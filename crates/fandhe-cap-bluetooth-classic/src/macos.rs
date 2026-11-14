@@ -3,12 +3,12 @@
 //! feature `device` 有効時にコンパイルし IOBluetooth をリンクする）を `unsafe extern "C"` 3 関数
 //! （[`paired`](MacBluetoothClassic) の一覧・[`present`]・[`stop`]）で呼ぶ。`unsafe` はこの FFI 呼び出しと
 //! `CStr` の読み取りに閉じ `// SAFETY:` で契約を明記する（coding-rust.md の FFI 例外規定）。
-//! `device/bluetooth_classic.rs` の macOS 経路から呼ばれ、契約は `fandhe_device::bluetooth_classic`。
+//! 本 crate の `driver` の macOS 経路から呼ばれ、契約は `crate::contract`。
 //!
 //! `.m` 側のコールバックから [`fandhe_rust_bt_classic_found`] / [`fandhe_rust_bt_classic_finished`]
 //! （本モジュールが公開する `extern "C"` 関数）が main queue 上で呼ばれ、`device/bluetooth_classic` の
 //! 観測バッファへ足す。OS から受けた名前・キー・件数・電波強度は非信頼入力として、変換の前に検証する。
-//! コードの写像は `fandhe_device::bluetooth_classic::decode_code`（SSOT）に一本化する。
+//! コードの写像は `crate::contract::decode_code`（SSOT）に一本化する。
 //! 機器名・アドレスをログへ出力しない（security.md A09）。
 //!
 //! 写像の純関数 [`from_raw`] はホストでもテストできるようモジュールは `cfg(any(macos, test))`。
@@ -20,11 +20,11 @@
 //! - 【推測】LE だけのペアリング機器が `pairedDevices` に混ざるか
 //! - 連続の inquiry は OS が間引く（中断として完了した場合は `Internal`）
 
-use fandhe_device::bluetooth_classic::{
-    clamp_name, major_from_cod, normalize_devices, rssi_from_raw, ClassicDevice, DeviceKey,
-    MAX_DEVICES,
+use crate::contract::{
+    ClassicDevice, DeviceKey, MAX_DEVICES, clamp_name, major_from_cod, normalize_devices,
+    rssi_from_raw,
 };
-use fandhe_device::DeviceError;
+use crate::error::BluetoothClassicError;
 use std::ffi::CStr;
 
 const NAME_BYTES: usize = 256;
@@ -74,11 +74,11 @@ fn device_from_raw(
 
 /// `.m` の生値を契約の値へ写す。件数が 0..=[`MAX_DEVICES`] の外なら `Internal`（0 件の成功に畳まない）。
 /// 名前は NUL 終端と UTF-8 を検証し、満たさなければ `None`（件数には数える）。キーが空の要素は捨てる。
-fn from_raw(raw: &Raw) -> Result<Vec<ClassicDevice>, DeviceError> {
+fn from_raw(raw: &Raw) -> Result<Vec<ClassicDevice>, BluetoothClassicError> {
     let n = usize::try_from(raw.count)
         .ok()
         .filter(|&n| n <= MAX_DEVICES)
-        .ok_or(DeviceError::Internal("bluetooth_classic list"))?;
+        .ok_or(BluetoothClassicError::Internal("bluetooth_classic list"))?;
     Ok(normalize_devices(raw.entries[..n].iter().filter_map(|e| {
         device_from_raw(
             read_cstr(&e.name),
@@ -97,7 +97,7 @@ mod ffi {
     // SAFETY: `macos/fandhe_macos_bluetooth_classic.m`（`build.rs` が macOS ターゲットの feature
     // `device` 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_macos_bt_classic_paired(out: *mut Raw) -> i32;
         fn fandhe_macos_bt_classic_start(request_id: u64, duration_ms: u64) -> i32;
         fn fandhe_macos_bt_classic_stop();
@@ -142,36 +142,39 @@ fn blank() -> Box<Raw> {
 struct MacBluetoothClassic;
 
 #[cfg(target_os = "macos")]
-impl fandhe_device::bluetooth_classic::BluetoothClassic for MacBluetoothClassic {
-    fn paired(&self) -> Result<Vec<ClassicDevice>, DeviceError> {
+impl crate::contract::BluetoothClassic for MacBluetoothClassic {
+    fn paired(&self) -> Result<Vec<ClassicDevice>, BluetoothClassicError> {
         // 約 15KB。ヒープに置く。
         let mut raw = blank();
-        fandhe_device::bluetooth_classic::decode_code(ffi::paired(&mut raw))?;
+        crate::contract::decode_code(ffi::paired(&mut raw))?;
         from_raw(&raw)
     }
 
-    fn discover(&self) -> Result<Vec<ClassicDevice>, DeviceError> {
+    fn discover(&self) -> Result<Vec<ClassicDevice>, BluetoothClassicError> {
         // 検索は pull 型の `present` / `OBSERVED` 経路でのみ駆動する。トレイト経由の同期呼び出しは
         // 窓の間ブロックしてしまうため提供しない（成功値へは倒さない）。
-        Err(DeviceError::Unsupported("bluetooth_classic"))
+        Err(BluetoothClassicError::Unsupported("bluetooth_classic"))
     }
 }
 
-/// macOS の `BluetoothClassic` 実装を返す（`device/bluetooth_classic.rs` の dispatch から呼ばれる）。
+/// macOS の `BluetoothClassic` 実装を返す（本 crate の `driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "macos")]
-pub(crate) fn implementation() -> Box<dyn fandhe_device::bluetooth_classic::BluetoothClassic> {
+pub(crate) fn implementation() -> Box<dyn crate::contract::BluetoothClassic> {
     Box::new(MacBluetoothClassic)
 }
 
 /// 検索の開始を依頼する。窓は呼び出し元が渡す `duration`（`DISCOVERY_WINDOW_MS`）で、`.m` 側は
 /// この値で閉じる。`.m` は常に 0（受理）を返す契約で、0 以外は依頼の失敗として返す。
 #[cfg(target_os = "macos")]
-pub(crate) fn present(request_id: u64, duration: std::time::Duration) -> Result<(), DeviceError> {
+pub(crate) fn present(
+    request_id: u64,
+    duration: std::time::Duration,
+) -> Result<(), BluetoothClassicError> {
     let ms = u64::try_from(duration.as_millis()).unwrap_or(u64::MAX);
     if ffi::start(request_id, ms) == 0 {
         Ok(())
     } else {
-        Err(DeviceError::Internal("bluetooth_classic present"))
+        Err(BluetoothClassicError::Internal("bluetooth_classic present"))
     }
 }
 
@@ -185,7 +188,7 @@ pub(crate) fn stop() {
 /// この呼び出しが戻るまでのみ有効なため、ここで同期的にコピーして検証し切る。
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_bt_classic_found(
     request_id: u64,
     key: *const std::os::raw::c_char,
@@ -213,26 +216,23 @@ extern "C" fn fandhe_rust_bt_classic_found(
             .map(str::to_owned)
     };
     if let Some((k, d)) = device_from_raw(name.as_deref(), key.as_deref(), cod, rssi, paired != 0) {
-        super::bluetooth_classic::OBSERVED.observe(request_id, k, d);
+        crate::OBSERVED.observe(request_id, k, d);
     }
 }
 
 /// 完了通知（`.m` から main queue 上で 1 要求につき 1 回だけ呼ばれる）。
-/// `code` の意味は `fandhe_device::bluetooth_classic::decode_code`。
+/// `code` の意味は `crate::contract::decode_code`。
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_bt_classic_finished(request_id: u64, code: i32) {
-    super::bluetooth_classic::finish(
-        request_id,
-        fandhe_device::bluetooth_classic::decode_code(code),
-    );
+    crate::finish(request_id, crate::contract::decode_code(code));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::bluetooth_classic::DeviceKind;
+    use crate::contract::DeviceKind;
 
     fn put(slot: &mut [u8], s: &[u8]) {
         slot[..s.len()].copy_from_slice(s);
@@ -266,7 +266,7 @@ mod tests {
             r.count = c;
             assert!(matches!(
                 from_raw(&r),
-                Err(DeviceError::Internal("bluetooth_classic list"))
+                Err(BluetoothClassicError::Internal("bluetooth_classic list"))
             ));
         }
     }
@@ -327,7 +327,7 @@ mod tests {
     fn discover_via_trait_is_unsupported_not_empty_success() {
         assert!(matches!(
             implementation().discover(),
-            Err(DeviceError::Unsupported(_))
+            Err(BluetoothClassicError::Unsupported(_))
         ));
     }
 }

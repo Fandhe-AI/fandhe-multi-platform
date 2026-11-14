@@ -403,6 +403,18 @@
             android:authorities="${applicationId}.fandhe.notification"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.BluetoothClassicLifecycle"
+            android:authorities="${applicationId}.fandhe.bluetooth-classic"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.BlePeripheralLifecycle"
+            android:authorities="${applicationId}.fandhe.ble-peripheral"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.BluetoothLeLifecycle"
+            android:authorities="${applicationId}.fandhe.bluetooth-le"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.CameraCaptureLifecycle"
             android:authorities="${applicationId}.fandhe.camera-capture"
             android:exported="false" />

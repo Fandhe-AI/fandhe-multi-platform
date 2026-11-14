@@ -1,9 +1,9 @@
 //! Windows 向け Bluetooth Classic 実装（Issue #660、親 #130。骨格は #659）。
 //!
-//! 呼び出し元: `device/bluetooth_classic.rs` の Windows 経路が、一覧で [`implementation`]、検索で
+//! 呼び出し元: 本 crate の `driver` の Windows 経路が、一覧で [`implementation`]、検索で
 //! [`present`] を呼び、終了時（`device::shutdown` → `stop_shared_discovery`）に [`stop_shared`] を呼ぶ。
 //! dispatch・`device.rs` の `pub mod`・共通コアの画面には触らない。契約の SSOT は
-//! `fandhe_device::bluetooth_classic`（0 件は成功・失敗の区別・部分結果の破棄・`Cancelled` を返さない）。
+//! `crate::contract`（0 件は成功・失敗の区別・部分結果の破棄・`Cancelled` を返さない）。
 //!
 //! # 流れ
 //!
@@ -31,7 +31,7 @@
 //!
 //! # 守る範囲と守らない範囲
 //!
-//! `fandhe_device::bluetooth_classic` のモジュール doc を参照。加えて、止められない inquiry は
+//! `crate::contract` のモジュール doc を参照。加えて、止められない inquiry は
 //! プロセス終了で OS が片付けるため、停止時に同期して待たない。
 //!
 //! # 既知の天井（【推測】は Windows 実機確認 #650 で確かめる）
@@ -50,11 +50,11 @@
 
 use std::time::{Duration, Instant};
 
-use fandhe_device::bluetooth_classic::{
-    clamp_name, major_from_cod, ClassicDevice, DeviceKey, DISCOVERY_WINDOW_MS,
-    WINDOWS_DEADLINE_GRACE_MS,
+use crate::contract::{
+    ClassicDevice, DISCOVERY_WINDOW_MS, DeviceKey, WINDOWS_DEADLINE_GRACE_MS, clamp_name,
+    major_from_cod,
 };
-use fandhe_device::DeviceError;
+use crate::error::BluetoothClassicError;
 
 /// 1 回の列挙で受け取る機器数の上限（応答の洪水でメモリが膨らむのを防ぐ）。
 const MAX_ENUMERATED: usize = 256;
@@ -130,7 +130,7 @@ enum FindOutcome {
     /// 列挙の正常な終端（0 件の成功、または最後の機器の後）。
     End,
     /// 失敗（部分結果は捨てる）。
-    Fail(DeviceError),
+    Fail(BluetoothClassicError),
 }
 
 /// 列挙関数（`BluetoothFindFirstDevice` / `BluetoothFindNextDevice`）の HRESULT を契約へ写す。
@@ -138,8 +138,12 @@ enum FindOutcome {
 fn classify_find_error(code: i32) -> FindOutcome {
     match code {
         HR_NO_MORE_ITEMS => FindOutcome::End,
-        HR_ACCESS_DENIED => FindOutcome::Fail(DeviceError::PermissionDenied("bluetooth_classic")),
-        _ => FindOutcome::Fail(DeviceError::Internal("bluetooth_classic enumerate")),
+        HR_ACCESS_DENIED => {
+            FindOutcome::Fail(BluetoothClassicError::PermissionDenied("bluetooth_classic"))
+        }
+        _ => FindOutcome::Fail(BluetoothClassicError::Internal(
+            "bluetooth_classic enumerate",
+        )),
     }
 }
 
@@ -166,13 +170,13 @@ enum AdapterProbe {
 }
 
 /// アダプタ判定を契約へ写す。`Unknown` のラジオは列挙の実結果に任せる（空の成功は返さない）。
-fn precheck_outcome(probe: AdapterProbe) -> Result<(), DeviceError> {
+fn precheck_outcome(probe: AdapterProbe) -> Result<(), BluetoothClassicError> {
     match probe {
         AdapterProbe::NoAdapter | AdapterProbe::ClassicUnsupported => {
-            Err(DeviceError::Unsupported("bluetooth_classic"))
+            Err(BluetoothClassicError::Unsupported("bluetooth_classic"))
         }
         AdapterProbe::Radio(RadioKind::Off | RadioKind::Disabled) => {
-            Err(DeviceError::Disabled("bluetooth_classic"))
+            Err(BluetoothClassicError::Disabled("bluetooth_classic"))
         }
         AdapterProbe::Radio(RadioKind::On | RadioKind::Unknown) => Ok(()),
     }
@@ -186,7 +190,7 @@ enum Action {
     /// 要求を確定する。`Ok` は観測バッファへ足して完了、`Err` は部分結果を捨てて失敗で完了。
     Finish {
         request_id: u64,
-        result: Result<Found, DeviceError>,
+        result: Result<Found, BluetoothClassicError>,
     },
 }
 
@@ -221,13 +225,15 @@ impl Scheduler {
 
     /// 期限を過ぎた要求を `Internal` で確定する。`inflight` は止められないので残す。
     fn expire(&mut self, now: Instant, out: &mut Vec<Action>) {
-        if self.current.as_ref().is_some_and(|r| now >= r.deadline) {
-            if let Some(r) = self.current.take() {
-                out.push(Action::Finish {
-                    request_id: r.id,
-                    result: Err(DeviceError::Internal("bluetooth_classic deadline")),
-                });
-            }
+        if self.current.as_ref().is_some_and(|r| now >= r.deadline)
+            && let Some(r) = self.current.take()
+        {
+            out.push(Action::Finish {
+                request_id: r.id,
+                result: Err(BluetoothClassicError::Internal(
+                    "bluetooth_classic deadline",
+                )),
+            });
         }
     }
 
@@ -254,7 +260,7 @@ impl Scheduler {
                 self.current = None;
                 out.push(Action::Finish {
                     request_id: id,
-                    result: Err(DeviceError::Internal("bluetooth_classic window")),
+                    result: Err(BluetoothClassicError::Internal("bluetooth_classic window")),
                 });
             }
         }
@@ -285,7 +291,7 @@ impl Scheduler {
     fn on_done(
         &mut self,
         id: u64,
-        result: Result<Found, DeviceError>,
+        result: Result<Found, BluetoothClassicError>,
         now: Instant,
     ) -> Vec<Action> {
         let mut out = Vec::new();
@@ -328,27 +334,27 @@ pub(crate) use os::{implementation, present, stop_shared};
 #[cfg(target_os = "windows")]
 mod os {
     use std::collections::VecDeque;
+    use std::sync::Mutex;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::{self, RecvTimeoutError};
-    use std::sync::Mutex;
     use std::time::{Duration, Instant};
 
-    use fandhe_device::bluetooth_classic::{normalize_devices, BluetoothClassic, ClassicDevice};
-    use fandhe_device::DeviceError;
+    use crate::contract::{BluetoothClassic, ClassicDevice, normalize_devices};
+    use crate::error::BluetoothClassicError;
     use windows::Devices::Bluetooth::BluetoothAdapter;
     use windows::Devices::Radios::RadioState;
     use windows::Win32::Devices::Bluetooth::{
-        BluetoothFindDeviceClose, BluetoothFindFirstDevice, BluetoothFindNextDevice,
-        BLUETOOTH_DEVICE_INFO, BLUETOOTH_DEVICE_SEARCH_PARAMS, HBLUETOOTH_DEVICE_FIND,
+        BLUETOOTH_DEVICE_INFO, BLUETOOTH_DEVICE_SEARCH_PARAMS, BluetoothFindDeviceClose,
+        BluetoothFindFirstDevice, BluetoothFindNextDevice, HBLUETOOTH_DEVICE_FIND,
     };
     use windows::Win32::Foundation::HANDLE;
 
     use super::{
-        classify_find_error, device_from_parts, precheck_outcome, Action, AdapterProbe,
-        FindOutcome, Found, RadioKind, Scheduler, HR_ACCESS_DENIED, MAX_ENUMERATED,
-        PAIRED_TIMEOUT_MS,
+        Action, AdapterProbe, FindOutcome, Found, HR_ACCESS_DENIED, MAX_ENUMERATED,
+        PAIRED_TIMEOUT_MS, RadioKind, Scheduler, classify_find_error, device_from_parts,
+        precheck_outcome,
     };
-    use crate::device::bluetooth_classic::{finish, OBSERVED};
+    use crate::{OBSERVED, finish};
 
     enum Msg {
         Start {
@@ -359,7 +365,7 @@ mod os {
         Stop,
         Done {
             request_id: u64,
-            result: Result<Found, DeviceError>,
+            result: Result<Found, BluetoothClassicError>,
         },
     }
 
@@ -373,16 +379,16 @@ mod os {
     }
 
     /// `windows::core::Error` → 契約のエラー（アクセス拒否だけ `PermissionDenied`）。
-    fn map_win_error(e: &windows::core::Error, what: &'static str) -> DeviceError {
+    fn map_win_error(e: &windows::core::Error, what: &'static str) -> BluetoothClassicError {
         if e.code().0 == HR_ACCESS_DENIED {
-            DeviceError::PermissionDenied("bluetooth_classic")
+            BluetoothClassicError::PermissionDenied("bluetooth_classic")
         } else {
-            DeviceError::Internal(what)
+            BluetoothClassicError::Internal(what)
         }
     }
 
     /// WinRT でアダプタの有無・Classic 対応・ラジオ状態を調べて契約へ写す。
-    fn precheck() -> Result<(), DeviceError> {
+    fn precheck() -> Result<(), BluetoothClassicError> {
         // アダプタ無し（null）は windows クレートが code 0 の `Err` にする。
         let adapter = match BluetoothAdapter::GetDefaultAsync()
             .map_err(|e| map_win_error(&e, "bluetooth_classic init"))?
@@ -462,7 +468,7 @@ mod os {
 
     /// Win32 の列挙。失敗は部分結果を捨てて `Err`。
     #[allow(unsafe_code)]
-    fn enumerate(mode: Mode) -> Result<Found, DeviceError> {
+    fn enumerate(mode: Mode) -> Result<Found, BluetoothClassicError> {
         let (inquiry, multiplier) = match mode {
             Mode::Paired => (false, 0),
             Mode::Inquiry(m) => (true, m),
@@ -487,7 +493,7 @@ mod os {
                 return match classify_find_error(e.code().0) {
                     FindOutcome::End => Ok(Vec::new()),
                     FindOutcome::Fail(err) => Err(err),
-                }
+                };
             }
         };
         let mut out: Found = Vec::new();
@@ -519,13 +525,13 @@ mod os {
     struct WindowsBluetoothClassic;
 
     impl BluetoothClassic for WindowsBluetoothClassic {
-        fn paired(&self) -> Result<Vec<ClassicDevice>, DeviceError> {
+        fn paired(&self) -> Result<Vec<ClassicDevice>, BluetoothClassicError> {
             paired_list()
         }
 
         /// 検索は pull 型の `present` 経路でだけ駆動する。成功値へは倒さない。
-        fn discover(&self) -> Result<Vec<ClassicDevice>, DeviceError> {
-            Err(DeviceError::Unsupported("bluetooth_classic"))
+        fn discover(&self) -> Result<Vec<ClassicDevice>, BluetoothClassicError> {
+            Err(BluetoothClassicError::Unsupported("bluetooth_classic"))
         }
     }
 
@@ -542,10 +548,10 @@ mod os {
     }
 
     /// ペアリング済み一覧を短命スレッドで読み、UI 側は上限付きで待つ（UI スレッドで WinRT を待たない）。
-    fn paired_list() -> Result<Vec<ClassicDevice>, DeviceError> {
+    fn paired_list() -> Result<Vec<ClassicDevice>, BluetoothClassicError> {
         let started = Instant::now();
         if PAIRED_BUSY.swap(true, Ordering::AcqRel) {
-            return Err(DeviceError::Internal("bluetooth_classic busy"));
+            return Err(BluetoothClassicError::Internal("bluetooth_classic busy"));
         }
         let (tx, rx) = mpsc::channel();
         let spawned = std::thread::Builder::new().spawn(move || {
@@ -555,22 +561,25 @@ mod os {
         });
         if spawned.is_err() {
             PAIRED_BUSY.store(false, Ordering::Release);
-            return Err(DeviceError::Internal("bluetooth_classic paired"));
+            return Err(BluetoothClassicError::Internal("bluetooth_classic paired"));
         }
         let limit = Duration::from_millis(PAIRED_TIMEOUT_MS).saturating_sub(started.elapsed());
         match rx.recv_timeout(limit) {
             Ok(result) => result.map(normalize_devices),
-            Err(RecvTimeoutError::Timeout) => {
-                Err(DeviceError::Internal("bluetooth_classic paired timeout"))
-            }
+            Err(RecvTimeoutError::Timeout) => Err(BluetoothClassicError::Internal(
+                "bluetooth_classic paired timeout",
+            )),
             Err(RecvTimeoutError::Disconnected) => {
-                Err(DeviceError::Internal("bluetooth_classic paired"))
+                Err(BluetoothClassicError::Internal("bluetooth_classic paired"))
             }
         }
     }
 
     /// 検索の開始を依頼する。期限の起点は入口の `Instant`。スーパーバイザへ送って即座に戻る。
-    pub(crate) fn present(request_id: u64, duration: Duration) -> Result<(), DeviceError> {
+    pub(crate) fn present(
+        request_id: u64,
+        duration: Duration,
+    ) -> Result<(), BluetoothClassicError> {
         let started_at = Instant::now();
         let mut guard = lock_worker();
         if guard.is_none() {
@@ -580,7 +589,7 @@ mod os {
                 .name("fandhe-bt-classic".into())
                 .spawn(move || supervisor(rx, own_tx));
             if spawned.is_err() {
-                return Err(DeviceError::Internal("bluetooth_classic present"));
+                return Err(BluetoothClassicError::Internal("bluetooth_classic present"));
             }
             *guard = Some(tx);
         }
@@ -594,7 +603,7 @@ mod os {
         });
         if !sent {
             *guard = None;
-            return Err(DeviceError::Internal("bluetooth_classic present"));
+            return Err(BluetoothClassicError::Internal("bluetooth_classic present"));
         }
         Ok(())
     }
@@ -653,7 +662,7 @@ mod os {
                     if spawned.is_err() {
                         queue.extend(sched.on_done(
                             request_id,
-                            Err(DeviceError::Internal("bluetooth_classic spawn")),
+                            Err(BluetoothClassicError::Internal("bluetooth_classic spawn")),
                             Instant::now(),
                         ));
                     }
@@ -680,8 +689,8 @@ mod tests {
         s.encode_utf16().collect()
     }
 
-    fn is_internal<T>(r: &Result<T, DeviceError>) -> bool {
-        matches!(r, Err(DeviceError::Internal(_)))
+    fn is_internal<T>(r: &Result<T, BluetoothClassicError>) -> bool {
+        matches!(r, Err(BluetoothClassicError::Internal(_)))
     }
 
     #[test]
@@ -721,7 +730,7 @@ mod tests {
             let (_, d) = device_from_parts(1, 0x0000_0204, &name, auth, rem).unwrap();
             assert_eq!(d.paired, paired);
             assert_eq!(d.rssi, None);
-            assert_eq!(d.kind, fandhe_device::bluetooth_classic::DeviceKind::Phone);
+            assert_eq!(d.kind, crate::contract::DeviceKind::Phone);
             assert_eq!(d.name.as_deref(), Some("Dev"));
         }
         assert!(device_from_parts(0, 0, &name, true, true).is_none());
@@ -748,15 +757,15 @@ mod tests {
         ));
         assert!(matches!(
             classify_find_error(HR_ACCESS_DENIED),
-            FindOutcome::Fail(DeviceError::PermissionDenied(_))
+            FindOutcome::Fail(BluetoothClassicError::PermissionDenied(_))
         ));
         assert!(matches!(
             classify_find_error(-1),
-            FindOutcome::Fail(DeviceError::Internal(_))
+            FindOutcome::Fail(BluetoothClassicError::Internal(_))
         ));
         assert!(matches!(
             classify_find_error(0),
-            FindOutcome::Fail(DeviceError::Internal(_))
+            FindOutcome::Fail(BluetoothClassicError::Internal(_))
         ));
     }
 
@@ -764,16 +773,16 @@ mod tests {
     fn precheck_outcome_never_returns_empty_success_for_failures() {
         assert!(matches!(
             precheck_outcome(AdapterProbe::NoAdapter),
-            Err(DeviceError::Unsupported(_))
+            Err(BluetoothClassicError::Unsupported(_))
         ));
         assert!(matches!(
             precheck_outcome(AdapterProbe::ClassicUnsupported),
-            Err(DeviceError::Unsupported(_))
+            Err(BluetoothClassicError::Unsupported(_))
         ));
         for k in [RadioKind::Off, RadioKind::Disabled] {
             assert!(matches!(
                 precheck_outcome(AdapterProbe::Radio(k)),
-                Err(DeviceError::Disabled(_))
+                Err(BluetoothClassicError::Disabled(_))
             ));
         }
         assert!(precheck_outcome(AdapterProbe::Radio(RadioKind::On)).is_ok());
@@ -903,7 +912,7 @@ mod tests {
         s.on_start(1, t0, WIN, t0);
         let a = s.on_done(
             1,
-            Err(DeviceError::Disabled("bluetooth_classic")),
+            Err(BluetoothClassicError::Disabled("bluetooth_classic")),
             t0 + Duration::from_secs(1),
         );
         assert_eq!(finishes(&a), vec![(1, false)]);

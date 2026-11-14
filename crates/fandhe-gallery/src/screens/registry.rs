@@ -132,7 +132,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ble_peripheral" => fandhe_core::screens::ble_peripheral::current_screen,
-    fandhe_egui_proxy::device::ble_peripheral::ble_peripheral_effect,
+    fandhe_cap_ble_peripheral::ble_peripheral_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "global_hotkey" => fandhe_core::screens::global_hotkey::current_screen,
@@ -248,11 +248,11 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ble_scan" => fandhe_core::screens::ble_scan::current_screen,
-    fandhe_egui_proxy::device::bluetooth_le::ble_scan_effect,
+    fandhe_cap_bluetooth_le::ble_scan_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "bluetooth_classic_show" => fandhe_core::screens::bluetooth_classic_show::current_screen,
-    fandhe_egui_proxy::device::bluetooth_classic::bluetooth_classic_show_effect,
+    fandhe_cap_bluetooth_classic::bluetooth_classic_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "lan_discover" => fandhe_core::screens::lan_discover::current_screen,

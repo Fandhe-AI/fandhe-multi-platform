@@ -1,5 +1,5 @@
 //! iOS / macOS 向け BLE スキャン実装（Issue #1060 macOS・#1061 iOS）。
-//! `device/bluetooth_le.rs` の iOS / macOS 経路から呼ばれ、CoreBluetooth 実装
+//! 本 crate の `driver` の iOS / macOS 経路から呼ばれ、CoreBluetooth 実装
 //! （`apple/fandhe_apple_bluetooth_le.m`、`build.rs` が iOS / macOS の feature `device`
 //! 有効時にコンパイル・リンクする）を `unsafe extern "C"` 2 関数（[`present`] /
 //! [`stop`]）で呼ぶ。`unsafe` はこの呼び出しと `CStr::from_ptr` に閉じ `// SAFETY:` で
@@ -7,16 +7,16 @@
 //!
 //! `.m` 側のコールバックから [`fandhe_rust_ble_device`] / [`fandhe_rust_ble_finished`]
 //! （本モジュールが公開する `extern "C"` 関数）が呼ばれ、`device/bluetooth_le` の観測
-//! バッファへ push する。コードの写像は `device/bluetooth_le.rs` の純関数（SSOT）に
+//! バッファへ push する。コードの写像は 本 crate の `driver` の純関数（SSOT）に
 //! 一本化する。周辺機器の名前・識別子をログへ出力しない（security.md A09）。
 
 use std::ffi::CStr;
 use std::os::raw::c_char;
 use std::time::Duration;
 
-use fandhe_device::bluetooth_le::BleDevice;
+use crate::contract::BleDevice;
 
-use super::bluetooth_le::{error_from_apple_code, finish, rssi_from_apple, OBSERVED};
+use crate::{OBSERVED, error_from_apple_code, finish, rssi_from_apple};
 
 // SAFETY: `apple/fandhe_apple_bluetooth_le.m` が定義する C ABI（`build.rs` が iOS / macOS の
 // feature `device` 有効時にコンパイル・リンクする）。契約は `.m` ファイル冒頭コメント
@@ -52,7 +52,7 @@ pub(crate) fn stop() {
 /// 取れないとき 127（番兵、[`rssi_from_apple`] が `None` に写す）。ポインタはこの呼び出しが
 /// 戻るまでのみ有効なため、ここで同期的にコピーし切る。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_ble_device(
     request_id: u64,
     id: *const c_char,
@@ -87,7 +87,7 @@ extern "C" fn fandhe_rust_ble_device(
 /// 完了通知（`.m` の専用キューから 1 要求につき 1 回だけ呼ばれる）。
 /// `code`: 0 = 成功、1 = オフ、2 = 権限拒否、3 = 非対応、4 = 内部エラー。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_ble_finished(request_id: u64, code: i32) {
     let result = if code == 0 {
         Ok(())

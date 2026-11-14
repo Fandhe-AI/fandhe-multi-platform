@@ -3,7 +3,7 @@
 //! `fandhe_core::screens::ble_scan`（端末依存ゼロ）の要求を
 //! [`super::mount::mount_with_effect`] の effect として観測し、Web Bluetooth の
 //! `navigator.bluetooth.requestDevice({ acceptAllDevices: true })` で利用者に 1 台を選ばせ、
-//! 1 件の一覧として書き戻す。契約の SSOT は `fandhe_device::bluetooth_le` のモジュール doc
+//! 1 件の一覧として書き戻す。契約の SSOT は `fandhe-cap-bluetooth-le` の契約（`contract`）のモジュール doc
 //! （Web は「利用者が 1 台選ぶ形」・RSSI は `None`）。Web は `fandhe-device` の
 //! `BluetoothLe` トレイトを通らない（`share.rs` と同じ理由）ため、本モジュールが DOM
 //! レンダラ側の対応実装にあたる。
@@ -39,8 +39,8 @@
 //!
 //! 機器の id・名前・例外の `message` は `console` 出力・送信を行わない（security.md A09）。
 
+use fandhe_cap_bluetooth_le::{normalize_scan, BleDevice};
 use fandhe_core::screens::ble_scan::{BleRow, ScanError};
-use fandhe_device::bluetooth_le::{normalize_scan, BleDevice};
 
 /// `SecurityError`（user activation 無し・非 secure context）のときの案内。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]

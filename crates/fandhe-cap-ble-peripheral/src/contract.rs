@@ -94,7 +94,7 @@
 
 use std::sync::Arc;
 
-use crate::DeviceError;
+use crate::error::BlePeripheralError;
 
 /// 固定のサービス UUID（本機能専用に採番した 128 bit）。
 pub const SERVICE_UUID: &str = "DB43AF8A-2474-4E87-B6C8-742420170E01";
@@ -166,7 +166,7 @@ pub enum StopOutcome {
     NotRunning,
 }
 
-const STOP_FAILED: DeviceError = DeviceError::Internal("ble_peripheral stop");
+const STOP_FAILED: BlePeripheralError = BlePeripheralError::Internal("ble_peripheral stop");
 
 /// `.m` の事象コード → 事象。未知のコードは `Ended(Failed)` に倒し、成功を作らない。
 pub fn event_from_apple_code(code: i32) -> PeripheralEvent {
@@ -227,7 +227,7 @@ pub fn event_from_windows_advertisement_status(status: i32, error: i32) -> Optio
 }
 
 /// `.m` の停止の戻り値（0 が停止、1 が未起動）→ 結果。それ以外は失敗。
-pub fn stop_outcome_from_apple(code: i32) -> Result<StopOutcome, DeviceError> {
+pub fn stop_outcome_from_apple(code: i32) -> Result<StopOutcome, BlePeripheralError> {
     match code {
         0 => Ok(StopOutcome::Stopped),
         1 => Ok(StopOutcome::NotRunning),
@@ -239,10 +239,10 @@ pub fn stop_outcome_from_apple(code: i32) -> Result<StopOutcome, DeviceError> {
 pub trait BlePeripheral: Send + Sync {
     /// 公開を依頼する。`session` は事象を照合する世代で、`on_event` へ事象を流す。
     /// 進行中の公開があれば完了通知なしで置き換える。
-    fn start(&self, session: u64, on_event: OnEvent) -> Result<StartOutcome, DeviceError>;
+    fn start(&self, session: u64, on_event: OnEvent) -> Result<StartOutcome, BlePeripheralError>;
 
     /// 公開を止めて資源を解放する。完了の事象は流さない（戻り値が結果）。
-    fn stop(&self) -> Result<StopOutcome, DeviceError>;
+    fn stop(&self) -> Result<StopOutcome, BlePeripheralError>;
 }
 
 /// 非対応 OS 用。`start` は `Unsupported`、`stop` は後始末のため `NotRunning`。
@@ -250,11 +250,11 @@ pub trait BlePeripheral: Send + Sync {
 pub struct UnsupportedBlePeripheral;
 
 impl BlePeripheral for UnsupportedBlePeripheral {
-    fn start(&self, _session: u64, _on_event: OnEvent) -> Result<StartOutcome, DeviceError> {
-        Err(DeviceError::Unsupported("ble_peripheral"))
+    fn start(&self, _session: u64, _on_event: OnEvent) -> Result<StartOutcome, BlePeripheralError> {
+        Err(BlePeripheralError::Unsupported)
     }
 
-    fn stop(&self) -> Result<StopOutcome, DeviceError> {
+    fn stop(&self) -> Result<StopOutcome, BlePeripheralError> {
         Ok(StopOutcome::NotRunning)
     }
 }
@@ -327,7 +327,7 @@ mod tests {
         for code in [-1, 2, 99, i32::MIN, i32::MAX] {
             assert!(matches!(
                 stop_outcome_from_apple(code),
-                Err(DeviceError::Internal("ble_peripheral stop"))
+                Err(BlePeripheralError::Internal("ble_peripheral stop"))
             ));
         }
     }
@@ -390,7 +390,7 @@ mod tests {
         let imp = UnsupportedBlePeripheral;
         assert!(matches!(
             imp.start(1, Arc::new(|_| {})),
-            Err(DeviceError::Unsupported("ble_peripheral"))
+            Err(BlePeripheralError::Unsupported)
         ));
         assert!(matches!(imp.stop(), Ok(StopOutcome::NotRunning)));
     }

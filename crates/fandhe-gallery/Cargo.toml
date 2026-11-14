@@ -27,6 +27,9 @@ device = [
   "dep:fandhe-cap-ar",
   "dep:fandhe-cap-audio-devices",
   "dep:fandhe-cap-audio-session",
+  "dep:fandhe-cap-ble-peripheral",
+  "dep:fandhe-cap-bluetooth-classic",
+  "dep:fandhe-cap-bluetooth-le",
   "dep:fandhe-cap-calendar",
   "dep:fandhe-cap-call-ui",
   "dep:fandhe-cap-camera-capture",
@@ -148,12 +151,14 @@ NSNearbyInteractionUsageDescription = "型サンプル「UWB による距離」�
 NSHomeKitUsageDescription = "型サンプル「スマートホーム操作」の動作確認に使います"
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」「音声認識」「動画の撮影」の動作確認に使います"
 NSAlarmKitUsageDescription = "型サンプル「アラーム」の動作確認に使います"
+NSBluetoothAlwaysUsageDescription = "型サンプル「BLE スキャン」「BLE の周辺機器役」の動作確認に使います"
 
 [package.metadata.fandhe-app.macos.usage-descriptions]
 NSLocationUsageDescription = "型サンプル「Wi-Fi 情報」「Wi-Fi への接続」で、接続先の Wi-Fi 名を読むために使います"
 NSCalendarsWriteOnlyAccessUsageDescription = "型サンプル「予定の追加」の動作確認に使います"
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」の動作確認に使います"
 NSCameraUsageDescription = "型サンプル「カメラのライブ映像」「動画の撮影」の動作確認に使います"
+NSBluetoothAlwaysUsageDescription = "型サンプル「BLE スキャン」「Bluetooth Classic」「BLE の周辺機器役」「無線の状態と切り替え」の動作確認に使います"
 
 [build-dependencies]
 # Apple のリンク指定（弱リンク・rpath・Info.plist 埋め込み）を `fandhe-egui-proxy` から受け取って出し直す。
@@ -181,6 +186,9 @@ fandhe-cap-app-progress-attention = { path = "../fandhe-cap-app-progress-attenti
 fandhe-cap-ar = { path = "../fandhe-cap-ar", optional = true }
 fandhe-cap-audio-devices = { path = "../fandhe-cap-audio-devices", optional = true }
 fandhe-cap-audio-session = { path = "../fandhe-cap-audio-session", optional = true }
+fandhe-cap-ble-peripheral = { path = "../fandhe-cap-ble-peripheral", optional = true }
+fandhe-cap-bluetooth-classic = { path = "../fandhe-cap-bluetooth-classic", optional = true }
+fandhe-cap-bluetooth-le = { path = "../fandhe-cap-bluetooth-le", optional = true }
 fandhe-cap-calendar = { path = "../fandhe-cap-calendar", optional = true }
 fandhe-cap-call-ui = { path = "../fandhe-cap-call-ui", optional = true }
 fandhe-cap-camera-capture = { path = "../fandhe-cap-camera-capture", optional = true }

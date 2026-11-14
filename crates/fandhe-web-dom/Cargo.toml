@@ -105,6 +105,8 @@ fandhe-cap-media-playback = { path = "../fandhe-cap-media-playback" }
 fandhe-cap-now-playing-controls = { path = "../fandhe-cap-now-playing-controls" }
 # notification の契約の型（`NotificationRequest`・`NotificationError`）。Web 実装の本体は本クレートに残す。wasm32 では OS 別の依存が cfg で外れる。
 fandhe-cap-notification = { path = "../fandhe-cap-notification" }
+# bluetooth-le の契約の型・純関数（`BleDevice`・`normalize_scan`）。Web 実装の本体は本クレートに残す。wasm32 では OS 別の依存が cfg で外れる。
+fandhe-cap-bluetooth-le = { path = "../fandhe-cap-bluetooth-le" }
 # Issue #1185: Web 共通層（`Applier`・マウントの生存管理と解放・`query_param_bytes`）。`url_scheme` の native テストが純関数を使うため全ターゲットの依存にする。
 fandhe-platform-web = { path = "../fandhe-platform-web" }
 

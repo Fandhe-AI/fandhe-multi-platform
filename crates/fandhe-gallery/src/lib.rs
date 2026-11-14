@@ -265,6 +265,15 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // 作り直されるため、再生成前に開始した権限確認が後から完了しても黙って失われる（`fandhe_cap_notification::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_notification::reset_pending_tracking();
+    // BLE スキャンの保留中の要求と観測バッファも同様に破棄する（`fandhe_cap_bluetooth_le::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_bluetooth_le::reset_pending_tracking();
+    // Android の BLE 周辺機器役の通知先も破棄する（`fandhe_cap_ble_peripheral::reset_pending_tracking` の doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_ble_peripheral::reset_pending_tracking();
+    // Bluetooth Classic の保留中の要求と観測バッファも同様に破棄する（`fandhe_cap_bluetooth_classic::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_bluetooth_classic::reset_pending_tracking();
     // 音声再生も同様。画面状態が generation 0 に戻るため、処理済み世代を捨て再生を止める
     // （`fandhe_cap_media_playback::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
@@ -309,6 +318,12 @@ fn shutdown() {
     // 再生（media-playback）→ OS のメディア操作（now-playing-controls）の順に止め、どちらも audio_session より前に置く。
     fandhe_cap_media_playback::shutdown();
     fandhe_cap_now_playing_controls::shutdown();
+    fandhe_cap_bluetooth_le::stop_shared_scan();
+    // 公開の停止は `.m` の専用キューへの短い同期呼び出し。Rust 側のロックは握らない。
+    fandhe_cap_ble_peripheral::shutdown();
+    // macOS の停止は main queue へ同期ディスパッチする。`shutdown` は eframe の `on_exit`（main thread）からロックを握らずに呼ばれるため、
+    // main 上なら直接停止し、デッドロックしない。
+    fandhe_cap_bluetooth_classic::stop_shared_discovery();
     fandhe_cap_system_tray::stop_shared_system_tray();
     fandhe_cap_global_hotkey::shutdown();
     fandhe_cap_midi::shutdown();

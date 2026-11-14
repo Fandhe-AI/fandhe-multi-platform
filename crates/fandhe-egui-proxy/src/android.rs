@@ -135,18 +135,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // 同じ理由）。
     #[cfg(feature = "device")]
     crate::device::speech_recognition::reset_pending_tracking();
-    // Issue #1062: `bluetooth_le::bridge::SLOT` / `OBSERVED` も同じ理由でプロセス static の
-    // ため Activity 再生成をまたいで残る。新しい画面（`Idle`）を構築する前にここで捨てる
-    // （`device::bluetooth_le::reset_pending_tracking` doc 参照）。Java 側に対になる no-op
-    // スタブは置かない: Rust の `request_ble_scan` を経ないと Java が `nativeOnBleScan*`
-    // を呼ぶ経路自体が無く、`feature = "device"` 無効ビルドでは到達しないため
-    // （`speech_recognition`/`notification` と同じ理由）。
-    #[cfg(feature = "device")]
-    crate::device::bluetooth_le::reset_pending_tracking();
-    // Issue #659: `bluetooth_classic::bridge::SLOT` / `OBSERVED` も同じ理由でプロセス static のため、
-    // Activity 再生成をまたいで残る旧要求の保留をここで捨てる。
-    #[cfg(feature = "device")]
-    crate::device::bluetooth_classic::reset_pending_tracking();
     // Issue #486: `lan_discovery::bridge::SLOT` / `OBSERVED` も同じ理由でプロセス static のため、
     // Activity 再生成をまたいで残る旧要求の保留をここで捨てる。
     #[cfg(feature = "device")]
@@ -187,9 +175,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // `device::spotlight_index::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::spotlight_index::reset_pending_tracking();
-    // Issue #1123: Android の BLE 周辺機器役の通知先も破棄する（`android_ble_peripheral` の doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::android_ble_peripheral::reset_pending_tracking();
     // Issue #1130: 決済シートの保留中の要求を破棄し、旧 request_id の完了を不一致で捨てさせる。
     #[cfg(feature = "device")]
     crate::device::payment_request::reset_pending_tracking();

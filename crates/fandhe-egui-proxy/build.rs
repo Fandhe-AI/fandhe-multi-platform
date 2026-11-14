@@ -98,11 +98,6 @@ fn build() {
     // macOS 分岐と共用する。
     compile_apple_speech_recognition();
 
-    // `apple/fandhe_apple_bluetooth_le.m`（Issue #1060 macOS + #1061 iOS）も macOS 分岐と
-    // 共用する。
-    compile_apple_bluetooth_le();
-    // `apple/fandhe_apple_ble_peripheral.m`（Issue #778）。macOS・iOS 両分岐から呼ぶ。
-    compile_apple_ble_peripheral();
     // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。Network をリンクする。
     compile_apple_lan_discovery();
@@ -291,28 +286,6 @@ fn compile_apple_network_status() {
     );
 }
 
-/// `apple/fandhe_apple_ble_peripheral.m` を `cc` でコンパイルし CoreBluetooth をリンクする
-/// （Issue #778 macOS。iOS は #779 で委譲済み）。iOS・macOS 双方の feature `device` 分岐から呼ぶ。
-fn compile_apple_ble_peripheral() {
-    compile_objc(
-        "apple/fandhe_apple_ble_peripheral.m",
-        if target_is_ios() {
-            &["CoreBluetooth", "Foundation", "UIKit"]
-        } else {
-            &["CoreBluetooth", "Foundation"]
-        },
-    );
-}
-
-/// `apple/fandhe_apple_bluetooth_le.m` を `cc` でコンパイルし CoreBluetooth をリンクする
-/// （Issue #1060 macOS + #1061 iOS）。iOS・macOS 双方の feature `device` 分岐から呼ぶ。
-fn compile_apple_bluetooth_le() {
-    compile_objc(
-        "apple/fandhe_apple_bluetooth_le.m",
-        &["CoreBluetooth", "Foundation"],
-    );
-}
-
 /// `apple/fandhe_apple_lan_discovery.m` を `cc` でコンパイルし Network をリンクする
 /// （Issue #486 macOS・親 #109 の b-ios で iOS も共用）。dns_sd は libSystem に含まれる。
 fn compile_apple_lan_discovery() {
@@ -431,15 +404,6 @@ fn compile_macos_web_auth_session() {
     compile_objc(
         "macos/fandhe_macos_web_auth_session.m",
         &["AppKit", "AuthenticationServices", "Foundation"],
-    );
-}
-
-/// `macos/fandhe_macos_bluetooth_classic.m` を `cc` でコンパイルし IOBluetooth・CoreBluetooth をリンクする
-/// （Issue #659）。**macOS 分岐のみ**から呼ばれる（`src/device/macos_bluetooth_classic.rs` が使う）。
-fn compile_macos_bluetooth_classic() {
-    compile_objc(
-        "macos/fandhe_macos_bluetooth_classic.m",
-        &["CoreBluetooth", "Foundation", "IOBluetooth"],
     );
 }
 
@@ -589,10 +553,6 @@ fn build_macos() {
     // iOS 分岐と共用する。
     compile_apple_speech_recognition();
 
-    // `apple/fandhe_apple_bluetooth_le.m`（Issue #1060 macOS + #1061 iOS）も共用する。
-    compile_apple_bluetooth_le();
-    // `apple/fandhe_apple_ble_peripheral.m`（Issue #778）。macOS・iOS 両分岐から呼ぶ。
-    compile_apple_ble_peripheral();
     // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。Network をリンクする。
     compile_apple_lan_discovery();
@@ -632,8 +592,6 @@ fn build_macos() {
     compile_macos_music_library();
     // `macos/fandhe_macos_web_auth_session.m`（Issue #530）も macOS 専用。AuthenticationServices を使う。
     compile_macos_web_auth_session();
-    // `macos/fandhe_macos_bluetooth_classic.m`（Issue #659）も macOS 専用。IOBluetooth を使う。
-    compile_macos_bluetooth_classic();
     compile_macos_pen_stylus();
 
     // 素の実行体（`fandhe-gallery` の bin）へ `macos/Info.plist`

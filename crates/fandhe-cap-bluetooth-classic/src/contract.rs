@@ -8,7 +8,7 @@
 //! BLE の周辺機器は `bluetooth_le` の範囲で、本機能の結果に含めない。
 //!
 //! 一覧は同期の 1 回読み（[`BluetoothClassic::paired`]、`usb_device` と同型）、検索は
-//! `fandhe-egui-proxy` の `device/bluetooth_classic.rs` が pull 型（`lan_discovery` と同型）で
+//! `fandhe-egui-proxy` の 本 crate の `driver` が pull 型（`lan_discovery` と同型）で
 //! 駆動する。各 OS が集めた生の結果は [`normalize_devices`] で契約の形に整える。
 //!
 //! # 契約
@@ -54,7 +54,7 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::DeviceError;
+use crate::error::BluetoothClassicError;
 
 /// 1 回の検索窓（ミリ秒）。
 pub const DISCOVERY_WINDOW_MS: u64 = 12_000;
@@ -129,9 +129,9 @@ impl fmt::Debug for DeviceKey {
 /// Bluetooth Classic の契約（モジュール doc の「契約」節）。
 pub trait BluetoothClassic: Send + Sync {
     /// ペアリング済み機器を 1 回読む。[`normalize_devices`] 済み。
-    fn paired(&self) -> Result<Vec<ClassicDevice>, DeviceError>;
+    fn paired(&self) -> Result<Vec<ClassicDevice>, BluetoothClassicError>;
     /// 約 [`DISCOVERY_WINDOW_MS`] 検索して [`normalize_devices`] 済みの一覧を返す。
-    fn discover(&self) -> Result<Vec<ClassicDevice>, DeviceError>;
+    fn discover(&self) -> Result<Vec<ClassicDevice>, BluetoothClassicError>;
 }
 
 /// 対象外 OS・初期化失敗時のフォールバック。ダミーの成功実装へは倒さない。
@@ -139,12 +139,12 @@ pub trait BluetoothClassic: Send + Sync {
 pub struct UnsupportedBluetoothClassic;
 
 impl BluetoothClassic for UnsupportedBluetoothClassic {
-    fn paired(&self) -> Result<Vec<ClassicDevice>, DeviceError> {
-        Err(DeviceError::Unsupported("bluetooth_classic"))
+    fn paired(&self) -> Result<Vec<ClassicDevice>, BluetoothClassicError> {
+        Err(BluetoothClassicError::Unsupported("bluetooth_classic"))
     }
 
-    fn discover(&self) -> Result<Vec<ClassicDevice>, DeviceError> {
-        Err(DeviceError::Unsupported("bluetooth_classic"))
+    fn discover(&self) -> Result<Vec<ClassicDevice>, BluetoothClassicError> {
+        Err(BluetoothClassicError::Unsupported("bluetooth_classic"))
     }
 }
 
@@ -245,14 +245,14 @@ pub fn normalize_devices(
 /// | 2 | `Disabled` |
 /// | 3 | `Unsupported` |
 /// | その他 | `Internal` |
-pub fn decode_code(code: i32) -> Result<(), DeviceError> {
+pub fn decode_code(code: i32) -> Result<(), BluetoothClassicError> {
     const F: &str = "bluetooth_classic";
     match code {
         0 => Ok(()),
-        1 => Err(DeviceError::PermissionDenied(F)),
-        2 => Err(DeviceError::Disabled(F)),
-        3 => Err(DeviceError::Unsupported(F)),
-        _ => Err(DeviceError::Internal("bluetooth_classic outcome")),
+        1 => Err(BluetoothClassicError::PermissionDenied(F)),
+        2 => Err(BluetoothClassicError::Disabled(F)),
+        3 => Err(BluetoothClassicError::Unsupported(F)),
+        _ => Err(BluetoothClassicError::Internal("bluetooth_classic outcome")),
     }
 }
 
@@ -378,23 +378,35 @@ mod tests {
         assert!(decode_code(0).is_ok());
         assert!(matches!(
             decode_code(1),
-            Err(DeviceError::PermissionDenied(_))
+            Err(BluetoothClassicError::PermissionDenied(_))
         ));
-        assert!(matches!(decode_code(2), Err(DeviceError::Disabled(_))));
-        assert!(matches!(decode_code(3), Err(DeviceError::Unsupported(_))));
-        assert!(matches!(decode_code(4), Err(DeviceError::Internal(_))));
-        assert!(matches!(decode_code(-1), Err(DeviceError::Internal(_))));
+        assert!(matches!(
+            decode_code(2),
+            Err(BluetoothClassicError::Disabled(_))
+        ));
+        assert!(matches!(
+            decode_code(3),
+            Err(BluetoothClassicError::Unsupported(_))
+        ));
+        assert!(matches!(
+            decode_code(4),
+            Err(BluetoothClassicError::Internal(_))
+        ));
+        assert!(matches!(
+            decode_code(-1),
+            Err(BluetoothClassicError::Internal(_))
+        ));
     }
 
     #[test]
     fn unsupported_is_error_not_empty_success() {
         assert!(matches!(
             UnsupportedBluetoothClassic.paired(),
-            Err(DeviceError::Unsupported("bluetooth_classic"))
+            Err(BluetoothClassicError::Unsupported("bluetooth_classic"))
         ));
         assert!(matches!(
             UnsupportedBluetoothClassic.discover(),
-            Err(DeviceError::Unsupported("bluetooth_classic"))
+            Err(BluetoothClassicError::Unsupported("bluetooth_classic"))
         ));
     }
 

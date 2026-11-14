@@ -1,5 +1,8 @@
 package com.fandhe.platform;
 
+import java.util.WeakHashMap;
+import java.util.Collections;
+import android.app.Activity;
 import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothClass;
@@ -28,8 +31,8 @@ import java.util.Set;
 
 // Bluetooth Classic（Issue #661、親 #130 の b-android）の Android 実装ヘルパー。範囲はペアリング済み機器の
 // 一覧（同期 1 回）と、固定窓の検索 1 回のみ。接続・ペアリング・Bluetooth を ON にする操作・アドレスの表示は範囲外。
-// MainActivity から生成・委譲される。Rust の `device/android_bluetooth_classic.rs` が
-// `MainActivity.bluetoothClassicPaired`（一覧）と `MainActivity.requestBluetoothClassic`（検索）を JNI で呼び、
+// Activity ごとに 1 つ、`BluetoothClassicLifecycle`（`FeatureLifecycleProvider` 継承）が `attach` で生成して `HELPERS` に持つ。
+// Rust の `fandhe-cap-bluetooth-classic`（`src/android.rs`）が static の `paired`（一覧）と `request`（検索。第 1 引数は Activity）を JNI で呼び、
 // 検索の結果は native 2 本で返す。
 //
 // 並行性: 検索の状態を触る経路は main looper 1 本（`request` は post、BroadcastReceiver も main Handler で
@@ -78,7 +81,7 @@ final class BluetoothClassicHelper {
     private final ComponentActivity activity;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final RequestTracker request = new RequestTracker();
-    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity のフィールド初期化子で生成する。
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`BluetoothClassicLifecycle.onHostCreated`（`Activity.onCreate` の中）から `attach` で生成する。
     private final ActivityResultLauncher<String[]> permissionLauncher;
 
     // 以下は main looper 専用。
@@ -91,7 +94,50 @@ final class BluetoothClassicHelper {
     private int forwarded;
     private BroadcastReceiver receiver;
 
-    BluetoothClassicHelper(ComponentActivity activity) {
+    // Activity ごとの helper（上記クラス冒頭コメント参照）。
+    private static final Map<Activity, BluetoothClassicHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    // Activity の生成時（`BluetoothClassicLifecycle` から、UI スレッド）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new BluetoothClassicHelper(activity));
+    }
+
+    // Activity の破棄時（同上）。再生成を含む。保持している資源を解放し、保留中の要求を捨てる。
+    static void detach(Activity activity) {
+        BluetoothClassicHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // `BluetoothClassicLifecycle` から（UI スレッド）。helper が無ければ何もしない。
+    static void resumed(Activity activity) {
+        BluetoothClassicHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onResume();
+        }
+    }
+
+    // `BluetoothClassicLifecycle` から（UI スレッド）。helper が無ければ何もしない。
+    static void paused(Activity activity) {
+        BluetoothClassicHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onPause();
+        }
+    }
+
+    // Rust から呼ぶ入口。helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、失敗で確定する。
+    static void request(Activity activity, long id, int durationMs) {
+        BluetoothClassicHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            nativeOnClassicFinished(id, CODE_OTHER);
+            return;
+        }
+        helper.request(id, durationMs);
+    }
+
+    private BluetoothClassicHelper(ComponentActivity activity) {
         this.activity = activity;
         this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:BluetoothClassicHelper:1", activity,
                 new ActivityResultContracts.RequestMultiplePermissions(), this::onPermissionResult);
@@ -124,7 +170,8 @@ final class BluetoothClassicHelper {
 
     // egui スレッドから同期で呼ばれる。形は「コード」単独（失敗）か、
     // 「0 REC 件数 (REC address SEP name SEP cod)*」。null は内部失敗。
-    static String paired(Context appContext) {
+    static String paired(Context context) {
+        Context appContext = context.getApplicationContext();
         if (!hasFeature(appContext)) {
             return String.valueOf(CODE_UNSUPPORTED);
         }

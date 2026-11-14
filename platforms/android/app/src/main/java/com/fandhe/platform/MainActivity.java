@@ -34,13 +34,6 @@ package com.fandhe.platform;
 
 import android.Manifest;
 import android.app.PendingIntent;
-import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothManager;
-import android.bluetooth.le.BluetoothLeScanner;
-import android.bluetooth.le.ScanCallback;
-import android.bluetooth.le.ScanRecord;
-import android.bluetooth.le.ScanResult;
-import android.bluetooth.le.ScanSettings;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -464,54 +457,12 @@ public class MainActivity extends GameActivity {
         super.onStart();
     }
 
-    @Override
-    protected void onStop() {
-        blePeripheralHelper.onStop();
-        super.onStop();
-    }
-
-    // ロック画面・OS のメディア操作（Issue #383）。実装は `NowPlayingHelper`。Rust の
-    // `android_now_playing.rs` が egui スレッドから同期で JNI 呼び出しする。
-    private final NowPlayingHelper nowPlayingHelper = new NowPlayingHelper(this);
-
-    long nowPlayingPublish(String title, boolean playing, long positionMs, long durationMs) {
-        return nowPlayingHelper.publish(title, playing, positionMs, durationMs);
-    }
-
-    void nowPlayingClear() {
-        nowPlayingHelper.clear();
-    }
 
     // LAN のサービス探索（Issue #489）。実装は `LanDiscoveryHelper`。Rust の `android_lan_discovery.rs` が JNI で呼ぶ。
     private final LanDiscoveryHelper lanDiscoveryHelper = new LanDiscoveryHelper(this);
 
     void requestLanDiscovery(long requestId, int durationMs) {
         lanDiscoveryHelper.request(requestId, durationMs);
-    }
-
-    // Bluetooth Classic（Issue #661）。実装は `BluetoothClassicHelper`（許可ランチャーを STARTED 前に登録）。
-    // Rust の `android_bluetooth_classic.rs` が JNI で呼ぶ。
-    private final BluetoothClassicHelper bluetoothClassicHelper = new BluetoothClassicHelper(this);
-
-    void requestBluetoothClassic(long requestId, int durationMs) {
-        bluetoothClassicHelper.request(requestId, durationMs);
-    }
-
-    // ペアリング済み一覧（シグネチャ `()Ljava/lang/String;`）。詰め方は `BluetoothClassicHelper.paired` 冒頭を参照。
-    private String bluetoothClassicPaired() {
-        return BluetoothClassicHelper.paired(getApplicationContext());
-    }
-
-    // BLE の周辺機器役（Issue #1123）。実装は `BlePeripheralHelper`（許可ランチャーを STARTED 前に登録）。
-    // Rust の `android_ble_peripheral.rs` が JNI で呼ぶ。戻り値の意味は `BlePeripheralHelper.start` / `stop` を参照。
-    private final BlePeripheralHelper blePeripheralHelper = new BlePeripheralHelper(this);
-
-    int blePeripheralStart(long token, String serviceUuid, String characteristicUuid, String value) {
-        return blePeripheralHelper.start(token, serviceUuid, characteristicUuid, value);
-    }
-
-    int blePeripheralStop() {
-        return blePeripheralHelper.stop();
     }
 
     // 近くの端末との直接通信（Issue #513）。実装は `LocalPeerHelper`（許可ランチャーを STARTED 前に登録）。
@@ -1487,281 +1438,6 @@ public class MainActivity extends GameActivity {
                         info.isInPictureInPictureMode()));
     }
 
-    // BLE スキャン（Issue #1062、`device/bluetooth_le.rs` の Android 経路）。
-    // Rust の `request_ble_scan` が `requestBleScan(long, int)` を呼び、広告ごとに
-    // `nativeOnBleScanResult`、終了時に 1 回だけ `nativeOnBleScanFinished` で通知する
-    // （macOS / Windows と共通の `OBSERVED` / `bridge` へ pull 型で橋渡し）。
-    // 同一 id の統合・RSSI 降順・上限は Rust 側 `normalize_scan` に任せ、ここでは並べ替えも
-    // 重複除去もしない。完了コード → 契約のエラーの写像は Rust 側
-    // `bluetooth_le::error_from_android_code` が SSOT（ここでは分岐しない）。
-    //
-    // 並行性（device-bridge-contracts.md 2・11 節）: 状態を触る経路は UI スレッド 1 本に
-    // 集約する。`requestBleScan` は `runOnUiThread`、`ScanCallback` は main looper へ届く
-    // （Handler 未指定の既定）、期限 `Handler` も main looper、ライフサイクルも UI
-    // スレッドのため、ロックは持たない。通知は `bleScanRequest.complete(id)` が true の
-    // ときだけ行い（first-wins）、二重完了と古い世代の通知を防ぐ。
-    //
-    // 期限: Rust の `SCAN_DURATION_MS` を `durationMs` で受けてそのまま使う（複製しない）。
-    // `startScan` 成功時点から数え、権限ダイアログの回答待ちには掛けない（macOS と同じ
-    // 既知の天井）。周辺機器の名前・アドレスはログへ出さない（security.md A09）。
-    //
-    // 結果コード（Rust 側 `error_from_android_code` と一致させる）: 0=成功／1=Bluetooth オフ／
-    // 2=権限拒否／3=非搭載・LE 非対応／4=内部エラー／5=中断（`onPause`/`onDestroy`/非前景での
-    // 開始）／6=位置情報サービスがオフ（API 30 以下。オフのままだと 0 件になり「0 台の成功」に
-    // 化けるため失敗にする）。
-    private static final int BLE_RESULT_OK = 0;
-    private static final int BLE_RESULT_DISABLED = 1;
-    private static final int BLE_RESULT_PERMISSION_DENIED = 2;
-    private static final int BLE_RESULT_UNSUPPORTED = 3;
-    private static final int BLE_RESULT_INTERNAL_ERROR = 4;
-    private static final int BLE_RESULT_INTERRUPTED = 5;
-    private static final int BLE_RESULT_LOCATION_OFF = 6;
-
-    // `address` は識別子、`name` は広告名（無ければ null）、`rssi` は `ScanResult.getRssi()`
-    // の生値（取得不能の番兵 127 も Rust 側が `None` へ写す）。
-    private static native void nativeOnBleScanResult(
-            long requestId, String address, String name, int rssi);
-
-    private static native void nativeOnBleScanFinished(long requestId, int code);
-
-    private final RequestTracker bleScanRequest = new RequestTracker();
-    private final Handler bleHandler = new Handler(Looper.getMainLooper());
-    private BluetoothLeScanner bleScanner;
-    private ScanCallback bleScanCallback;
-    private Runnable bleScanTimeout;
-    private int bleScanDurationMs;
-    // 権限ダイアログの回答待ち。表示中に来た再要求は新しい id を追跡し直すだけで、
-    // 結果は「その時点の現在 id」へ適用する（要求する権限は同一のため）。
-    private boolean blePermissionPending;
-    // 許可結果が非前景中に届いたため `startBleScan` を次の `onResume` へ保留している
-    // （正常な許可を中断扱いにせず、背景での開始も避ける、契約表 1 節）。
-    private boolean bleStartPendingResume;
-
-    // API 31 以上は `BLUETOOTH_SCAN` + `BLUETOOTH_CONNECT`、30 以下は `ACCESS_FINE_LOCATION`
-    // （Manifest 参照。API 31 以上のみ CONNECT を要求するため minSdk 未満の分岐は不要）。
-    private static String[] blePermissions() {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-                ? new String[] {
-                    Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT
-                }
-                : new String[] {Manifest.permission.ACCESS_FINE_LOCATION};
-    }
-
-    private boolean bleGranted() {
-        for (String p : blePermissions()) {
-            if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private final ActivityResultLauncher<String[]> requestBlePermission =
-            getActivityResultRegistry().register("fandhe:MainActivity:9", this, new ActivityResultContracts.RequestMultiplePermissions(), result -> {
-                boolean granted = true;
-                for (String p : blePermissions()) {
-                    granted &= Boolean.TRUE.equals(result.get(p));
-                }
-                this.blePermissionPending = false;
-                long id = this.bleScanRequest.current();
-                if (id == RequestTracker.NONE) {
-                    return;
-                }
-                if (!granted) {
-                    finishBle(id, BLE_RESULT_PERMISSION_DENIED);
-                    return;
-                }
-                if (isFinishing() || isDestroyed()) {
-                    finishBle(id, BLE_RESULT_INTERRUPTED);
-                    return;
-                }
-                if (!this.activityResumed) {
-                    this.bleStartPendingResume = true;
-                    return;
-                }
-                startBleScan(id);
-            });
-
-    // 要求を 1 回だけ確定して通知する（追跡中の id と一致したときのみ）。
-    private void finishBle(long id, int code) {
-        if (id != RequestTracker.NONE && bleScanRequest.complete(id)) {
-            nativeOnBleScanFinished(id, code);
-        }
-    }
-
-    // タイマー解除 → `stopScan` → 参照解放を全終了経路（期限・失敗・置き換え・
-    // `onPause`・`onDestroy`）で必ず通す。Bluetooth オフ時の `stopScan` が投げる
-    // 例外は握る（契約表 9 節: 失敗経路でも資源を残さない）。
-    private void stopBleScanQuietly() {
-        if (bleScanTimeout != null) {
-            bleHandler.removeCallbacks(bleScanTimeout);
-            bleScanTimeout = null;
-        }
-        if (bleScanner != null && bleScanCallback != null) {
-            try {
-                bleScanner.stopScan(bleScanCallback);
-            } catch (RuntimeException ignored) {
-                // SecurityException / IllegalStateException（Bluetooth オフ）。
-            }
-        }
-        bleScanner = null;
-        bleScanCallback = null;
-    }
-
-    // Rust から呼ばれる開始依頼（Rust スレッド → UI スレッドへ集約）。
-    public void requestBleScan(final long requestId, final int durationMs) {
-        runOnUiThread(() -> {
-            // 置き換え: 進行中のスキャンは止め、旧 id は通知せず破棄する（Rust 側は既に新世代）。
-            stopBleScanQuietly();
-            bleScanRequest.track(requestId);
-            bleScanDurationMs = durationMs;
-            if (blePermissionPending || bleStartPendingResume) {
-                return;
-            }
-            if (isFinishing() || isDestroyed() || !activityResumed) {
-                finishBle(requestId, BLE_RESULT_INTERRUPTED);
-                return;
-            }
-            // 非搭載の判定を権限より先に行い、非対応端末で権限ダイアログを出さない。
-            if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)
-                    || bleAdapter() == null) {
-                finishBle(requestId, BLE_RESULT_UNSUPPORTED);
-                return;
-            }
-            if (!bleGranted()) {
-                blePermissionPending = true;
-                try {
-                    requestBlePermission.launch(blePermissions());
-                } catch (RuntimeException e) {
-                    blePermissionPending = false;
-                    finishBle(requestId, BLE_RESULT_INTERNAL_ERROR);
-                }
-                return;
-            }
-            startBleScan(requestId);
-        });
-    }
-
-    private BluetoothAdapter bleAdapter() {
-        BluetoothManager manager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
-        return manager == null ? null : manager.getAdapter();
-    }
-
-    private static int bleFailureCode(int scanErrorCode) {
-        return scanErrorCode == ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED
-                ? BLE_RESULT_UNSUPPORTED
-                : BLE_RESULT_INTERNAL_ERROR;
-    }
-
-    private void startBleScan(final long id) {
-        final BluetoothAdapter adapter = bleAdapter();
-        if (adapter == null) {
-            finishBle(id, BLE_RESULT_UNSUPPORTED);
-            return;
-        }
-        // API 31+ の `isEnabled()` / `BluetoothDevice.getAddress()` は `BLUETOOTH_CONNECT` を
-        // 要しうるため、実行時許可に含めている。それでも SecurityException が出たら落とさず権限拒否で確定する。
-        final BluetoothLeScanner scanner;
-        try {
-            scanner = adapter.isEnabled() ? adapter.getBluetoothLeScanner() : null;
-        } catch (SecurityException e) {
-            finishBle(id, BLE_RESULT_PERMISSION_DENIED);
-            return;
-        }
-        if (scanner == null) {
-            finishBle(id, BLE_RESULT_DISABLED);
-            return;
-        }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-            // サービスが取れない端末は位置 OFF と同じ扱い（null を渡すと NPE になる）。
-            LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-            if (lm == null || !LocationManagerCompat.isLocationEnabled(lm)) {
-                finishBle(id, BLE_RESULT_LOCATION_OFF);
-                return;
-            }
-        }
-        ScanCallback callback = new ScanCallback() {
-            @Override
-            public void onScanResult(int callbackType, ScanResult result) {
-                if (bleScanRequest.current() != id || result.getDevice() == null) {
-                    return;
-                }
-                // `BluetoothDevice.getName()` は API 31+ で BLUETOOTH_CONNECT を要するため
-                // 使わず、広告の ScanRecord から名前を取る。
-                ScanRecord record = result.getScanRecord();
-                final String address;
-                try {
-                    address = result.getDevice().getAddress();
-                } catch (SecurityException e) {
-                    // スキャン中に権限が取り消された（API 31+）。止めて権限拒否で確定する。
-                    stopBleScanQuietly();
-                    finishBle(id, BLE_RESULT_PERMISSION_DENIED);
-                    return;
-                }
-                nativeOnBleScanResult(
-                        id, address, record == null ? null : record.getDeviceName(), result.getRssi());
-            }
-
-            @Override
-            public void onScanFailed(int errorCode) {
-                if (bleScanRequest.current() != id) {
-                    return;
-                }
-                stopBleScanQuietly();
-                finishBle(id, bleFailureCode(errorCode));
-            }
-        };
-        ScanSettings settings =
-                new ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build();
-        try {
-            scanner.startScan(null, settings, callback);
-        } catch (SecurityException e) {
-            finishBle(id, BLE_RESULT_PERMISSION_DENIED);
-            return;
-        } catch (RuntimeException e) {
-            finishBle(id, BLE_RESULT_INTERNAL_ERROR);
-            return;
-        }
-        bleScanner = scanner;
-        bleScanCallback = callback;
-        bleScanTimeout = () -> {
-            bleScanTimeout = null;
-            if (bleScanRequest.current() != id) {
-                return;
-            }
-            // 途中で Bluetooth がオフになった場合は失敗にする（部分結果は Rust 側で捨てる）。
-            boolean stillOn;
-            try {
-                stillOn = adapter.isEnabled();
-            } catch (SecurityException e) {
-                stillOn = false;
-            }
-            // API 30 以下は途中で位置情報サービスが OFF になると広告が届かず 0 台の偽の成功になる。
-            boolean locationOff = false;
-            if (stillOn && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-                LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-                locationOff = lm == null || !LocationManagerCompat.isLocationEnabled(lm);
-            }
-            stopBleScanQuietly();
-            finishBle(
-                    id,
-                    !stillOn
-                            ? BLE_RESULT_DISABLED
-                            : locationOff ? BLE_RESULT_LOCATION_OFF : BLE_RESULT_OK);
-        };
-        bleHandler.postDelayed(bleScanTimeout, bleScanDurationMs);
-    }
-
-    // `onPause`/`onDestroy` 共通: スキャン中なら止めて中断で確定する。権限ダイアログ待ち
-    // （`bleScanCallback == null`）は破棄しない（ダイアログ自体が `onPause` を起こすため）。
-    private void abortBleScanIfRunning() {
-        if (bleScanCallback != null) {
-            long id = bleScanRequest.current();
-            stopBleScanQuietly();
-            finishBle(id, BLE_RESULT_INTERRUPTED);
-        }
-    }
-
     // 傾きセンサのリスナー登録（Issue #831）。バックグラウンド中は登録しない
     // （onPause で解除する）ため、フォアグラウンド復帰のたびに再登録が必要。
     @Override
@@ -1773,8 +1449,6 @@ public class MainActivity extends GameActivity {
         environmentSensorsHelper.onResume();
         motionRawSensorsHelper.onResume();
         localPeerHelper.onResume();
-        bluetoothClassicHelper.onResume();
-        nowPlayingHelper.onResume();
         if (sensorManager != null && motionSensor != null) {
             sensorManager.registerListener(
                     motionListener, motionSensor, SensorManager.SENSOR_DELAY_GAME);
@@ -1836,14 +1510,6 @@ public class MainActivity extends GameActivity {
                 }
             }
         }
-        // BLE スキャン（Issue #1062）: 許可結果が非前景中に届き開始を保留していた要求を再開する。
-        if (bleStartPendingResume) {
-            bleStartPendingResume = false;
-            long id = bleScanRequest.current();
-            if (id != RequestTracker.NONE && bleScanCallback == null) {
-                startBleScan(id);
-            }
-        }
     }
 
     // バックグラウンド中のセンサ計測・バッテリ消費を避けるための解除（Issue #831）。
@@ -1859,11 +1525,9 @@ public class MainActivity extends GameActivity {
         webAuthSessionHelper.onPause();
         lanDiscoveryHelper.onPause();
         localPeerHelper.onPause();
-        bluetoothClassicHelper.onPause();
         compassHelper.onPause();
         environmentSensorsHelper.onPause();
         motionRawSensorsHelper.onPause();
-        nowPlayingHelper.onPause();
         if (sensorManager != null) {
             sensorManager.unregisterListener(motionListener);
         }
@@ -1892,8 +1556,6 @@ public class MainActivity extends GameActivity {
                 abortSpeech(SPEECH_RESULT_INTERRUPTED);
             }
         }
-        // BLE スキャン（Issue #1062）: バックグラウンド遷移でスキャン中なら止めて中断で確定する。
-        abortBleScanIfRunning();
     }
 
     // Rust 側の TTS ワーカースレッド（`device/android.rs` の `AndroidTts`）から
@@ -3467,15 +3129,12 @@ public class MainActivity extends GameActivity {
         fullscreenHelper.onDestroy();
         penStylusHelper.onDestroy();
         // UI キューを待つネイティブ終了処理（clear）が super.onDestroy() の後ろで詰まらないよう先に解放する。
-        nowPlayingHelper.onDestroy();
         super.onDestroy();
         paymentRequestHelper.onDestroy();
         healthDataHelper.onDestroy();
         translationHelper.onDestroy();
         lanDiscoveryHelper.onDestroy();
         localPeerHelper.onDestroy();
-        bluetoothClassicHelper.onDestroy();
-        blePeripheralHelper.onDestroy();
         musicLibraryHelper.onDestroy();
         compassHelper.onDestroy();
         environmentSensorsHelper.onDestroy();
@@ -3499,12 +3158,6 @@ public class MainActivity extends GameActivity {
                 abortSpeech(SPEECH_RESULT_INTERRUPTED);
             }
         }
-        // BLE スキャン（Issue #1062）: スキャン中・権限ダイアログ待ちを問わず止めて、追跡中の
-        // 要求があれば中断で確定する（破棄後に結果を届ける先は無いが Rust 側を畳む）。
-        stopBleScanQuietly();
-        blePermissionPending = false;
-        bleStartPendingResume = false;
-        finishBle(bleScanRequest.current(), BLE_RESULT_INTERRUPTED);
         // ファイル選択（Issue #874、案 B）は Activity 破棄時に明示的な決着を送らない。
         // `Picking` のまま残る（OS がコールバックしないケースと同じ既知の天井、
         // 仕様書「固定タイムアウトを掛けない」節参照）。`filePickRequest` は static

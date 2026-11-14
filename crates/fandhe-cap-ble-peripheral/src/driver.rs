@@ -1,14 +1,14 @@
 //! Phase 11（親 #164）型サンプル「BLE の周辺機器役」（Issue #778）の effect ドライバ。
 //! `fandhe_core::screens::ble_peripheral`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::ble_peripheral::BlePeripheral` で OS へ公開・停止を依頼し、結果と事象を
+//! `crate::contract::BlePeripheral` で OS へ公開・停止を依頼し、結果と事象を
 //! `CompletionSender` 経由で返す（`screens/registry.rs` の `effect` 区画から呼ばれる契約）。
-//! 契約と守る範囲は `fandhe_device::ble_peripheral` のモジュール doc を参照。
+//! 契約と守る範囲は `crate::contract` のモジュール doc を参照。
 //!
 //! `start` は非ブロッキング、`stop` は `.m` の専用キューへの短い同期呼び出しなので UI スレッドで
 //! 同期に呼ぶ。待ち・期限・`request_repaint_after` は持たない（事象は OS の通知 →
-//! `CompletionSender::send` が UI を起こす）。**macOS は `apple_ble_peripheral`、iOS は #779 で
-//! `ios_ble_peripheral.rs` から `apple_ble_peripheral` へ委譲済み**。Windows は `windows_ble_peripheral`（Issue #1101）。
-//! Android は `android_ble_peripheral`（Issue #1123、`BlePeripheralHelper` と JNI）。
+//! `CompletionSender::send` が UI を起こす）。**macOS は `apple`、iOS は #779 で
+//! `ios_ble_peripheral.rs` から `apple` へ委譲済み**。Windows は `windows`（Issue #1101）。
+//! Android は `android`（Issue #1123、`BlePeripheralHelper` と JNI）。
 //!
 //! 読み取りは「世代つきのまとめ送り」にする: 未適用件数を数え、0 → 1 になったときだけ完了を
 //! 1 件送る。読み取りが大量に届いても完了キューが伸びない。
@@ -16,11 +16,6 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use fandhe_core::screens::ble_peripheral::{
-    apply_event, apply_reads, finish_start, finish_stop, mark_in_flight, take_action,
-    BlePeripheralState, EndKind, PeripheralAction, PeripheralFailure, ScreenEvent, StartResult,
-    StopResult, OS_CHOSEN_NAME_LABEL,
-};
 #[cfg(any(
     not(any(
         target_os = "macos",
@@ -30,14 +25,19 @@ use fandhe_core::screens::ble_peripheral::{
     )),
     test
 ))]
-use fandhe_device::ble_peripheral::UnsupportedBlePeripheral;
-use fandhe_device::ble_peripheral::{
-    BlePeripheral, EndReason, OnEvent, PeripheralEvent, StartOutcome, StopOutcome, LOCAL_NAME,
-    SERVICE_UUID,
+use crate::contract::UnsupportedBlePeripheral;
+use crate::contract::{
+    BlePeripheral, EndReason, LOCAL_NAME, OnEvent, PeripheralEvent, SERVICE_UUID, StartOutcome,
+    StopOutcome,
 };
-use fandhe_device::DeviceError;
+use crate::error::BlePeripheralError;
+use fandhe_core::screens::ble_peripheral::{
+    BlePeripheralState, EndKind, OS_CHOSEN_NAME_LABEL, PeripheralAction, PeripheralFailure,
+    ScreenEvent, StartResult, StopResult, apply_event, apply_reads, finish_start, finish_stop,
+    mark_in_flight, take_action,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在の公開の session と通知先を持つ受け口。OS 実装（`.m` のコールバック）が事象を渡す入口で、
 /// どの OS でもコンパイルし Linux CI でもテストする。判定と取り出しだけをロックの内側で行い、
@@ -116,18 +116,18 @@ fn to_end_kind(reason: EndReason) -> EndKind {
 
 /// 依頼結果を画面用へ写像する。内部構造・OS のコードは出さない（security.md A09）。
 fn to_start_result(
-    result: Result<StartOutcome, DeviceError>,
+    result: Result<StartOutcome, BlePeripheralError>,
 ) -> Result<StartResult, PeripheralFailure> {
     match result {
         Ok(StartOutcome::Accepted) => Ok(StartResult::Accepted),
-        Err(DeviceError::Unsupported(_)) => Ok(StartResult::Unsupported),
+        Err(BlePeripheralError::Unsupported) => Ok(StartResult::Unsupported),
         Err(_) => Err(PeripheralFailure),
     }
 }
 
 /// 停止結果を画面用へ写像する。
 fn to_stop_result(
-    result: Result<StopOutcome, DeviceError>,
+    result: Result<StopOutcome, BlePeripheralError>,
 ) -> Result<StopResult, PeripheralFailure> {
     match result {
         Ok(StopOutcome::Stopped) => Ok(StopResult::Stopped),
@@ -200,18 +200,24 @@ fn drive(
     }
 }
 
+/// OS 別の [`BlePeripheral`] 実装（プロセスに 1 つ。画面の effect・`shutdown` と同じ実体）。
+/// 画面の状態型に依存しないため、フレームワークの外のアプリも使える。
+pub fn platform_ble_peripheral() -> Arc<dyn BlePeripheral> {
+    Arc::clone(shared())
+}
+
 /// プロセスに 1 つの実装（`shutdown` が公開と同じ実体に届くようにする）。
-fn platform_ble_peripheral() -> &'static Arc<dyn BlePeripheral> {
+fn shared() -> &'static Arc<dyn BlePeripheral> {
     static IMPL: OnceLock<Arc<dyn BlePeripheral>> = OnceLock::new();
     IMPL.get_or_init(|| {
         #[cfg(target_os = "macos")]
-        return super::apple_ble_peripheral::implementation();
+        return crate::apple::implementation();
         #[cfg(target_os = "ios")]
-        return super::ios_ble_peripheral::implementation();
+        return crate::ios::implementation();
         #[cfg(target_os = "windows")]
-        return super::windows_ble_peripheral::implementation();
+        return crate::windows::implementation();
         #[cfg(target_os = "android")]
-        return super::android_ble_peripheral::implementation();
+        return crate::android::implementation();
         #[cfg(not(any(
             target_os = "macos",
             target_os = "ios",
@@ -230,18 +236,25 @@ pub fn ble_peripheral_effect(
     if take_action(state).is_none() {
         return;
     }
-    drive(state, sender, platform_ble_peripheral().as_ref());
+    drive(state, sender, shared().as_ref());
 }
 
-/// アプリ終了時に公開を止めて資源を解放する（`device::shutdown` から呼ばれる）。
+/// アプリ終了時に公開を止めて資源を解放する（`fandhe-gallery` の終了処理から呼ばれる）。
 /// 終了経路なので結果は見ない。
-pub(super) fn shutdown() {
-    let _ = platform_ble_peripheral().stop();
+pub fn shutdown() {
+    let _ = shared().stop();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
     use fandhe_core::screens::ble_peripheral as screen;
     use screen::PeripheralPhase;
 
@@ -249,13 +262,17 @@ mod tests {
     struct Fake {
         start_calls: Mutex<u32>,
         stop_calls: Mutex<u32>,
-        start_result: fn() -> Result<StartOutcome, DeviceError>,
-        stop_result: fn() -> Result<StopOutcome, DeviceError>,
+        start_result: fn() -> Result<StartOutcome, BlePeripheralError>,
+        stop_result: fn() -> Result<StopOutcome, BlePeripheralError>,
         on_event: Mutex<Option<(u64, OnEvent)>>,
     }
 
     impl BlePeripheral for Fake {
-        fn start(&self, session: u64, on_event: OnEvent) -> Result<StartOutcome, DeviceError> {
+        fn start(
+            &self,
+            session: u64,
+            on_event: OnEvent,
+        ) -> Result<StartOutcome, BlePeripheralError> {
             *self.start_calls.lock().unwrap() += 1;
             let r = (self.start_result)();
             if r.is_ok() {
@@ -263,15 +280,15 @@ mod tests {
             }
             r
         }
-        fn stop(&self) -> Result<StopOutcome, DeviceError> {
+        fn stop(&self) -> Result<StopOutcome, BlePeripheralError> {
             *self.stop_calls.lock().unwrap() += 1;
             (self.stop_result)()
         }
     }
 
     fn fake(
-        start_result: fn() -> Result<StartOutcome, DeviceError>,
-        stop_result: fn() -> Result<StopOutcome, DeviceError>,
+        start_result: fn() -> Result<StartOutcome, BlePeripheralError>,
+        stop_result: fn() -> Result<StopOutcome, BlePeripheralError>,
     ) -> Fake {
         Fake {
             start_calls: Mutex::new(0),
@@ -286,11 +303,14 @@ mod tests {
         fake(|| Ok(StartOutcome::Accepted), || Ok(StopOutcome::Stopped))
     }
 
-    type Rx = std::sync::mpsc::Receiver<crate::app::Completion<BlePeripheralState>>;
+    type Rx = std::sync::mpsc::Receiver<fandhe_runtime::Completion<BlePeripheralState>>;
 
     fn channel() -> (CompletionSender<BlePeripheralState>, Rx) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (
+            fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     fn drain(s: &mut BlePeripheralState, rx: &Rx) {
@@ -349,11 +369,15 @@ mod tests {
     fn event_emitted_during_start_is_applied_after_accept() {
         struct EarlyEnd;
         impl BlePeripheral for EarlyEnd {
-            fn start(&self, _s: u64, on_event: OnEvent) -> Result<StartOutcome, DeviceError> {
+            fn start(
+                &self,
+                _s: u64,
+                on_event: OnEvent,
+            ) -> Result<StartOutcome, BlePeripheralError> {
                 on_event(PeripheralEvent::Ended(EndReason::BluetoothOff));
                 Ok(StartOutcome::Accepted)
             }
-            fn stop(&self) -> Result<StopOutcome, DeviceError> {
+            fn stop(&self) -> Result<StopOutcome, BlePeripheralError> {
                 Ok(StopOutcome::NotRunning)
             }
         }
@@ -369,14 +393,18 @@ mod tests {
     fn advertising_then_reads_during_start_are_counted_after_accept() {
         struct EarlyReads;
         impl BlePeripheral for EarlyReads {
-            fn start(&self, _s: u64, on_event: OnEvent) -> Result<StartOutcome, DeviceError> {
+            fn start(
+                &self,
+                _s: u64,
+                on_event: OnEvent,
+            ) -> Result<StartOutcome, BlePeripheralError> {
                 on_event(PeripheralEvent::Advertising);
                 for _ in 0..3 {
                     on_event(PeripheralEvent::Read);
                 }
                 Ok(StartOutcome::Accepted)
             }
-            fn stop(&self) -> Result<StopOutcome, DeviceError> {
+            fn stop(&self) -> Result<StopOutcome, BlePeripheralError> {
                 Ok(StopOutcome::NotRunning)
             }
         }
@@ -455,7 +483,7 @@ mod tests {
     fn unsupported_and_failure_never_advertise() {
         let (sender, rx) = channel();
         let f = fake(
-            || Err(DeviceError::Unsupported("ble_peripheral")),
+            || Err(BlePeripheralError::Unsupported),
             || Ok(StopOutcome::NotRunning),
         );
         let mut s = BlePeripheralState::default();
@@ -465,7 +493,7 @@ mod tests {
         assert_eq!(s.notice, screen::UNSUPPORTED_NOTICE);
 
         let f = fake(
-            || Err(DeviceError::Internal("ble_peripheral start")),
+            || Err(BlePeripheralError::Internal("ble_peripheral start")),
             || Ok(StopOutcome::NotRunning),
         );
         let mut s = BlePeripheralState::default();

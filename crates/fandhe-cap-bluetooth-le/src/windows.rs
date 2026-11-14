@@ -1,4 +1,4 @@
-//! Windows 向け BLE スキャン実装（Issue #1060）。`device/bluetooth_le.rs` の Windows
+//! Windows 向け BLE スキャン実装（Issue #1060）。本 crate の `driver` の Windows
 //! 経路から呼ばれ、WinRT `BluetoothLEAdvertisementWatcher` を [`present`] /
 //! [`stop_shared`] のセッション管理（ワーカースレッド・期限タイマ・停止合図）で駆動する
 //! （`BluetoothLe` トレイトは通さない。`windows_speech_recognition.rs` と同型）。
@@ -33,10 +33,9 @@
 //! 環境では `ConsentRequired` / `DisabledByUser` を `PermissionDenied` として返す。
 //! 実機確認は未実施（ローカルに MSVC が無く、型検査は `x86_64-pc-windows-gnu` のみ）。
 
-use std::sync::{mpsc, Mutex};
+use std::sync::{Mutex, mpsc};
 use std::time::{Duration, Instant};
 
-use windows::core::Ref;
 use windows::Devices::Bluetooth::Advertisement::{
     BluetoothLEAdvertisementReceivedEventArgs, BluetoothLEAdvertisementWatcher,
     BluetoothLEAdvertisementWatcherStoppedEventArgs, BluetoothLEScanningMode,
@@ -44,11 +43,12 @@ use windows::Devices::Bluetooth::Advertisement::{
 use windows::Devices::Bluetooth::BluetoothAdapter;
 use windows::Devices::Radios::RadioState;
 use windows::Foundation::TypedEventHandler;
+use windows::core::Ref;
 
-use fandhe_device::bluetooth_le::BleDevice;
-use fandhe_device::DeviceError;
+use crate::contract::BleDevice;
+use crate::error::BluetoothLeError;
 
-use super::bluetooth_le::{error_from_bluetooth_error, finish, OBSERVED};
+use crate::{OBSERVED, error_from_bluetooth_error, finish};
 
 /// `RawSignalStrengthInDBm` の「取得不能」番兵（実際の値域と衝突しないため `None` に写す）。
 const RSSI_UNAVAILABLE: i16 = -127;
@@ -76,17 +76,17 @@ fn clear_if_current(request_id: u64) {
 
 /// `windows::core::Error` → 契約のエラー。アクセス拒否だけ `PermissionDenied`、
 /// それ以外は内部エラー（HRESULT は画面へ出さない）。
-fn map_win_error(e: &windows::core::Error, what: &'static str) -> DeviceError {
+fn map_win_error(e: &windows::core::Error, what: &'static str) -> BluetoothLeError {
     if e.code().0 == E_ACCESSDENIED {
-        DeviceError::PermissionDenied("bluetooth_le")
+        BluetoothLeError::PermissionDenied("bluetooth_le")
     } else {
-        DeviceError::Internal(what)
+        BluetoothLeError::Internal(what)
     }
 }
 
 /// `device/bluetooth_le.rs::drive_callback` から呼ばれる。ワーカーを起動して即座に返る。
 /// 進行中のセッションがあれば停止を送って置き換える（古い結果は request_id 照合で捨てる）。
-pub(crate) fn present(request_id: u64, duration: Duration) -> Result<(), DeviceError> {
+pub(crate) fn present(request_id: u64, duration: Duration) -> Result<(), BluetoothLeError> {
     let (stop_tx, stop_rx) = mpsc::channel();
     {
         let mut session = lock_session();
@@ -106,7 +106,7 @@ pub(crate) fn present(request_id: u64, duration: Duration) -> Result<(), DeviceE
     });
     if spawned.is_err() {
         clear_if_current(request_id);
-        return Err(DeviceError::Internal("bluetooth_le present"));
+        return Err(BluetoothLeError::Internal("bluetooth_le present"));
     }
     Ok(())
 }
@@ -132,7 +132,7 @@ fn run_scan(
     request_id: u64,
     duration: Duration,
     stop_rx: &mpsc::Receiver<()>,
-) -> Result<(), DeviceError> {
+) -> Result<(), BluetoothLeError> {
     // アダプタ無し（null）は windows クレートが空エラー（code 0）の `Err` にして返す。
     // その場合だけ Unsupported。アクセス拒否は PermissionDenied、それ以外は Internal。
     let adapter = BluetoothAdapter::GetDefaultAsync()
@@ -140,7 +140,7 @@ fn run_scan(
         .get()
         .map_err(|e| {
             if e.code().0 == 0 {
-                DeviceError::Unsupported("bluetooth_le")
+                BluetoothLeError::Unsupported("bluetooth_le")
             } else {
                 map_win_error(&e, "bluetooth_le init")
             }
@@ -149,7 +149,7 @@ fn run_scan(
         .IsLowEnergySupported()
         .map_err(|e| map_win_error(&e, "bluetooth_le init"))?
     {
-        return Err(DeviceError::Unsupported("bluetooth_le"));
+        return Err(BluetoothLeError::Unsupported("bluetooth_le"));
     }
     let radio = adapter
         .GetRadioAsync()
@@ -160,7 +160,7 @@ fn run_scan(
         .State()
         .map_err(|e| map_win_error(&e, "bluetooth_le radio"))?;
     if state == RadioState::Off || state == RadioState::Disabled {
-        return Err(DeviceError::Disabled("bluetooth_le"));
+        return Err(BluetoothLeError::Disabled("bluetooth_le"));
     }
 
     let watcher = BluetoothLEAdvertisementWatcher::new()
@@ -247,7 +247,7 @@ fn run_scan(
         match stopped_rx.recv() {
             Ok(0) => Ok(()),
             Ok(code) => Err(stopped_error(code, false)),
-            Err(_) => Err(DeviceError::Internal("bluetooth_le stop")),
+            Err(_) => Err(BluetoothLeError::Internal("bluetooth_le stop")),
         }
     })();
 
@@ -260,10 +260,10 @@ fn run_scan(
 
 /// `Stopped` の `BluetoothError` コードを契約のエラーへ写す。`early` は期限前の OS 起点停止
 /// （Success でも失敗）。Error を読めなかった（-1）場合は `Internal`。
-fn stopped_error(code: i32, early: bool) -> DeviceError {
+fn stopped_error(code: i32, early: bool) -> BluetoothLeError {
     match code {
-        0 if early => DeviceError::Internal("bluetooth_le stopped early"),
-        -1 => DeviceError::Internal("bluetooth_le stopped"),
+        0 if early => BluetoothLeError::Internal("bluetooth_le stopped early"),
+        -1 => BluetoothLeError::Internal("bluetooth_le stopped"),
         c => error_from_bluetooth_error(c),
     }
 }
@@ -280,9 +280,18 @@ mod tests {
 
     #[test]
     fn stopped_error_maps_early_success_and_radio_off() {
-        assert!(matches!(stopped_error(0, true), DeviceError::Internal(_)));
-        assert!(matches!(stopped_error(1, false), DeviceError::Disabled(_)));
-        assert!(matches!(stopped_error(-1, false), DeviceError::Internal(_)));
+        assert!(matches!(
+            stopped_error(0, true),
+            BluetoothLeError::Internal(_)
+        ));
+        assert!(matches!(
+            stopped_error(1, false),
+            BluetoothLeError::Disabled(_)
+        ));
+        assert!(matches!(
+            stopped_error(-1, false),
+            BluetoothLeError::Internal(_)
+        ));
     }
 
     #[test]

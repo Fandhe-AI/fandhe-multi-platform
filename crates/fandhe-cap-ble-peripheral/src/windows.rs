@@ -1,6 +1,6 @@
-//! Windows 向け BLE の周辺機器役実装（Issue #1101）。`device/ble_peripheral.rs` の Windows 経路
+//! Windows 向け BLE の周辺機器役実装（Issue #1101）。本 crate の `driver` の Windows 経路
 //! （`platform_ble_peripheral`）から呼ばれ、WinRT `GattServiceProvider` で固定のサービス UUID 1 つ・
-//! 読み取り専用の特性 1 つを公開する。契約と守る範囲は `fandhe_device::ble_peripheral` のモジュール
+//! 読み取り専用の特性 1 つを公開する。契約と守る範囲は `crate::contract` のモジュール
 //! doc、状態の写像（`BluetoothError` / アドバタイズ status → 事象）はそこの純関数が SSOT。
 //!
 //! # 流れ（専用ワーカーの待たない状態機械）
@@ -43,7 +43,6 @@
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, OnceLock};
 
-use windows::core::{Interface, Ref, RuntimeType, GUID, HRESULT};
 use windows::Devices::Bluetooth::BluetoothAdapter;
 use windows::Devices::Bluetooth::GenericAttributeProfile::{
     GattCharacteristicProperties, GattLocalCharacteristic, GattLocalCharacteristicParameters,
@@ -55,16 +54,17 @@ use windows::Devices::Bluetooth::GenericAttributeProfile::{
 use windows::Devices::Radios::{Radio, RadioState};
 use windows::Foundation::TypedEventHandler;
 use windows::Storage::Streams::DataWriter;
+use windows::core::{GUID, HRESULT, Interface, Ref, RuntimeType};
 use windows_future::{AsyncOperationCompletedHandler, AsyncStatus, IAsyncInfo, IAsyncOperation};
 
-use fandhe_device::ble_peripheral::{
-    end_reason_from_windows_bluetooth_error, event_from_windows_advertisement_status,
-    BlePeripheral, EndReason, OnEvent, PeripheralEvent, StartOutcome, StopOutcome,
-    CHARACTERISTIC_UUID, READ_VALUE, SERVICE_UUID,
+use crate::contract::{
+    BlePeripheral, CHARACTERISTIC_UUID, EndReason, OnEvent, PeripheralEvent, READ_VALUE,
+    SERVICE_UUID, StartOutcome, StopOutcome, end_reason_from_windows_bluetooth_error,
+    event_from_windows_advertisement_status,
 };
-use fandhe_device::DeviceError;
+use crate::error::BlePeripheralError;
 
-use super::ble_peripheral::SessionSlot;
+use crate::SessionSlot;
 
 /// `E_ACCESSDENIED`。
 const E_ACCESSDENIED: i32 = 0x8007_0005_u32 as i32;
@@ -77,7 +77,7 @@ static SESSION: SessionSlot = SessionSlot::new();
 /// ワーカーへの命令。開始・停止・各段の完了・OS の通知はすべてここを順に通る。
 enum Cmd {
     Start(u64),
-    Stop(Sender<Result<StopOutcome, DeviceError>>),
+    Stop(Sender<Result<StopOutcome, BlePeripheralError>>),
     Adapter(u64, windows::core::Result<BluetoothAdapter>),
     Radio(u64, windows::core::Result<Radio>),
     Provider(u64, windows::core::Result<GattServiceProviderResult>),
@@ -151,11 +151,7 @@ impl Running {
                 ok = false;
             }
         }
-        if ok {
-            Ok(())
-        } else {
-            Err(())
-        }
+        if ok { Ok(()) } else { Err(()) }
     }
 
     /// 保持しているラジオが切れているか（同期プロパティの読み取りで、待たない）。
@@ -233,17 +229,17 @@ fn worker() -> Option<&'static Sender<Cmd>> {
 }
 
 impl BlePeripheral for WindowsBlePeripheral {
-    fn start(&self, session: u64, on_event: OnEvent) -> Result<StartOutcome, DeviceError> {
+    fn start(&self, session: u64, on_event: OnEvent) -> Result<StartOutcome, BlePeripheralError> {
         SESSION.set(session, on_event);
         let sent = worker().is_some_and(|tx| tx.send(Cmd::Start(session)).is_ok());
         if !sent {
             SESSION.clear();
-            return Err(DeviceError::Internal("ble_peripheral start"));
+            return Err(BlePeripheralError::Internal("ble_peripheral start"));
         }
         Ok(StartOutcome::Accepted)
     }
 
-    fn stop(&self) -> Result<StopOutcome, DeviceError> {
+    fn stop(&self) -> Result<StopOutcome, BlePeripheralError> {
         SESSION.clear();
         // ワーカー未起動なら動いていない。
         let Some(Some(tx)) = WORKER.get() else {
@@ -251,16 +247,16 @@ impl BlePeripheral for WindowsBlePeripheral {
         };
         let (reply_tx, reply_rx) = mpsc::channel();
         if tx.send(Cmd::Stop(reply_tx)).is_err() {
-            return Err(DeviceError::Internal("ble_peripheral stop"));
+            return Err(BlePeripheralError::Internal("ble_peripheral stop"));
         }
         // ワーカーは OS を待たないので、Stop には即座に返事が返る。
         reply_rx
             .recv()
-            .unwrap_or(Err(DeviceError::Internal("ble_peripheral stop")))
+            .unwrap_or(Err(BlePeripheralError::Internal("ble_peripheral stop")))
     }
 }
 
-/// `device/ble_peripheral.rs` から呼ばれる、プロセスに 1 つの実装。
+/// 本 crate の `driver` から呼ばれる、プロセスに 1 つの実装。
 pub(crate) fn implementation() -> Arc<dyn BlePeripheral> {
     Arc::new(WindowsBlePeripheral)
 }
@@ -406,20 +402,20 @@ fn step(state: State, cmd: Cmd, tx: &Sender<Cmd>) -> State {
                     State::Idle
                 }
                 Err(()) => {
-                    let _ = reply.send(Err(DeviceError::Internal("ble_peripheral stop")));
+                    let _ = reply.send(Err(BlePeripheralError::Internal("ble_peripheral stop")));
                     State::Running(r)
                 }
             },
         },
         Cmd::Read(session) => {
             let mut state = state;
-            if let State::Running(r) = &mut state {
-                if r.session == session {
-                    if r.advertising {
-                        SESSION.deliver(session, PeripheralEvent::Read);
-                    } else {
-                        r.early_reads += 1;
-                    }
+            if let State::Running(r) = &mut state
+                && r.session == session
+            {
+                if r.advertising {
+                    SESSION.deliver(session, PeripheralEvent::Read);
+                } else {
+                    r.early_reads += 1;
                 }
             }
             state
@@ -456,11 +452,7 @@ fn step(state: State, cmd: Cmd, tx: &Sender<Cmd>) -> State {
                     }
                 }
             }
-            if released {
-                State::Idle
-            } else {
-                state
-            }
+            if released { State::Idle } else { state }
         }
     }
 }

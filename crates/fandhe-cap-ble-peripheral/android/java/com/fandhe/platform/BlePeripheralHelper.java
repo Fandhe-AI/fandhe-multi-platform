@@ -1,5 +1,8 @@
 package com.fandhe.platform;
 
+import java.util.WeakHashMap;
+import java.util.Collections;
+import android.app.Activity;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
@@ -38,8 +41,8 @@ import java.util.concurrent.CountDownLatch;
 
 // BLE の周辺機器役（Issue #1123、親 #164 の b-android）の Android 実装ヘルパー。固定の GATT サービス 1 つと
 // 読み取り専用の特性 1 つを公開し、アドバタイズする。書き込み・通知・ペアリング・背景でのアドバタイズは範囲外。
-// MainActivity から生成・委譲される。Rust の `device/android_ble_peripheral.rs` が
-// `MainActivity.blePeripheralStart`（開始）と `blePeripheralStop`（停止）を JNI で呼び、事象は native 2 本で返す。
+// Activity ごとに 1 つ、`BlePeripheralLifecycle`（`FeatureLifecycleProvider` 継承）が `attach` で生成して `HELPERS` に持つ。
+// Rust の `fandhe-cap-ble-peripheral`（`src/android.rs`）が static の `start`（開始）と `stop`（停止）（第 1 引数は Activity）を JNI で呼び、事象は native 2 本で返す。
 // UUID と値は Rust の定数を引数で受け取る（Java に複製しない）。端末名は scan response に OS が載せる。
 //
 // 並行性: 公開の状態（current・GATT server・advertiser・receiver）は HandlerThread 1 本（bg）専用でロックを
@@ -82,7 +85,7 @@ final class BlePeripheralHelper {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final HandlerThread thread = new HandlerThread("ble-peripheral");
     private final Handler bg;
-    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity のフィールド初期化子で生成する。
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`BlePeripheralLifecycle.onHostCreated`（`Activity.onCreate` の中）から `attach` で生成する。
     private final ActivityResultLauncher<String[]> permissionLauncher;
 
     // main 専用。ダイアログ表示中に再要求が来たら、launch せずこの token だけ差し替える。
@@ -102,7 +105,44 @@ final class BlePeripheralHelper {
     // 解放に失敗した資源が残っている間 true。start() が読むので volatile。回収できるまで新しい公開を受け付けない。
     private volatile boolean unreleased;
 
-    BlePeripheralHelper(ComponentActivity activity) {
+    // Activity ごとの helper（上記クラス冒頭コメント参照）。
+    private static final Map<Activity, BlePeripheralHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    // Activity の生成時（`BlePeripheralLifecycle` から、UI スレッド）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new BlePeripheralHelper(activity));
+    }
+
+    // Activity の破棄時（同上）。再生成を含む。保持している資源を解放し、保留中の要求を捨てる。
+    static void detach(Activity activity) {
+        BlePeripheralHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // `BlePeripheralLifecycle` から（UI スレッド）。helper が無ければ何もしない。
+    static void stopped(Activity activity) {
+        BlePeripheralHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onStop();
+        }
+    }
+
+    // Rust から呼ぶ入口。helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、失敗で確定する。
+    static int start(Activity activity, long token, String service, String characteristic, String text) {
+        BlePeripheralHelper helper = HELPERS.get(activity);
+        return helper == null ? 1 : helper.start(token, service, characteristic, text);
+    }
+
+    // Rust から呼ぶ入口。helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、失敗で確定する。
+    static int stop(Activity activity) {
+        BlePeripheralHelper helper = HELPERS.get(activity);
+        return helper == null ? STOP_NOT_RUNNING : helper.stop();
+    }
+
+    private BlePeripheralHelper(ComponentActivity activity) {
         this.activity = activity;
         thread.start();
         bg = new Handler(thread.getLooper());

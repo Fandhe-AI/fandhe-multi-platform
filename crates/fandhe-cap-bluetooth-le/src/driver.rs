@@ -2,7 +2,7 @@
 //! ドライバ。`fandhe_core::screens::ble_scan`（端末依存ゼロ）の要求を観測し、結果を
 //! `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約の SSOT は `fandhe_device::bluetooth_le`（10 秒・上限 50 件・`normalize_scan`）。
+//! 契約の SSOT は `crate::contract`（10 秒・上限 50 件・`normalize_scan`）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
 //! （`device.rs` モジュール doc と同じ理由）。
@@ -22,15 +22,15 @@
 //!
 //! 期限は `SCAN_DURATION_MS` だけ（OS 側へ渡して一致させる、同 3 節）。画面離脱は
 //! プロセス終了と同義（`FANDHE_PROXY_APP` は 1 プロセス 1 画面）のため、
-//! [`stop_shared_scan`] を `device::shutdown` から呼んでスキャンを止める。
+//! [`stop_shared_scan`] を `fandhe-gallery` の終了処理から呼んでスキャンを止める。
 //! 再要求は古いセッションを置き換え、古い request_id の結果は照合して捨てる。
 //!
 //! # Android（#1062）
 //!
 //! iOS / macOS / Windows と同じ pull 型 [`bridge`] / [`OBSERVED`] を使う。Java 側
-//! （`MainActivity.requestBleScan`）が `BluetoothLeScanner` を UI スレッド 1 本に集約して
+//! （`BluetoothLeHelper.requestBleScan`）が `BluetoothLeScanner` を UI スレッド 1 本に集約して
 //! 動かし、広告ごとに `nativeOnBleScanResult`、終了時に 1 回 `nativeOnBleScanFinished`
-//! を呼ぶ（`device/android.rs`）。期限は `SCAN_DURATION_MS` を JNI 引数で渡し Java は
+//! を呼ぶ（`crate::android`）。期限は `SCAN_DURATION_MS` を JNI 引数で渡し Java は
 //! それをそのまま使う。停止は Activity のライフサイクル（`onPause` / `onDestroy`）で
 //! 完結するため [`stop_shared_scan`] に Android 分岐は無い。
 //!
@@ -49,26 +49,26 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use fandhe_core::screens::ble_scan::{finish_scan, mark_scanning, take_request, BleScanState};
-use fandhe_core::screens::ble_scan::{BleRow, ScanError};
 #[cfg(not(any(
     target_os = "ios",
     target_os = "macos",
     target_os = "windows",
     target_os = "android"
 )))]
-use fandhe_device::bluetooth_le::BluetoothLe;
-use fandhe_device::bluetooth_le::{normalize_scan, BleDevice};
-use fandhe_device::DeviceError;
+use crate::contract::BluetoothLe;
+use crate::contract::{BleDevice, normalize_scan};
+use crate::error::BluetoothLeError;
+use fandhe_core::screens::ble_scan::{BleRow, ScanError};
+use fandhe_core::screens::ble_scan::{BleScanState, finish_scan, mark_scanning, take_request};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 const FEATURE: &str = "bluetooth_le";
 
-/// 契約の `Result<Vec<BleDevice>, DeviceError>` を画面用へ写す（種別は 1 対 1、
+/// 契約の `Result<Vec<BleDevice>, BluetoothLeError>` を画面用へ写す（種別は 1 対 1、
 /// その他は `Display` 文言のみ。内部構造は出さない、security.md A09）。
 pub(crate) fn to_core(
-    result: Result<Vec<BleDevice>, DeviceError>,
+    result: Result<Vec<BleDevice>, BluetoothLeError>,
 ) -> Result<Vec<BleRow>, ScanError> {
     match result {
         Ok(devices) => Ok(devices
@@ -79,10 +79,10 @@ pub(crate) fn to_core(
                 rssi_dbm: d.rssi_dbm,
             })
             .collect()),
-        Err(DeviceError::Disabled(_)) => Err(ScanError::Disabled),
-        Err(DeviceError::PermissionDenied(_)) => Err(ScanError::PermissionDenied),
-        Err(DeviceError::Unsupported(_)) => Err(ScanError::Unsupported),
-        Err(DeviceError::Cancelled(_)) => Err(ScanError::Cancelled),
+        Err(BluetoothLeError::Disabled(_)) => Err(ScanError::Disabled),
+        Err(BluetoothLeError::PermissionDenied(_)) => Err(ScanError::PermissionDenied),
+        Err(BluetoothLeError::Unsupported(_)) => Err(ScanError::Unsupported),
+        Err(BluetoothLeError::Cancelled(_)) => Err(ScanError::Cancelled),
         Err(other) => Err(ScanError::Other(other.to_string())),
     }
 }
@@ -97,12 +97,12 @@ pub(crate) fn to_core(
 /// | 3 | 非対応 | `Unsupported` |
 /// | それ以外 | 内部エラー・未知 | `Internal` |
 #[cfg_attr(not(any(target_os = "ios", target_os = "macos")), allow(dead_code))]
-pub(crate) fn error_from_apple_code(code: i32) -> DeviceError {
+pub(crate) fn error_from_apple_code(code: i32) -> BluetoothLeError {
     match code {
-        1 => DeviceError::Disabled(FEATURE),
-        2 => DeviceError::PermissionDenied(FEATURE),
-        3 => DeviceError::Unsupported(FEATURE),
-        _ => DeviceError::Internal("bluetooth_le outcome"),
+        1 => BluetoothLeError::Disabled(FEATURE),
+        2 => BluetoothLeError::PermissionDenied(FEATURE),
+        3 => BluetoothLeError::Unsupported(FEATURE),
+        _ => BluetoothLeError::Internal("bluetooth_le outcome"),
     }
 }
 
@@ -136,14 +136,14 @@ pub(crate) fn rssi_from_apple(raw: i32) -> Option<i16> {
 ///
 /// 6 を `Disabled` にしないのは、画面が「Bluetooth がオフです」と原因を取り違えるため。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn error_from_android_code(code: i32) -> DeviceError {
+pub(crate) fn error_from_android_code(code: i32) -> BluetoothLeError {
     match code {
-        1 => DeviceError::Disabled(FEATURE),
-        2 => DeviceError::PermissionDenied(FEATURE),
-        3 => DeviceError::Unsupported(FEATURE),
-        5 => DeviceError::Internal("bluetooth_le interrupted"),
-        6 => DeviceError::Internal("bluetooth_le location off"),
-        _ => DeviceError::Internal("bluetooth_le outcome"),
+        1 => BluetoothLeError::Disabled(FEATURE),
+        2 => BluetoothLeError::PermissionDenied(FEATURE),
+        3 => BluetoothLeError::Unsupported(FEATURE),
+        5 => BluetoothLeError::Internal("bluetooth_le interrupted"),
+        6 => BluetoothLeError::Internal("bluetooth_le location off"),
+        _ => BluetoothLeError::Internal("bluetooth_le outcome"),
     }
 }
 
@@ -159,12 +159,12 @@ pub(crate) fn error_from_android_code(code: i32) -> DeviceError {
 /// | 9 | `TransportNotSupported` | `Unsupported` |
 /// | それ以外 | `ResourceInUse` / `OtherError` / 未知 | `Internal` |
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub(crate) fn error_from_bluetooth_error(code: i32) -> DeviceError {
+pub(crate) fn error_from_bluetooth_error(code: i32) -> BluetoothLeError {
     match code {
-        1 => DeviceError::Disabled(FEATURE),
-        5 | 7 | 8 => DeviceError::PermissionDenied(FEATURE),
-        6 | 9 => DeviceError::Unsupported(FEATURE),
-        _ => DeviceError::Internal("bluetooth_le outcome"),
+        1 => BluetoothLeError::Disabled(FEATURE),
+        5 | 7 | 8 => BluetoothLeError::PermissionDenied(FEATURE),
+        6 | 9 => BluetoothLeError::Unsupported(FEATURE),
+        _ => BluetoothLeError::Internal("bluetooth_le outcome"),
     }
 }
 
@@ -231,8 +231,8 @@ impl Observer {
     pub(crate) fn finish(
         &self,
         request_id: u64,
-        result: Result<(), DeviceError>,
-    ) -> Option<Result<Vec<BleDevice>, DeviceError>> {
+        result: Result<(), BluetoothLeError>,
+    ) -> Option<Result<Vec<BleDevice>, BluetoothLeError>> {
         let mut guard = self.lock();
         if guard.as_ref().is_none_or(|(id, _)| *id != request_id) {
             return None;
@@ -261,7 +261,7 @@ pub(crate) static OBSERVED: Observer = Observer::new();
     )),
     allow(dead_code)
 )]
-pub(crate) fn finish(request_id: u64, result: Result<(), DeviceError>) {
+pub(crate) fn finish(request_id: u64, result: Result<(), BluetoothLeError>) {
     if let Some(r) = OBSERVED.finish(request_id, result) {
         bridge::deliver(request_id, r);
     }
@@ -278,11 +278,11 @@ pub(crate) fn finish(request_id: u64, result: Result<(), DeviceError>) {
     allow(dead_code)
 )]
 pub(crate) mod bridge {
+    use crate::contract::BleDevice;
+    use crate::error::BluetoothLeError;
     use fandhe_core::screens::ble_scan::{BleRow, ScanError};
-    use fandhe_device::bluetooth_le::BleDevice;
-    use fandhe_device::DeviceError;
 
-    use crate::device::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::RequestSlot;
 
     pub(crate) type Outcome = Result<Vec<BleRow>, ScanError>;
 
@@ -293,8 +293,11 @@ pub(crate) mod bridge {
     }
 
     /// `request_id` 不一致・既に結果ありは捨てて `false`。
-    pub(crate) fn deliver(request_id: u64, result: Result<Vec<BleDevice>, DeviceError>) -> bool {
-        SLOT.deliver(request_id, super::to_core(result))
+    pub(crate) fn deliver(
+        request_id: u64,
+        result: Result<Vec<BleDevice>, BluetoothLeError>,
+    ) -> bool {
+        SLOT.deliver(request_id, crate::to_core(result))
     }
 }
 
@@ -315,24 +318,24 @@ fn drive_callback(state: &BleScanState, sender: &CompletionSender<BleScanState>)
 
         let request_id = bridge::begin();
         OBSERVED.begin(request_id);
-        let duration = Duration::from_millis(fandhe_device::bluetooth_le::SCAN_DURATION_MS);
+        let duration = Duration::from_millis(crate::contract::SCAN_DURATION_MS);
         #[cfg(any(target_os = "ios", target_os = "macos"))]
-        if !super::apple_bluetooth_le::present(request_id, duration) {
+        if !crate::apple::present(request_id, duration) {
             // 依頼自体が同期的に失敗した（コールバックは二度と来ない）。
             finish(
                 request_id,
-                Err(DeviceError::Internal("bluetooth_le present")),
+                Err(BluetoothLeError::Internal("bluetooth_le present")),
             );
         }
         #[cfg(target_os = "windows")]
-        if let Err(e) = super::windows_bluetooth_le::present(request_id, duration) {
+        if let Err(e) = crate::windows::present(request_id, duration) {
             finish(request_id, Err(e));
         }
         #[cfg(target_os = "android")]
-        if !super::android::request_ble_scan(request_id, duration.as_millis() as i32) {
+        if !crate::android::request_ble_scan(request_id, duration.as_millis() as i32) {
             finish(
                 request_id,
-                Err(DeviceError::Internal("bluetooth_le present")),
+                Err(BluetoothLeError::Internal("bluetooth_le present")),
             );
         }
         return;
@@ -342,7 +345,7 @@ fn drive_callback(state: &BleScanState, sender: &CompletionSender<BleScanState>)
         return;
     }
     let generation = state.generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         &bridge::SLOT,
         sender,
         |_request_id| {},
@@ -378,6 +381,19 @@ fn drive(state: &BleScanState, sender: &CompletionSender<BleScanState>, ble: &dy
     }));
 }
 
+/// 同期の [`BluetoothLe`] 実装（`Unsupported` 固定）。iOS・macOS・Windows・Android は権限ダイアログや OS のコールバックの結果を
+/// 受ける pull 型の [`bridge`] / [`OBSERVED`] を使い、同期の [`BluetoothLe`] を持たないため、この入口は上記 4 OS 以外にだけ載せる
+/// （Web は別経路 `fandhe-web-dom`）。
+#[cfg(not(any(
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "android"
+)))]
+pub fn platform_bluetooth_le() -> Box<dyn BluetoothLe> {
+    Box::new(crate::contract::UnsupportedBluetoothLe)
+}
+
 /// `registry.rs` の `effect` 区画から `ble_scan` 画面用に配線される effect ドライバ。
 pub fn ble_scan_effect(state: &BleScanState, sender: &CompletionSender<BleScanState>) {
     #[cfg(any(
@@ -393,30 +409,26 @@ pub fn ble_scan_effect(state: &BleScanState, sender: &CompletionSender<BleScanSt
         target_os = "windows",
         target_os = "android"
     )))]
-    drive(
-        state,
-        sender,
-        &fandhe_device::bluetooth_le::UnsupportedBluetoothLe,
-    );
+    drive(state, sender, &crate::contract::UnsupportedBluetoothLe);
 }
 
-/// Activity 再生成時に旧要求の保留を捨てる（`android.rs::android_main` から呼ばれる。
+/// Activity 再生成時に旧要求の保留を捨てる（`fandhe-gallery` の `android_main` から呼ばれる。
 /// Java 側の追跡は Activity インスタンスのフィールドで、再生成で一緒に消える）。
 #[cfg(target_os = "android")]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     bridge::SLOT.reset();
     OBSERVED.clear();
 }
 
-/// アプリ終了時に進行中のスキャンを止める（`device::shutdown` から呼ばれる）。
+/// アプリ終了時に進行中のスキャンを止める（`fandhe-gallery` の終了処理から呼ばれる）。
 /// Rust 側のロックを握ったまま OS 側の停止を呼ばない（OS 側コールバックが同じ
 /// ロックを取るため、`device-bridge-contracts.md` 11 節）。
 pub fn stop_shared_scan() {
     OBSERVED.clear();
     #[cfg(any(target_os = "ios", target_os = "macos"))]
-    super::apple_bluetooth_le::stop();
+    crate::apple::stop();
     #[cfg(target_os = "windows")]
-    super::windows_bluetooth_le::stop_shared();
+    crate::windows::stop_shared();
 }
 
 #[cfg(test)]
@@ -434,23 +446,23 @@ mod tests {
     #[test]
     fn to_core_maps_each_error_kind_distinctly() {
         assert_eq!(
-            to_core(Err(DeviceError::Disabled("x"))),
+            to_core(Err(BluetoothLeError::Disabled("x"))),
             Err(ScanError::Disabled)
         );
         assert_eq!(
-            to_core(Err(DeviceError::PermissionDenied("x"))),
+            to_core(Err(BluetoothLeError::PermissionDenied("x"))),
             Err(ScanError::PermissionDenied)
         );
         assert_eq!(
-            to_core(Err(DeviceError::Unsupported("x"))),
+            to_core(Err(BluetoothLeError::Unsupported("x"))),
             Err(ScanError::Unsupported)
         );
         assert_eq!(
-            to_core(Err(DeviceError::Cancelled("x"))),
+            to_core(Err(BluetoothLeError::Cancelled("x"))),
             Err(ScanError::Cancelled)
         );
         assert!(matches!(
-            to_core(Err(DeviceError::Internal("x"))),
+            to_core(Err(BluetoothLeError::Internal("x"))),
             Err(ScanError::Other(_))
         ));
         assert_eq!(to_core(Ok(vec![])), Ok(vec![]));
@@ -458,19 +470,25 @@ mod tests {
 
     #[test]
     fn apple_code_table() {
-        assert!(matches!(error_from_apple_code(1), DeviceError::Disabled(_)));
+        assert!(matches!(
+            error_from_apple_code(1),
+            BluetoothLeError::Disabled(_)
+        ));
         assert!(matches!(
             error_from_apple_code(2),
-            DeviceError::PermissionDenied(_)
+            BluetoothLeError::PermissionDenied(_)
         ));
         assert!(matches!(
             error_from_apple_code(3),
-            DeviceError::Unsupported(_)
+            BluetoothLeError::Unsupported(_)
         ));
-        assert!(matches!(error_from_apple_code(4), DeviceError::Internal(_)));
+        assert!(matches!(
+            error_from_apple_code(4),
+            BluetoothLeError::Internal(_)
+        ));
         assert!(matches!(
             error_from_apple_code(99),
-            DeviceError::Internal(_)
+            BluetoothLeError::Internal(_)
         ));
     }
 
@@ -478,20 +496,20 @@ mod tests {
     fn android_code_table() {
         assert!(matches!(
             error_from_android_code(1),
-            DeviceError::Disabled(_)
+            BluetoothLeError::Disabled(_)
         ));
         assert!(matches!(
             error_from_android_code(2),
-            DeviceError::PermissionDenied(_)
+            BluetoothLeError::PermissionDenied(_)
         ));
         assert!(matches!(
             error_from_android_code(3),
-            DeviceError::Unsupported(_)
+            BluetoothLeError::Unsupported(_)
         ));
         for c in [4, 5, 6, 99] {
             assert!(matches!(
                 error_from_android_code(c),
-                DeviceError::Internal(_)
+                BluetoothLeError::Internal(_)
             ));
         }
     }
@@ -507,24 +525,24 @@ mod tests {
     fn bluetooth_error_table() {
         assert!(matches!(
             error_from_bluetooth_error(1),
-            DeviceError::Disabled(_)
+            BluetoothLeError::Disabled(_)
         ));
         for c in [5, 7, 8] {
             assert!(matches!(
                 error_from_bluetooth_error(c),
-                DeviceError::PermissionDenied(_)
+                BluetoothLeError::PermissionDenied(_)
             ));
         }
         for c in [6, 9] {
             assert!(matches!(
                 error_from_bluetooth_error(c),
-                DeviceError::Unsupported(_)
+                BluetoothLeError::Unsupported(_)
             ));
         }
         for c in [2, 3, 4, 99] {
             assert!(matches!(
                 error_from_bluetooth_error(c),
-                DeviceError::Internal(_)
+                BluetoothLeError::Internal(_)
             ));
         }
     }
@@ -548,8 +566,8 @@ mod tests {
         let o = Observer::new();
         o.begin(1);
         o.observe(1, dev("a", None, Some(-50)));
-        let r = o.finish(1, Err(DeviceError::Disabled("x"))).unwrap();
-        assert!(matches!(r, Err(DeviceError::Disabled(_))));
+        let r = o.finish(1, Err(BluetoothLeError::Disabled("x"))).unwrap();
+        assert!(matches!(r, Err(BluetoothLeError::Disabled(_))));
     }
 
     #[test]
@@ -572,11 +590,17 @@ mod tests {
     )))]
     #[test]
     fn unsupported_os_shows_unsupported_not_empty() {
-        use fandhe_core::screens::ble_scan::{start_scan, ScanPhase};
+        use fandhe_core::screens::ble_scan::{ScanPhase, start_scan};
 
-        let ctx = egui::Context::default();
+        /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+        struct NoopWaker;
+        impl fandhe_runtime::RepaintWaker for NoopWaker {
+            fn wake(&self) {}
+            fn wake_after(&self, _delay: std::time::Duration) {}
+        }
+
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = crate::app::egui_sender(tx, ctx);
+        let sender = fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
         let mut state = BleScanState::default();
         start_scan(&mut state);
         ble_scan_effect(&state, &sender);

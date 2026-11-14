@@ -1,25 +1,25 @@
 //! iOS / macOS 向け BLE の周辺機器役の実装（Issue #778 macOS、#779 iOS）。
-//! `device/ble_peripheral.rs` の macOS 経路と `ios_ble_peripheral`（委譲）から呼ばれ、
+//! 本 crate の `driver` の macOS 経路と `ios`（委譲）から呼ばれ、
 //! CoreBluetooth `CBPeripheralManager` 実装（`apple/fandhe_apple_ble_peripheral.m`、`build.rs` が
 //! iOS / macOS の feature `device` 有効時にコンパイル・リンクする）を `unsafe extern "C"` 2 関数で
 //! 呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する（`apple_bluetooth_le.rs` と
 //! 同型、coding-rust.md の FFI 例外規定）。
 //!
 //! `.m` 側のコールバックから [`fandhe_rust_ble_peripheral_event`]（本モジュールが公開する
-//! `extern "C"`）が呼ばれ、`device/ble_peripheral.rs` の `SessionSlot` が session を照合して
-//! 通知先へ渡す。コードの写像は `fandhe_device::ble_peripheral` の純関数（SSOT）。
+//! `extern "C"`）が呼ばれ、本 crate の `driver` の `SessionSlot` が session を照合して
+//! 通知先へ渡す。コードの写像は `crate::contract` の純関数（SSOT）。
 //! 中心役の識別子と読み取りの中身はログに出さない（security.md A09）。
 
 use std::ffi::c_char;
 use std::sync::Arc;
 
-use fandhe_device::ble_peripheral::{
-    event_from_apple_code, stop_outcome_from_apple, BlePeripheral, OnEvent, StartOutcome,
-    StopOutcome, CHARACTERISTIC_UUID, LOCAL_NAME, READ_VALUE, SERVICE_UUID,
+use crate::contract::{
+    BlePeripheral, CHARACTERISTIC_UUID, LOCAL_NAME, OnEvent, READ_VALUE, SERVICE_UUID,
+    StartOutcome, StopOutcome, event_from_apple_code, stop_outcome_from_apple,
 };
-use fandhe_device::DeviceError;
+use crate::error::BlePeripheralError;
 
-use super::ble_peripheral::SessionSlot;
+use crate::SessionSlot;
 
 /// 現在の公開の session と通知先（プロセスに 1 つ）。
 static SESSION: SessionSlot = SessionSlot::new();
@@ -48,14 +48,14 @@ struct ApplePeripheral;
 
 impl BlePeripheral for ApplePeripheral {
     #[allow(unsafe_code)]
-    fn start(&self, session: u64, on_event: OnEvent) -> Result<StartOutcome, DeviceError> {
+    fn start(&self, session: u64, on_event: OnEvent) -> Result<StartOutcome, BlePeripheralError> {
         let (Some(service), Some(characteristic), Some(name), Some(value)) = (
             c_str(SERVICE_UUID),
             c_str(CHARACTERISTIC_UUID),
             c_str(LOCAL_NAME),
             c_str(READ_VALUE),
         ) else {
-            return Err(DeviceError::Internal("ble_peripheral start"));
+            return Err(BlePeripheralError::Internal("ble_peripheral start"));
         };
         // 先に通知先を置く（`.m` の最初の事象を落とさない）。古い session の事象は照合で捨てられる。
         SESSION.set(session, on_event);
@@ -75,12 +75,12 @@ impl BlePeripheral for ApplePeripheral {
             Ok(StartOutcome::Accepted)
         } else {
             SESSION.clear();
-            Err(DeviceError::Internal("ble_peripheral start"))
+            Err(BlePeripheralError::Internal("ble_peripheral start"))
         }
     }
 
     #[allow(unsafe_code)]
-    fn stop(&self) -> Result<StopOutcome, DeviceError> {
+    fn stop(&self) -> Result<StopOutcome, BlePeripheralError> {
         // Rust 側のロックを離してから `.m` の専用キューへ同期ディスパッチする（契約表 11）。
         SESSION.clear();
         // SAFETY: 引数なし。`.m` 側は専用キューへ同期ディスパッチして停止と解放を行う
@@ -90,22 +90,22 @@ impl BlePeripheral for ApplePeripheral {
     }
 }
 
-/// macOS 経路の実装（iOS も `ios_ble_peripheral` が委譲する）。
+/// macOS 経路の実装（iOS も `ios` が委譲する）。
 pub(crate) fn implementation() -> Arc<dyn BlePeripheral> {
     Arc::new(ApplePeripheral)
 }
 
 /// 事象の通知（`.m` の専用キューから呼ばれる）。ポインタを受けず、panic せず、`dispatch_sync` しない。
-/// `code` の意味は `fandhe_device::ble_peripheral` の `CODE_*`。
+/// `code` の意味は `crate::contract` の `CODE_*`。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_ble_peripheral_event(session: u64, code: i32) {
     SESSION.deliver(session, event_from_apple_code(code));
     // iOS では OS コールバックが事象を共有状態へ入れた直後に次フレームを起こす
     // （入力が無いと egui が描画せず画面が処理中のまま止まる、`device-bridge-contracts.md` 4 節）。
     // 古い session の事象でも再描画は無害なので `deliver` の結果に関係なく呼ぶ。
     #[cfg(target_os = "ios")]
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }
 
 #[cfg(test)]

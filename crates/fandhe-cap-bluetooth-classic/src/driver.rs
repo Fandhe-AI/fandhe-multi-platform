@@ -2,7 +2,7 @@
 //! `fandhe_core::screens::bluetooth_classic_show`（端末依存ゼロ）の要求を観測し、結果を
 //! `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約の SSOT は `fandhe_device::bluetooth_classic`（12 秒の窓・上限 50 件・`normalize_devices`・
+//! 契約の SSOT は `crate::contract`（12 秒の窓・上限 50 件・`normalize_devices`・
 //! `decode_code`）。
 //!
 //! 一覧と検索は別の経路で駆動する。
@@ -17,11 +17,11 @@
 //!
 //! # OS ごとの `present`
 //!
-//! 3 OS とも `present(request_id, duration) -> Result<(), DeviceError>` の同じ形で、後続の OS 実装は
+//! 3 OS とも `present(request_id, duration) -> Result<(), BluetoothClassicError>` の同じ形で、後続の OS 実装は
 //! 自分のモジュールの中身だけを埋め、本ファイルの dispatch には触らない。
-//! - macOS: `macos_bluetooth_classic`（IOBluetooth の `IOBluetoothDeviceInquiry`。main queue で動く）
-//! - Windows: `windows_bluetooth_classic`（#660。Win32 `BluetoothFindFirstDevice`。専用ワーカー）
-//! - Android: `android_bluetooth_classic`（#661。`BluetoothAdapter.startDiscovery`。窓は main Handler が閉じる）
+//! - macOS: `macos`（IOBluetooth の `IOBluetoothDeviceInquiry`。main queue で動く）
+//! - Windows: `windows`（#660。Win32 `BluetoothFindFirstDevice`。専用ワーカー）
+//! - Android: `android`（#661。`BluetoothAdapter.startDiscovery`。窓は main Handler が閉じる）
 //!
 //! # 期限・終了
 //!
@@ -37,7 +37,7 @@
 //! # 守る範囲 / 守らない範囲
 //!
 //! 守る: 1 プロセス内の要求と完了の順序、失敗を成功と見せないこと、検索の停止と資源の解放。
-//! 守らない範囲は `fandhe_device::bluetooth_classic` のモジュール doc を参照。
+//! 守らない範囲は `crate::contract` のモジュール doc を参照。
 //! 機器名・アドレスはログへ出さない（security.md A09）。
 
 // 検索の経路（Observer・bridge・finish）は 3 OS とテストからだけ呼ばれる。
@@ -54,16 +54,15 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+use crate::contract::{BluetoothClassic, ClassicDevice, DeviceKey, DeviceKind, normalize_devices};
+use crate::error::BluetoothClassicError;
 use fandhe_core::screens::bluetooth_classic_show::{
-    finish_discover, finish_paired, mark_discovering, mark_paired_reading, take_discover_request,
-    take_paired_request, BluetoothClassicShowState, ClassicError, ClassicKind, ClassicRow,
+    BluetoothClassicShowState, ClassicError, ClassicKind, ClassicRow, finish_discover,
+    finish_paired, mark_discovering, mark_paired_reading, take_discover_request,
+    take_paired_request,
 };
-use fandhe_device::bluetooth_classic::{
-    normalize_devices, BluetoothClassic, ClassicDevice, DeviceKey, DeviceKind,
-};
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 観測バッファに溜める機器数の上限。応答の洪水でメモリが膨らむのを防ぐ
 /// （最終的な件数上限は `finish` 時の `normalize_devices` が `MAX_DEVICES` で切る）。
@@ -74,22 +73,22 @@ const MAX_OBSERVED: usize = 256;
 
 /// 現在のプラットフォームに応じた `BluetoothClassic` 実装を返す（状態を持たないため呼び出しごとに構築）。
 /// Windows・Android は骨格のスタブ（`Unsupported`）で、#660 / #661 が実装に置き換える。
-fn platform_bluetooth_classic() -> Box<dyn BluetoothClassic> {
+pub fn platform_bluetooth_classic() -> Box<dyn BluetoothClassic> {
     #[cfg(target_os = "macos")]
     {
-        super::macos_bluetooth_classic::implementation()
+        crate::macos::implementation()
     }
     #[cfg(target_os = "windows")]
     {
-        super::windows_bluetooth_classic::implementation()
+        crate::windows::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_bluetooth_classic::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
     {
-        Box::new(fandhe_device::bluetooth_classic::UnsupportedBluetoothClassic)
+        Box::new(crate::contract::UnsupportedBluetoothClassic)
     }
 }
 
@@ -110,11 +109,11 @@ fn kind_to_core(kind: DeviceKind) -> ClassicKind {
     }
 }
 
-/// 契約の `Result<Vec<ClassicDevice>, DeviceError>` を画面用へ写す（種別は 1 対 1、
+/// 契約の `Result<Vec<ClassicDevice>, BluetoothClassicError>` を画面用へ写す（種別は 1 対 1、
 /// その他は `Display` 文言のみ。内部構造は出さない、security.md A09）。
 /// `Cancelled` は契約上返らないため `Other` に写す。
 pub(crate) fn to_core(
-    result: Result<Vec<ClassicDevice>, DeviceError>,
+    result: Result<Vec<ClassicDevice>, BluetoothClassicError>,
 ) -> Result<Vec<ClassicRow>, ClassicError> {
     match result {
         Ok(devices) => Ok(devices
@@ -126,9 +125,9 @@ pub(crate) fn to_core(
                 rssi: d.rssi,
             })
             .collect()),
-        Err(DeviceError::PermissionDenied(_)) => Err(ClassicError::PermissionDenied),
-        Err(DeviceError::Disabled(_)) => Err(ClassicError::Disabled),
-        Err(DeviceError::Unsupported(_)) => Err(ClassicError::Unsupported),
+        Err(BluetoothClassicError::PermissionDenied(_)) => Err(ClassicError::PermissionDenied),
+        Err(BluetoothClassicError::Disabled(_)) => Err(ClassicError::Disabled),
+        Err(BluetoothClassicError::Unsupported(_)) => Err(ClassicError::Unsupported),
         Err(other) => Err(ClassicError::Other(other.to_string())),
     }
 }
@@ -159,8 +158,8 @@ impl Observer {
     /// 機器 1 件を足す。現在の要求のときだけ。同じキーの合流規則は `normalize_devices` を
     /// 再利用する（規則を二重に書かない）。
     ///
-    /// 呼び出し元は macOS の `macos_bluetooth_classic`、Windows の `windows_bluetooth_classic`、
-    /// Android の `android_bluetooth_classic`。
+    /// 呼び出し元は macOS の `macos`、Windows の `windows`、
+    /// Android の `android`。
     #[cfg_attr(not(any(target_os = "macos", test)), allow(dead_code))]
     pub(crate) fn observe(&self, request_id: u64, key: DeviceKey, device: ClassicDevice) {
         let mut guard = self.lock();
@@ -183,8 +182,8 @@ impl Observer {
     pub(crate) fn finish(
         &self,
         request_id: u64,
-        result: Result<(), DeviceError>,
-    ) -> Option<Result<Vec<ClassicDevice>, DeviceError>> {
+        result: Result<(), BluetoothClassicError>,
+    ) -> Option<Result<Vec<ClassicDevice>, BluetoothClassicError>> {
         let mut guard = self.lock();
         if guard.as_ref().is_none_or(|(id, _)| *id != request_id) {
             return None;
@@ -206,7 +205,7 @@ pub(crate) static OBSERVED: Observer = Observer::new();
 /// OS 側の完了通知。バッファを確定して [`bridge`] へ置く（古い要求は捨てる）。
 /// 呼び出し元（検索ドライバ・OS 実装）と同じ OS 集合にだけ置く（契約表 7 節）。
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
-pub(crate) fn finish(request_id: u64, result: Result<(), DeviceError>) {
+pub(crate) fn finish(request_id: u64, result: Result<(), BluetoothClassicError>) {
     if let Some(r) = OBSERVED.finish(request_id, result) {
         bridge::deliver(request_id, r);
     }
@@ -214,11 +213,11 @@ pub(crate) fn finish(request_id: u64, result: Result<(), DeviceError>) {
 
 /// OS からのコールバックとの橋渡し（pull 型、`RequestSlot` の facade）。
 pub(crate) mod bridge {
+    use crate::contract::ClassicDevice;
+    use crate::error::BluetoothClassicError;
     use fandhe_core::screens::bluetooth_classic_show::{ClassicError, ClassicRow};
-    use fandhe_device::bluetooth_classic::ClassicDevice;
-    use fandhe_device::DeviceError;
 
-    use crate::device::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::RequestSlot;
 
     pub(crate) type Outcome = Result<Vec<ClassicRow>, ClassicError>;
 
@@ -232,7 +231,7 @@ pub(crate) mod bridge {
     /// `request_id` 不一致・既に結果ありは捨てて `false`。
     pub(crate) fn deliver(
         request_id: u64,
-        result: Result<Vec<ClassicDevice>, DeviceError>,
+        result: Result<Vec<ClassicDevice>, BluetoothClassicError>,
     ) -> bool {
         SLOT.deliver(request_id, super::to_core(result))
     }
@@ -271,13 +270,13 @@ fn drive_discover_callback(
 
         let request_id = bridge::begin();
         OBSERVED.begin(request_id);
-        let duration = Duration::from_millis(fandhe_device::bluetooth_classic::DISCOVERY_WINDOW_MS);
+        let duration = Duration::from_millis(crate::contract::DISCOVERY_WINDOW_MS);
         #[cfg(target_os = "macos")]
-        let started = super::macos_bluetooth_classic::present(request_id, duration);
+        let started = crate::macos::present(request_id, duration);
         #[cfg(target_os = "windows")]
-        let started = super::windows_bluetooth_classic::present(request_id, duration);
+        let started = crate::windows::present(request_id, duration);
         #[cfg(target_os = "android")]
-        let started = super::android_bluetooth_classic::present(request_id, duration);
+        let started = crate::android::present(request_id, duration);
         if let Err(e) = started {
             // 依頼自体が同期的に失敗した（コールバックは二度と来ない）。
             finish(request_id, Err(e));
@@ -289,7 +288,7 @@ fn drive_discover_callback(
         return;
     }
     let generation = state.discover_generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         &bridge::SLOT,
         sender,
         |_request_id| {},
@@ -337,33 +336,40 @@ pub fn bluetooth_classic_show_effect(
     drive_discover_sync(state, sender, platform_bluetooth_classic().as_ref());
 }
 
-/// Activity 再生成時に旧要求の保留を捨てる（`android.rs::android_main` から呼ばれる。
+/// Activity 再生成時に旧要求の保留を捨てる（`fandhe-gallery` の `android_main` から呼ばれる。
 /// Java 側の追跡は Activity インスタンスのフィールドで、再生成で一緒に消える）。
 #[cfg(target_os = "android")]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     bridge::SLOT.reset();
     OBSERVED.clear();
 }
 
-/// アプリ終了時に進行中の検索を止める（`device::shutdown` から呼ばれる）。
+/// アプリ終了時に進行中の検索を止める（`fandhe-gallery` の終了処理から呼ばれる）。
 /// Rust 側のロックを握ったまま OS 側の停止を呼ばない（macOS の停止は main queue へ同期ディスパッチし、
 /// main 側のコールバックが同じロックを取るため、`device-bridge-contracts.md` 11 節）。
 /// `OBSERVED.clear()` はロックを解放してから OS 側を止める。
 pub fn stop_shared_discovery() {
     OBSERVED.clear();
     #[cfg(target_os = "macos")]
-    super::macos_bluetooth_classic::stop();
+    crate::macos::stop();
     #[cfg(target_os = "windows")]
-    super::windows_bluetooth_classic::stop_shared();
+    crate::windows::stop_shared();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+    use crate::contract::{MAX_DEVICES, UnsupportedBluetoothClassic, decode_code};
     use fandhe_core::screens::bluetooth_classic_show::{
-        start_discover, DiscoverPhase, PairedPhase, UNSUPPORTED_ERROR,
+        DiscoverPhase, PairedPhase, UNSUPPORTED_ERROR, start_discover,
     };
-    use fandhe_device::bluetooth_classic::{decode_code, UnsupportedBluetoothClassic, MAX_DEVICES};
     use std::sync::mpsc;
 
     fn key(s: &str) -> DeviceKey {
@@ -382,23 +388,23 @@ mod tests {
     #[test]
     fn to_core_maps_each_error_kind_distinctly() {
         assert_eq!(
-            to_core(Err(DeviceError::PermissionDenied("x"))),
+            to_core(Err(BluetoothClassicError::PermissionDenied("x"))),
             Err(ClassicError::PermissionDenied)
         );
         assert_eq!(
-            to_core(Err(DeviceError::Disabled("x"))),
+            to_core(Err(BluetoothClassicError::Disabled("x"))),
             Err(ClassicError::Disabled)
         );
         assert_eq!(
-            to_core(Err(DeviceError::Unsupported("x"))),
+            to_core(Err(BluetoothClassicError::Unsupported("x"))),
             Err(ClassicError::Unsupported)
         );
         assert!(matches!(
-            to_core(Err(DeviceError::Cancelled("x"))),
+            to_core(Err(BluetoothClassicError::Cancelled("x"))),
             Err(ClassicError::Other(_))
         ));
         assert!(matches!(
-            to_core(Err(DeviceError::Internal("x"))),
+            to_core(Err(BluetoothClassicError::Internal("x"))),
             Err(ClassicError::Other(_))
         ));
         assert_eq!(to_core(Ok(vec![])), Ok(vec![]));
@@ -426,8 +432,10 @@ mod tests {
         let o = Observer::new();
         o.begin(1);
         o.observe(1, key("a"), dev(Some("a"), false, None));
-        let r = o.finish(1, Err(DeviceError::Disabled("x"))).unwrap();
-        assert!(matches!(r, Err(DeviceError::Disabled(_))));
+        let r = o
+            .finish(1, Err(BluetoothClassicError::Disabled("x")))
+            .unwrap();
+        assert!(matches!(r, Err(BluetoothClassicError::Disabled(_))));
         assert_eq!(
             to_core(r),
             Err(ClassicError::Disabled),
@@ -463,24 +471,25 @@ mod tests {
         bridge::SLOT.reset();
     }
 
-    struct Failing(DeviceError);
+    struct Failing(BluetoothClassicError);
     impl BluetoothClassic for Failing {
-        fn paired(&self) -> Result<Vec<ClassicDevice>, DeviceError> {
+        fn paired(&self) -> Result<Vec<ClassicDevice>, BluetoothClassicError> {
             Err(match &self.0 {
-                DeviceError::Disabled(m) => DeviceError::Disabled(m),
-                DeviceError::PermissionDenied(m) => DeviceError::PermissionDenied(m),
-                _ => DeviceError::Internal("x"),
+                BluetoothClassicError::Disabled(m) => BluetoothClassicError::Disabled(m),
+                BluetoothClassicError::PermissionDenied(m) => {
+                    BluetoothClassicError::PermissionDenied(m)
+                }
+                _ => BluetoothClassicError::Internal("x"),
             })
         }
-        fn discover(&self) -> Result<Vec<ClassicDevice>, DeviceError> {
+        fn discover(&self) -> Result<Vec<ClassicDevice>, BluetoothClassicError> {
             self.paired()
         }
     }
 
     fn run_paired(classic: &dyn BluetoothClassic) -> BluetoothClassicShowState {
-        let ctx = egui::Context::default();
         let (tx, rx) = mpsc::channel();
-        let sender = crate::app::egui_sender(tx, ctx);
+        let sender = fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
         let mut state = BluetoothClassicShowState::default();
         drive_paired_sync(&state, &sender, classic);
         while let Ok(c) = rx.try_recv() {
@@ -491,7 +500,7 @@ mod tests {
 
     #[test]
     fn paired_failures_never_become_empty_success() {
-        let s = run_paired(&Failing(DeviceError::Disabled("x")));
+        let s = run_paired(&Failing(BluetoothClassicError::Disabled("x")));
         assert_eq!(s.paired_phase, PairedPhase::Idle);
         assert_eq!(
             s.paired_error,
@@ -499,7 +508,7 @@ mod tests {
         );
         assert_eq!(s.paired_status, "");
 
-        let s = run_paired(&Failing(DeviceError::PermissionDenied("x")));
+        let s = run_paired(&Failing(BluetoothClassicError::PermissionDenied("x")));
         assert_eq!(
             s.paired_error,
             fandhe_core::screens::bluetooth_classic_show::PERMISSION_DENIED_ERROR
@@ -517,9 +526,8 @@ mod tests {
     #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
     #[test]
     fn fallback_discover_completes_with_unsupported() {
-        let ctx = egui::Context::default();
         let (tx, rx) = mpsc::channel();
-        let sender = crate::app::egui_sender(tx, ctx);
+        let sender = fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
         let mut state = BluetoothClassicShowState::default();
         start_discover(&mut state);
         drive_discover_sync(&state, &sender, &UnsupportedBluetoothClassic);
@@ -535,9 +543,8 @@ mod tests {
     fn discover_state_untouched_by_paired_driver() {
         let mut state = BluetoothClassicShowState::default();
         start_discover(&mut state);
-        let ctx = egui::Context::default();
         let (tx, rx) = mpsc::channel();
-        let sender = crate::app::egui_sender(tx, ctx);
+        let sender = fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
         drive_paired_sync(&state, &sender, &UnsupportedBluetoothClassic);
         while let Ok(c) = rx.try_recv() {
             c(&mut state);

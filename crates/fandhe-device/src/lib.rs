@@ -31,12 +31,6 @@ pub mod background_upload;
 pub mod barcode_scan;
 /// Phase 11（端末機能の拡充ループ、親 #905、Issue #906）: 生体認証。
 pub mod biometric_auth;
-/// Phase 11（端末機能の拡充ループ、親 #164、Issue #778）: BLE の周辺機器役（アドバタイズ・読み取り専用の GATT サーバー）。
-pub mod ble_peripheral;
-/// Phase 11（端末機能の拡充ループ、親 #130、Issue #659）: Bluetooth Classic の機器一覧と検索。
-pub mod bluetooth_classic;
-/// Phase 11（端末機能の拡充ループ）: Bluetooth LE の周辺機器スキャン。
-pub mod bluetooth_le;
 /// カメラのライブ映像の縮小の部品（`downscale_packed`・`downscale_yuv420`・`preview_size`）だけ。`fandhe-cap-ar` と
 /// `fandhe-web-dom` が共有する純関数で、機能の契約は `fandhe-cap-camera-preview-stream` が持つ（Issue #812 / #1329、
 /// consumer-app-structure.md §8）。

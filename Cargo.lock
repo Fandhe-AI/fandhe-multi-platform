@@ -1194,6 +1194,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-ble-peripheral"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
+name = "fandhe-cap-bluetooth-classic"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-bluetooth-le"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-calendar"
 version = "0.2.0"
 dependencies = [
@@ -2368,6 +2408,9 @@ dependencies = [
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
  "fandhe-cap-audio-session",
+ "fandhe-cap-ble-peripheral",
+ "fandhe-cap-bluetooth-classic",
+ "fandhe-cap-bluetooth-le",
  "fandhe-cap-calendar",
  "fandhe-cap-call-ui",
  "fandhe-cap-camera-capture",
@@ -2555,6 +2598,7 @@ dependencies = [
  "fandhe-cap-app-lifecycle",
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
+ "fandhe-cap-bluetooth-le",
  "fandhe-cap-camera-preview-stream",
  "fandhe-cap-color-picker",
  "fandhe-cap-compose-mail-sms",

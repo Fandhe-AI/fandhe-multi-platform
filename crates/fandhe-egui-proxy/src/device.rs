@@ -39,16 +39,6 @@ pub mod android_background_task;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_background_upload;
-/// Issue #1123（親 #164）: Android 向け BLE の周辺機器役の実装（骨格は #1122）。`device/ble_peripheral.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_ble_peripheral;
-/// Issue #659: Android 向け Bluetooth Classic の骨格（`Unsupported` のスタブ。#661 が
-/// `BluetoothClassicHelper.java` と JNI で埋める）。`device/bluetooth_classic.rs` の Android 経路から呼ばれる。
-/// 後続の子がホストテストを足すときに本行の cfg を広げずに済むよう test でもコンパイルする。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_bluetooth_classic;
 /// Issue #1117: Android 向け車載ディスプレイ（Car App Library の Service/Screen を JNI 経由で操作する）。
 /// `device/car_display.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -190,15 +180,6 @@ pub mod apple_barcode_scan;
 /// C ABI ラッパー）。`device/biometric_auth.rs` の macOS/iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_biometric;
-/// Issue #778 macOS・Issue #779 iOS: BLE の周辺機器役実装（`apple/fandhe_apple_ble_peripheral.m` を
-/// 呼ぶ C ABI ラッパー）。`device/ble_peripheral.rs` の macOS 経路と、委譲する
-/// `ios_ble_peripheral`（iOS）から呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_ble_peripheral;
-/// Issue #1060 macOS + #1061 iOS: BLE スキャン実装（`apple/fandhe_apple_bluetooth_le.m` を
-/// 呼ぶ C ABI ラッパー）。`device/bluetooth_le.rs` の iOS / macOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_bluetooth_le;
 /// Issue #1220 macOS + #1221 iOS: 連絡先選択実装（`apple/fandhe_apple_contact_picker.m` を
 /// 呼ぶ C ABI ラッパー）。`device/contact_pick.rs` の Apple 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -296,16 +277,6 @@ pub mod barcode_scan;
 /// Phase 11 の拡充ループ（親 #905、Issue #906/#907/#908）: 生体認証の effect ドライバ
 /// （macOS/iOS/Android/Windows 実装）。
 pub mod biometric_auth;
-/// Phase 11 の拡充ループ（親 #164、Issue #778）: BLE の周辺機器役の effect ドライバ
-/// （macOS・iOS・Windows 実装。Android は骨格で #1123 が実装。他 OS は
-/// `UnsupportedBlePeripheral` 固定）。
-pub mod ble_peripheral;
-/// Phase 11 の拡充ループ（親 #130、Issue #659）: Bluetooth Classic の一覧・検索の effect ドライバ
-/// （macOS 実装。Windows・Android は骨格のスタブで #660 / #661 が埋める。他 OS は `UnsupportedBluetoothClassic` 固定）。
-pub mod bluetooth_classic;
-/// Phase 11 の拡充ループ（親 #1059、Issue #1060）: BLE スキャンの effect ドライバ
-/// （iOS/macOS/Windows/Android 実装、他 OS は `UnsupportedBluetoothLe` 固定。Web は別経路 `fandhe-web-dom`（#1063））。
-pub mod bluetooth_le;
 /// Phase 11 の拡充ループ（親 #152、Issue #1116）: 車載ディスプレイの effect ドライバ。
 /// Android は Car App Library 実装（#1117）、他 OS は `UnsupportedCarDisplay` 固定。
 pub mod car_display;
@@ -366,10 +337,6 @@ pub mod ios_background_upload;
 /// Issue #557: iOS 向けバーコード・QR 読み取りの骨格（実装は #558）。
 #[cfg(target_os = "ios")]
 pub mod ios_barcode_scan;
-/// Issue #779: iOS 向け BLE の周辺機器役（`apple_ble_peripheral` へ委譲する）。
-/// `device/ble_peripheral.rs` の iOS 経路から呼ばれる。
-#[cfg(target_os = "ios")]
-pub mod ios_ble_peripheral;
 /// Issue #1405: iOS 向け方位実装（`ios/fandhe_ios_compass.m` を呼ぶ C ABI ラッパー、CoreLocation の heading）。`device/compass.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -474,12 +441,6 @@ pub mod macos_app_shortcuts;
 /// background_task.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_background_task;
-/// Issue #659: macOS 向け Bluetooth Classic 実装（`macos/fandhe_macos_bluetooth_classic.m` の
-/// IOBluetooth 呼び出しを包む C ABI ラッパー）。`device/bluetooth_classic.rs` の macOS 経路から呼ばれる。
-/// 写像の純関数をホストでテストできるよう cfg は `any(macos, test)`。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_bluetooth_classic;
 /// Issue #482: macOS 向け音楽ライブラリ実装（`macos/fandhe_macos_music_library.m` の `ITLibrary` を
 /// 呼ぶ C ABI ラッパー）。`device/music_library.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -625,20 +586,6 @@ pub mod windows_background_task;
 /// Windows Hello ラッパー）。`device/biometric_auth.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_biometric;
-/// Issue #1101: Windows 向け BLE の周辺機器役（WinRT `GattServiceProvider`）。
-/// `device/ble_peripheral.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_ble_peripheral;
-/// Issue #659: Windows 向け Bluetooth Classic の骨格（`Unsupported` のスタブ。#660 が
-/// `BluetoothFindFirstDevice` で埋める）。`device/bluetooth_classic.rs` の Windows 経路から呼ばれる。
-/// 後続の子がホストテストを足すときに本行の cfg を広げずに済むよう test でもコンパイルする。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_bluetooth_classic;
-/// Issue #1060: Windows 向け BLE スキャン実装（WinRT `BluetoothLEAdvertisementWatcher`
-/// ラッパー）。`device/bluetooth_le.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_bluetooth_le;
 /// Issue #1404: Windows 向け方位実装（WinRT `Compass` の pull）。`device/compass.rs` の windows 経路から呼ばれる。
 /// 写像の純関数をホストでテストできるよう cfg は `any(windows, test)`。
 #[cfg(any(target_os = "windows", test))]
@@ -739,12 +686,6 @@ use fandhe_device::{storage::Storage, DeviceError};
 pub fn shutdown() {
     tts::stop_shared_tts();
     location::stop_shared_location();
-    bluetooth_le::stop_shared_scan();
-    // 公開の停止は `.m` の専用キューへの短い同期呼び出し。Rust 側のロックは握らない。
-    ble_peripheral::shutdown();
-    // macOS の停止は main queue へ同期ディスパッチする。`shutdown` は eframe の `on_exit`（main thread）から
-    // ロックを握らずに呼ばれるため、main 上なら直接停止し、デッドロックしない。
-    bluetooth_classic::stop_shared_discovery();
     lan_discovery::stop_shared_discovery();
     local_peer::stop_shared_exchange();
     picture_in_picture::shutdown();

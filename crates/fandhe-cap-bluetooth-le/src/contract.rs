@@ -51,7 +51,7 @@
 
 use std::collections::HashMap;
 
-use crate::DeviceError;
+use crate::error::BluetoothLeError;
 
 /// 1 回のスキャン時間（ミリ秒）。
 pub const SCAN_DURATION_MS: u64 = 10_000;
@@ -72,15 +72,15 @@ pub struct BleDevice {
 /// BLE スキャンの契約（モジュール doc の「契約」節）。
 pub trait BluetoothLe: Send + Sync {
     /// 約 [`SCAN_DURATION_MS`] スキャンして [`normalize_scan`] 済みの一覧を返す。
-    fn scan(&self) -> Result<Vec<BleDevice>, DeviceError>;
+    fn scan(&self) -> Result<Vec<BleDevice>, BluetoothLeError>;
 }
 
 /// 対象外 OS（Linux 等）・初期化失敗時のフォールバック。ダミーの成功実装へは倒さない。
 pub struct UnsupportedBluetoothLe;
 
 impl BluetoothLe for UnsupportedBluetoothLe {
-    fn scan(&self) -> Result<Vec<BleDevice>, DeviceError> {
-        Err(DeviceError::Unsupported("bluetooth_le"))
+    fn scan(&self) -> Result<Vec<BleDevice>, BluetoothLeError> {
+        Err(BluetoothLeError::Unsupported("bluetooth_le"))
     }
 }
 
@@ -148,7 +148,7 @@ mod tests {
     fn unsupported_scan_is_error_not_empty() {
         assert!(matches!(
             UnsupportedBluetoothLe.scan(),
-            Err(DeviceError::Unsupported("bluetooth_le"))
+            Err(BluetoothLeError::Unsupported("bluetooth_le"))
         ));
     }
 }
