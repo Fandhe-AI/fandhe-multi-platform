@@ -122,6 +122,8 @@ android {
             @Suppress("DEPRECATION")
             res.srcDirs("../../../crates/fandhe-cap-compose-mail-sms/android/res")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-contacts/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-device-identifier/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-display-refresh-hdr/android/java")

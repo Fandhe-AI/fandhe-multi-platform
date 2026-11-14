@@ -75,7 +75,6 @@ import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
 import android.provider.CalendarContract;
-import android.provider.ContactsContract;
 import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
 import android.speech.RecognitionListener;
@@ -193,17 +192,6 @@ public class MainActivity extends GameActivity {
             long requestId, int code, String name, int fd);
 
     // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
-    // （Issue #1222、Phase 11 型サンプル「連絡先選択」の Android 経路。`nativeOnPhotoPickerResult`
-    // と同型の pull 型）。
-    // requestId: `requestContactPick(long)` が受け取った値をそのまま返す（Rust 側 `bridge` が
-    // 現在の要求と照合し、Activity 再生成後の遅延到着は黙って捨てる）。
-    // code: 0=選択（name が有効）／1=キャンセル／3=失敗（`launch()` 例外・連絡先アプリ無し・
-    // 読み取り失敗・名前なしを一律ここへ畳む。インテント経由に権限拒否は無く 2 は送らない）。
-    // name: 選ばれた連絡先の表示名のみ。ログには出さない。
-    private static native void nativeOnContactPickerResult(
-            long requestId, int code, String name);
-
-    // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
     // （Issue #890、Phase 11 型サンプル「位置情報」の Android 経路に限り追加。
     // Phase 8 の feature `device` 切り離し時に削除する）。継続 push 型
     // （`fandhe_device::location::SharedLocation` 契約）のため requestId を持たない。
@@ -264,13 +252,6 @@ public class MainActivity extends GameActivity {
     // （`android_main`）が再生成のたびに受け皿を捨てるため、再生成をまたいで届いた結果は
     // Rust 側の id 照合で捨てられる。
     private static final RequestTracker photoPickRequest = new RequestTracker();
-    private static final RequestTracker contactPickRequest = new RequestTracker();
-    // 連絡先アプリを開いてから結果コールバックが来るまで true（Issue #1222）。static なので
-    // Activity 再生成をまたいで残り、旧ピッカーの結果が新インスタンスへ届くまで新しい起動を断る。
-    // 断らないと、再生成後に始めた要求 B の id を旧要求 A の結果が消費して B の成功に見える
-    // （`CameraCaptureHelper` の `awaitingCameraResult` と同じ理由）。読み書きは UI スレッドだけで行う。
-    private static boolean contactPickerOpen = false;
-
     // 変換前の元データに許す上限（バイト）。Rust 側 `MAX_PHOTO_BYTES` と揃える。
     private static final long PHOTO_MAX_BYTES = 8L * 1024 * 1024;
     // 変換前に許す画像の長辺（画素）。Rust 側 `MAX_PHOTO_SIDE` と揃える。
@@ -982,26 +963,6 @@ public class MainActivity extends GameActivity {
                 new Thread(() -> deliverPickedPhoto(requestId, uri), "fandhe-photo-pick").start();
             });
 
-    // 連絡先選択（Issue #1222）。`PickContact` は `ACTION_PICK`（`Contacts.CONTENT_TYPE`）で
-    // 連絡先アプリを開く。選んだ 1 件の URI 読み取り権限だけが委譲されるため `READ_CONTACTS`
-    // は不要。Activity 再生成後に旧要求の結果が配送されても、`take()` が NONE なら捨て、
-    // そうでなくても Rust 側の id 照合で捨てられる（`pickPhoto` と同じ理由）。
-    private final ActivityResultLauncher<Void> pickContact =
-            getActivityResultRegistry().register("fandhe:MainActivity:6", this, new ActivityResultContracts.PickContact(), uri -> {
-                contactPickerOpen = false;
-                long requestId = contactPickRequest.take();
-                if (requestId == RequestTracker.NONE) {
-                    return;
-                }
-                if (uri == null) {
-                    nativeOnContactPickerResult(requestId, 1, null);
-                    return;
-                }
-                // ContentResolver の読み取りを UI スレッドでやらない。
-                new Thread(() -> deliverPickedContact(requestId, uri), "fandhe-contact-pick")
-                        .start();
-            });
-
     // 測位の開始・停止を UI スレッド上の resumed 状態と一致させるための可視性フラグ
     // （codex-review P1 指摘、PR #894）。`requestLocationUpdates()` は Rust スレッドから
     // JNI 経由で呼ばれ `runOnUiThread` へ開始要求を積むが、その Runnable の実行前に
@@ -1535,12 +1496,6 @@ public class MainActivity extends GameActivity {
         // 対で「宛先を失った」要求を残さない（`micRecordRequest` と同じ位置づけ、
         // 順序非依存）。
         speechRequest.take();
-
-        // 連絡先選択（Issue #1222）: Rust 側 `android_main` の `contact_pick::
-        // reset_pending_tracking()` と対で、保留中の要求 id を捨てる。旧ピッカーの結果は
-        // 新インスタンスへ届き得るが、id が NONE なので捨てられる。`contactPickerOpen` は
-        // その結果が届くまで true のまま残し、新しい起動を断る。
-        contactPickRequest.take();
 
         sensorManager = getSystemService(SensorManager.class);
         if (sensorManager != null) {
@@ -2328,49 +2283,6 @@ public class MainActivity extends GameActivity {
                 nativeOnPhotoPickerResult(requestId, 2, null, -1);
             }
         });
-    }
-
-    // Rust 側 `device/contact_pick.rs`（Android 分岐）から JNI 経由で呼ばれる（Issue #1222、
-    // 署名 `(J)V`）。即時 return・結果は `nativeOnContactPickerResult`。権限・依存は追加しない。
-    private void requestContactPick(long requestId) {
-        runOnUiThread(() -> {
-            // 再生成前に開いた連絡先アプリの結果がまだ届いていない。その結果がこの要求の id を
-            // 消費しないよう、起動せずに失敗で返す（`contactPickerOpen` doc 参照）。
-            if (contactPickerOpen) {
-                nativeOnContactPickerResult(requestId, 3, null);
-                return;
-            }
-            contactPickRequest.track(requestId);
-            contactPickerOpen = true;
-            try {
-                pickContact.launch(null);
-            } catch (RuntimeException e) {
-                // 連絡先アプリ無し（ActivityNotFoundException）等。コールバックが来ない経路なので
-                // ここで一度だけ通知する。
-                contactPickerOpen = false;
-                contactPickRequest.take();
-                nativeOnContactPickerResult(requestId, 3, null);
-            }
-        });
-    }
-
-    // 選ばれた連絡先の表示名だけを読んで Rust へ渡す（ワーカースレッド）。projection は
-    // DISPLAY_NAME の固定 1 列、selection は使わない。Uri・名前・例外メッセージはログへ出さない（A09）。
-    private void deliverPickedContact(long requestId, Uri uri) {
-        String name = null;
-        try (Cursor c = getContentResolver().query(
-                uri, new String[] {ContactsContract.Contacts.DISPLAY_NAME}, null, null, null)) {
-            if (c != null && c.moveToFirst()) {
-                name = c.getString(0);
-            }
-        } catch (RuntimeException e) {
-            name = null;
-        }
-        if (name == null) {
-            nativeOnContactPickerResult(requestId, 3, null);
-        } else {
-            nativeOnContactPickerResult(requestId, 0, name);
-        }
     }
 
     // 選ばれた写真を Rust へ渡す（ワーカースレッド）。JPEG / PNG は fd をそのまま渡し、それ以外

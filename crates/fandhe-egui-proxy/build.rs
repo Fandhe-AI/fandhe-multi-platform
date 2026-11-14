@@ -81,7 +81,6 @@ fn build() {
 
     // `apple/fandhe_apple_biometric.m`（Issue #906）も macOS 分岐と共用する。
     compile_apple_biometric();
-    compile_apple_contact_picker();
 
     // `apple/fandhe_apple_photo_library.m`（Issue #1254 macOS + #1255 iOS）も macOS 分岐と共用する。
     compile_apple_photo_library();
@@ -175,14 +174,6 @@ fn compile_apple_location() {
 /// リンクする（iOS・macOS 双方の feature `device` 分岐から呼ばれる共通処理、Issue #906）。
 fn compile_apple_biometric() {
     compile_objc("apple/fandhe_apple_biometric.m", &["LocalAuthentication"]);
-}
-
-/// `apple/fandhe_apple_contact_picker.m` を `cc` でコンパイルし Contacts / ContactsUI をリンクする（Issue #1220 macOS + #1221 iOS）。
-fn compile_apple_contact_picker() {
-    compile_objc(
-        "apple/fandhe_apple_contact_picker.m",
-        &[ui_framework(), "Contacts", "ContactsUI"],
-    );
 }
 
 /// `apple/fandhe_apple_spotlight_index.m` を `cc` でコンパイルし CoreSpotlight をリンクする
@@ -609,7 +600,6 @@ fn build_macos() {
 
     compile_apple_location();
     compile_apple_biometric();
-    compile_apple_contact_picker();
     compile_apple_photo_library();
     compile_apple_map_view();
 

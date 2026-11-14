@@ -2,7 +2,7 @@
 //! effect ドライバ。`fandhe_core::screens::contact_pick`（端末依存ゼロ）の要求を観測し、
 //! 結果を `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。契約本体は
-//! `fandhe_device::contact_picker` のモジュール doc。
+//! `crate::contract` のモジュール doc。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。
 //!
@@ -14,7 +14,7 @@
 //!
 //! # Android（Issue #1222）
 //!
-//! `bridge` は macOS / iOS と共有。提示は `device/android.rs::request_contact_pick`、結果は
+//! `bridge` は macOS / iOS と共有。提示は `crate::android::request_contact_pick`、結果は
 //! `nativeOnContactPickerResult` が Java のコード 0（選択）/ 1（キャンセル）/ 3（提示・
 //! 読み取り失敗）で届ける（インテント経由なので 2 = 権限拒否は送られない）。Activity 再生成で
 //! 保留中の要求は復元せず破棄する（`android_main` が [`reset_pending_tracking`] を呼ぶ）。
@@ -25,24 +25,25 @@
 //! `UnsupportedContactPicker` 経由で `Unsupported` を画面へ出す（成功にしない）。
 
 use fandhe_core::screens::contact_pick::{ContactPickOutcome, ContactPickState};
-use fandhe_device::contact_picker::{validate_contact_name, PickedContact};
-use fandhe_device::DeviceError;
 
+use crate::contract::{PickedContact, validate_contact_name};
+use crate::error::ContactsError;
+
+#[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
+use crate::contract::ContactPicker;
 #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
 use fandhe_core::screens::contact_pick::{finish_pick, mark_picking, take_request};
-#[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
-use fandhe_device::contact_picker::ContactPicker;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
-/// `Result<PickedContact, DeviceError>` を画面用の結果へ畳む。表示文字列に名前は入らない
-/// （`DeviceError` のメッセージは内部識別子のみ）。
-fn to_outcome(result: Result<PickedContact, DeviceError>) -> ContactPickOutcome {
+/// `Result<PickedContact, ContactsError>` を画面用の結果へ畳む。表示文字列に名前は入らない
+/// （`ContactsError` のメッセージは内部識別子のみ）。
+fn to_outcome(result: Result<PickedContact, ContactsError>) -> ContactPickOutcome {
     match result {
         Ok(c) => ContactPickOutcome::Picked(c.display_name),
-        Err(DeviceError::Cancelled(_)) => ContactPickOutcome::Cancelled,
-        Err(DeviceError::PermissionDenied(_)) => ContactPickOutcome::PermissionDenied,
-        Err(DeviceError::Unsupported(_)) => ContactPickOutcome::Unsupported,
+        Err(ContactsError::Cancelled) => ContactPickOutcome::Cancelled,
+        Err(ContactsError::PermissionDenied) => ContactPickOutcome::PermissionDenied,
+        Err(ContactsError::Unsupported) => ContactPickOutcome::Unsupported,
         Err(e) => ContactPickOutcome::Failed(e.to_string()),
     }
 }
@@ -58,27 +59,27 @@ fn to_outcome(result: Result<PickedContact, DeviceError>) -> ContactPickOutcome 
 pub(crate) fn outcome_from_code(
     code: i32,
     name: Option<String>,
-) -> Result<PickedContact, DeviceError> {
+) -> Result<PickedContact, ContactsError> {
     match code {
         0 => match name {
             Some(n) => validate_contact_name(n),
-            None => Err(DeviceError::Internal("contact_picker name")),
+            None => Err(ContactsError::Internal("contact_picker name")),
         },
-        1 => Err(DeviceError::Cancelled("contact_picker")),
-        2 => Err(DeviceError::PermissionDenied("contact_picker")),
-        3 => Err(DeviceError::Internal("contact_picker present")),
-        _ => Err(DeviceError::Internal("contact_picker outcome")),
+        1 => Err(ContactsError::Cancelled),
+        2 => Err(ContactsError::PermissionDenied),
+        3 => Err(ContactsError::Internal("contact_picker present")),
+        _ => Err(ContactsError::Internal("contact_picker outcome")),
     }
 }
 
 /// macOS / iOS / Android: OS コールバックとの橋渡し（pull 型、`RequestSlot` の facade）。
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub(crate) mod bridge {
+    use crate::contract::PickedContact;
+    use crate::error::ContactsError;
     use fandhe_core::screens::contact_pick::ContactPickOutcome;
-    use fandhe_device::contact_picker::PickedContact;
-    use fandhe_device::DeviceError;
 
-    use crate::device::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::RequestSlot;
 
     pub(crate) static SLOT: RequestSlot<ContactPickOutcome> = RequestSlot::new();
 
@@ -89,7 +90,7 @@ pub(crate) mod bridge {
 
     /// OS からの結果を画面用へ変換して置く（main queue から届く契約）。`request_id` 不一致・
     /// 未登録・既に結果ありは捨てて `false`（古い世代・二重通知が成功へ化けない）。
-    pub(crate) fn deliver(request_id: u64, result: Result<PickedContact, DeviceError>) -> bool {
+    pub(crate) fn deliver(request_id: u64, result: Result<PickedContact, ContactsError>) -> bool {
         SLOT.deliver(request_id, super::to_outcome(result))
     }
 
@@ -103,24 +104,24 @@ pub(crate) mod bridge {
 
 /// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
 #[cfg(target_os = "android")]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     bridge::reset();
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 fn present(request_id: u64) -> bool {
-    super::apple_contact_picker::present(request_id)
+    crate::apple::present(request_id)
 }
 
 #[cfg(target_os = "android")]
 fn present(request_id: u64) -> bool {
-    super::android::request_contact_pick(request_id)
+    crate::android::request_contact_pick(request_id)
 }
 
 /// macOS / iOS / Android の effect ドライバ本体（`biometric_auth::drive_callback` と同型）。
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 fn drive_callback(state: &ContactPickState, sender: &CompletionSender<ContactPickState>) {
-    use fandhe_core::screens::contact_pick::{finish_pick, mark_picking, take_request, PickPhase};
+    use fandhe_core::screens::contact_pick::{PickPhase, finish_pick, mark_picking, take_request};
 
     if take_request(state).is_some() {
         let _ = sender.send(Box::new(mark_picking));
@@ -129,7 +130,7 @@ fn drive_callback(state: &ContactPickState, sender: &CompletionSender<ContactPic
             // 提示依頼自体が同期的に失敗した（コールバックは二度と来ない）。
             bridge::deliver(
                 request_id,
-                Err(DeviceError::Internal("contact_picker present")),
+                Err(ContactsError::Internal("contact_picker present")),
             );
         }
         return;
@@ -139,7 +140,7 @@ fn drive_callback(state: &ContactPickState, sender: &CompletionSender<ContactPic
         return;
     }
     let generation = state.generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         &bridge::SLOT,
         sender,
         |_request_id| {},
@@ -172,16 +173,18 @@ fn drive(
     }));
 }
 
+/// 入口。連絡先選択の実装を返す。macOS・iOS・Android は OS コールバックの結果を pull 型 `bridge` で受けるため
+/// `ContactPicker` を通らず、画面の effect ドライバ（[`contact_pick_effect`]）が直接扱う。ここは `Unsupported` 固定の実装を返す。
+pub fn platform_contacts() -> Box<dyn crate::contract::ContactPicker> {
+    Box::new(crate::contract::UnsupportedContactPicker)
+}
+
 /// `registry.rs` の `effect` 区画から `contact_pick` 画面用に配線される effect ドライバ。
 pub fn contact_pick_effect(state: &ContactPickState, sender: &CompletionSender<ContactPickState>) {
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     drive_callback(state, sender);
     #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
-    drive(
-        state,
-        sender,
-        &fandhe_device::contact_picker::UnsupportedContactPicker,
-    );
+    drive(state, sender, &crate::contract::UnsupportedContactPicker);
 }
 
 #[cfg(test)]
@@ -201,19 +204,19 @@ mod tests {
             ContactPickOutcome::Picked("A".into())
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::Cancelled("contact_picker"))),
+            to_outcome(Err(ContactsError::Cancelled)),
             ContactPickOutcome::Cancelled
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::PermissionDenied("contact_picker"))),
+            to_outcome(Err(ContactsError::PermissionDenied)),
             ContactPickOutcome::PermissionDenied
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::Unsupported("contact_picker"))),
+            to_outcome(Err(ContactsError::Unsupported)),
             ContactPickOutcome::Unsupported
         );
         assert!(matches!(
-            to_outcome(Err(DeviceError::Internal("x"))),
+            to_outcome(Err(ContactsError::Internal("x"))),
             ContactPickOutcome::Failed(_)
         ));
     }
@@ -225,20 +228,20 @@ mod tests {
             outcome_from_code(0, None),
             outcome_from_code(0, Some(" ".into())),
         ] {
-            assert!(matches!(bad, Err(DeviceError::Internal(_))));
+            assert!(matches!(bad, Err(ContactsError::Internal(_))));
         }
         assert!(matches!(
             outcome_from_code(1, None),
-            Err(DeviceError::Cancelled(_))
+            Err(ContactsError::Cancelled)
         ));
         assert!(matches!(
             outcome_from_code(2, None),
-            Err(DeviceError::PermissionDenied(_))
+            Err(ContactsError::PermissionDenied)
         ));
         for code in [3, -1, 99] {
             assert!(matches!(
                 outcome_from_code(code, Some("A".into())),
-                Err(DeviceError::Internal(_))
+                Err(ContactsError::Internal(_))
             ));
         }
     }
@@ -248,10 +251,7 @@ mod tests {
     fn stale_and_duplicate_delivery_never_becomes_success() {
         let id = bridge::begin();
         assert!(!bridge::deliver(id.wrapping_add(1), Ok(picked("A"))));
-        assert!(bridge::deliver(
-            id,
-            Err(DeviceError::Cancelled("contact_picker"))
-        ));
+        assert!(bridge::deliver(id, Err(ContactsError::Cancelled)));
         // 二重通知は first-wins で、成功へ化けない。
         assert!(!bridge::deliver(id, Ok(picked("A"))));
         assert_eq!(
@@ -267,10 +267,16 @@ mod tests {
     #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
     #[test]
     fn unsupported_is_reflected_not_success() {
-        use fandhe_core::screens::contact_pick::{request_pick, PickPhase};
-        let ctx = egui::Context::default();
+        use fandhe_core::screens::contact_pick::{PickPhase, request_pick};
+        use fandhe_runtime::RepaintWaker;
+        use std::sync::Arc;
+        struct NoopWaker;
+        impl RepaintWaker for NoopWaker {
+            fn wake(&self) {}
+            fn wake_after(&self, _delay: std::time::Duration) {}
+        }
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = crate::app::egui_sender(tx, ctx);
+        let sender = CompletionSender::new(tx, Arc::new(NoopWaker));
         let mut state = ContactPickState::default();
         request_pick(&mut state);
         contact_pick_effect(&state, &sender);

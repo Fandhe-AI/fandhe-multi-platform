@@ -499,6 +499,10 @@
             android:authorities="${applicationId}.fandhe.gamepad"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.ContactsLifecycle"
+            android:authorities="${applicationId}.fandhe.contacts"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.TranslationLifecycle"
             android:authorities="${applicationId}.fandhe.translation"
             android:exported="false" />

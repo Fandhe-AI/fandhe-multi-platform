@@ -1,7 +1,7 @@
 //! 連絡先を 1 件選ぶ契約（Phase 11 の拡充ループ、親 #1117、Issue #1220）。
 //!
 //! 利用者が OS のピッカーで選んだ 1 件の **表示名だけ** を返す。電話番号・メール・識別子の
-//! 取得、連絡先の一覧取得、書き込みは扱わない。`fandhe-egui-proxy` の effect ドライバ
+//! 取得、連絡先の一覧取得、書き込みは扱わない。`fandhe-cap-contacts` の effect ドライバ
 //! （`device/contact_pick.rs`）が呼ぶ。iOS / Android / Web の実装（#1221 / #1222 / #1223）も
 //! 本書の契約に従う。
 //!
@@ -34,7 +34,7 @@
 //! 認可状態を確かめ、未決定なら許可を求める安全側で実装する。ピッカーだけなら不要と
 //! 分かった場合は Mac 目視（#1213）の結果をもとに外す。
 
-use crate::DeviceError;
+use crate::error::ContactsError;
 
 /// 選ばれた連絡先。表示名だけを持つ（電話・メール・識別子は持たない）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,26 +45,26 @@ pub struct PickedContact {
 
 /// OS から届いた名前を契約へ写す。前後の空白を除くと空なら `Internal`（成功にしない）。
 /// trim は判定にだけ使い、保存する値は届いた文字列のまま。
-pub fn validate_contact_name(name: String) -> Result<PickedContact, DeviceError> {
+pub fn validate_contact_name(name: String) -> Result<PickedContact, ContactsError> {
     if name.trim().is_empty() {
-        return Err(DeviceError::Internal("contact_picker empty name"));
+        return Err(ContactsError::Internal("contact_picker empty name"));
     }
     Ok(PickedContact { display_name: name })
 }
 
-/// 連絡先選択の契約。同期 API（コールバック型 OS は `fandhe-egui-proxy` の pull 型 bridge
+/// 連絡先選択の契約。同期 API（コールバック型 OS は `crate::driver` の pull 型 bridge
 /// を使いこのトレイトを通らない。`photo_picker` と同じ分担）。
 pub trait ContactPicker: Send + Sync {
     /// ピッカーを 1 回開き、選ばれた 1 件を返す。キャンセルは `Err(Cancelled)`。
-    fn pick(&self) -> Result<PickedContact, DeviceError>;
+    fn pick(&self) -> Result<PickedContact, ContactsError>;
 }
 
 /// 対象外 OS 用。ダミーの成功実装へは倒さない。
 pub struct UnsupportedContactPicker;
 
 impl ContactPicker for UnsupportedContactPicker {
-    fn pick(&self) -> Result<PickedContact, DeviceError> {
-        Err(DeviceError::Unsupported("contact_picker"))
+    fn pick(&self) -> Result<PickedContact, ContactsError> {
+        Err(ContactsError::Unsupported)
     }
 }
 
@@ -77,7 +77,7 @@ mod tests {
         for n in ["", "   ", "\u{3000}\n"] {
             assert!(matches!(
                 validate_contact_name(n.to_string()),
-                Err(DeviceError::Internal("contact_picker empty name"))
+                Err(ContactsError::Internal("contact_picker empty name"))
             ));
         }
     }
@@ -92,7 +92,7 @@ mod tests {
     fn unsupported_never_succeeds() {
         assert!(matches!(
             UnsupportedContactPicker.pick(),
-            Err(DeviceError::Unsupported("contact_picker"))
+            Err(ContactsError::Unsupported)
         ));
     }
 }

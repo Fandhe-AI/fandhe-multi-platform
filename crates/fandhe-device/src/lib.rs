@@ -47,8 +47,6 @@ pub mod camera_preview_stream;
 pub mod car_display;
 /// Phase 11（端末機能の拡充ループ、親 #1154、Issue #1404）: 方位（コンパス）。
 pub mod compass;
-/// Phase 11（端末機能の拡充ループ、親 #1117、Issue #1220）: 連絡先を 1 件選ぶ。
-pub mod contact_picker;
 /// Phase 11（端末機能の拡充ループ、親 #153、Issue #1278）: ディープリンク（Universal Links / App Links）の受信。
 pub mod deep_link;
 /// Phase 11（端末機能の拡充ループ、親 #1131、Issue #1304）: 端末・OS 情報（機種・OS 版・空き容量）。

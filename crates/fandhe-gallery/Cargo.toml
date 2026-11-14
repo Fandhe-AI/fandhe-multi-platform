@@ -35,6 +35,7 @@ device = [
   "dep:fandhe-cap-color-picker",
   "dep:fandhe-cap-companion-device",
   "dep:fandhe-cap-compose-mail-sms",
+  "dep:fandhe-cap-contacts",
   "dep:fandhe-cap-device-identifier",
   "dep:fandhe-cap-digital-credentials",
   "dep:fandhe-cap-display-refresh-hdr",
@@ -149,6 +150,7 @@ NSLocationUsageDescription = "型サンプル「Wi-Fi 情報」「Wi-Fi への�
 NSCalendarsWriteOnlyAccessUsageDescription = "型サンプル「予定の追加」の動作確認に使います"
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」の動作確認に使います"
 NSCameraUsageDescription = "型サンプル「カメラのライブ映像」「動画の撮影」の動作確認に使います"
+NSContactsUsageDescription = "型サンプル「連絡先選択」の動作確認に使います"
 
 [build-dependencies]
 # Apple のリンク指定（弱リンク・rpath・Info.plist 埋め込み）を `fandhe-egui-proxy` から受け取って出し直す。
@@ -182,6 +184,7 @@ fandhe-cap-clipboard = { path = "../fandhe-cap-clipboard", optional = true }
 fandhe-cap-color-picker = { path = "../fandhe-cap-color-picker", optional = true }
 fandhe-cap-companion-device = { path = "../fandhe-cap-companion-device", optional = true }
 fandhe-cap-compose-mail-sms = { path = "../fandhe-cap-compose-mail-sms", optional = true }
+fandhe-cap-contacts = { path = "../fandhe-cap-contacts", optional = true }
 fandhe-cap-device-identifier = { path = "../fandhe-cap-device-identifier", optional = true }
 fandhe-cap-digital-credentials = { path = "../fandhe-cap-digital-credentials", optional = true }
 fandhe-cap-display-refresh-hdr = { path = "../fandhe-cap-display-refresh-hdr", optional = true }

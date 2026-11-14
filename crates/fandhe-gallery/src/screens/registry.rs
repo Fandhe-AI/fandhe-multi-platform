@@ -59,7 +59,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "contact_pick" => fandhe_core::screens::contact_pick::current_screen,
-    fandhe_egui_proxy::device::contact_pick::contact_pick_effect,
+    fandhe_cap_contacts::contact_pick_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "eye_dropper" => fandhe_core::screens::eye_dropper_pick::current_screen,

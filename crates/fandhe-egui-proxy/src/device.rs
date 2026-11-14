@@ -221,10 +221,6 @@ pub mod apple_ble_peripheral;
 /// 呼ぶ C ABI ラッパー）。`device/bluetooth_le.rs` の iOS / macOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_bluetooth_le;
-/// Issue #1220 macOS + #1221 iOS: 連絡先選択実装（`apple/fandhe_apple_contact_picker.m` を
-/// 呼ぶ C ABI ラッパー）。`device/contact_pick.rs` の Apple 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_contact_picker;
 /// Issue #416: macOS / iOS 向けファイルの関連付け受信（`apple/fandhe_apple_file_association.m` の
 /// Apple Event `kAEOpenDocuments` ハンドラから呼ばれる C ABI ラッパー）。`device/file_association.rs::platform` の
 /// macOS 経路と `main.rs`（登録）から使われる。iOS は b-ios が埋めるまで受け口だけがある。
@@ -339,10 +335,6 @@ pub mod car_display;
 /// Issue #1404（親 #1154）: 方位（コンパス）の effect ドライバ（Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedCompass` 固定。Web は `fandhe-web-dom`）。
 pub mod compass;
-/// Phase 11 の拡充ループ（親 #1117、Issue #1220・#1221・#1222）: 連絡先選択の effect ドライバ
-/// （macOS / iOS / Android は pull 型 `bridge`、他 OS は兄弟 issue が入るまで
-/// `UnsupportedContactPicker` 固定）。
-pub mod contact_pick;
 /// Phase 11 の拡充ループ（親 #153、Issue #1278）: ディープリンク受信の effect ドライバ
 /// （Android 分岐はスタブ、他 OS は `UnsupportedDeepLink` 固定）。
 pub mod deep_link;

@@ -1295,6 +1295,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-contacts"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-device-identifier"
 version = "0.2.0"
 dependencies = [
@@ -2315,6 +2327,7 @@ dependencies = [
  "fandhe-cap-color-picker",
  "fandhe-cap-companion-device",
  "fandhe-cap-compose-mail-sms",
+ "fandhe-cap-contacts",
  "fandhe-cap-device-identifier",
  "fandhe-cap-digital-credentials",
  "fandhe-cap-display-refresh-hdr",
@@ -2492,6 +2505,7 @@ dependencies = [
  "fandhe-cap-camera-preview-stream",
  "fandhe-cap-color-picker",
  "fandhe-cap-compose-mail-sms",
+ "fandhe-cap-contacts",
  "fandhe-cap-digital-credentials",
  "fandhe-cap-display-refresh-hdr",
  "fandhe-cap-dynamic-type",
