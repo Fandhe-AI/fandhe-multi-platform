@@ -117,8 +117,6 @@ pub mod quick_settings_tile;
 pub mod safe_area_insets;
 /// Phase 11（端末機能の拡充ループ、親 #128、Issue #655）: 画面向きの取得・固定。
 pub mod screen_orientation;
-/// Phase 11（端末機能の拡充ループ、親 #921、Issue #922）: 資格情報の安全な保存。
-pub mod secure_credential;
 /// Phase 11（端末機能の拡充ループ、親 #1023、Issue #1024）: 音声認識。
 pub mod speech_recognition;
 /// Phase 11（端末機能の拡充ループ、親 #117、Issue #560）: OS の検索への登録（固定のメモ 1 件の登録と全削除）。

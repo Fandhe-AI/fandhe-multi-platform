@@ -6,13 +6,14 @@
 //!
 //! 契約: 「無い」は `Ok(None)`（`load`）、削除は冪等（`delete` は無くても `Ok(())`）、
 //! 失敗は `Err`（`biometric_auth.rs` と同じ「使えない/失敗を成功に化けさせない」方針）。
-//! macOS/iOS の実装は `fandhe-egui-proxy` 側の FFI（`apple_secure_credential.rs`）に置く
-//! （本クレートは `#![forbid(unsafe_code)]` のため FFI を持たない、`lib.rs` doc 参照）。
+//! macOS/iOS の実装は本 crate の `apple`（FFI）、Android は `android`、Windows は `windows` に置く
+//! （`lib.rs` doc 参照）。
 //!
 //! [`Secret`] は `Debug` で値そのものを出さない（バイト数のみ）。呼び出し元
 //! （`fandhe-core` の画面状態）も同様に値をマスクする契約（security.md A09）。
 
-use crate::{DeviceError, storage};
+use crate::SecureCredentialError;
+use fandhe_device::storage;
 
 /// 保存できる秘密値の最大バイト数（UTF-8）。超過は `InvalidInput` で明示失敗させ、
 /// 固定長バッファを使う FFI 実装（macOS Keychain 等）側の上限と揃える。
@@ -54,19 +55,21 @@ impl std::fmt::Debug for Secret {
 /// 秘密値を検証する。空文字列・内部 NUL・[`SECRET_MAX_BYTES`] 超過を拒否する
 /// （NUL 拒否は `CString` 化する FFI 実装での失敗を事前に防ぐ、`biometric_auth::
 /// validate_reason` と同じ SSOT 方針）。
-pub fn validate_secret(secret: &str) -> Result<&str, DeviceError> {
+pub fn validate_secret(secret: &str) -> Result<&str, SecureCredentialError> {
     if secret.is_empty() || secret.contains('\0') || secret.len() > SECRET_MAX_BYTES {
-        return Err(DeviceError::InvalidInput("secure_credential secret"));
+        return Err(SecureCredentialError::InvalidInput(
+            "secure_credential secret",
+        ));
     }
     Ok(secret)
 }
 
 /// key を検証する。`storage::validate_key`（許可文字集合・パストラバーサル拒否）に
 /// 加え、[`KEY_MAX_LEN`] 超過を拒否する。
-pub fn validate_key(key: &str) -> Result<&str, DeviceError> {
-    storage::validate_key(key)?;
-    if key.len() > KEY_MAX_LEN {
-        return Err(DeviceError::InvalidKey(key.to_string()));
+pub fn validate_key(key: &str) -> Result<&str, SecureCredentialError> {
+    // 許可文字集合・パストラバーサル拒否は `fandhe_device::storage` の検査を共用する（二重実装を避ける）。
+    if storage::validate_key(key).is_err() || key.len() > KEY_MAX_LEN {
+        return Err(SecureCredentialError::InvalidKey(key.to_string()));
     }
     Ok(key)
 }
@@ -76,30 +79,28 @@ pub fn validate_key(key: &str) -> Result<&str, DeviceError> {
 /// OS 識別子へ連結しない、実装側の責務）。
 pub trait SecureCredential: Send + Sync {
     /// `key` に `secret` を保存する。既存値があれば置き換える。
-    fn store(&self, key: &str, secret: &str) -> Result<(), DeviceError>;
+    fn store(&self, key: &str, secret: &str) -> Result<(), SecureCredentialError>;
     /// `key` の値を読む。未存在は `Ok(None)`（エラーにしない契約）。
-    fn load(&self, key: &str) -> Result<Option<Secret>, DeviceError>;
+    fn load(&self, key: &str) -> Result<Option<Secret>, SecureCredentialError>;
     /// `key` の値を削除する。未存在でも `Ok(())`（冪等）。
-    fn delete(&self, key: &str) -> Result<(), DeviceError>;
+    fn delete(&self, key: &str) -> Result<(), SecureCredentialError>;
 }
 
-/// 対応不可プラットフォーム用（Linux、Web）。Windows は `fandhe-egui-proxy` 側
-/// `device/windows_secure_credential.rs`（`WindowsPasswordVault`、Issue #923）、
-/// iOS/macOS/Android も同クレート側で対応済み。常に
-/// `Unsupported("secure_credential")` を返す。
+/// 対応不可プラットフォーム用（Linux、Web）。Windows・iOS・macOS・Android は本 crate の OS 実装が対応済み。
+/// 常に `Unsupported` を返す。
 pub struct UnsupportedSecureCredential;
 
 impl SecureCredential for UnsupportedSecureCredential {
-    fn store(&self, _key: &str, _secret: &str) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("secure_credential"))
+    fn store(&self, _key: &str, _secret: &str) -> Result<(), SecureCredentialError> {
+        Err(SecureCredentialError::Unsupported)
     }
 
-    fn load(&self, _key: &str) -> Result<Option<Secret>, DeviceError> {
-        Err(DeviceError::Unsupported("secure_credential"))
+    fn load(&self, _key: &str) -> Result<Option<Secret>, SecureCredentialError> {
+        Err(SecureCredentialError::Unsupported)
     }
 
-    fn delete(&self, _key: &str) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("secure_credential"))
+    fn delete(&self, _key: &str) -> Result<(), SecureCredentialError> {
+        Err(SecureCredentialError::Unsupported)
     }
 }
 
@@ -122,7 +123,7 @@ mod tests {
     fn validate_secret_rejects_empty() {
         assert!(matches!(
             validate_secret("").unwrap_err(),
-            DeviceError::InvalidInput("secure_credential secret")
+            SecureCredentialError::InvalidInput("secure_credential secret")
         ));
     }
 
@@ -130,7 +131,7 @@ mod tests {
     fn validate_secret_rejects_embedded_nul() {
         assert!(matches!(
             validate_secret("a\0b").unwrap_err(),
-            DeviceError::InvalidInput("secure_credential secret")
+            SecureCredentialError::InvalidInput("secure_credential secret")
         ));
     }
 
@@ -139,7 +140,7 @@ mod tests {
         let oversize = "a".repeat(SECRET_MAX_BYTES + 1);
         assert!(matches!(
             validate_secret(&oversize).unwrap_err(),
-            DeviceError::InvalidInput("secure_credential secret")
+            SecureCredentialError::InvalidInput("secure_credential secret")
         ));
     }
 
@@ -153,11 +154,11 @@ mod tests {
     fn validate_key_rejects_traversal_and_separator() {
         assert!(matches!(
             validate_key("../x").unwrap_err(),
-            DeviceError::InvalidKey(_)
+            SecureCredentialError::InvalidKey(_)
         ));
         assert!(matches!(
             validate_key("a/b").unwrap_err(),
-            DeviceError::InvalidKey(_)
+            SecureCredentialError::InvalidKey(_)
         ));
     }
 
@@ -166,7 +167,7 @@ mod tests {
         let long = "a".repeat(KEY_MAX_LEN + 1);
         assert!(matches!(
             validate_key(&long).unwrap_err(),
-            DeviceError::InvalidKey(_)
+            SecureCredentialError::InvalidKey(_)
         ));
     }
 
@@ -181,15 +182,15 @@ mod tests {
         let cred = UnsupportedSecureCredential;
         assert!(matches!(
             cred.store("k", "v").unwrap_err(),
-            DeviceError::Unsupported("secure_credential")
+            SecureCredentialError::Unsupported
         ));
         assert!(matches!(
             cred.load("k").unwrap_err(),
-            DeviceError::Unsupported("secure_credential")
+            SecureCredentialError::Unsupported
         ));
         assert!(matches!(
             cred.delete("k").unwrap_err(),
-            DeviceError::Unsupported("secure_credential")
+            SecureCredentialError::Unsupported
         ));
     }
 
@@ -199,7 +200,7 @@ mod tests {
     struct MemCredential(Arc<Mutex<HashMap<String, String>>>);
 
     impl SecureCredential for MemCredential {
-        fn store(&self, key: &str, secret: &str) -> Result<(), DeviceError> {
+        fn store(&self, key: &str, secret: &str) -> Result<(), SecureCredentialError> {
             self.0
                 .lock()
                 .expect("lock は成功する")
@@ -207,7 +208,7 @@ mod tests {
             Ok(())
         }
 
-        fn load(&self, key: &str) -> Result<Option<Secret>, DeviceError> {
+        fn load(&self, key: &str) -> Result<Option<Secret>, SecureCredentialError> {
             Ok(self
                 .0
                 .lock()
@@ -217,7 +218,7 @@ mod tests {
                 .map(Secret::new))
         }
 
-        fn delete(&self, key: &str) -> Result<(), DeviceError> {
+        fn delete(&self, key: &str) -> Result<(), SecureCredentialError> {
             self.0.lock().expect("lock は成功する").remove(key);
             Ok(())
         }

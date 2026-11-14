@@ -1,6 +1,6 @@
 //! Phase 11（親 #921）型サンプル「資格情報」（Issue #922・#924）の effect ドライバ。
 //! `fandhe_core::screens::credential_vault`（端末依存ゼロ）の `pending` 要求を観測し、
-//! `fandhe_device::secure_credential::SecureCredential` で OS のセキュアストアを
+//! `crate::contract::SecureCredential` で OS のセキュアストアを
 //! 保存・読み出し・削除して `CompletionSender` 経由で結果を返す（`crate::screens::
 //! registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、
 //! `device/clipboard.rs` と同型）。
@@ -21,40 +21,40 @@
 
 use std::sync::Arc;
 
+use crate::contract::SecureCredential;
+use crate::error::SecureCredentialError;
 use fandhe_core::screens::credential_vault::{
-    finish_delete, finish_load, finish_store, mark_dispatched, take_request, CredentialVaultState,
-    VaultRequest, UNAVAILABLE_MARKER,
+    CredentialVaultState, UNAVAILABLE_MARKER, VaultRequest, finish_delete, finish_load,
+    finish_store, mark_dispatched, take_request,
 };
-use fandhe_device::secure_credential::SecureCredential;
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
-/// `DeviceError` を画面へ渡す文言へ変換する。`Unsupported` は [`UNAVAILABLE_MARKER`]
+/// `SecureCredentialError` を画面へ渡す文言へ変換する。`Unsupported` は [`UNAVAILABLE_MARKER`]
 /// （`fandhe-core` 側が `Outcome::Unavailable` へ畳む判定に使う SSOT 文字列）へ写し、
-/// それ以外は `Display` の文言のみを転送する（`DeviceError` の内部構造は漏らさない、
-/// security.md A09。秘密値は `DeviceError` のどのバリアントにも含まれない、
+/// それ以外は `Display` の文言のみを転送する（`SecureCredentialError` の内部構造は漏らさない、
+/// security.md A09。秘密値は `SecureCredentialError` のどのバリアントにも含まれない、
 /// `secure_credential.rs::validate_secret` は値そのものをエラーへ含めない設計）。
-fn to_message(e: DeviceError) -> String {
+fn to_message(e: SecureCredentialError) -> String {
     match e {
-        DeviceError::Unsupported(_) => UNAVAILABLE_MARKER.to_string(),
+        SecureCredentialError::Unsupported => UNAVAILABLE_MARKER.to_string(),
         other => other.to_string(),
     }
 }
 
 /// 現在のプラットフォームに応じた `SecureCredential` 実装を返す。
 ///
-/// iOS・macOS は [`super::apple_secure_credential::AppleKeychain`]、Android は
-/// [`super::android::AndroidSecureCredential`]、Windows は
-/// [`super::windows_secure_credential::WindowsPasswordVault`]。それ以外（Linux・Web）は
+/// iOS・macOS は [`crate::apple::AppleKeychain`]、Android は
+/// [`crate::android::AndroidSecureCredential`]、Windows は
+/// [`crate::windows::WindowsPasswordVault`]。それ以外（Linux・Web）は
 /// `UnsupportedSecureCredential`。
-fn implementation() -> Arc<dyn SecureCredential> {
+pub fn platform_secure_credential() -> Arc<dyn SecureCredential> {
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     {
         use std::sync::OnceLock;
         static INSTANCE: OnceLock<Arc<dyn SecureCredential>> = OnceLock::new();
         INSTANCE
-            .get_or_init(|| Arc::new(super::apple_secure_credential::AppleKeychain))
+            .get_or_init(|| Arc::new(crate::apple::AppleKeychain))
             .clone()
     }
     #[cfg(target_os = "android")]
@@ -62,7 +62,7 @@ fn implementation() -> Arc<dyn SecureCredential> {
         use std::sync::OnceLock;
         static INSTANCE: OnceLock<Arc<dyn SecureCredential>> = OnceLock::new();
         INSTANCE
-            .get_or_init(|| Arc::new(super::android::AndroidSecureCredential))
+            .get_or_init(|| Arc::new(crate::android::AndroidSecureCredential))
             .clone()
     }
     #[cfg(target_os = "windows")]
@@ -70,7 +70,7 @@ fn implementation() -> Arc<dyn SecureCredential> {
         use std::sync::OnceLock;
         static INSTANCE: OnceLock<Arc<dyn SecureCredential>> = OnceLock::new();
         INSTANCE
-            .get_or_init(|| Arc::new(super::windows_secure_credential::WindowsPasswordVault))
+            .get_or_init(|| Arc::new(crate::windows::WindowsPasswordVault))
             .clone()
     }
     #[cfg(not(any(
@@ -83,7 +83,7 @@ fn implementation() -> Arc<dyn SecureCredential> {
         use std::sync::OnceLock;
         static INSTANCE: OnceLock<Arc<dyn SecureCredential>> = OnceLock::new();
         INSTANCE
-            .get_or_init(|| Arc::new(fandhe_device::secure_credential::UnsupportedSecureCredential))
+            .get_or_init(|| Arc::new(crate::contract::UnsupportedSecureCredential))
             .clone()
     }
 }
@@ -143,23 +143,31 @@ pub fn credential_vault_effect(
     state: &CredentialVaultState,
     sender: &CompletionSender<CredentialVaultState>,
 ) {
-    drive(state, sender, implementation());
+    drive(state, sender, platform_secure_credential());
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use fandhe_core::screens::credential_vault::{delete, load, set_input, set_key, store};
+    use fandhe_runtime::RepaintWaker;
+    use std::time::Duration;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
 
     fn sender_with_channel() -> (
         CompletionSender<CredentialVaultState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<CredentialVaultState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<CredentialVaultState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     /// インメモリモック（`fandhe-device` 側テストと同じ最小形）。
@@ -167,7 +175,7 @@ mod tests {
     struct MemCredential(Arc<Mutex<HashMap<String, String>>>);
 
     impl SecureCredential for MemCredential {
-        fn store(&self, key: &str, secret: &str) -> Result<(), DeviceError> {
+        fn store(&self, key: &str, secret: &str) -> Result<(), SecureCredentialError> {
             self.0
                 .lock()
                 .expect("lock は成功する")
@@ -178,17 +186,17 @@ mod tests {
         fn load(
             &self,
             key: &str,
-        ) -> Result<Option<fandhe_device::secure_credential::Secret>, DeviceError> {
+        ) -> Result<Option<crate::contract::Secret>, SecureCredentialError> {
             Ok(self
                 .0
                 .lock()
                 .expect("lock は成功する")
                 .get(key)
                 .cloned()
-                .map(fandhe_device::secure_credential::Secret::new))
+                .map(crate::contract::Secret::new))
         }
 
-        fn delete(&self, key: &str) -> Result<(), DeviceError> {
+        fn delete(&self, key: &str) -> Result<(), SecureCredentialError> {
             self.0.lock().expect("lock は成功する").remove(key);
             Ok(())
         }
@@ -203,7 +211,7 @@ mod tests {
     struct BlockingCredential;
 
     impl SecureCredential for BlockingCredential {
-        fn store(&self, _key: &str, _secret: &str) -> Result<(), DeviceError> {
+        fn store(&self, _key: &str, _secret: &str) -> Result<(), SecureCredentialError> {
             loop {
                 std::thread::park();
             }
@@ -211,12 +219,12 @@ mod tests {
         fn load(
             &self,
             _key: &str,
-        ) -> Result<Option<fandhe_device::secure_credential::Secret>, DeviceError> {
+        ) -> Result<Option<crate::contract::Secret>, SecureCredentialError> {
             loop {
                 std::thread::park();
             }
         }
-        fn delete(&self, _key: &str) -> Result<(), DeviceError> {
+        fn delete(&self, _key: &str) -> Result<(), SecureCredentialError> {
             loop {
                 std::thread::park();
             }
@@ -227,17 +235,17 @@ mod tests {
     struct FailingCredential;
 
     impl SecureCredential for FailingCredential {
-        fn store(&self, _key: &str, _secret: &str) -> Result<(), DeviceError> {
-            Err(DeviceError::Unsupported("secure_credential"))
+        fn store(&self, _key: &str, _secret: &str) -> Result<(), SecureCredentialError> {
+            Err(SecureCredentialError::Unsupported)
         }
         fn load(
             &self,
             _key: &str,
-        ) -> Result<Option<fandhe_device::secure_credential::Secret>, DeviceError> {
-            Err(DeviceError::Unsupported("secure_credential"))
+        ) -> Result<Option<crate::contract::Secret>, SecureCredentialError> {
+            Err(SecureCredentialError::Unsupported)
         }
-        fn delete(&self, _key: &str) -> Result<(), DeviceError> {
-            Err(DeviceError::Unsupported("secure_credential"))
+        fn delete(&self, _key: &str) -> Result<(), SecureCredentialError> {
+            Err(SecureCredentialError::Unsupported)
         }
     }
 

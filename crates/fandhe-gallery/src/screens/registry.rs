@@ -179,7 +179,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "credential_vault" => fandhe_core::screens::credential_vault::current_screen,
-    fandhe_egui_proxy::device::secure_credential::credential_vault_effect,
+    fandhe_cap_secure_credential::credential_vault_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "serial_port_show" => fandhe_core::screens::serial_port_show::current_screen,

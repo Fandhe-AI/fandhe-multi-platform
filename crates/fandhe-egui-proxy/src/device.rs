@@ -289,11 +289,6 @@ pub mod apple_picture_in_picture;
 /// `cfg(test)` でも有効にする。
 #[cfg(any(target_os = "macos", test))]
 pub mod apple_quick_settings_tile;
-/// Issue #922・#924: iOS / macOS 向け資格情報保存実装（`apple/
-/// fandhe_apple_secure_credential.m` を呼ぶ C ABI ラッパー）。`device/
-/// secure_credential.rs` の iOS/macOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_secure_credential;
 /// Issue #1024（macOS）/ #1025（iOS）: iOS / macOS 向け音声認識実装（`apple/
 /// fandhe_apple_speech_recognition.m` を呼ぶ C ABI ラッパー）。`device/
 /// speech_recognition.rs` の iOS/macOS 経路から呼ばれる。
@@ -648,9 +643,6 @@ pub mod safe_area_insets;
 /// （iOS は #656、Android は #657 が埋めるスタブ、Web は #658 の `fandhe-web-dom`、
 /// 他 OS は `UnsupportedScreenOrientation` 固定）。
 pub mod screen_orientation;
-/// Phase 11 の拡充ループ（親 #921、Issue #922・#924）: 資格情報保存の effect
-/// ドライバ（macOS/iOS/Android 実装、Windows は #923）。
-pub mod secure_credential;
 /// Phase 11 の拡充ループ（親 #1023、Issue #1024・#1025）: 音声認識の effect ドライバ
 /// （macOS/iOS/Windows/Android 実装、Android/Web は兄弟 issue）。
 pub mod speech_recognition;
@@ -795,10 +787,6 @@ pub mod windows_photo_library;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_print;
-/// Issue #923: Windows 向け資格情報保存実装（WinRT `PasswordVault` ラッパー）。
-/// `device/secure_credential.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_secure_credential;
 /// Issue #1024: Windows 向け音声認識実装（WinRT `SpeechRecognizer` ラッパー）。
 /// `device/speech_recognition.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

@@ -83,10 +83,6 @@ fn build() {
     compile_apple_biometric();
     compile_apple_contact_picker();
 
-    // `apple/fandhe_apple_secure_credential.m`（Issue #922・#924）は macOS 分岐と
-    // 共用する。
-    compile_apple_secure_credential();
-
     // `apple/fandhe_apple_photo_library.m`（Issue #1254 macOS + #1255 iOS）も macOS 分岐と共用する。
     compile_apple_photo_library();
 
@@ -217,16 +213,6 @@ fn compile_apple_map_view() {
     compile_objc(
         "apple/fandhe_apple_map_view.m",
         &[ui_framework(), "CoreGraphics", "Foundation", "MapKit"],
-    );
-}
-
-/// `apple/fandhe_apple_secure_credential.m` を `cc` でコンパイルし Security を
-/// リンクする（Issue #922・#924）。iOS・macOS 双方の feature `device` 分岐から
-/// 呼ばれる共通処理（doc 参照）。
-fn compile_apple_secure_credential() {
-    compile_objc(
-        "apple/fandhe_apple_secure_credential.m",
-        &["Foundation", "Security"],
     );
 }
 
@@ -624,7 +610,6 @@ fn build_macos() {
     compile_apple_location();
     compile_apple_biometric();
     compile_apple_contact_picker();
-    compile_apple_secure_credential();
     compile_apple_photo_library();
     compile_apple_map_view();
 

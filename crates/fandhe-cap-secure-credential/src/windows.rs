@@ -1,5 +1,5 @@
 //! Windows 向け資格情報保存実装（Issue #923）。`device/secure_credential.rs` の
-//! Windows 経路から呼ばれ、`fandhe_device::secure_credential::SecureCredential` を
+//! Windows 経路から呼ばれ、`crate::contract::SecureCredential` を
 //! WinRT `Windows.Security.Credentials.PasswordVault`（Credential Locker）で
 //! 実装する。macOS 実装（`apple_secure_credential.rs`、Keychain FFI）と異なり
 //! `windows` クレート側が safe fn としてラップ済みのため `unsafe` は不要
@@ -18,7 +18,7 @@
 //! 「失敗」を区別する）。
 //!
 //! HRESULT の生値・秘密値をログ・エラー文言へ出さず、固定ラベルの
-//! `DeviceError::Internal` へ畳む（`windows_share.rs`/`windows_biometric.rs`/
+//! `SecureCredentialError::Internal` へ畳む（`windows_share.rs`/`windows_biometric.rs`/
 //! `windows_system_sound.rs` と同じ方針、security.md A09）。
 //!
 //! # 既知の天井
@@ -29,11 +29,11 @@
 //! 検討する（対応表 `docs/device/capabilities/secure-credential.json` の
 //! `windows.note` にも記録）。
 
-use fandhe_device::secure_credential::{validate_key, validate_secret, Secret, SecureCredential};
-use fandhe_device::DeviceError;
-use windows::core::HSTRING;
+use crate::contract::{Secret, SecureCredential, validate_key, validate_secret};
+use crate::error::SecureCredentialError;
 use windows::Security::Credentials::{PasswordCredential, PasswordVault};
 use windows::Win32::Foundation::ERROR_NOT_FOUND;
+use windows::core::HSTRING;
 
 /// PasswordVault の resource 識別子。macOS Keychain 実装の service 文字列と揃える。
 const RESOURCE: &str = "com.fandhe.egui-proxy-desktop";
@@ -51,8 +51,8 @@ fn is_not_found(error: &windows::core::Error) -> bool {
 /// `PasswordVault` インスタンスを生成する。状態を持たないため呼び出しごとに
 /// 生成する（`windows_text_scale.rs::WindowsTextScale` と同じ方針。resource 単位の
 /// 操作頻度は低く常駐コストを避ける）。
-fn vault() -> Result<PasswordVault, DeviceError> {
-    PasswordVault::new().map_err(|_| DeviceError::Internal("secure_credential vault"))
+fn vault() -> Result<PasswordVault, SecureCredentialError> {
+    PasswordVault::new().map_err(|_| SecureCredentialError::Internal("secure_credential vault"))
 }
 
 /// 検証済み key から user name（`USER_PREFIX` + key）を組み立てる。
@@ -65,11 +65,11 @@ fn user_name(key: &str) -> HSTRING {
 fn retrieve(
     vault: &PasswordVault,
     user: &HSTRING,
-) -> Result<Option<PasswordCredential>, DeviceError> {
+) -> Result<Option<PasswordCredential>, SecureCredentialError> {
     match vault.Retrieve(&HSTRING::from(RESOURCE), user) {
         Ok(cred) => Ok(Some(cred)),
         Err(e) if is_not_found(&e) => Ok(None),
-        Err(_) => Err(DeviceError::Internal("secure_credential load")),
+        Err(_) => Err(SecureCredentialError::Internal("secure_credential load")),
     }
 }
 
@@ -77,7 +77,7 @@ fn retrieve(
 pub(crate) struct WindowsPasswordVault;
 
 impl SecureCredential for WindowsPasswordVault {
-    fn store(&self, key: &str, secret: &str) -> Result<(), DeviceError> {
+    fn store(&self, key: &str, secret: &str) -> Result<(), SecureCredentialError> {
         let key = validate_key(key)?;
         let secret = validate_secret(secret)?;
         let vault = vault()?;
@@ -87,7 +87,7 @@ impl SecureCredential for WindowsPasswordVault {
             &user,
             &HSTRING::from(secret),
         )
-        .map_err(|_| DeviceError::Internal("secure_credential store"))?;
+        .map_err(|_| SecureCredentialError::Internal("secure_credential store"))?;
         // `Add` は同一 resource + user の既存項目があると「置き換え」として成功する
         // （PasswordVault の仕様。Microsoft のドキュメントに準拠）。したがって
         // Remove→再 Add のフォールバックは不要（PR #930 レビュー指摘）だけでなく
@@ -96,10 +96,10 @@ impl SecureCredential for WindowsPasswordVault {
         // Add の失敗はそのまま返す。
         vault
             .Add(&cred)
-            .map_err(|_| DeviceError::Internal("secure_credential store"))
+            .map_err(|_| SecureCredentialError::Internal("secure_credential store"))
     }
 
-    fn load(&self, key: &str) -> Result<Option<Secret>, DeviceError> {
+    fn load(&self, key: &str) -> Result<Option<Secret>, SecureCredentialError> {
         let key = validate_key(key)?;
         let vault = vault()?;
         let user = user_name(key);
@@ -109,14 +109,14 @@ impl SecureCredential for WindowsPasswordVault {
         // `Password()` は事前に `RetrievePassword()` を呼ばないと空を返す契約
         // （WinRT `PasswordCredential` の仕様）。
         cred.RetrievePassword()
-            .map_err(|_| DeviceError::Internal("secure_credential load"))?;
+            .map_err(|_| SecureCredentialError::Internal("secure_credential load"))?;
         let password = cred
             .Password()
-            .map_err(|_| DeviceError::Internal("secure_credential load"))?;
+            .map_err(|_| SecureCredentialError::Internal("secure_credential load"))?;
         Ok(Some(Secret::new(password.to_string_lossy())))
     }
 
-    fn delete(&self, key: &str) -> Result<(), DeviceError> {
+    fn delete(&self, key: &str) -> Result<(), SecureCredentialError> {
         let key = validate_key(key)?;
         let vault = vault()?;
         let user = user_name(key);
@@ -127,7 +127,7 @@ impl SecureCredential for WindowsPasswordVault {
         };
         vault
             .Remove(&cred)
-            .map_err(|_| DeviceError::Internal("secure_credential delete"))
+            .map_err(|_| SecureCredentialError::Internal("secure_credential delete"))
     }
 }
 
