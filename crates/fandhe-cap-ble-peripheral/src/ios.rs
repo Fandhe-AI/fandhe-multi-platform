@@ -1,7 +1,7 @@
 //! iOS 向け BLE の周辺機器役（Issue #779、親 #164 の b-ios）。
 //!
 //! 呼び出し元: 本 crate の `driver` の iOS 経路が [`implementation`] を呼ぶ。
-//! 実体は macOS と共用の `apple_ble_peripheral::implementation`（CoreBluetooth `CBPeripheralManager` を
+//! 実体は macOS と共用の `apple::implementation`（CoreBluetooth `CBPeripheralManager` を
 //! `apple/fandhe_apple_ble_peripheral.m` の C ABI 経由で呼ぶ）への委譲で、dispatch・共通コア画面・
 //! trait 契約（`crate::contract`）は変えない。
 //!

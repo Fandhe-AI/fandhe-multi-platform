@@ -2,7 +2,7 @@
 //! effect ドライバ。`fandhe_core::screens::alarm_show`（端末依存ゼロ）のボタン要求を
 //! 観測して `crate::contract::Alarm` を呼び、`CompletionSender` 経由で結果を
 //! 返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)`
-//! として呼ばれる契約、`device/background_task.rs` と同型）。
+//! として呼ばれる契約、`fandhe-egui-proxy` の `device/background_task.rs` と同型）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
 //! （`device.rs` モジュール doc と同じ理由）。

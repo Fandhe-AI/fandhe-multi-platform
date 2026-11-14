@@ -19,7 +19,7 @@ import java.util.WeakHashMap;
 // 素材は Rust が実行時に生成する WAV で、`MediaPlayer` + `MediaDataSource`（API 23）で鳴らす。
 // 動画・背景再生・シーク・ネットワーク再生は扱わない。
 //
-// コード表の SSOT はここで、Rust 側 `android_media_playback.rs` が同じ値で解釈する。
+// コード表の SSOT はここで、Rust 側 `src/android.rs` が同じ値で解釈する。
 //   load/control の戻り: 0=受付 / 1=失敗（破棄済み・内部）/ 2=WAV 不正 / 3=世代不一致
 //   control の op      : 0=play / 1=pause / 2=stop
 //   snapshot           : long[4] = {世代, phase, 位置ms, 長さms}（未取得は -1）

@@ -3,7 +3,7 @@
 // `NSURLVolumeAvailableCapacityForImportantUsageKey` でホームのボリュームの空き容量（OS の
 // 見積り）を同期で読む。個体識別子（`hw.uuid`・シリアル）は読まない。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_device_info.rs` から C ABI 経由で呼ばれる。
+// `src/macos.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
 //
 // 契約:

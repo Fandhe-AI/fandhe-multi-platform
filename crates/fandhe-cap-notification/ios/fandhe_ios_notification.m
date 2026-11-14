@@ -1,9 +1,9 @@
 // Phase 11 の拡充ループ（親 #1003）型サンプル「通知」の iOS 実装（Issue #1005）。
 // macOS（#1004、`osascript`）とは別経路: iOS はバンドル化されたプロセスから起動する
 // ため `UNUserNotificationCenter` が使える（macOS が使わない理由は `crates/
-// fandhe-egui-proxy/src/device/notification.rs` モジュール doc 参照）。
+// src/driver.rs` モジュール doc 参照）。
 //
-// `crates/fandhe-egui-proxy/src/device/ios_notification.rs` から C ABI 経由で
+// `src/ios.rs` から C ABI 経由で
 // 呼ばれる。`build.rs` が feature `device` 有効時のみ `cc` コンパイルし、
 // UserNotifications をリンクする。
 //
@@ -17,8 +17,8 @@
 //        コピーしてから return するため、呼び出し元は return 後に元の文字列
 //        バッファを解放してよい（所有権は移らない）。
 //   fandhe_rust_notification_outcome(uint64_t request_id, int32_t code)
-//     -> Rust 側（`ios_notification.rs`）が公開する `extern "C"` 関数。`code` の
-//        写像は Rust 側 `device/notification.rs::outcome_from_code`（SSOT）に
+//     -> Rust 側（`src/ios.rs`）が公開する `extern "C"` 関数。`code` の
+//        写像は Rust 側 `driver.rs::outcome_from_code`（SSOT）に
 //        一本化する。本ファイルでの対応（`.m` 側で二重に写像しない）:
 //          0 = addNotificationRequest が成功
 //          1 = 許可が未決定のまま閉じた（requestAuthorization が granted=NO かつ
@@ -56,7 +56,7 @@
 
 #import <UserNotifications/UserNotifications.h>
 
-// Rust 側（`ios_notification.rs`）が公開する `extern "C"` 関数。
+// Rust 側（`src/ios.rs`）が公開する `extern "C"` 関数。
 extern void fandhe_rust_notification_outcome(uint64_t request_id, int32_t code);
 
 // `UNUserNotificationCenter.delegate` は weak プロパティのため、プロセスの

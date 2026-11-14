@@ -206,7 +206,7 @@ pub(crate) mod bridge {
     /// OS からの結果（[`super::outcome_from_code`] 経由の生の `Result`）を
     /// `super::to_outcome`/`super::to_message` で画面用へ変換してから置く
     /// （任意スレッド。実際には `.m` 側は main queue、Android は UI スレッドから
-    /// 呼ぶ契約、`ios_notification.rs`/`android.rs` の doc 参照）。`request_id`
+    /// 呼ぶ契約、`src/ios.rs`/`android.rs` の doc 参照）。`request_id`
     /// 不一致・未登録・既に結果ありは捨てて `false`。
     pub(crate) fn deliver(
         request_id: u64,
@@ -236,7 +236,7 @@ pub(crate) mod bridge {
     }
 }
 
-/// OS へ提示を依頼する（iOS は `ios_notification::present`、Android は
+/// OS へ提示を依頼する（iOS は `ios::present`、Android は
 /// `android::request_notification`）。戻り値は「提示依頼を受理できたか」（`false` は
 /// 呼び出し元が `Err(Internal("notification present"))` として畳む、
 /// `biometric_auth::present` と同型）。

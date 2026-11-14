@@ -3,7 +3,7 @@
 //! `fandhe_core::screens::device_info_show`（端末依存ゼロ）を
 //! [`super::mount::mount_with_effect`] の effect として観測し、ブラウザから読んだ値を
 //! `finish_read` へ書き戻す。`fandhe-device` の `DeviceInfo` トレイトは経由しない
-//! （`fandhe-device/src/device_info.rs` の module doc どおり、Web は本クレートの担当）。
+//! （`fandhe-cap-device-info` の `contract.rs` の module doc どおり、Web は本クレートの担当）。
 //! `fandhe-egui-proxy` の wasm canvas 経路は対象外。
 //!
 //! # 読み取り方

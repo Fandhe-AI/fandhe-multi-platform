@@ -1,4 +1,4 @@
-//! Windows 向けアラーム実装（Issue #721、親 #140）。`device/alarm.rs` の Windows
+//! Windows 向けアラーム実装（Issue #721、親 #140）。`driver.rs` の Windows
 //! 経路から呼ばれ、`crate::contract::Alarm` を WinRT
 //! `ScheduledToastNotification` + `ToastNotifier::AddToSchedule` で実装する。
 //! `scenario="alarm"` のトーストは閉じるまで画面に残り、アラーム音を繰り返す

@@ -54,7 +54,7 @@ import java.util.Set;
 // https://developer.android.com/develop/background-work/background-tasks/broadcasts ）。
 // ACTION_FOUND は protected broadcast で他アプリからは送れないが、受信側でも action と extra の型を検証する。
 //
-// 結果コードの SSOT は Rust の `fandhe_device::bluetooth_classic::decode_code`。ここは値を合わせるだけで
+// 結果コードの SSOT は Rust の `decode_code`（`driver.rs`）。ここは値を合わせるだけで
 // 写像の分岐をしない（4・5・6 は Rust 側で Internal）。機器名・アドレスはログへ出さない。
 // 守らない範囲: OS や他アプリが inquiry を早く終えた・間引いた場合の結果の違い、API 31 以上で許可を得る前の
 // 一覧が「許可されていません」になること、neverForLocation が検索結果へ与える影響（#650 で実機確認）。

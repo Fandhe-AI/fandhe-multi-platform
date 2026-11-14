@@ -66,7 +66,7 @@ impl Poller {
     }
 }
 
-/// 現在の OS の実装（macOS は App Group の回数ファイル、Android は `android_quick_settings_tile`、
+/// 現在の OS の実装（macOS は App Group の回数ファイル、Android は `android`、
 /// 他と初期化不能は `Unsupported` 固定）。
 fn platform_tile() -> &'static Arc<dyn QuickSettingsTile> {
     static TILE: OnceLock<Arc<dyn QuickSettingsTile>> = OnceLock::new();

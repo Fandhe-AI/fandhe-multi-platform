@@ -1,4 +1,4 @@
-//! Android 向けアラーム（正確な時刻の予約）の実装（Issue #1078、親 #1056）。`device/alarm.rs` の
+//! Android 向けアラーム（正確な時刻の予約）の実装（Issue #1078、親 #1056）。`driver.rs` の
 //! Android 経路から、ワーカースレッドが操作ごとに同期で呼ぶ。契約の SSOT は `crate::contract`。
 //!
 //! Java 側 `MainActivity.alarmSchedule(long)I` / `alarmCancel()I` / `alarmState()J` が

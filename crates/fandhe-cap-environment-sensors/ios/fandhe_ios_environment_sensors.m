@@ -2,7 +2,7 @@
 // `UIDevice` の近接監視を購読し、最新値を static に保持する（pull 型）。照度は公開 API が無いので
 // このファイルでは扱わない（Rust 側が `UnsupportedOnOs` を返す）。
 //
-// `src/device/ios_environment_sensors.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
+// `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
 // feature `device` 有効時のみ `cc` コンパイルする（CoreMotion・UIKit は他の .m 用にリンク済み）。
 //
 // 契約（気圧）:

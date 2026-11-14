@@ -16,7 +16,7 @@ import android.os.SystemClock;
 // （`src/android.rs`）が egui スレッドから static の `start` / `read` / `stop`（第 1 引数は Activity）を同期 JNI で呼ぶ）。
 // helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、`start` は失敗・`read` は購読喪失（READ_LOST）で確定する。
 //
-// 戻り値のコード・ビット配置の SSOT はここで、Rust 側 `android_compass.rs` が同じ値で解釈する。
+// 戻り値のコード・ビット配置の SSOT はここで、Rust 側 `src/android.rs` が同じ値で解釈する。
 //   compassStart: 0=OK / 1=センサー無し / 2=登録失敗・破棄済み
 //   compassRead : 負値=購読が失われた / 0=値なし / bit32=1 の値あり
 //                 （bit0-31=方位角ラジアンの float 生ビット、bit40-47=event.accuracy & 0xff）

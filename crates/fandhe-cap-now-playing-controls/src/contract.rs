@@ -1,6 +1,6 @@
 //! ロック画面・OS のメディア操作の契約（Issue #381、親 #98）。再生中の曲名と再生状態を OS の
 //! 「再生中」表示（macOS はコントロールセンターとメディアキー）へ渡し、OS から来た再生・一時停止を
-//! 画面へ返す橋渡し。`fandhe-egui-proxy` の `device/now_playing.rs` が `audio_play` 画面
+//! 画面へ返す橋渡し。`fandhe-egui-proxy` の `driver.rs` が `audio_play` 画面
 //! （media-playback）の再生・一時停止の間だけ [`NowPlaying::publish`] を呼び、OS 側の操作は
 //! [`SharedOsCommand`] 経由で拾う。
 //!

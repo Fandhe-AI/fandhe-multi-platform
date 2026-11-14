@@ -1,7 +1,7 @@
 // 方位（コンパス）: iOS 実装（Issue #1405、親 #1154）。CoreLocation の heading を購読し、
 // 最新値を static に保持する（pull 型）。
 //
-// `src/device/ios_compass.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の feature `device`
+// `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の feature `device`
 // 有効時のみ `cc` コンパイルする（CoreLocation は `apple/fandhe_apple_location.m` 側でリンク済み）。
 //
 // 契約:

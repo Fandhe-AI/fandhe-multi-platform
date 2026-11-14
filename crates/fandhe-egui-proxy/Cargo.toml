@@ -141,11 +141,6 @@ ordered-float = { workspace = true }
 # eframe（glow / wgpu / accesskit の target 別 feature 構成）は fandhe-render-egui へ移した（Issue #1164）。
 # 本クレートは eframe に直接依存しない。
 
-# Issue #1174: quick-settings-tile（`device/apple_quick_settings_tile.rs`）が home-widget と同じ App Group の
-# コンテナパスを組むのに使う（Team ID 検証を複製しない）。
-[target.'cfg(target_os = "macos")'.dependencies]
-fandhe-platform-apple = { path = "../fandhe-platform-apple" }
-
 [target.'cfg(target_os = "ios")'.dependencies]
 # iOS（実機 aarch64-apple-ios・シミュレータ aarch64-apple-ios-sim / x86_64-apple-ios を
 # `target_os = "ios"` で一括捕捉）向けバックエンド分岐（TASK-1.3-S1 / REQ-1 / M3）。
@@ -174,9 +169,6 @@ fandhe-platform-apple = { path = "../fandhe-platform-apple" }
 # TASK-6.2-S1（REQ-6）: "accesskit" は通常ビルドから外す（native 分岐と同じ理由。
 # dev-dependencies の egui_kittest との feature 統合で `cargo test` 時のみ有効化される）。
 wgpu = { workspace = true }
-# TASK-21.2（Issue #1168）: `device/ios.rs` が main thread 判定（`is_main_thread`）に使う。
-# build 依存の feature `build` は有効にしない（通常のビルドへ `cc` を持ち込まない）。
-fandhe-platform-apple = { path = "../fandhe-platform-apple" }
 #
 # 注: `cargo tree -i x11rb`（iOS ターゲット）で x11rb が現れるが、これは本分岐の
 # feature（x11/wayland を含まない）由来ではなく、egui-winit の依存 arboard が

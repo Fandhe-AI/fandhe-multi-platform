@@ -84,7 +84,7 @@ fn map_win_error(e: &windows::core::Error, what: &'static str) -> BluetoothLeErr
     }
 }
 
-/// `device/bluetooth_le.rs::drive_callback` から呼ばれる。ワーカーを起動して即座に返る。
+/// `driver.rs::drive_callback` から呼ばれる。ワーカーを起動して即座に返る。
 /// 進行中のセッションがあれば停止を送って置き換える（古い結果は request_id 照合で捨てる）。
 pub(crate) fn present(request_id: u64, duration: Duration) -> Result<(), BluetoothLeError> {
     let (stop_tx, stop_rx) = mpsc::channel();

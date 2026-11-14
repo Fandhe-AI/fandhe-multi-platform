@@ -2,7 +2,7 @@
 // `AVAudioPlayer` で渡された WAV バイト列 1 本を再生・一時停止・停止し、状態と位置を返す。
 // `AVPlayer` は KVO が要るため使わない（pull 型の snapshot で足りる）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_media_playback.rs` から C ABI 経由で呼ばれる。
+// `src/apple.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の macOS / iOS 分岐がコンパイルする（AVFoundation は既存のリンクで足りる）。
 // iOS（Issue #269）では TARGET_OS_IOS の内側で次を足す。
 //   - 背景遷移（UIApplicationDidEnterBackgroundNotification）と割り込み開始

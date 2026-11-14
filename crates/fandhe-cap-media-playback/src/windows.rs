@@ -1,4 +1,4 @@
-//! Windows 向け音声再生実装（Issue #268、親 #86）。`device/media_playback.rs::platform_playback` の
+//! Windows 向け音声再生実装（Issue #268、親 #86）。`driver.rs::platform_playback` の
 //! Windows 経路から呼ばれ、契約（SSOT）は `fandhe_device::media_playback`。
 //! Media Foundation Media Engine（`IMFMediaEngine`、音声のみモード）で `demo_wav()` の WAV を
 //! メモリから再生する。範囲は再生・一時停止・停止・位置・長さのみ（動画・シーク・ネットワークは範囲外）。

@@ -10,8 +10,8 @@
 //! # iOS / macOS / Windows / Android: pull 型 `bridge`
 //!
 //! 広告は OS のスレッドから非同期に届き、完了も非同期のため、`BluetoothLe` トレイトを
-//! 通さずコアの状態機械へ直接書き戻す（`device/biometric_auth.rs` /
-//! `device/speech_recognition.rs` と同型。[`bridge`] は `RequestSlot` の facade）。
+//! 通さずコアの状態機械へ直接書き戻す（`fandhe-egui-proxy` の `device/biometric_auth.rs` /
+//! `fandhe-egui-proxy` の `device/speech_recognition.rs` と同型。[`bridge`] は `RequestSlot` の facade）。
 //! OS 側は [`OBSERVED`]（観測バッファ）へ [`Observer::observe`] で広告を足し、終了時に
 //! [`finish`] を 1 回呼ぶ。バッファの照合・取り出しは 1 つのロックの内側で行い
 //! （`device-bridge-contracts.md` 2 節）、成功のときだけ `normalize_scan` を通して
@@ -301,7 +301,7 @@ pub(crate) mod bridge {
     }
 }
 
-/// iOS / macOS / Windows / Android の effect ドライバ本体（`device/biometric_auth.rs::drive_callback`
+/// iOS / macOS / Windows / Android の effect ドライバ本体（`fandhe-egui-proxy` の `device/biometric_auth.rs::drive_callback`
 /// と同型）。
 #[cfg(any(
     target_os = "ios",

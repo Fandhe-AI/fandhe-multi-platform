@@ -47,7 +47,7 @@
       "api": "`/usr/bin/osascript`（`display notification`）",
       "perm": "スクリプトエディタの通知許可（システム設定 > 通知）。本体の entitlement は不要",
       "url": "https://developer.apple.com/documentation/usernotifications",
-      "note": "実装済み（旧#1004）。バンドル外プロセスから `UNUserNotificationCenter` を呼ぶと例外で落ちるため使わず、`osascript display notification` を子プロセスで起動する代替経路を採る（`crates/fandhe-device/src/notification.rs` モジュール doc 参照）。通知はスクリプトエディタ名義で出る。タイトル・本文は argv には出さず `osascript -` の標準入力へ AppleScript ソースとして渡す（`ps`/プロセス一覧からの通知内容露出を防ぐ、codex 指摘 P1、PR 旧#1008）。文字列リテラルへの埋め込みはバックスラッシュ・二重引用符のエスケープと、改行を `linefeed`/`return` 定数との連結式へ変換する処理で AppleScript 注入・コンパイル失敗の両方を防ぐ（実機で実測済み）。表示されたか・通知設定が無効かは `osascript` から判定できないため常に `Submitted`（`Shown` は返さない、嘘の成功を出さない）。5 秒の期限を掛け、超えたら kill + wait で回収する。Mac 目視済み（10-01）: タイトル・本文を入れて「通知する」で通知センターに表示され、画面は「送信しました（表示されるかは OS の通知設定次第です）」と表示（成功を断言しない）。未確認: 通知をシステム設定でオフにした状態の目視（`osascript` は表示の有無を返さないため、画面は同じ「送信しました（…OS の通知設定次第です）」になる設計）。",
+      "note": "実装済み（旧#1004）。バンドル外プロセスから `UNUserNotificationCenter` を呼ぶと例外で落ちるため使わず、`osascript display notification` を子プロセスで起動する代替経路を採る（`crates/fandhe-cap-notification/src/driver.rs` モジュール doc 参照）。通知はスクリプトエディタ名義で出る。タイトル・本文は argv には出さず `osascript -` の標準入力へ AppleScript ソースとして渡す（`ps`/プロセス一覧からの通知内容露出を防ぐ、codex 指摘 P1、PR 旧#1008）。文字列リテラルへの埋め込みはバックスラッシュ・二重引用符のエスケープと、改行を `linefeed`/`return` 定数との連結式へ変換する処理で AppleScript 注入・コンパイル失敗の両方を防ぐ（実機で実測済み）。表示されたか・通知設定が無効かは `osascript` から判定できないため常に `Submitted`（`Shown` は返さない、嘘の成功を出さない）。5 秒の期限を掛け、超えたら kill + wait で回収する。Mac 目視済み（10-01）: タイトル・本文を入れて「通知する」で通知センターに表示され、画面は「送信しました（表示されるかは OS の通知設定次第です）」と表示（成功を断言しない）。未確認: 通知をシステム設定でオフにした状態の目視（`osascript` は表示の有無を返さないため、画面は同じ「送信しました（…OS の通知設定次第です）」になる設計）。",
       "sourceName": [
         "通知"
       ],

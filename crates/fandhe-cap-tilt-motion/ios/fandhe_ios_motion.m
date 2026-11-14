@@ -1,6 +1,6 @@
 // Phase 10（親 #827）型サンプル「傾きで玉が転がる」: iOS 側の実センサ実装（Issue #832）。
 //
-// `crates/fandhe-egui-proxy/src/device/ios.rs`（`IosMotion`）から C ABI 経由で
+// `src/ios.rs`（`IosMotion`）から C ABI 経由で
 // 呼ばれる。CoreMotion は Rust バインディングを持たないため、この 1 ファイルの
 // ObjC コードに実装を閉じ、`extern "C"` 宣言 1 点のみを Rust 側へ公開する
 // （`fandhe_ios_camera.m` と同型、coding-rust.md の FFI 例外規定）。

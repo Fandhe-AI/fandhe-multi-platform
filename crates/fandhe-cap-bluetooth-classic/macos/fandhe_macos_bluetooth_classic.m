@@ -3,7 +3,7 @@
 // `IOBluetoothDeviceInquiry`（周辺の機器の検索）を使う。接続・ペアリング操作・電源の ON 操作はしない。
 // 機器のアドレス文字列は同一機器の判定キーとして Rust 側へ渡すだけで、画面にもログにも出さない。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_bluetooth_classic.rs` から C ABI 経由で呼ばれる。
+// `src/macos.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルし IOBluetooth をリンクする。
 //
 // 契約（検索は pull 型。`fandhe_apple_lan_discovery.m` と同型）:
@@ -29,7 +29,7 @@
 //       タイマー（窓の終わり）→ 0 / complete で正常 → 0 / complete で error・aborted（OS の間引きを
 //       含む）→ 4。確定したら必ず inquiry を stop し delegate を外してから finished を呼ぶ。
 //       stop の後に届く complete は無視する。コードの意味づけは Rust 側
-//       `fandhe_device::bluetooth_classic::decode_code` に一本化する。
+//       `decode_code`（`driver.rs`） に一本化する。
 //
 // 電源と権限の判定（一覧と検索で共通）:
 //   `IOBluetoothHostController.defaultController` が nil → 3、`powerState` が ON でない → 2、

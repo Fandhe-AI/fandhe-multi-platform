@@ -7,7 +7,7 @@ import android.service.quicksettings.TileService;
 // bind できるのはシステムだけ。タイルの追加はユーザーがクイック設定の編集から行う。
 // 非アクティブモード（ACTIVE_TILE の meta-data なし）で、タイル側への回数表示はしない。
 // タップのたびに `QuickSettingsTileStore.increment` で回数を 1 増やし、アプリ画面が
-// Rust（`android_quick_settings_tile.rs`）経由で読む。アプリのプロセスが無ければ OS がこの
+// Rust（`src/android.rs`）経由で読む。アプリのプロセスが無ければ OS がこの
 // サービスのために起こすが、MainActivity は読み込まれない。切り離し時は Manifest の宣言ごと削除する。
 public final class QuickSettingsTileService extends TileService {
     @Override

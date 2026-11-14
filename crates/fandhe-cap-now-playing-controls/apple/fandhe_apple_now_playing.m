@@ -3,7 +3,7 @@
 // MediaPlayer の `MPNowPlayingInfoCenter`（曲名・長さ・位置・再生速度）と `MPRemoteCommandCenter`
 // （再生・一時停止・切り替え）で、OS の「再生中」表示（macOS はコントロールセンターとメディアキー、iOS はコントロールセンター）へ渡す。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_now_playing.rs` から C ABI 経由で呼ばれる。
+// `src/apple.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の macOS・iOS 分岐がコンパイルし MediaPlayer をリンクする。権限・entitlement・usage description は不要。
 //
 // 契約（戻りコードは固定。NSError の生値・説明は返さずログにも出さない、security.md A09）:

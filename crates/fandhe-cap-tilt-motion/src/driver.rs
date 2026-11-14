@@ -75,14 +75,14 @@ pub fn shared_motion() -> &'static DummyMotion {
 
 /// `SensorManager.GRAVITY_EARTH`（Android）と同値の標準重力加速度（m/s^2）。
 /// [`gravity_to_tilt`] が重力ベクトルを `-1.0..=1.0` の傾き値へ正規化する除数として使う。
-/// 実呼び出し元（`device/android.rs` の JNI エクスポート）は Android ターゲットのみに
+/// 実呼び出し元（`src/android.rs` の JNI エクスポート）は Android ターゲットのみに
 /// 存在するため、他ターゲットでは `#[cfg(test)]` のユニットテストのみが参照する
 /// （dead_code 誤検知を避けるため `cfg_attr` で許可する）。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 const GRAVITY_EARTH: f32 = 9.80665;
 
 /// Android の重力センサ値（`TYPE_GRAVITY`、無ければ `TYPE_ACCELEROMETER`）を画面座標の
-/// 傾き `(tilt_x, tilt_y)` へ写像する純関数（Issue #831）。`device/android.rs` の JNI
+/// 傾き `(tilt_x, tilt_y)` へ写像する純関数（Issue #831）。`src/android.rs` の JNI
 /// エクスポートから呼ばれ、ホストの `cargo test` で検証できるようロジックをここへ
 /// 切り出している。
 ///

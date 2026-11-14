@@ -1,5 +1,5 @@
 //! Windows 向けローカル通知実装（Issue #1004、AUMID 登録は Issue #1033）。
-//! `device/notification.rs` の Windows 経路から呼ばれ、
+//! `driver.rs` の Windows 経路から呼ばれ、
 //! `crate::contract::Notifier` を WinRT `Windows.UI.Notifications`
 //! （Toast）で実装する。
 //!

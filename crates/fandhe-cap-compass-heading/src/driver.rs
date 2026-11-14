@@ -12,8 +12,8 @@
 //! 期限は単調時計（`Instant`）由来のミリ秒だけで測る。完了は読み取り時の `session` を持たせ、
 //! 古い世代の完了は画面側で捨てられる。
 //!
-//! dispatch（[`implementation`]）は全対象 OS の最終形。Windows は `windows_compass.rs`、iOS は `ios_compass.rs`、Android は
-//! `android_compass.rs`、Web は `fandhe-web-dom` 側、
+//! dispatch（[`implementation`]）は全対象 OS の最終形。Windows は `src/windows.rs`、iOS は `src/ios.rs`、Android は
+//! `src/android.rs`、Web は `fandhe-web-dom` 側、
 //! macOS・Linux は非対応。
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};

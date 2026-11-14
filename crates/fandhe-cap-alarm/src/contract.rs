@@ -2,7 +2,7 @@
 //!
 //! 扱う範囲は「壁時計の絶対時刻を 1 件予約する → アプリが閉じていても OS がその
 //! 時刻に知らせる」の 1 本道に限る。現在の実装は Windows（`ScheduledToastNotification`、
-//! `scenario="alarm"` のトースト）だけで、`fandhe-egui-proxy` の `device/alarm.rs` が
+//! `scenario="alarm"` のトースト）だけで、`fandhe-egui-proxy` の `driver.rs` が
 //! 呼ぶ。iOS（AlarmKit）・Android（`AlarmManager.setAlarmClock`）は実装予定で、
 //! 下の契約のうち両 OS の項は実装時に守る条件として先に書いている。実装するまでは、
 //! それ以外の OS と同じく [`UnsupportedAlarm`] 固定（対応表 `docs/device/capabilities/

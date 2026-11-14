@@ -2,7 +2,7 @@
 // iOS（b-ios、Issue #779）の共用実装（`fandhe_apple_bluetooth_le.m` と同じ iOS/macOS 共用方針）。
 // Foundation と CoreBluetooth だけを使い AppKit / UIKit は使わない。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_ble_peripheral.rs` から C ABI 経由で呼ばれる。
+// `src/apple.rs` から C ABI 経由で呼ばれる。
 // `build.rs` が iOS / macOS の feature `device` 有効時に `cc` でコンパイルし、CoreBluetooth
 // をリンクする。
 //
@@ -18,7 +18,7 @@
 //   fandhe_rust_ble_peripheral_event(session, code)
 //     Rust 側が公開する `extern "C"` 関数。code: 0 公開中（開始のコールバック成功）/ 1 読み取り 1 件 /
 //     2 Bluetooth オフ / 3 権限拒否 / 4 非対応 / 5 失敗 / 6 中断（iOS の背景遷移で発火）。
-//     写像の SSOT は Rust 側 `fandhe_device::ble_peripheral` の純関数。終了系のコード（2〜6）は
+//     写像の SSOT は Rust 側 `crate::contract` の純関数。終了系のコード（2〜6）は
 //     1 つの公開につき高々 1 回（`FandheBlePeripheralFinish` が唯一の発火点）で、通知の前に
 //     資源の解放を済ませる。
 //

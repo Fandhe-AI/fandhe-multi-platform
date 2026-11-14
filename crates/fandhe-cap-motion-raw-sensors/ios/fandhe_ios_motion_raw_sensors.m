@@ -2,7 +2,7 @@
 // CoreMotion `CMMotionManager` の `gyroData.rotationRate`（rad/s）・`magnetometerData.magneticField`
 // （µT）・`deviceMotion.userAcceleration`（G）を OS が返した単位と軸のまま保持する（pull 型）。
 //
-// `src/device/ios_motion_raw_sensors.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
+// `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
 // feature `device` 有効時のみ `cc` コンパイルする（CoreMotion・UIKit は他の .m 用にリンク済み）。
 //
 // manager は `fandhe_ios_motion.m`（tilt）と共有する 1 つだけを使う。そちらを正とし、ここでは
@@ -33,7 +33,7 @@ extern int32_t fandhe_ios_device_motion_failure(void);
 extern void fandhe_ios_device_motion_clear_failure(void);
 extern CMDeviceMotion *_Nullable fandhe_ios_device_motion_latest(void);
 
-// Rust 側（`ios_motion_raw_sensors.rs`）の受け口。値・失敗を確定した直後に次フレームを起こす。
+// Rust 側（`src/ios.rs`）の受け口。値・失敗を確定した直後に次フレームを起こす。
 extern void fandhe_rust_motion_raw_sensors_changed(void);
 
 enum { kKindGyro = 0, kKindMag = 1, kKindLinear = 2, kKindCount = 3 };

@@ -15,7 +15,7 @@
 //! 判定と状態更新は `DRIVER` のロックの内側で行い、経路はこのドライバ 1 本に集約する（契約表 2・11）。
 //!
 //! dispatch（[`implementation`]）は全対象 OS の最終形。iOS・Android・Windows は
-//! `ios_environment_sensors.rs` 等の各 OS 実装（#610・#611・#612）、
+//! `src/ios.rs` 等の各 OS 実装（#610・#611・#612）、
 //! macOS・Linux は `UnsupportedEnvironmentSensors` 固定。Web は対応表で `no` のため配線しない。
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};

@@ -2,7 +2,7 @@
 // iOS（Issue #1061）の共用実装（`fandhe_apple_biometric.m` と同じ iOS/macOS 共用方針）。
 // Foundation と CoreBluetooth だけを使い AppKit / UIKit は使わない。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_bluetooth_le.rs` から C ABI 経由で呼ばれる。
+// `src/apple.rs` から C ABI 経由で呼ばれる。
 // `build.rs` が iOS / macOS の feature `device` 有効時に `cc` でコンパイルし、CoreBluetooth
 // をリンクする。
 //
@@ -20,7 +20,7 @@
 //   fandhe_rust_ble_finished(request_id, code)
 //     Rust 側が公開する `extern "C"` 関数。code: 0 成功 / 1 Bluetooth オフ /
 //     2 権限拒否 / 3 非対応 / 4 内部エラー。コードの意味づけ（契約のエラー種別への
-//     写像）は Rust 側 `device/bluetooth_le.rs` の純関数に一本化する。1 要求につき
+//     写像）は Rust 側 `driver.rs` の純関数に一本化する。1 要求につき
 //     finished は高々 1 回（`FandheBleFinish` が唯一の発火点）。rssi は取れないとき
 //     127（番兵）を渡す。
 //

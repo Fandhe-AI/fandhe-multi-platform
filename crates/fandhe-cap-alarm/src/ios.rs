@@ -1,4 +1,4 @@
-//! iOS 向けアラーム実装（Issue #1077、親 #1056）。`device/alarm.rs` の iOS 経路から呼ばれ、
+//! iOS 向けアラーム実装（Issue #1077、親 #1056）。`driver.rs` の iOS 経路から呼ばれ、
 //! `crate::contract::Alarm` を AlarmKit（`ios/fandhe_ios_alarm.swift`。`build.rs` が feature
 //! `device` 有効時に swiftc で静的ライブラリ化し弱リンクする）で実装する。`unsafe` は
 //! `@_cdecl` の C ABI 3 関数の宣言と呼び出し 3 か所に閉じる（coding-rust.md の FFI 例外規定準拠）。

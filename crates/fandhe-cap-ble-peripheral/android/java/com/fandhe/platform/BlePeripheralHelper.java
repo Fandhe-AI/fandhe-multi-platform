@@ -57,7 +57,7 @@ import java.util.concurrent.CountDownLatch;
 // レシーバーは RECEIVER_EXPORTED で登録する（システムの broadcast は NOT_EXPORTED では届かない）。
 // ACTION_STATE_CHANGED は protected broadcast だが、受信側でも action と extra を検証する。
 //
-// 結果コードの SSOT は Rust の `fandhe_device::ble_peripheral::CODE_*`。ここは値を合わせるだけで写像の
+// 結果コードの SSOT は Rust の `contract.rs` の `CODE_*`。ここは値を合わせるだけで写像の
 // 分岐をしない（開始失敗の errorCode は生のまま Rust へ渡す）。中心役のアドレス・名前・読み取りの中身・
 // OS のエラーコードはログへ出さない。
 // 守らない範囲: 他アプリの同時アドバタイズ、端末名が長く scan response が DATA_TOO_LARGE になる場合

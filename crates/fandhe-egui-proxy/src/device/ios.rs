@@ -32,9 +32,6 @@ use std::sync::{Condvar, Mutex};
 use fandhe_device::file_picker::{read_picked, MAX_FILE_BYTES};
 use fandhe_device::tts::Tts;
 use fandhe_device::{DataDir, DeviceError};
-// main thread 判定は Apple 共通層（`fandhe-platform-apple`）が持つ。UIKit を触る呼び出し
-// （`fandhe_ios_motion_read` 等）の前に、ワーカースレッドからの誤用をここで弾く（codex-review 指摘 P1、PR #844）。
-use fandhe_platform_apple::is_main_thread;
 
 /// iOS アプリコンテナ内 `Documents/` を `DataDir` として返す（`storage::FsStorage::new`
 /// へ渡す契約、`device.rs::storage_note_state` から呼ばれる）。

@@ -8,8 +8,8 @@
 //! # OS 別実装の差し込み口
 //!
 //! [`platform_device_info`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を
-//! 持つモジュールだけを埋める（macOS: `macos_device_info`、Windows: `windows_device_info`、
-//! iOS: `ios_device_info`（#1305）、Android: `android_device_info`（#1306））。それ以外は
+//! 持つモジュールだけを埋める（macOS: `macos`、Windows: `windows`、
+//! iOS: `ios`（#1305）、Android: `android`（#1306））。それ以外は
 //! `UnsupportedDeviceInfo` 固定で、ダミーの成功実装へは倒さない。
 //!
 //! # 同期読み取り
