@@ -206,11 +206,6 @@ pub mod android_url_scheme;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_web_auth_session;
-/// Issue #516: Android 向け Wi-Fi 情報・スキャン実装（`WifiManager`、JNI 経由の pull 型 bridge）。
-/// `device/wifi_info.rs` の Android 経路から呼ばれる。純関数をホストでテストするため test でもコンパイルする。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_wifi_info;
 /// Issue #424（親 #101）: アプリショートカット（長押し・ジャンプリスト・Dock メニュー）の登録ドライバ。
 /// `device/url_scheme.rs::url_scheme_show_effect` から呼ばれる。実装は macOS（Dock メニュー）、
 /// iOS は Info.plist の静的宣言（`Declared`、#425）、Android・Windows（ジャンプリスト）は実装済み、他 OS は `UnsupportedAppShortcuts` 固定。
@@ -617,12 +612,6 @@ pub mod macos_safe_area_insets;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_web_auth_session;
-/// Issue #514: macOS 向け Wi-Fi 情報実装（`macos/fandhe_macos_wifi_info.m` の CoreWLAN と CoreLocation の
-/// 許可判定を呼ぶ C ABI ラッパー）。`device/wifi_info.rs` の macOS 経路から呼ばれる。写像の純関数を
-/// ホストでテストするため test でも載せる。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_wifi_info;
 /// Issue #636: macOS 向けウィンドウ管理の読み取り実装（`macos/fandhe_macos_window_management.m` を呼ぶ
 /// C ABI ラッパー）。`device/window_management.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -729,9 +718,6 @@ pub mod url_scheme;
 /// Phase 11 の拡充ループ（親 #113、Issue #530）: OAuth 用 Web 認証セッションの effect ドライバ（macOS・Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedWebAuthSession` 固定。Web は対象外）。
 pub mod web_auth_session;
-/// Phase 11 の拡充ループ（親 #111、Issue #514）: Wi-Fi 情報の effect ドライバ（macOS・Windows・Android 実装、
-/// iOS（deferred）・他 OS は `UnsupportedWifiInfo` 固定。Web は対象外）。
-pub mod wifi_info;
 /// Phase 11 の拡充ループ（親 #127、Issue #636）: ウィンドウ管理（位置・サイズ・最前面）の effect ドライバ
 /// （macOS 実装、Windows は #637、他 OS は `UnsupportedWindowManager` 固定。Web は `fandhe-web-dom`）。
 pub mod window_management;
@@ -884,12 +870,6 @@ pub mod windows_url_scheme;
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_web_auth_session;
-/// Issue #515: Windows 向け Wi-Fi 情報実装（`wlanapi`）。
-/// `device/wifi_info.rs` の Windows 経路から呼ばれる。写像の純関数をホストでテストできるよう
-/// cfg は `any(windows, test)`。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_wifi_info;
 /// Issue #637: Windows 向けウィンドウ管理の読み取り（`NativeReads` の Windows 実装。最前面か・今いる画面の
 /// 作業領域を Win32 で読む）。`device/window_management.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]

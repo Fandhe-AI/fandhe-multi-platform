@@ -66,7 +66,7 @@
       "note": "実装済み（#792）。`WlanConnect` の戻り値 0 は要求の受け付けにすぎないため成功にせず、`connection_complete` の通知（interface GUID・SSID・一時プロファイルで照合、reason が成功のときだけ成功）を待つ。登録解除 → context の解放 → ハンドルを閉じる、の順を全経路で守る。アダプターが外れた通知（`interface_removal`）は失敗として待ちを終える。一時プロファイルは XML 文字列で渡し、SSID は 16 進、パスフレーズは XML エスケープして `keyMaterial` に平文で入る（公式）。失敗したときだけ電源を読み直して Wi-Fi オフを分ける。`UNSUPPORTED_SECURITY` は返さず、WPA3 のみのネットワークなどは `CONNECT_FAILED` に入る。`windows` クレートの feature `Win32_NetworkManagement_Ndis` を足した（`WlanConnect` の型がこの下にある。新規パッケージは増えない）。WinRT の `WiFiAdapter.ConnectAsync` はスキャン結果の `WiFiAvailableNetwork` が要り、`Windows.Devices.WiFi` は位置情報の同意の対象のため使わない。",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#782）",
-      "impl": "crates/fandhe-cap-wifi-connect/src/windows.rs + crates/fandhe-egui-proxy/src/device/windows_wifi_info.rs + crates/fandhe-cap-wifi-connect/src/driver.rs + crates/fandhe-core/src/screens/wifi_connect_show.rs + crates/fandhe-cap-wifi-connect/src/contract.rs、Issue #792"
+      "impl": "crates/fandhe-cap-wifi-connect/src/windows.rs + crates/fandhe-device/src/wifi_info.rs + crates/fandhe-cap-wifi-connect/src/driver.rs + crates/fandhe-core/src/screens/wifi_connect_show.rs + crates/fandhe-cap-wifi-connect/src/contract.rs、Issue #792"
     },
     "web": {
       "status": "no",

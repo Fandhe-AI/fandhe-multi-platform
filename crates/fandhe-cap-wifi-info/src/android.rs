@@ -1,13 +1,12 @@
-//! Android 向け Wi-Fi 情報実装（Issue #516、親 #111）。`device/wifi_info.rs::implementation`
-//! の Android 経路から呼ばれ、現在の接続の SSID・dBm と OS が持つ直近のスキャン結果を
+//! Android 向け Wi-Fi 情報実装（Issue #516、親 #111）。`driver` の Android 経路から呼ばれ、現在の接続の SSID・dBm と OS が持つ直近のスキャン結果を
 //! 期限付きで 1 回読む。Java 側は `WifiInfoHelper`（許可確認・状態判定・読み取り・取り消し）。
-//! 契約の SSOT は `fandhe_device::wifi_info`。
+//! 契約の SSOT は `crate::contract`。
 //!
 //! 流れ: `WifiInfo::read`（ワーカースレッド）→ [`RequestSlot::begin`] で id 採番 →
-//! JNI `MainActivity.requestWifiInfo(id)` → Java が結果コードと値を `nativeOnWifiInfoResult`
+//! JNI `WifiInfoHelper.read(Activity, id)`（static） → Java が結果コードと値を `nativeOnWifiInfoResult`
 //! で返す → [`decode`] で契約の失敗種別へ写像し、SSID は `Ssid::from_bytes`・dBm は
 //! `rssi_from_dbm`・周辺は `normalize_nearby` に通す → ワーカーが slot を見て受け取る。
-//! 期限 [`READ_TIMEOUT`]（許可ダイアログの応答待ちを含む）が切れたら `cancelWifiInfo(id)` で
+//! 期限 [`READ_TIMEOUT`]（許可ダイアログの応答待ちを含む）が切れたら `WifiInfoHelper.cancel(Activity, id)` で
 //! 取り消し `Internal(READ_FAILED)`（0 件の成功にしない）。
 //!
 //! 守る範囲: 1 プロセス内の要求順序・0 件と失敗の区別（位置情報オフ・許可なし・電波オフは
@@ -17,18 +16,18 @@
 //! #510 で実機確認する未確認事項: API 31 以降の `getConnectionInfo` が位置情報の許可で SSID を
 //! 返すか、スキャンキャッシュが空のときの出方。
 //!
-//! no-op スタブは置かない: Java の native は Rust の `requestWifiInfo` を経た後でしか呼ばれない。
+//! no-op スタブは置かない: Java の native は Rust の `read` を経た後でしか呼ばれない。
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use fandhe_device::wifi_info::{
-    normalize_nearby, rssi_from_dbm, Ssid, WifiInfo, WifiNetwork, WifiReport, FEATURE,
-    LOCATION_OFF, RADIO_OFF, READ_FAILED,
+use crate::contract::{
+    FEATURE, LOCATION_OFF, RADIO_OFF, READ_FAILED, Ssid, WifiInfo, WifiNetwork, WifiReport,
+    normalize_nearby, rssi_from_dbm,
 };
-use fandhe_device::DeviceError;
+use crate::error::WifiInfoError;
 
-use super::request_slot::{RequestSlot, POLL_INTERVAL};
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot};
 
 /// 要求の期限（呼び出し開始から。許可ダイアログの応答待ちを含む）。
 /// trait の `read()` は期限を持たないため、Java が応答しない場合に備える Android 側の上限。
@@ -37,7 +36,7 @@ const READ_TIMEOUT: Duration = Duration::from_secs(30);
 /// Java が送る周辺の最大件数。SSID ごとの集約と上位 5 件への絞り込みは `normalize_nearby` が行う。
 const NEARBY_CAP: usize = 4096;
 
-/// 契約の失敗種別（`DeviceError` は `Clone` でないため slot 用に写した形）。
+/// 契約の失敗種別（`WifiInfoError` は `Clone` でないため slot 用に写した形）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Fail {
     Unsupported,
@@ -47,14 +46,14 @@ enum Fail {
     Failed,
 }
 
-impl From<Fail> for DeviceError {
+impl From<Fail> for WifiInfoError {
     fn from(f: Fail) -> Self {
         match f {
-            Fail::Unsupported => DeviceError::Unsupported(FEATURE),
-            Fail::PermissionDenied => DeviceError::PermissionDenied(FEATURE),
-            Fail::RadioOff => DeviceError::Disabled(RADIO_OFF),
-            Fail::LocationOff => DeviceError::Disabled(LOCATION_OFF),
-            Fail::Failed => DeviceError::Internal(READ_FAILED),
+            Fail::Unsupported => WifiInfoError::Unsupported(FEATURE),
+            Fail::PermissionDenied => WifiInfoError::PermissionDenied(FEATURE),
+            Fail::RadioOff => WifiInfoError::Disabled(RADIO_OFF),
+            Fail::LocationOff => WifiInfoError::Disabled(LOCATION_OFF),
+            Fail::Failed => WifiInfoError::Internal(READ_FAILED),
         }
     }
 }
@@ -150,7 +149,7 @@ struct AndroidWifiInfo;
 
 #[cfg(target_os = "android")]
 impl WifiInfo for AndroidWifiInfo {
-    fn read(&self) -> Result<WifiReport, DeviceError> {
+    fn read(&self) -> Result<WifiReport, WifiInfoError> {
         read_with(
             &SLOT,
             READ_TIMEOUT,
@@ -159,45 +158,41 @@ impl WifiInfo for AndroidWifiInfo {
                 let _ = call_activity(true, id);
             },
         )
-        .map_err(DeviceError::from)
+        .map_err(WifiInfoError::from)
     }
 }
 
-/// `MainActivity.requestWifiInfo(long)`（`cancel=false`）または
-/// `cancelWifiInfo(long)`（`cancel=true`）を JNI で呼ぶ。`false` は呼び出し失敗。
-/// `unsafe` 2 箇所は `fandhe_platform_android::with_activity` と同一の根拠。
+/// `WifiInfoHelper.read(Activity, long)`（`cancel=false`）または `cancel(Activity, long)`（`cancel=true`）を
+/// JNI の static 呼び出しで呼ぶ。`false` は呼び出し失敗。JavaVM と Activity の取得は
+/// `fandhe_platform_android::with_activity_class` に任せ、ここは `unsafe` を持たない。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
 fn call_activity(cancel: bool, id: u64) -> bool {
-    use super::android::JniCallFailed;
-    let Some(app) = crate::android::android_app() else {
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+    use jni::objects::JValue;
+    let Some(app) = android_app() else {
         return false;
     };
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| -> Result<(), JniCallFailed> {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        let args = [jni::objects::JValue::Long(id as jni::sys::jlong)];
-        if cancel {
-            env.call_method(
-                &activity,
-                jni::jni_str!("cancelWifiInfo"),
-                jni::jni_sig!((long) -> ()),
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.WifiInfoHelper"),
+        |env, activity, class| -> Result<(), JniCallFailed> {
+            let args = [
+                JValue::Object(activity),
+                JValue::Long(id as jni::sys::jlong),
+            ];
+            env.call_static_method(
+                class,
+                if cancel {
+                    jni::jni_str!("cancel")
+                } else {
+                    jni::jni_str!("read")
+                },
+                jni::jni_sig!((android.app.Activity, long) -> ()),
                 &args,
             )?;
-        } else {
-            env.call_method(
-                &activity,
-                jni::jni_str!("requestWifiInfo"),
-                jni::jni_sig!((long) -> ()),
-                &args,
-            )?;
-        }
-        Ok(())
-    })
+            Ok(())
+        },
+    )
     .is_ok()
 }
 
@@ -210,7 +205,7 @@ fn call_activity(cancel: bool, id: u64) -> bool {
 /// JNI 命名規約上の固定シンボル名で、既存の JNI エクスポートと同じ根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_WifiInfoHelper_nativeOnWifiInfoResult<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
@@ -269,7 +264,7 @@ extern "system" fn Java_com_fandhe_platform_WifiInfoHelper_nativeOnWifiInfoResul
     }
 }
 
-/// Android の `WifiInfo` 実装を返す（`device/wifi_info.rs` の dispatch から呼ばれる）。
+/// Android の `WifiInfo` 実装を返す（`driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn WifiInfo> {
     Arc::new(AndroidWifiInfo)
@@ -280,7 +275,7 @@ pub(crate) fn implementation() -> Arc<dyn WifiInfo> {
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 pub(crate) fn implementation() -> Arc<dyn WifiInfo> {
-    Arc::new(fandhe_device::wifi_info::UnsupportedWifiInfo)
+    Arc::new(crate::contract::UnsupportedWifiInfo)
 }
 
 #[cfg(test)]
@@ -314,12 +309,12 @@ mod tests {
     #[test]
     fn fail_maps_to_contract_errors() {
         assert!(matches!(
-            DeviceError::from(Fail::LocationOff),
-            DeviceError::Disabled(LOCATION_OFF)
+            WifiInfoError::from(Fail::LocationOff),
+            WifiInfoError::Disabled(LOCATION_OFF)
         ));
         assert!(matches!(
-            DeviceError::from(Fail::Failed),
-            DeviceError::Internal(READ_FAILED)
+            WifiInfoError::from(Fail::Failed),
+            WifiInfoError::Internal(READ_FAILED)
         ));
     }
 

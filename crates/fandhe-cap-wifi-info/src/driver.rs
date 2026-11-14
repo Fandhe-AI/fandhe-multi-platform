@@ -1,53 +1,53 @@
 //! Phase 11（親 #111）型サンプル「Wi-Fi 情報」（Issue #514）の effect ドライバ。
 //! `fandhe_core::screens::wifi_info_show`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::wifi_info::WifiInfo` で現在の接続と周辺を読んで `CompletionSender` 経由で結果を
+//! `crate::contract::WifiInfo` で現在の接続と周辺を読んで `CompletionSender` 経由で結果を
 //! 返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
-//! 呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_device::wifi_info`。
+//! 呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は `crate::contract`。
 //!
 //! # スレッド
 //!
 //! macOS は位置情報の許可ダイアログの応答を待つブロッキング呼び出しになるため、UI を止めないよう
 //! OS を問わずワーカースレッドで呼ぶ。完了は画面状態の世代照合つきで入れる（古い世代は捨てられる）。
 //! 要求の追跡は世代照合で足りるため `RequestSlot` は使わない（Android 実装が Java の許可ランチャーを
-//! 待つ場合は `android_wifi_info.rs` の内側で使う）。
+//! 待つ場合は `android.rs` の内側で使う）。
 //!
 //! # OS 別実装の差し込み口
 //!
-//! [`implementation`] の cfg 分岐が最終形で、各 OS は `implementation()` を持つモジュールだけを
-//! 埋める（macOS: `macos_wifi_info`（#514）、Windows: `windows_wifi_info`、Android:
-//! `android_wifi_info`）。それ以外（iOS は対応表で `deferred`・Linux 等）は `UnsupportedWifiInfo` 固定で、
+//! [`platform_wifi_info`] の cfg 分岐が最終形で、各 OS は `implementation()` を持つモジュールだけを
+//! 埋める（macOS: `crate::macos`（#514）、Windows: `crate::windows`、Android:
+//! `crate::android`）。それ以外（iOS は対応表で `deferred`・Linux 等）は `UnsupportedWifiInfo` 固定で、
 //! ダミーの成功実装へは倒さない。
 
 use std::sync::Arc;
 
-use fandhe_core::screens::wifi_info_show::{
-    finish_read, mark_loading, take_request, PermissionHint, WifiFailure, WifiInfoShowState,
-    WifiRow, WifiView,
-};
 #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
-use fandhe_device::wifi_info::UnsupportedWifiInfo;
-use fandhe_device::wifi_info::{WifiInfo, WifiNetwork, WifiReport, LOCATION_OFF};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedWifiInfo;
+use crate::contract::{LOCATION_OFF, WifiInfo, WifiNetwork, WifiReport};
+use crate::error::WifiInfoError;
+use fandhe_core::screens::wifi_info_show::{
+    PermissionHint, WifiFailure, WifiInfoShowState, WifiRow, WifiView, finish_read, mark_loading,
+    take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `WifiInfo` 実装を返す（プロセスで 1 個）。
-fn implementation() -> Arc<dyn WifiInfo> {
+pub fn platform_wifi_info() -> Arc<dyn WifiInfo> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn WifiInfo>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "macos")]
             {
-                super::macos_wifi_info::implementation()
+                crate::macos::implementation()
             }
             #[cfg(target_os = "windows")]
             {
-                super::windows_wifi_info::implementation()
+                crate::windows::implementation()
             }
             #[cfg(target_os = "android")]
             {
-                super::android_wifi_info::implementation()
+                crate::android::implementation()
             }
             #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
             {
@@ -66,14 +66,14 @@ const PERMISSION_HINT: PermissionHint = if cfg!(target_os = "windows") {
     PermissionHint::SystemSettings
 };
 
-/// `DeviceError` を画面の失敗種別へ写す。その他は固定文言へ畳み、OS 固有の値を画面へ漏らさない
+/// `WifiInfoError` を画面の失敗種別へ写す。その他は固定文言へ畳み、OS 固有の値を画面へ漏らさない
 /// （security.md A09）。
-fn to_failure(e: DeviceError) -> WifiFailure {
+fn to_failure(e: WifiInfoError) -> WifiFailure {
     match e {
-        DeviceError::Unsupported(_) => WifiFailure::Unsupported,
-        DeviceError::PermissionDenied(_) => WifiFailure::PermissionDenied(PERMISSION_HINT),
-        DeviceError::Disabled(LOCATION_OFF) => WifiFailure::LocationOff,
-        DeviceError::Disabled(_) => WifiFailure::RadioOff,
+        WifiInfoError::Unsupported(_) => WifiFailure::Unsupported,
+        WifiInfoError::PermissionDenied(_) => WifiFailure::PermissionDenied(PERMISSION_HINT),
+        WifiInfoError::Disabled(LOCATION_OFF) => WifiFailure::LocationOff,
+        WifiInfoError::Disabled(_) => WifiFailure::RadioOff,
         _ => WifiFailure::Failed("Wi-Fi 情報の読み取り".to_string()),
     }
 }
@@ -134,34 +134,39 @@ pub fn wifi_info_show_effect(
     state: &WifiInfoShowState,
     sender: &CompletionSender<WifiInfoShowState>,
 ) {
-    drive(state, sender, implementation());
+    drive(state, sender, platform_wifi_info());
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::wifi_info_show::{
-        fetch, Phase, FAILED_PREFIX, LOCATION_OFF_STATUS, PERMISSION_ANDROID_PRECISE,
-        PERMISSION_SYSTEM_SETTINGS, PERMISSION_WINDOWS_SETTINGS, RADIO_OFF_STATUS,
-        UNSUPPORTED_STATUS,
+    use crate::contract::{
+        FEATURE, RADIO_OFF, READ_FAILED, Ssid, UnsupportedWifiInfo as Unsupported,
     };
-    use fandhe_device::wifi_info::{
-        Ssid, UnsupportedWifiInfo as Unsupported, FEATURE, RADIO_OFF, READ_FAILED,
+    use fandhe_core::screens::wifi_info_show::{
+        FAILED_PREFIX, LOCATION_OFF_STATUS, PERMISSION_ANDROID_PRECISE, PERMISSION_SYSTEM_SETTINGS,
+        PERMISSION_WINDOWS_SETTINGS, Phase, RADIO_OFF_STATUS, UNSUPPORTED_STATUS, fetch,
     };
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
     fn sender_with_channel() -> (
         CompletionSender<WifiInfoShowState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<WifiInfoShowState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<WifiInfoShowState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     struct Fake {
-        result: Result<WifiReport, fn() -> DeviceError>,
+        result: Result<WifiReport, fn() -> WifiInfoError>,
         calls: AtomicUsize,
     }
 
@@ -172,7 +177,7 @@ mod tests {
                 calls: AtomicUsize::new(0),
             })
         }
-        fn err(f: fn() -> DeviceError) -> Arc<Self> {
+        fn err(f: fn() -> WifiInfoError) -> Arc<Self> {
             Arc::new(Self {
                 result: Err(f),
                 calls: AtomicUsize::new(0),
@@ -181,7 +186,7 @@ mod tests {
     }
 
     impl WifiInfo for Fake {
-        fn read(&self) -> Result<WifiReport, DeviceError> {
+        fn read(&self) -> Result<WifiReport, WifiInfoError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             self.result.clone().map_err(|f| f())
         }
@@ -246,19 +251,22 @@ mod tests {
         } else {
             PERMISSION_SYSTEM_SETTINGS
         };
-        let cases: [(fn() -> DeviceError, String); 5] = [
+        let cases: [(fn() -> WifiInfoError, String); 5] = [
             (
-                || DeviceError::Unsupported(FEATURE),
+                || WifiInfoError::Unsupported(FEATURE),
                 UNSUPPORTED_STATUS.into(),
             ),
-            (|| DeviceError::PermissionDenied(FEATURE), hint.into()),
-            (|| DeviceError::Disabled(RADIO_OFF), RADIO_OFF_STATUS.into()),
+            (|| WifiInfoError::PermissionDenied(FEATURE), hint.into()),
             (
-                || DeviceError::Disabled(LOCATION_OFF),
+                || WifiInfoError::Disabled(RADIO_OFF),
+                RADIO_OFF_STATUS.into(),
+            ),
+            (
+                || WifiInfoError::Disabled(LOCATION_OFF),
                 LOCATION_OFF_STATUS.into(),
             ),
             (
-                || DeviceError::Internal(READ_FAILED),
+                || WifiInfoError::Internal(READ_FAILED),
                 format!("{FAILED_PREFIX}Wi-Fi 情報の読み取り"),
             ),
         ];
@@ -312,8 +320,8 @@ mod tests {
     #[test]
     fn unsupported_os_implementation_is_unsupported() {
         assert!(matches!(
-            implementation().read(),
-            Err(DeviceError::Unsupported(_))
+            platform_wifi_info().read(),
+            Err(WifiInfoError::Unsupported(_))
         ));
     }
 }

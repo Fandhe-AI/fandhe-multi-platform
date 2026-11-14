@@ -132,7 +132,8 @@ pub mod tts;
 pub mod url_scheme;
 /// Phase 11（端末機能の拡充ループ、親 #113、Issue #530）: OAuth 用の Web 認証セッション（デモ認可ページ + コールバック検査）。
 pub mod web_auth_session;
-/// Phase 11（端末機能の拡充ループ、親 #111、Issue #514）: Wi-Fi 情報（現在の接続と周辺の上位数件）。
+/// Wi-Fi の電源状態の判定（`radio_off`）だけ。wifi-info と wifi-connect が共有する純関数で、機能の契約は `fandhe-cap-wifi-info`
+/// が持つ（Issue #514 / #1329、consumer-app-structure.md §8）。
 pub mod wifi_info;
 /// Phase 11（端末機能の拡充ループ、親 #127、Issue #636）: ウィンドウ管理（位置・サイズ・最前面）。
 pub mod window_management;

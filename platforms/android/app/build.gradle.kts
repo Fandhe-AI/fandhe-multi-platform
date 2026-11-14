@@ -227,6 +227,8 @@ android {
             java.srcDirs("../../../crates/fandhe-cap-wallpaper-set/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-wifi-connect/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-wifi-info/android/java")
             // END fandhe-cap
         }
     }

@@ -1,8 +1,8 @@
 //! macOS 向け Wi-Fi 情報実装（Issue #514、親 #111）。`macos/fandhe_macos_wifi_info.m`
 //! （CoreWLAN `CWWiFiClient` + CoreLocation の許可判定。`build.rs` が macOS 分岐で feature `device`
 //! 有効時にコンパイルし CoreWLAN をリンクする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` は
-//! この呼び出しに閉じ `// SAFETY:` で契約を明記する。`device/wifi_info.rs` の macOS 経路から
-//! ワーカースレッドで呼ばれ、契約は `fandhe_device::wifi_info`。
+//! この呼び出しに閉じ `// SAFETY:` で契約を明記する。`driver` の macOS 経路から
+//! ワーカースレッドで呼ばれ、契約は `crate::contract`。
 //!
 //! 戻りコードの写像 [`decode_code`] と生データの変換 [`net_from_raw`] は純関数で、ホストの
 //! `cargo test` で検査する。
@@ -29,11 +29,11 @@
 
 use std::sync::Arc;
 
-use fandhe_device::wifi_info::{
-    normalize_nearby, rssi_from_dbm, Ssid, WifiInfo, WifiNetwork, WifiReport, FEATURE,
-    LOCATION_OFF, RADIO_OFF, READ_FAILED,
+use crate::contract::{
+    FEATURE, LOCATION_OFF, RADIO_OFF, READ_FAILED, Ssid, WifiInfo, WifiNetwork, WifiReport,
+    normalize_nearby, rssi_from_dbm,
 };
-use fandhe_device::DeviceError;
+use crate::error::WifiInfoError;
 
 /// SSID の最大バイト数（IEEE 802.11）。
 const SSID_MAX: usize = 32;
@@ -58,14 +58,14 @@ const ZERO_NET: RawNet = RawNet {
 };
 
 /// 戻りコードを契約の失敗へ写す。`0`（成功）は `None`。未知の値は `Internal`（成功へ畳まない）。
-fn decode_code(rc: i32) -> Option<DeviceError> {
+fn decode_code(rc: i32) -> Option<WifiInfoError> {
     match rc {
         0 => None,
-        1 => Some(DeviceError::Unsupported(FEATURE)),
-        2 => Some(DeviceError::PermissionDenied(FEATURE)),
-        3 => Some(DeviceError::Disabled(RADIO_OFF)),
-        4 => Some(DeviceError::Disabled(LOCATION_OFF)),
-        _ => Some(DeviceError::Internal(READ_FAILED)),
+        1 => Some(WifiInfoError::Unsupported(FEATURE)),
+        2 => Some(WifiInfoError::PermissionDenied(FEATURE)),
+        3 => Some(WifiInfoError::Disabled(RADIO_OFF)),
+        4 => Some(WifiInfoError::Disabled(LOCATION_OFF)),
+        _ => Some(WifiInfoError::Internal(READ_FAILED)),
     }
 }
 
@@ -84,12 +84,12 @@ fn net_from_raw(raw: &RawNet) -> WifiNetwork {
 
 #[cfg(target_os = "macos")]
 mod ffi {
-    use super::{RawNet, NEARBY_CAP};
+    use super::{NEARBY_CAP, RawNet};
 
     // SAFETY: `macos/fandhe_macos_wifi_info.m`（`build.rs` が macOS 分岐で feature `device` 有効時に
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_macos_wifi_info_read(
             current: *mut RawNet,
             has_current: *mut i32,
@@ -132,7 +132,7 @@ struct MacWifiInfo;
 
 #[cfg(target_os = "macos")]
 impl WifiInfo for MacWifiInfo {
-    fn read(&self) -> Result<WifiReport, DeviceError> {
+    fn read(&self) -> Result<WifiReport, WifiInfoError> {
         let (rc, current, nearby) = ffi::read();
         if let Some(e) = decode_code(rc) {
             return Err(e);
@@ -144,7 +144,7 @@ impl WifiInfo for MacWifiInfo {
     }
 }
 
-/// macOS の `WifiInfo` 実装を返す（`device/wifi_info.rs` の dispatch から呼ばれる）。
+/// macOS の `WifiInfo` 実装を返す（`driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "macos")]
 pub(crate) fn implementation() -> Arc<dyn WifiInfo> {
     Arc::new(MacWifiInfo)
@@ -165,21 +165,24 @@ mod tests {
     #[test]
     fn every_code_maps_and_unknown_is_internal() {
         assert!(decode_code(0).is_none());
-        assert!(matches!(decode_code(1), Some(DeviceError::Unsupported(_))));
+        assert!(matches!(
+            decode_code(1),
+            Some(WifiInfoError::Unsupported(_))
+        ));
         assert!(matches!(
             decode_code(2),
-            Some(DeviceError::PermissionDenied(_))
+            Some(WifiInfoError::PermissionDenied(_))
         ));
         assert!(matches!(
             decode_code(3),
-            Some(DeviceError::Disabled(RADIO_OFF))
+            Some(WifiInfoError::Disabled(RADIO_OFF))
         ));
         assert!(matches!(
             decode_code(4),
-            Some(DeviceError::Disabled(LOCATION_OFF))
+            Some(WifiInfoError::Disabled(LOCATION_OFF))
         ));
         for rc in [5, -1, 99, i32::MIN] {
-            assert!(matches!(decode_code(rc), Some(DeviceError::Internal(_))));
+            assert!(matches!(decode_code(rc), Some(WifiInfoError::Internal(_))));
         }
     }
 

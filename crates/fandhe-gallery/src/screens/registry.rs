@@ -491,7 +491,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wifi_info_show" => fandhe_core::screens::wifi_info_show::current_screen,
-    fandhe_egui_proxy::device::wifi_info::wifi_info_show_effect,
+    fandhe_cap_wifi_info::wifi_info_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wifi_connect_show" => fandhe_core::screens::wifi_connect_show::current_screen,

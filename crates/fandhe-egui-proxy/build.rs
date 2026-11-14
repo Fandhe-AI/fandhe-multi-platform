@@ -471,15 +471,6 @@ fn compile_apple_now_playing() {
     );
 }
 
-/// `macos/fandhe_macos_wifi_info.m` を `cc` でコンパイルし CoreWLAN をリンクする（Issue #514）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_wifi_info.rs` が使う）。
-fn compile_macos_wifi_info() {
-    compile_objc(
-        "macos/fandhe_macos_wifi_info.m",
-        &["CoreLocation", "CoreWLAN", "Foundation"],
-    );
-}
-
 /// `macos/fandhe_macos_music_library.m` を `cc` でコンパイルし iTunesLibrary をリンクする（Issue #482）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_music_library.rs` が使う）。
 fn compile_macos_music_library() {
@@ -744,8 +735,6 @@ fn build_macos() {
     compile_macos_music_library();
     // `macos/fandhe_macos_web_auth_session.m`（Issue #530）も macOS 専用。AuthenticationServices を使う。
     compile_macos_web_auth_session();
-    // `macos/fandhe_macos_wifi_info.m`（Issue #514）も macOS 専用。CoreWLAN を使う。
-    compile_macos_wifi_info();
     // `macos/fandhe_macos_bluetooth_classic.m`（Issue #659）も macOS 専用。IOBluetooth を使う。
     compile_macos_bluetooth_classic();
     compile_macos_pen_stylus();

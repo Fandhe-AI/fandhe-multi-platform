@@ -1,5 +1,5 @@
-//! Windows 向け Wi-Fi 情報実装（Issue #515、親 #111）。`device/wifi_info.rs::implementation` の
-//! Windows 経路からワーカースレッドで呼ばれる。契約の SSOT は `fandhe_device::wifi_info`。
+//! Windows 向け Wi-Fi 情報実装（Issue #515、親 #111）。`driver` の
+//! Windows 経路からワーカースレッドで呼ばれる。契約の SSOT は `crate::contract`。
 //!
 //! # 流れ（Win32 wlanapi。COM・WinRT なし）
 //!
@@ -27,8 +27,8 @@
 //! 写像の純関数はホストの `cargo test` で検査する。型検査は `x86_64-pc-windows-gnu` のみで、
 //! 実機（24H2 の正常系・同意拒否・位置情報オフ・Wi-Fi オフ・未接続）は #510 で確かめる。
 
-use fandhe_device::wifi_info::{rssi_from_dbm, Ssid, WifiNetwork, FEATURE, READ_FAILED};
-use fandhe_device::DeviceError;
+use crate::contract::{FEATURE, READ_FAILED, Ssid, WifiNetwork, rssi_from_dbm};
+use crate::error::WifiInfoError;
 
 /// `ERROR_ACCESS_DENIED`。
 const ACCESS_DENIED: u32 = 5;
@@ -42,17 +42,17 @@ const MAX_INTERFACES: usize = 64;
 const SSID_MAX: usize = 32;
 
 /// OS のエラーコードを契約の失敗へ写す（全呼び出し箇所で共通）。
-fn classify(code: u32) -> DeviceError {
+fn classify(code: u32) -> WifiInfoError {
     match code {
-        ACCESS_DENIED => DeviceError::PermissionDenied(FEATURE),
-        _ => DeviceError::Internal(READ_FAILED),
+        ACCESS_DENIED => WifiInfoError::PermissionDenied(FEATURE),
+        _ => WifiInfoError::Internal(READ_FAILED),
     }
 }
 
 /// `WlanOpenHandle` のエラーを写す。サービスが無ければ非対応。
-fn open_error(code: u32) -> DeviceError {
+fn open_error(code: u32) -> WifiInfoError {
     match code {
-        SERVICE_NOT_ACTIVE => DeviceError::Unsupported(FEATURE),
+        SERVICE_NOT_ACTIVE => WifiInfoError::Unsupported(FEATURE),
         _ => classify(code),
     }
 }
@@ -86,24 +86,24 @@ mod ffi {
     use std::mem::{offset_of, size_of};
     use std::sync::Arc;
 
-    use fandhe_device::wifi_info::{
-        normalize_nearby, WifiInfo, WifiNetwork, WifiReport, FEATURE, RADIO_OFF,
+    use crate::contract::{
+        FEATURE, RADIO_OFF, WifiInfo, WifiNetwork, WifiReport, normalize_nearby,
     };
-    use fandhe_device::DeviceError;
-    use windows::core::GUID;
+    use crate::error::WifiInfoError;
     use windows::Win32::Foundation::HANDLE;
     use windows::Win32::NetworkManagement::WiFi::{
-        dot11_BSS_type_any, wlan_interface_state_connected, wlan_intf_opcode_current_connection,
-        wlan_intf_opcode_radio_state, wlan_intf_opcode_rssi, WlanCloseHandle, WlanEnumInterfaces,
-        WlanFreeMemory, WlanGetNetworkBssList, WlanOpenHandle, WlanQueryInterface, WLAN_BSS_ENTRY,
-        WLAN_BSS_LIST, WLAN_CONNECTION_ATTRIBUTES, WLAN_INTERFACE_INFO, WLAN_INTERFACE_INFO_LIST,
-        WLAN_INTF_OPCODE, WLAN_RADIO_STATE,
+        WLAN_BSS_ENTRY, WLAN_BSS_LIST, WLAN_CONNECTION_ATTRIBUTES, WLAN_INTERFACE_INFO,
+        WLAN_INTERFACE_INFO_LIST, WLAN_INTF_OPCODE, WLAN_RADIO_STATE, WlanCloseHandle,
+        WlanEnumInterfaces, WlanFreeMemory, WlanGetNetworkBssList, WlanOpenHandle,
+        WlanQueryInterface, dot11_BSS_type_any, wlan_interface_state_connected,
+        wlan_intf_opcode_current_connection, wlan_intf_opcode_radio_state, wlan_intf_opcode_rssi,
     };
+    use windows::core::GUID;
 
-    use fandhe_device::wifi_info::radio_off;
+    use crate::contract::radio_off;
 
     use super::{
-        bss_items_fit, classify, net_from_parts, open_error, INVALID_STATE, MAX_INTERFACES,
+        INVALID_STATE, MAX_INTERFACES, bss_items_fit, classify, net_from_parts, open_error,
     };
 
     /// Windows の `WifiInfo` 実装を返す。
@@ -114,7 +114,7 @@ mod ffi {
     struct WindowsWifiInfo;
 
     impl WifiInfo for WindowsWifiInfo {
-        fn read(&self) -> Result<WifiReport, DeviceError> {
+        fn read(&self) -> Result<WifiReport, WifiInfoError> {
             read()
         }
     }
@@ -129,11 +129,7 @@ mod ffi {
             let mut h = HANDLE::default();
             // SAFETY: `ver`・`h` は呼び出しの間有効なローカル変数への排他ポインタ。
             let rc = unsafe { WlanOpenHandle(2, None, &mut ver, &mut h) };
-            if rc == 0 {
-                Ok(Client(h))
-            } else {
-                Err(rc)
-            }
+            if rc == 0 { Ok(Client(h)) } else { Err(rc) }
         }
     }
 
@@ -249,7 +245,7 @@ mod ffi {
             .collect())
     }
 
-    fn read() -> Result<WifiReport, DeviceError> {
+    fn read() -> Result<WifiReport, WifiInfoError> {
         let c = Client::open().map_err(open_error)?;
         let ifaces = interfaces(&c).map_err(classify)?;
         // ponytail: 複数アダプターは 1 つだけ読む（接続中の最初、無ければ先頭）。全アダプターの合成は未対応。
@@ -257,7 +253,7 @@ mod ffi {
             .iter()
             .find(|i| i.1)
             .or_else(|| ifaces.first())
-            .ok_or(DeviceError::Unsupported(FEATURE))?;
+            .ok_or(WifiInfoError::Unsupported(FEATURE))?;
 
         let radio: WLAN_RADIO_STATE =
             query(&c, &guid, wlan_intf_opcode_radio_state).map_err(classify)?;
@@ -267,7 +263,7 @@ mod ffi {
             .map(|p| (p.dot11SoftwareRadioState.0, p.dot11HardwareRadioState.0))
             .collect();
         if radio_off(&states) {
-            return Err(DeviceError::Disabled(RADIO_OFF));
+            return Err(WifiInfoError::Disabled(RADIO_OFF));
         }
 
         let current = if connected {
@@ -280,7 +276,7 @@ mod ffi {
     }
 
     /// 接続中の SSID と dBm。切断と競合して `ERROR_INVALID_STATE` なら未接続（`None`）。
-    fn read_current(c: &Client, guid: &GUID) -> Result<Option<WifiNetwork>, DeviceError> {
+    fn read_current(c: &Client, guid: &GUID) -> Result<Option<WifiNetwork>, WifiInfoError> {
         let conn: WLAN_CONNECTION_ATTRIBUTES =
             match query(c, guid, wlan_intf_opcode_current_connection) {
                 Ok(v) => v,
@@ -305,19 +301,25 @@ mod tests {
     fn error_mapping() {
         assert!(matches!(
             classify(5),
-            DeviceError::PermissionDenied(FEATURE)
+            WifiInfoError::PermissionDenied(FEATURE)
         ));
-        assert!(matches!(classify(1062), DeviceError::Internal(READ_FAILED)));
-        assert!(matches!(classify(0), DeviceError::Internal(READ_FAILED)));
+        assert!(matches!(
+            classify(1062),
+            WifiInfoError::Internal(READ_FAILED)
+        ));
+        assert!(matches!(classify(0), WifiInfoError::Internal(READ_FAILED)));
         assert!(matches!(
             open_error(1062),
-            DeviceError::Unsupported(FEATURE)
+            WifiInfoError::Unsupported(FEATURE)
         ));
         assert!(matches!(
             open_error(5),
-            DeviceError::PermissionDenied(FEATURE)
+            WifiInfoError::PermissionDenied(FEATURE)
         ));
-        assert!(matches!(open_error(87), DeviceError::Internal(READ_FAILED)));
+        assert!(matches!(
+            open_error(87),
+            WifiInfoError::Internal(READ_FAILED)
+        ));
     }
 
     #[test]

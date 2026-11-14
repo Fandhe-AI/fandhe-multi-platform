@@ -4,10 +4,9 @@
 // CoreLocation で許可を判定する。**自分からスキャンしない**。BSSID は読まない。SSID・NSError は
 // ログに出さない。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_wifi_info.rs` から C ABI 経由で呼ばれる。`build.rs` の
-// `build_macos()` が feature `device` 有効時にのみコンパイルし、CoreWLAN をリンクする
-// （CoreLocation は `fandhe_apple_location.m` のコンパイルでリンク済み）。権限宣言は
-// `macos/Info.plist` の `NSLocationUsageDescription`（Rust のテスト実行体には埋め込まれないため、
+// `crates/fandhe-cap-wifi-info/src/macos.rs` から C ABI 経由で呼ばれる。`build.rs` が
+// macOS ターゲットでコンパイルし、CoreWLAN と CoreLocation をリンクする。権限宣言は
+// 機能の宣言（`Cargo.toml` の `[package.metadata.fandhe.macos]`）の `NSLocationUsageDescription`（Rust のテスト実行体には埋め込まれないため、
 // テストから実物は呼ばない）。
 //
 // 契約:

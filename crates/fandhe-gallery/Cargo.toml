@@ -103,6 +103,7 @@ device = [
   "dep:fandhe-cap-volume-control",
   "dep:fandhe-cap-wallpaper-set",
   "dep:fandhe-cap-wifi-connect",
+  "dep:fandhe-cap-wifi-info",
   # END fandhe-cap
 ]
 frame-metrics = ["fandhe-egui-proxy/frame-metrics"]
@@ -140,7 +141,7 @@ NSHomeKitUsageDescription = "型サンプル「スマートホーム操作」の
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」「音声認識」「動画の撮影」の動作確認に使います"
 
 [package.metadata.fandhe-app.macos.usage-descriptions]
-NSLocationUsageDescription = "型サンプル「Wi-Fi への接続」で、接続先の Wi-Fi 名を読むために使います"
+NSLocationUsageDescription = "型サンプル「Wi-Fi 情報」「Wi-Fi への接続」で、接続先の Wi-Fi 名を読むために使います"
 NSCalendarsWriteOnlyAccessUsageDescription = "型サンプル「予定の追加」の動作確認に使います"
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」の動作確認に使います"
 NSCameraUsageDescription = "型サンプル「カメラのライブ映像」「動画の撮影」の動作確認に使います"
@@ -245,6 +246,7 @@ fandhe-cap-video-transcode = { path = "../fandhe-cap-video-transcode", optional 
 fandhe-cap-volume-control = { path = "../fandhe-cap-volume-control", optional = true }
 fandhe-cap-wallpaper-set = { path = "../fandhe-cap-wallpaper-set", optional = true }
 fandhe-cap-wifi-connect = { path = "../fandhe-cap-wifi-connect", optional = true }
+fandhe-cap-wifi-info = { path = "../fandhe-cap-wifi-info", optional = true }
 # END fandhe-cap
 
 # Windows の共通層。起動時にメインウィンドウの HWND を控える（端末機能の有無によらない起動の定型、TASK-21.4 / #1184）。

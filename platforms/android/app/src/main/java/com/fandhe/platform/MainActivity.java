@@ -378,18 +378,6 @@ public class MainActivity extends GameActivity {
         musicLibraryHelper.cancel(requestId);
     }
 
-    // Wi-Fi 情報画面（Issue #516）。実装は `WifiInfoHelper`（許可ランチャーを STARTED 前に登録）。
-    // Rust の `android_wifi_info.rs` が JNI で呼ぶ。
-    private final WifiInfoHelper wifiInfoHelper = new WifiInfoHelper(this);
-
-    void requestWifiInfo(long requestId) {
-        wifiInfoHelper.read(requestId);
-    }
-
-    void cancelWifiInfo(long requestId) {
-        wifiInfoHelper.cancel(requestId);
-    }
-
     // 行動認識（Issue #1127）。実装は `ActivityRecognitionHelper`（フィールド初期化子で生成し、STARTED 前に
     // 許可ランチャーを登録する）。Rust の `android_activity_recognition.rs` が同期 JNI で呼ぶ。
     private final ActivityRecognitionHelper activityRecognitionHelper = new ActivityRecognitionHelper(this);
@@ -3762,7 +3750,6 @@ public class MainActivity extends GameActivity {
         bluetoothClassicHelper.onDestroy();
         blePeripheralHelper.onDestroy();
         musicLibraryHelper.onDestroy();
-        wifiInfoHelper.onDestroy();
         compassHelper.onDestroy();
         activityRecognitionHelper.onDestroy();
         environmentSensorsHelper.onDestroy();

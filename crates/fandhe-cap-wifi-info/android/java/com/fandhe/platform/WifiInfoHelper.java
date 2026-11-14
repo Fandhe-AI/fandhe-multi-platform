@@ -1,6 +1,7 @@
 package com.fandhe.platform;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.net.wifi.ScanResult;
@@ -17,10 +18,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.WeakHashMap;
 
-// Wi-Fi 情報画面（Issue #516）の Android 実装ヘルパー。MainActivity から生成・委譲される
-// （Rust の `device/android_wifi_info.rs` が `MainActivity.requestWifiInfo` / `cancelWifiInfo`
-// を JNI で呼び、結果を `nativeOnWifiInfoResult` で受ける）。
+// Wi-Fi 情報画面（Issue #516）の Android 実装ヘルパー。利用者の `MainActivity` には何も書かせない
+// （Rust の `fandhe-cap-wifi-info/src/android.rs` が static の `read(Activity, long)` / `cancel(Activity, long)` を
+// JNI で呼び、結果を `nativeOnWifiInfoResult` で受ける）。Activity の生成・破棄は `WifiInfoLifecycle`
+// （非公開 ContentProvider、`FeatureLifecycleProvider` 継承）が `attach` / `detach` で知らせる。Activity ごとの
+// helper は `HELPERS` に持つ（JNI スレッドと UI スレッドの両方から触るので同期化し、Activity が GC されれば項目も消える）。
+// helper が無い（生成前・破棄後）要求は RESULT_FAILED で確定し、結果が来ないまま待たせない。
 //
 // 1 要求 = 機能有無 → 精密位置情報の許可 → 位置情報サービス → Wi-Fi の電源 → 読み取り。
 // 空の結果が「0 件」か「許可・設定が足りず OS が空を返した」か区別できないため、読む前に
@@ -36,7 +41,7 @@ import java.util.Map;
 // `request` はインスタンスフィールドなので、再生成後の新インスタンスは NONE から始まり、
 // 旧インスタンスの結果は `complete(id)` に失敗して捨てられる。
 final class WifiInfoHelper {
-    // 結果コード。SSOT は Rust 側 `android_wifi_info.rs::decode_code`。
+    // 結果コード。SSOT は Rust 側 `android.rs::decode_code`。
     static final int RESULT_OK = 0;
     static final int RESULT_UNSUPPORTED = 1;
     static final int RESULT_PERMISSION_DENIED = 2;
@@ -52,6 +57,10 @@ final class WifiInfoHelper {
             long requestId, int code, boolean connected, String currentSsid, int currentRssi,
             String[] ssids, int[] rssis);
 
+    // Activity ごとの helper（上記クラス冒頭コメント参照）。
+    private static final Map<Activity, WifiInfoHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     private final ComponentActivity activity;
     private final RequestTracker request = new RequestTracker();
     private final Object lock = new Object();
@@ -62,31 +71,55 @@ final class WifiInfoHelper {
     // UI スレッドで最後に受理した id。これ以下の開始要求は追い越された古い要求として捨てる。
     private long latestId = RequestTracker.NONE;
 
-    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity の
-    // フィールド初期化子から本クラスを生成してここで登録する。
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`WifiInfoLifecycle.onHostCreated`
+    // （`Activity.onCreate` の中）から `attach` で本クラスを生成してここで登録する。
     private final ActivityResultLauncher<String[]> permissionLauncher;
 
-    WifiInfoHelper(ComponentActivity activity) {
+    private WifiInfoHelper(ComponentActivity activity) {
         this.activity = activity;
         this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:WifiInfoHelper:1", activity,
                 new ActivityResultContracts.RequestMultiplePermissions(), this::onPermissionResult);
     }
 
-    // JNI スレッドから呼ばれる。
-    void read(long id) {
-        activity.runOnUiThread(() -> start(id));
+    // Activity の生成時（`WifiInfoLifecycle` から、UI スレッド）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new WifiInfoHelper(activity));
     }
 
-    // Rust 側の期限切れから呼ばれる。
-    void cancel(long id) {
+    // Activity の破棄時（同上）。保留中の要求を RESULT_FAILED で確定して破棄する。
+    static void detach(ComponentActivity activity) {
+        WifiInfoHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // JNI スレッドから呼ばれる。helper が無い（生成前・破棄後）ときは RESULT_FAILED で確定する。
+    static void read(Activity activity, long id) {
+        WifiInfoHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            nativeOnWifiInfoResult(id, RESULT_FAILED, false, null, 0, null, null);
+            return;
+        }
+        helper.activity.runOnUiThread(() -> helper.start(id));
+    }
+
+    // Rust 側の期限切れから呼ばれる。helper が無ければ取り消す対象も無い。
+    static void cancel(Activity activity, long id) {
+        WifiInfoHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.cancelInternal(id);
+        }
+    }
+
+    private void cancelInternal(long id) {
         synchronized (lock) {
             cancelledId = Math.max(cancelledId, id);
             request.complete(id);
         }
     }
 
-    // MainActivity.onDestroy から UI スレッドで呼ぶ。
-    void onDestroy() {
+    private void onDestroy() {
         long id;
         synchronized (lock) {
             id = request.take();
