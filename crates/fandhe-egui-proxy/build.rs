@@ -159,8 +159,6 @@ fn build() {
     compile_ios_alarm();
     // `ios/fandhe_ios_web_auth_session.m`（Issue #532）。iOS 分岐のみ。
     compile_ios_web_auth_session();
-    // `ios/fandhe_ios_in_app_browser.m`（Issue #702）。iOS 分岐のみ。SafariServices をリンクする。
-    compile_ios_in_app_browser();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
     compile_apple_network_status();
     // `apple/fandhe_apple_media_playback.m`（Issue #267）。macOS と iOS（親 #86 の b-ios）で共用する。
@@ -578,15 +576,6 @@ fn compile_ios_web_auth_session() {
     compile_objc(
         "ios/fandhe_ios_web_auth_session.m",
         &["AuthenticationServices", "Foundation", "UIKit"],
-    );
-}
-
-/// `ios/fandhe_ios_in_app_browser.m` を `cc` でコンパイルし SafariServices をリンクする（Issue #702）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_in_app_browser.rs` が使う）。
-fn compile_ios_in_app_browser() {
-    compile_objc(
-        "ios/fandhe_ios_in_app_browser.m",
-        &["SafariServices", "UIKit"],
     );
 }
 

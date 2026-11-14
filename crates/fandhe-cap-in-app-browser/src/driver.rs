@@ -1,16 +1,16 @@
 //! Phase 11 型サンプル「アプリ内ブラウザ」（親 #135、Issue #701）の effect ドライバ。
 //! `fandhe_core::screens::in_app_browser_show`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::in_app_browser::InAppBrowser` に URL の表示を依頼して、OS 層から届く結果を
+//! `crate::contract::InAppBrowser` に URL の表示を依頼して、OS 層から届く結果を
 //! `CompletionSender` 経由で画面へ返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。契約（結果の三値・
-//! 期限・守る範囲）の SSOT は `fandhe_device::in_app_browser`。
+//! 期限・守る範囲）の SSOT は `crate::contract`。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。
 //!
 //! # OS 別の分担（dispatch・bridge・本ファイルは #701 で最終形。後続の子はここを触らない）
 //!
-//! - iOS: `ios_in_app_browser`（#702。`SFSafariViewController`）
-//! - Android: `android_in_app_browser`（#703。Custom Tabs）
+//! - iOS: `crate::ios`（#702。`SFSafariViewController`）
+//! - Android: `crate::android`（#703。Custom Tabs）
 //! - macOS・Windows・Linux: 対応する API を使わない（対応表で `no`）ため
 //!   `UnsupportedInAppBrowser` 固定（ダミーの成功実装へは倒さない）。Web は対象外
 //!
@@ -40,15 +40,15 @@
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use fandhe_core::screens::in_app_browser_show::{
-    finish_open, mark_running, take_request, CoreFailure, InAppBrowserShowState, Phase,
+use crate::contract::{
+    InAppBrowser, InAppBrowserFailure, InAppBrowserOutcome, OPEN_DEADLINE, validate_url,
 };
-use fandhe_device::in_app_browser::{
-    validate_url, InAppBrowser, InAppBrowserFailure, InAppBrowserOutcome, OPEN_DEADLINE,
+use fandhe_core::screens::in_app_browser_show::{
+    CoreFailure, InAppBrowserShowState, Phase, finish_open, mark_running, take_request,
 };
 
-use super::request_slot::{poll_and_finish, RequestSlot, POLL_INTERVAL};
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, poll_and_finish};
 
 /// OS 層から届く結果。
 type Outcome = Result<InAppBrowserOutcome, InAppBrowserFailure>;
@@ -57,15 +57,15 @@ type Outcome = Result<InAppBrowserOutcome, InAppBrowserFailure>;
 fn platform() -> Arc<dyn InAppBrowser> {
     #[cfg(target_os = "ios")]
     {
-        super::ios_in_app_browser::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_in_app_browser::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     {
-        Arc::new(fandhe_device::in_app_browser::UnsupportedInAppBrowser)
+        Arc::new(crate::contract::UnsupportedInAppBrowser)
     }
 }
 
@@ -158,11 +158,9 @@ impl Bridge {
         let due = active
             .as_ref()
             .is_some_and(|a| !a.presenting && a.started.elapsed() >= self.deadline);
-        if due {
-            if let Some(a) = active.take() {
-                self.slot
-                    .deliver(a.request_id, Err(InAppBrowserFailure::TimedOut));
-            }
+        if due && let Some(a) = active.take() {
+            self.slot
+                .deliver(a.request_id, Err(InAppBrowserFailure::TimedOut));
         }
     }
 
@@ -197,7 +195,7 @@ pub(crate) fn complete_from_os(request_id: u64, result: Outcome) {
 /// 画面状態は `default()`（世代 0）に戻るため、保留が残ると次の要求が発送されず飲み込まれる。
 /// 旧要求の遅延完了は id 不一致で捨てられる。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     if let Some(b) = BRIDGE.get() {
         b.reset();
     }
@@ -274,16 +272,23 @@ pub fn in_app_browser_show_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::{BrowserUrl, UnsupportedInAppBrowser};
     use fandhe_core::screens::in_app_browser_show::request_open;
-    use fandhe_device::in_app_browser::{BrowserUrl, UnsupportedInAppBrowser};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
 
-    type Rx = mpsc::Receiver<crate::app::Completion<InAppBrowserShowState>>;
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<InAppBrowserShowState>>;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
 
     fn channel() -> (CompletionSender<InAppBrowserShowState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     fn new_bridge(deadline: Duration) -> &'static Bridge {

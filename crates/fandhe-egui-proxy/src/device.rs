@@ -112,11 +112,6 @@ pub mod android_health_data;
 /// `device/image_recognition.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_image_recognition;
-/// Issue #701 / #703（親 #135）: Android 向けアプリ内ブラウザ（Custom Tabs）の骨格。
-/// `device/in_app_browser.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_in_app_browser;
 /// Issue #489: Android 向け LAN のサービス探索（`NsdManager`。Java 側は `LanDiscoveryHelper`、親 #109 の b-android）。
 /// `device/lan_discovery.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
@@ -412,10 +407,6 @@ pub mod health_data;
 /// （macOS・Windows / iOS 実装、Android は骨格のスタブ（対応表で `no`）、他 OS は
 /// `UnsupportedTextRecognizer` 固定。Web は対象外）。
 pub mod image_recognition;
-/// Phase 11 の拡充ループ（親 #135、Issue #701）: アプリ内ブラウザの effect ドライバ（iOS は
-/// `SFSafariViewController`・Android は Custom Tabs で #702・#703 が実装、他 OS は
-/// `UnsupportedInAppBrowser` 固定。Web は対象外）。
-pub mod in_app_browser;
 #[cfg(target_os = "ios")]
 pub mod ios;
 /// Issue #613: iOS 向け行動認識実装。`device/activity_recognition.rs` の ios 経路から呼ばれる。
@@ -497,11 +488,6 @@ pub mod ios_health_data;
 /// Issue #1252: iOS 向け文字認識（PHPicker + Vision）の effect ドライバ。
 #[cfg(target_os = "ios")]
 pub mod ios_image_recognition;
-/// Issue #701 / #702（親 #135）: iOS 向けアプリ内ブラウザ（`SFSafariViewController`）の骨格。
-/// `device/in_app_browser.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_in_app_browser;
 /// Issue #488: iOS 向け LAN のサービス探索（`apple_lan_discovery` へ委譲する）。
 /// `device/lan_discovery.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]

@@ -4,7 +4,7 @@
 //! 扱う範囲は「固定の公開 URL を OS のアプリ内ブラウザ（iOS は `SFSafariViewController`、
 //! Android は Custom Tabs）で 1 件開き、利用者が閉じて戻ったことを知る」こと。閲覧内容・遷移先・
 //! 読み込みの成否は扱わない。対象は iOS・Android のみで、macOS・Windows は `Unsupported`、
-//! Web は対象外（`n-a`）。`fandhe-egui-proxy` の effect ドライバ（`device/in_app_browser.rs`）が
+//! Web は対象外（`n-a`）。本 crate の effect ドライバ（`driver`）が
 //! 本モジュールの trait を呼び、OS 層（#702 iOS・#703 Android）が実装する。
 //!
 //! # 契約
@@ -28,7 +28,7 @@
 //!   `https`（大文字小文字を区別しない）、直後に `://`、authority が空でない、userinfo（`@`）なし、
 //!   ホストは ASCII の英数字・`-`・`.` または `[...]` の IPv6 リテラル、ポートは任意で 1〜65535、
 //!   全体が ASCII の印字可能文字（空白・制御文字・`\` なし）、長さは
-//!   [`crate::url_scheme::MAX_URL_BYTES`] 以下
+//!   [`fandhe_device::url_scheme::MAX_URL_BYTES`] 以下
 //! - **期限**（契約表 3）: 開くまでの [`OPEN_DEADLINE`]。起点は要求を観測した時の `Instant`
 //!   （単調時計）。閉じるまでの時間には期限を持たない。期限切れと表示開始は同じロックで排他にし、
 //!   期限切れを確定した後は OS に表示を始めさせない
@@ -48,7 +48,7 @@
 use std::fmt;
 use std::time::Duration;
 
-use crate::url_scheme::MAX_URL_BYTES;
+use fandhe_device::url_scheme::MAX_URL_BYTES;
 
 /// 要求を観測してからアプリ内ブラウザの表示を始めるまでの期限（Rust のドライバだけが持つ）。
 /// 仮の値で、実機確認で見直す。
@@ -154,7 +154,7 @@ pub fn validate_url(raw: &str) -> Result<BrowserUrl, InAppBrowserFailure> {
 }
 
 /// アプリ内ブラウザの OS 実装。`open` は「受理」だけを同期で返し、閉じた結果などは OS 層が
-/// `fandhe-egui-proxy` の bridge（`complete_from_os`）へ非同期に届ける。
+/// `driver` の bridge（`complete_from_os`）へ非同期に届ける。
 /// 呼び出し側（effect ドライバ）は [`validate_url`] を通した URL だけを渡す。
 pub trait InAppBrowser: Send + Sync {
     /// `request_id` の要求として `url` の表示を OS へ依頼する。

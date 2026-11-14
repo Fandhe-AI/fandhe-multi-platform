@@ -152,6 +152,8 @@ android {
             @Suppress("DEPRECATION")
             res.srcDirs("../../../crates/fandhe-cap-home-widget/android/res")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-in-app-browser/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-live-activity/android/java")
             @Suppress("DEPRECATION")
             res.srcDirs("../../../crates/fandhe-cap-live-activity/android/res")

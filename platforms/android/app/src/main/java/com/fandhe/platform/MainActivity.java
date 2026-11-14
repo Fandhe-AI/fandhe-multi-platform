@@ -528,14 +528,6 @@ public class MainActivity extends GameActivity {
         paymentRequestHelper.request(requestId, pay, isReadyToPayJson, paymentDataRequestJson);
     }
 
-    // アプリ内ブラウザ（Issue #703）。実装は `InAppBrowserHelper`。
-    // Rust の `android_in_app_browser.rs` が JNI で呼ぶ。
-    private final InAppBrowserHelper inAppBrowserHelper = new InAppBrowserHelper(this);
-
-    void requestInAppBrowserOpen(long requestId, String url) {
-        inAppBrowserHelper.open(requestId, url);
-    }
-
     // クイック設定タイル（Issue #720）。実装は `QuickSettingsTileStore`。Rust の
     // `android_quick_settings_tile.rs` が JNI（署名 `()Ljava/lang/String;` と `()J`）で呼ぶ。
     String quickSettingsTileCountRaw() {
@@ -1943,7 +1935,6 @@ public class MainActivity extends GameActivity {
         super.onResume();
         activityResumed = true;
         webAuthSessionHelper.onResume();
-        inAppBrowserHelper.onResume();
         compassHelper.onResume();
         environmentSensorsHelper.onResume();
         motionRawSensorsHelper.onResume();
@@ -2034,7 +2025,6 @@ public class MainActivity extends GameActivity {
         activityResumed = false;
         penStylusHelper.onPause();
         webAuthSessionHelper.onPause();
-        inAppBrowserHelper.onPause();
         lanDiscoveryHelper.onPause();
         localPeerHelper.onPause();
         bluetoothClassicHelper.onPause();
@@ -3764,7 +3754,6 @@ public class MainActivity extends GameActivity {
         // UI キューを待つネイティブ終了処理（clear）が super.onDestroy() の後ろで詰まらないよう先に解放する。
         nowPlayingHelper.onDestroy();
         super.onDestroy();
-        inAppBrowserHelper.onDestroy();
         paymentRequestHelper.onDestroy();
         healthDataHelper.onDestroy();
         translationHelper.onDestroy();

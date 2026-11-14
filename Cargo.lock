@@ -1537,6 +1537,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-in-app-browser"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-in-app-review"
 version = "0.2.0"
 dependencies = [
@@ -2250,6 +2263,7 @@ dependencies = [
  "fandhe-cap-http-get",
  "fandhe-cap-human-presence",
  "fandhe-cap-image-generation",
+ "fandhe-cap-in-app-browser",
  "fandhe-cap-in-app-review",
  "fandhe-cap-launch-at-login",
  "fandhe-cap-live-activity",

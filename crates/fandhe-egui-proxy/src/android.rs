@@ -206,10 +206,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // `device::translation::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::translation::reset_pending_tracking();
-    // Issue #701: アプリ内ブラウザの保留中の要求も破棄する（理由は translation と同じ。
-    // `device::in_app_browser::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::in_app_browser::reset_pending_tracking();
     // Issue #560: OS の検索への登録の処理済み世代も破棄する（理由は translation と同じ。
     // `device::spotlight_index::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

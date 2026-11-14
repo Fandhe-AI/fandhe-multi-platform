@@ -258,6 +258,9 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // クリップボードの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない）（`fandhe_cap_clipboard::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_clipboard::reset_pending_tracking();
+    // アプリ内ブラウザの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない。`fandhe_cap_in_app_browser::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_in_app_browser::reset_pending_tracking();
     // ドラッグ & ドロップの集約器もプロセス static のため再生成をまたいで残る。進行中のセッション・未適用イベントを
     // 新しい画面状態を作る前に捨てる（`fandhe_cap_drag_drop::reset_sessions` doc 参照。以前は egui-proxy の `run` が呼んでいた）。
     #[cfg(feature = "device")]
