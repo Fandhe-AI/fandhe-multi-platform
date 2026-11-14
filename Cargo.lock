@@ -1452,6 +1452,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-environment-sensors"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
 name = "fandhe-cap-external-app-launch"
 version = "0.2.0"
 dependencies = [
@@ -2442,6 +2458,7 @@ dependencies = [
  "fandhe-cap-document-scan",
  "fandhe-cap-drag-drop",
  "fandhe-cap-dynamic-type",
+ "fandhe-cap-environment-sensors",
  "fandhe-cap-external-app-launch",
  "fandhe-cap-eye-dropper",
  "fandhe-cap-file-preview",

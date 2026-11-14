@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #123、Issue #609）「気圧・照度・近接」の effect ドライバ。
 //! `fandhe_core::screens::environment_sensors_show`（端末依存ゼロ）の種類ごとの `wanted` の立ち上がりで
-//! `fandhe_device::environment_sensors::EnvironmentSensors::start`、立ち下がりで `stop` を呼び、購読中は
+//! `crate::contract::EnvironmentSensors::start`、立ち下がりで `stop` を呼び、購読中は
 //! [`READ_INTERVAL`] ごとに `read` して結果を注入する（`registry.rs` の `effect` 区画から
 //! 毎フレーム同期に呼ばれる）。`compass.rs` と同型の間隔つき pull を種類ごとに回す。
 //!
@@ -22,38 +22,38 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use fandhe_core::screens::environment_sensors_show::{
-    apply_failure, apply_reading, display_equal, EnvironmentSensorsShowState, ProximityView,
-    ReadingView, SensorFailureView, SensorKindView, SensorView,
-};
 #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
-use fandhe_device::environment_sensors::UnsupportedEnvironmentSensors;
-use fandhe_device::environment_sensors::{
-    validate_reading, EnvReading, EnvSensorFailure, EnvironmentSensors, Proximity, SensorKind,
-    NO_READING_TIMEOUT_MS, READ_INTERVAL,
+use crate::contract::UnsupportedEnvironmentSensors;
+use crate::contract::{
+    EnvReading, EnvSensorFailure, EnvironmentSensors, NO_READING_TIMEOUT_MS, Proximity,
+    READ_INTERVAL, SensorKind, validate_reading,
+};
+use fandhe_core::screens::environment_sensors_show::{
+    EnvironmentSensorsShowState, ProximityView, ReadingView, SensorFailureView, SensorKindView,
+    SensorView, apply_failure, apply_reading, display_equal,
 };
 
-use crate::app::CompletionSender;
 use fandhe_device::compass::WaitTracker;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた実装を返す（プロセスで 1 個。購読を二重に作らないため
 /// `OnceLock` で保持する）。
-fn implementation() -> Arc<dyn EnvironmentSensors> {
+pub fn platform_environment_sensors() -> Arc<dyn EnvironmentSensors> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn EnvironmentSensors>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "windows")]
             {
-                super::windows_environment_sensors::implementation()
+                crate::windows::implementation()
             }
             #[cfg(target_os = "ios")]
             {
-                super::ios_environment_sensors::implementation()
+                crate::ios::implementation()
             }
             #[cfg(target_os = "android")]
             {
-                super::android_environment_sensors::implementation()
+                crate::android::implementation()
             }
             #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
             {
@@ -303,7 +303,7 @@ pub fn environment_sensors_show_effect(
     drive(
         state,
         sender,
-        implementation().as_ref(),
+        platform_environment_sensors().as_ref(),
         Instant::now(),
         RESUME_EPOCH.load(Ordering::SeqCst),
         ds,
@@ -313,19 +313,29 @@ pub fn environment_sensors_show_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+    use crate::contract::UnsupportedEnvironmentSensors as Unsupported;
     use fandhe_core::screens::environment_sensors_show::{
         row_text, start_ambient, start_proximity, stop_ambient,
     };
-    use fandhe_device::environment_sensors::UnsupportedEnvironmentSensors as Unsupported;
     use std::sync::Mutex as StdMutex;
     use std::time::Duration;
 
-    type Rx = std::sync::mpsc::Receiver<crate::app::Completion<EnvironmentSensorsShowState>>;
+    type Rx = std::sync::mpsc::Receiver<fandhe_runtime::Completion<EnvironmentSensorsShowState>>;
     type ReadResult = Result<Option<EnvReading>, EnvSensorFailure>;
 
     fn channel() -> (CompletionSender<EnvironmentSensorsShowState>, Rx) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (
+            fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     fn apply_all(rx: &Rx, s: &mut EnvironmentSensorsShowState) {
@@ -660,7 +670,7 @@ mod tests {
     #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
     #[test]
     fn host_fallback_never_succeeds() {
-        let imp = implementation();
+        let imp = platform_environment_sensors();
         for k in SensorKind::ALL {
             assert_eq!(imp.start(k), Err(EnvSensorFailure::UnsupportedOnOs));
             assert_eq!(imp.read(k), Err(EnvSensorFailure::UnsupportedOnOs));

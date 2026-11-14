@@ -146,6 +146,8 @@ android {
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-dynamic-type/android/java")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-environment-sensors/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-external-app-launch/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-file-preview/android/java")

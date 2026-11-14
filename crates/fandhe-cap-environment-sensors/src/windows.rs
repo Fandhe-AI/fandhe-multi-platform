@@ -1,4 +1,4 @@
-//! Windows 向け気圧・照度・近接センサー実装（Issue #612、親 #123）。`device/environment_sensors.rs` の
+//! Windows 向け気圧・照度・近接センサー実装（Issue #612、親 #123）。本 crate の `driver` の
 //! Windows 経路の dispatch 先で、UI スレッドの driver から種類ごとに `start` / `read` / `stop` を呼ばれる。
 //! WinRT `Windows.Devices.Sensors` の `Barometer` / `LightSensor` / `ProximitySensor` を使う
 //! （`ReadingChanged` は購読しない。最新値を同期に pull する。契約は `fandhe-device` の
@@ -61,9 +61,7 @@
 
 use std::time::Instant;
 
-use fandhe_device::environment_sensors::{
-    is_fresh, EnvSensorFailure, Proximity, PRESSURE_STALE_MS,
-};
+use crate::contract::{EnvSensorFailure, PRESSURE_STALE_MS, Proximity, is_fresh};
 
 /// `E_ACCESSDENIED`（0x80070005）。権限拒否の写像に使う。
 const E_ACCESSDENIED: i32 = 0x8007_0005_u32 as i32;
@@ -231,10 +229,10 @@ impl<T: Clone> ProxState<T> {
         if !self.active {
             return Ok(None);
         }
-        if let Some((e, f)) = self.failure {
-            if e == self.epoch {
-                return Err(f);
-            }
+        if let Some((e, f)) = self.failure
+            && e == self.epoch
+        {
+            return Err(f);
         }
         Ok(self.sensor.clone())
     }
@@ -246,15 +244,15 @@ mod imp {
     use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
     use std::time::Duration;
 
-    use fandhe_platform_windows::minimize::{watch_minimize, MinimizeEdge};
+    use fandhe_platform_windows::minimize::{MinimizeEdge, watch_minimize};
     use windows::Devices::Enumeration::DeviceInformation;
     use windows::Devices::Sensors::{Barometer, LightSensor, ProximitySensor};
     use windows_future::{AsyncOperationCompletedHandler, AsyncStatus};
 
     use super::*;
-    use fandhe_device::environment_sensors::{
-        validate_lux, validate_pressure_hpa, EnvReading, EnvironmentSensors, SensorKind,
-        NO_READING_TIMEOUT_MS,
+    use crate::contract::{
+        EnvReading, EnvironmentSensors, NO_READING_TIMEOUT_MS, SensorKind, validate_lux,
+        validate_pressure_hpa,
     };
 
     fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -574,9 +572,9 @@ mod imp {
         match edge {
             MinimizeEdge::Minimized => {
                 drop_pressure_received();
-                super::super::environment_sensors::note_backgrounded();
+                crate::note_backgrounded();
             }
-            MinimizeEdge::Restored => super::super::environment_sensors::note_resumed(),
+            MinimizeEdge::Restored => crate::note_resumed(),
         }
     }
 

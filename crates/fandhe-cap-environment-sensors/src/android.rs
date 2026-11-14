@@ -1,5 +1,5 @@
-//! Android 向け気圧・照度・近接センサー実装（Issue #611、親 #123）。`device/environment_sensors.rs` の
-//! Android 経路から egui スレッドで呼ばれ、`MainActivity.environmentSensorsStart` / `Read` / `Stop` を
+//! Android 向け気圧・照度・近接センサー実装（Issue #611、親 #123）。本 crate の `driver` の
+//! Android 経路から egui スレッドで呼ばれ、`EnvironmentSensorsHelper` の static `start` / `read` / `stop`（第 1 引数は Activity）を
 //! 同期 JNI で呼んで最新値を pull する（継続配信型のため要求 id・`RequestSlot` は使わない）。
 //! Java 側は `EnvironmentSensorsHelper`（`TYPE_PRESSURE` / `TYPE_LIGHT` / `TYPE_PROXIMITY`）。
 //!
@@ -29,9 +29,9 @@
 
 use std::sync::Arc;
 
-use fandhe_device::environment_sensors::{
-    is_fresh, proximity_from_distance, validate_lux, validate_pressure_hpa, EnvReading,
-    EnvSensorFailure, EnvironmentSensors, SensorKind, PRESSURE_STALE_MS,
+use crate::contract::{
+    EnvReading, EnvSensorFailure, EnvironmentSensors, PRESSURE_STALE_MS, SensorKind, is_fresh,
+    proximity_from_distance, validate_lux, validate_pressure_hpa,
 };
 
 const START_OK: i32 = 0;
@@ -92,36 +92,35 @@ fn decode_read(kind: SensorKind, v: &[i64]) -> Result<Option<EnvReading>, EnvSen
 #[cfg(target_os = "android")]
 struct AndroidEnvironmentSensors;
 
-/// `MainActivity` の同期メソッドを呼ぶ。Activity 未確立・JNI 失敗は `None`。
-/// 2 箇所の `unsafe` は `android_accessibility_prefs.rs::call_read` と同一の根拠。
+/// `EnvironmentSensorsHelper` の static メソッドを呼ぶ。Activity 未確立・JNI 失敗は `None`。`unsafe` は共通層
+/// `fandhe_platform_android::with_activity_class` に閉じている。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
-fn call_activity<T>(
-    f: impl FnOnce(&mut jni::Env, &jni::objects::JObject) -> Result<T, super::android::JniCallFailed>,
+fn call_helper<T>(
+    f: impl FnOnce(
+        &mut jni::Env,
+        &jni::objects::JObject,
+        &jni::objects::JClass,
+    ) -> Result<T, fandhe_platform_android::JniCallFailed>,
 ) -> Option<T> {
-    let app = crate::android::android_app()?;
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        f(env, &activity)
-    })
+    let app = fandhe_platform_android::android_app()?;
+    fandhe_platform_android::with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.EnvironmentSensorsHelper"),
+        f,
+    )
     .ok()
 }
 
 #[cfg(target_os = "android")]
 impl EnvironmentSensors for AndroidEnvironmentSensors {
     fn start(&self, kind: SensorKind) -> Result<(), EnvSensorFailure> {
-        let code = call_activity(|env, a| {
+        let code = call_helper(|env, a, class| {
             Ok(env
-                .call_method(
-                    a,
-                    jni::jni_str!("environmentSensorsStart"),
-                    jni::jni_sig!((int) -> int),
-                    &[jni::JValue::Int(kind_code(kind))],
+                .call_static_method(
+                    class,
+                    jni::jni_str!("start"),
+                    jni::jni_sig!((android.app.Activity, int) -> int),
+                    &[jni::JValue::Object(a), jni::JValue::Int(kind_code(kind))],
                 )?
                 .i()?)
         })
@@ -130,13 +129,13 @@ impl EnvironmentSensors for AndroidEnvironmentSensors {
     }
 
     fn read(&self, kind: SensorKind) -> Result<Option<EnvReading>, EnvSensorFailure> {
-        let values = call_activity(|env, a| {
+        let values = call_helper(|env, a, class| {
             use jni::objects::JLongArray;
-            let ret = env.call_method(
-                a,
-                jni::jni_str!("environmentSensorsRead"),
-                jni::jni_sig!((int) -> long[]),
-                &[jni::JValue::Int(kind_code(kind))],
+            let ret = env.call_static_method(
+                class,
+                jni::jni_str!("read"),
+                jni::jni_sig!((android.app.Activity, int) -> long[]),
+                &[jni::JValue::Object(a), jni::JValue::Int(kind_code(kind))],
             )?;
             let arr = env.cast_local::<JLongArray>(ret.l()?)?;
             if arr.is_null() {
@@ -156,19 +155,19 @@ impl EnvironmentSensors for AndroidEnvironmentSensors {
     }
 
     fn stop(&self, kind: SensorKind) {
-        let _ = call_activity(|env, a| {
-            env.call_method(
-                a,
-                jni::jni_str!("environmentSensorsStop"),
-                jni::jni_sig!((int) -> ()),
-                &[jni::JValue::Int(kind_code(kind))],
+        let _ = call_helper(|env, a, class| {
+            env.call_static_method(
+                class,
+                jni::jni_str!("stop"),
+                jni::jni_sig!((android.app.Activity, int) -> ()),
+                &[jni::JValue::Object(a), jni::JValue::Int(kind_code(kind))],
             )?;
             Ok(())
         });
     }
 }
 
-/// Android の `EnvironmentSensors` 実装を返す（`device/environment_sensors.rs` の dispatch から呼ばれる）。
+/// Android の `EnvironmentSensors` 実装を返す（本 crate の `driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn EnvironmentSensors> {
     Arc::new(AndroidEnvironmentSensors)
@@ -178,7 +177,7 @@ pub(crate) fn implementation() -> Arc<dyn EnvironmentSensors> {
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 pub(crate) fn implementation() -> Arc<dyn EnvironmentSensors> {
-    Arc::new(fandhe_device::environment_sensors::UnsupportedEnvironmentSensors)
+    Arc::new(crate::contract::UnsupportedEnvironmentSensors)
 }
 
 /// 前景・背景の通知（Java `EnvironmentSensorsHelper.onPause` / `onResume` から無条件に呼ばれる）。
@@ -189,24 +188,24 @@ pub(crate) fn implementation() -> Arc<dyn EnvironmentSensors> {
 /// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じる。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_EnvironmentSensorsHelper_nativeOnForegroundChanged(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     foreground: jni::sys::jboolean,
 ) {
     if foreground {
-        super::environment_sensors::note_resumed();
-        crate::android::request_repaint();
+        crate::note_resumed();
+        fandhe_runtime::request_repaint();
     } else {
-        super::environment_sensors::note_backgrounded();
+        crate::note_backgrounded();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::environment_sensors::Proximity;
+    use crate::contract::Proximity;
 
     fn arr(state: i64, value: f64, extra: f64, received: i64, now: i64) -> [i64; 5] {
         [

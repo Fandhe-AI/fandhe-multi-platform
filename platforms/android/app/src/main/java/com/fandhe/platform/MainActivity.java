@@ -334,22 +334,6 @@ public class MainActivity extends GameActivity {
         musicLibraryHelper.cancel(requestId);
     }
 
-    // 気圧・照度・近接（Issue #611）。実装は `EnvironmentSensorsHelper`。Rust の
-    // `android_environment_sensors.rs` が同期 JNI で呼ぶ。
-    private final EnvironmentSensorsHelper environmentSensorsHelper = new EnvironmentSensorsHelper(this);
-
-    int environmentSensorsStart(int kind) {
-        return environmentSensorsHelper.start(kind);
-    }
-
-    long[] environmentSensorsRead(int kind) {
-        return environmentSensorsHelper.read(kind);
-    }
-
-    void environmentSensorsStop(int kind) {
-        environmentSensorsHelper.stop(kind);
-    }
-
     // ジャイロ・磁気・線形加速度の生値（Issue #901）。実装は `MotionRawSensorsHelper`。Rust の
     // `android_motion_raw_sensors.rs` が同期 JNI で呼ぶ。
     private final MotionRawSensorsHelper motionRawSensorsHelper = new MotionRawSensorsHelper(this);
@@ -1430,7 +1414,6 @@ public class MainActivity extends GameActivity {
         super.onResume();
         activityResumed = true;
         webAuthSessionHelper.onResume();
-        environmentSensorsHelper.onResume();
         motionRawSensorsHelper.onResume();
         localPeerHelper.onResume();
         if (sensorManager != null && motionSensor != null) {
@@ -1509,7 +1492,6 @@ public class MainActivity extends GameActivity {
         webAuthSessionHelper.onPause();
         lanDiscoveryHelper.onPause();
         localPeerHelper.onPause();
-        environmentSensorsHelper.onPause();
         motionRawSensorsHelper.onPause();
         if (sensorManager != null) {
             sensorManager.unregisterListener(motionListener);
@@ -3119,7 +3101,6 @@ public class MainActivity extends GameActivity {
         lanDiscoveryHelper.onDestroy();
         localPeerHelper.onDestroy();
         musicLibraryHelper.onDestroy();
-        environmentSensorsHelper.onDestroy();
         motionRawSensorsHelper.onDestroy();
         pictureInPictureHelper.onDestroy();
         printHelper.onDestroy();

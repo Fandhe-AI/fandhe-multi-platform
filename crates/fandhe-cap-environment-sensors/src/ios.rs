@@ -1,8 +1,8 @@
 //! iOS 向け気圧・近接センサー実装（Issue #610、親 #123）。`ios/fandhe_ios_environment_sensors.m`
 //! （CoreMotion `CMAltimeter` の気圧購読と `UIDevice` の近接監視、`build.rs` が iOS ターゲットの
 //! feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 6 関数で呼ぶ。#609 のスタブを
-//! 置き換えたもので、dispatch（`device/environment_sensors.rs`）・共通コア画面・trait 契約
-//! （`fandhe_device::environment_sensors`）は変えない。
+//! 置き換えたもので、dispatch（本 crate の `driver`）・共通コア画面・trait 契約
+//! （`crate::contract`）は変えない。
 //!
 //! 照度は iOS に公開 API が無い（SensorKit は研究用 entitlement が要る）ので常に `UnsupportedOnOs`。
 //!
@@ -13,7 +13,7 @@
 //! # 再描画・ライフサイクル
 //!
 //! `.m` が値・失敗を確定した直後に `fandhe_rust_environment_sensors_changed` を呼び、
-//! `crate::ios::request_repaint` で次フレームを起こす。背景遷移・前景復帰は
+//! `fandhe_runtime::request_repaint` で次フレームを起こす。背景遷移・前景復帰は
 //! `note_backgrounded` / `note_resumed`（ドライバの待機起点の引き直し）へ中継する。
 //!
 //! # 守る範囲・守らない範囲
@@ -29,8 +29,8 @@
 //! - シミュレータでは気圧・近接とも `NotPresent` になる
 
 #[cfg(any(target_os = "ios", test))]
-use fandhe_device::environment_sensors::{
-    is_fresh, pressure_hpa_from_kpa, EnvReading, EnvSensorFailure, Proximity, PRESSURE_STALE_MS,
+use crate::contract::{
+    EnvReading, EnvSensorFailure, PRESSURE_STALE_MS, Proximity, is_fresh, pressure_hpa_from_kpa,
 };
 
 /// `.m` の start の戻り値を契約へ写す（0 成功 / 1 非搭載 / 2 権限拒否 / 他 失敗）。
@@ -83,16 +83,14 @@ fn read_proximity_result(code: i32, near: i32) -> Result<Option<EnvReading>, Env
 mod imp {
     use std::sync::Arc;
 
-    use fandhe_device::environment_sensors::{
-        EnvReading, EnvSensorFailure, EnvironmentSensors, SensorKind,
-    };
+    use crate::contract::{EnvReading, EnvSensorFailure, EnvironmentSensors, SensorKind};
 
     use super::{read_pressure_result, read_proximity_result, start_result};
 
     // SAFETY: `ios/fandhe_ios_environment_sensors.m`（`build.rs` が iOS ターゲットの feature `device` 有効時に
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_ios_env_pressure_start() -> i32;
         fn fandhe_ios_env_pressure_read(kpa: *mut f64, age_ms: *mut f64) -> i32;
         fn fandhe_ios_env_pressure_stop();
@@ -146,7 +144,7 @@ mod imp {
         }
     }
 
-    /// iOS の `EnvironmentSensors` 実装を返す（`device/environment_sensors.rs` の iOS 経路から呼ばれる）。
+    /// iOS の `EnvironmentSensors` 実装を返す（本 crate の `driver` の iOS 経路から呼ばれる）。
     pub(crate) fn implementation() -> Arc<dyn EnvironmentSensors> {
         Arc::new(IosEnvironmentSensors)
     }
@@ -159,26 +157,26 @@ pub(crate) use imp::implementation;
 /// しない（契約表 11）。panic しない。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_environment_sensors_changed() {
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }
 
 /// 背景遷移の通知（`.m` の `DidEnterBackground` から）。背景中は `NoReading` の待機を止める。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_environment_sensors_backgrounded() {
-    super::environment_sensors::note_backgrounded();
+    crate::note_backgrounded();
 }
 
 /// 前景復帰の通知（`.m` の `WillEnterForeground` から）。ドライバの待機起点を引き直させる。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_environment_sensors_resumed() {
-    super::environment_sensors::note_resumed();
-    crate::ios::request_repaint();
+    crate::note_resumed();
+    fandhe_runtime::request_repaint();
 }
 
 #[cfg(test)]

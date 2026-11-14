@@ -419,6 +419,10 @@
             android:authorities="${applicationId}.fandhe.compass-heading"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.EnvironmentSensorsLifecycle"
+            android:authorities="${applicationId}.fandhe.environment-sensors"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.CameraCaptureLifecycle"
             android:authorities="${applicationId}.fandhe.camera-capture"
             android:exported="false" />

@@ -1,11 +1,11 @@
 //! 気圧・照度・近接センサーの契約（Issue #609、親 #123）。端末の環境センサーの値を画面に出すための
-//! 橋渡しで、`fandhe-egui-proxy` の `device/environment_sensors.rs` が種類ごとに購読の開始・停止と
+//! 橋渡しで、`fandhe-egui-proxy` の 本 crate の `driver` が種類ごとに購読の開始・停止と
 //! 間隔つきの [`EnvironmentSensors::read`] を行う（pull 型。OS 側が最新値を持ち、画面側が読む）。
 //! 方位（`compass`）と同型で、種類（[`SensorKind`]）を引数に持つ。
 //!
 //! # 契約
 //!
-//! - 結果は [`EnvReading`] か [`EnvSensorFailure`]。`DeviceError` へ variant を足すと既存の網羅 match が
+//! - 結果は [`EnvReading`] か [`EnvSensorFailure`]。`EnvironmentSensorsError` へ variant を足すと既存の網羅 match が
 //!   壊れるため機能固有の enum にする（`compass::CompassFailure` と同じ判断）
 //! - [`EnvironmentSensors::read`] の `Ok(None)` は「未開始 / 停止後 / まだ値が無い / 範囲外を捨てた後 /
 //!   古い値」。0 や直前の値で代用しない（`device-bridge-contracts.md`「6. 嘘の成功」）

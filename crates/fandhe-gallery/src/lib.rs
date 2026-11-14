@@ -138,6 +138,24 @@ extern "system" fn Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadKey(
 ) {
 }
 
+/// `device` feature 無効ビルド向けの `nativeOnForegroundChanged` no-op フォールバック（Issue #611）。
+/// `EnvironmentSensorsLifecycle`（#1331）は feature を知らず、`EnvironmentSensorsHelper.onPause` / `onResume` は
+/// 背景遷移を無条件に通知するため、実体を持つ `fandhe-cap-environment-sensors`（`device` 有効時のみ依存）が無いと
+/// `UnsatisfiedLinkError` になる。実体との二重定義を避けるため cfg は `device` 無効のときだけ。署名は Java 宣言・実体と一致
+/// （`(boolean) -> void`、`(Z)V`）。引数は `jni::sys::jboolean`（= `u8`）と ABI が同じ `u8` で受ける。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、シンボル名は JNI 命名規約上の固定名。
+#[cfg(all(target_os = "android", not(feature = "device")))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_EnvironmentSensorsHelper_nativeOnForegroundChanged(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _foreground: u8,
+) {
+}
+
 /// Android アプリのエントリポイント（計測専用ビルド）。
 ///
 /// `android-activity`（GameActivity 方式）がライブラリロード後にこのシンボル名を検索して呼ぶ

@@ -1,5 +1,9 @@
 package com.fandhe.platform;
 
+import java.util.WeakHashMap;
+import java.util.Map;
+import java.util.Collections;
+import android.app.Activity;
 import android.content.Context;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -7,10 +11,11 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.SystemClock;
 
-// 気圧・照度・近接センサー画面（Issue #611、親 #123）の Android 実装ヘルパー。MainActivity から
-// 生成・委譲される（Rust の `device/android_environment_sensors.rs` が egui スレッドから
-// `MainActivity.environmentSensorsStart` / `Read` / `Stop` を同期 JNI で呼ぶ。継続配信型のため
-// 要求 id・RequestSlot は使わない）。
+// 気圧・照度・近接センサー画面（Issue #611、親 #123）の Android 実装ヘルパー。Activity ごとに 1 つ、
+// `EnvironmentSensorsLifecycle`（`FeatureLifecycleProvider` 継承）が `attach` で生成して `HELPERS` に持つ
+// （Rust の `fandhe-cap-environment-sensors`（`src/android.rs`）が egui スレッドから static の `start` / `read` / `stop`
+// （第 1 引数は Activity）を同期 JNI で呼ぶ。継続配信型のため要求 id・RequestSlot は使わない）。
+// helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、`start` は失敗・`read` は購読喪失で確定する。
 //
 // 結果コード・配列配置の SSOT はここで、Rust 側が同じ値で解釈する。
 //   kind : 0=気圧 / 1=照度 / 2=近接（未知の値は START_FAILED・READ_LOST）
@@ -77,8 +82,61 @@ final class EnvironmentSensorsHelper {
     private boolean foreground = true;
     private boolean destroyed;
 
-    EnvironmentSensorsHelper(Context context) {
-        this.context = context;
+    // Activity ごとの helper（上記クラス冒頭コメント参照）。
+    private static final Map<Activity, EnvironmentSensorsHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    // Activity の生成時（`EnvironmentSensorsLifecycle` から、UI スレッド）。
+    static void attach(Activity activity) {
+        HELPERS.put(activity, new EnvironmentSensorsHelper(activity));
+    }
+
+    // Activity の破棄時（同上）。再生成を含む。保持している資源を解放し、保留中の要求を捨てる。
+    static void detach(Activity activity) {
+        EnvironmentSensorsHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // `EnvironmentSensorsLifecycle` から（UI スレッド）。helper が無ければ何もしない。
+    static void resumed(Activity activity) {
+        EnvironmentSensorsHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onResume();
+        }
+    }
+
+    // `EnvironmentSensorsLifecycle` から（UI スレッド）。helper が無ければ何もしない。
+    static void paused(Activity activity) {
+        EnvironmentSensorsHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onPause();
+        }
+    }
+
+    // Rust から呼ぶ入口。helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、失敗で確定する。
+    static int start(Activity activity, int kind) {
+        EnvironmentSensorsHelper helper = HELPERS.get(activity);
+        return helper == null ? START_FAILED : helper.start(kind);
+    }
+
+    // Rust から呼ぶ入口。helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、失敗で確定する。
+    static long[] read(Activity activity, int kind) {
+        EnvironmentSensorsHelper helper = HELPERS.get(activity);
+        return helper == null ? result(STATE_LOST, 0L, 0L, 0L, SystemClock.elapsedRealtime()) : helper.read(kind);
+    }
+
+    // Rust から呼ぶ入口。helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、失敗で確定する。
+    static void stop(Activity activity, int kind) {
+        EnvironmentSensorsHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.stop(kind);
+        }
+    }
+
+    private EnvironmentSensorsHelper(Activity activity) {
+        this.context = activity;
     }
 
     private static boolean validKind(int kind) {

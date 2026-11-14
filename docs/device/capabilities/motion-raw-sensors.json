@@ -41,7 +41,7 @@
       "note": "実装済み（#1145）。単位は OS のまま度/秒・µT・g（線形加速度は重力を除く）。`GetDefault` の null は `NotPresent`、`E_ACCESSDENIED` は `PermissionDenied`、他は `Failed`（`UnsupportedOnOs` は返さない）。`GetCurrentReading` の null と非有限は値なしで、軸の取得失敗は 0 や前回値で埋めず `Err`。守る範囲: 嘘の値を出さない、失敗種別を取り違えない、停止と最小化で保持を捨てる、判定と更新を 1 本の `Mutex` で行う。守らない範囲: 絶対精度、最小化の検出の遅れ（最大 200 ms）、Connected Standby、複数プロセス。センサー搭載機（2-in-1 等）のみ。デスクトップ PC では `GetDefault` が null。Connected Standby の間も null。一次情報: https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.gyrometerreading / https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.magnetometerreading / https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.accelerometer.getdefault / https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.accelerometerreadingtype。方針: `ReportInterval` は設定せず既定のままにする（戻す処理が要らず、停止失敗の経路が無い。停止・最小化・破棄は WinRT オブジェクトの drop のみ）。最小化の検出は `windows_environment_sensors.rs` と同じ IsIconic ウォッチャー（200ms）で、HWND 不明・ウォッチャーの起動失敗なら開始は `Failed` にして何も保持しない。最小化で保持を drop し、復元はウォッチャーが「取り直し要」の印を立てるだけで、`GetDefault` は UI スレッドの次の `read` で行う（失敗はその `read` が `Err`）。非表示中の `read` は `Ok(None)`。一次情報: https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.gyrometer.reportinterval。実機で確かめる点: センサーオブジェクトを別スレッドで drop してよいか、既定の間隔で `GetCurrentReading` が値を返すか、素の exe での HRESULT",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#885）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_motion_raw_sensors.rs + crates/fandhe-egui-proxy/src/device/windows_environment_sensors.rs、Issue #1145"
+      "impl": "crates/fandhe-egui-proxy/src/device/windows_motion_raw_sensors.rs + crates/fandhe-platform-windows/src/minimize.rs、Issue #1145"
     },
     "web": {
       "status": "done",

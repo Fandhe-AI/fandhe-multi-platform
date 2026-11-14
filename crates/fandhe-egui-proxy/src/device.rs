@@ -49,11 +49,6 @@ pub mod android_car_display;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_deep_link;
-/// Issue #609: Android 向け気圧・照度・近接センサー実装。
-/// `device/environment_sensors.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_environment_sensors;
 /// Issue #416: Android 向けファイルの関連付け受信のスタブ（b-android が埋める）。
 /// `device/file_association.rs::platform` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -283,9 +278,6 @@ pub mod contact_pick;
 /// Phase 11 の拡充ループ（親 #153、Issue #1278）: ディープリンク受信の effect ドライバ
 /// （Android 分岐はスタブ、他 OS は `UnsupportedDeepLink` 固定）。
 pub mod deep_link;
-/// Phase 11（親 #123、Issue #609）: 気圧・照度・近接センサーの effect ドライバ（iOS・Android・Windows 実装、
-/// 他 OS は `UnsupportedEnvironmentSensors` 固定。Web は対応表で `no`）。
-pub mod environment_sensors;
 /// Phase 11 の拡充ループ（親 #102、Issue #416）: ファイルの関連付けの effect ドライバ
 /// （macOS・iOS・Windows 実装、Android は未実装のスタブ、他 OS は `Unsupported` 固定）。
 pub mod file_association;
@@ -330,11 +322,6 @@ pub mod ios_background_upload;
 /// Issue #557: iOS 向けバーコード・QR 読み取りの骨格（実装は #558）。
 #[cfg(target_os = "ios")]
 pub mod ios_barcode_scan;
-/// Issue #609: iOS 向け気圧・照度・近接センサー実装。
-/// `device/environment_sensors.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_environment_sensors;
 /// Issue #417: iOS 向けファイルの関連付け受信（macOS と共用の `apple_file_association` を返す）。
 /// `device/file_association.rs::platform` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -575,11 +562,6 @@ pub mod windows_background_task;
 /// Windows Hello ラッパー）。`device/biometric_auth.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_biometric;
-/// Issue #609: Windows 向け気圧・照度・近接センサー実装。
-/// `device/environment_sensors.rs` の Windows 経路から呼ばれる。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_environment_sensors;
 /// Issue #416: Windows 向けファイルの関連付け受信実装。
 /// `device/file_association.rs` の Windows 経路と `main.rs` から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
