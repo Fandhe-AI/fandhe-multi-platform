@@ -11,7 +11,7 @@
 //! - 同じ受け口（関数のアドレス）は 1 度だけ登録する。登録した時点で最小化中なら、その受け口へ `Minimized` を 1 回届ける
 //!   （後から使い始めた機能が、すでに起きた立ち上がりを見逃して最小化中に資源を取らないため）
 //!
-//! 守る範囲: 立ち上がり・立ち下がりを 1 回ずつ配ること、受け口を呼ぶ間はロックを握らないこと。
+//! 守る範囲: 立ち上がり・立ち下がりを 1 回ずつ配ること、初期状態の再送を後続の配信より先に済ませること、受け口を呼ぶ間はロックを握らないこと。
 //! 守らない範囲: 200 ms 未満の最小化・復元の取りこぼし、ウィンドウが無い間（`window()` が `None`）の判定。
 
 use std::sync::{Mutex, MutexGuard};
@@ -62,6 +62,15 @@ static SHARED: Mutex<Shared> = Mutex::new(Shared {
     minimized: false,
 });
 
+/// 初期状態の再送と、ウォッチャーの立ち上がり・立ち下がりの配信を直列にする（ロック順は常に `DELIVER` → `SHARED`）。
+/// 再送を取った後に復元が先に配られ、新しい受け口へ `Restored` → `Minimized` の順で届くのを防ぐ。
+/// 受け口の中から `watch_minimize` を呼ぶとデッドロックするため呼ばない。
+static DELIVER: Mutex<()> = Mutex::new(());
+
+fn lock_deliver() -> MutexGuard<'static, ()> {
+    DELIVER.lock().unwrap_or_else(|p| p.into_inner())
+}
+
 fn lock() -> MutexGuard<'static, Shared> {
     SHARED.lock().unwrap_or_else(|p| p.into_inner())
 }
@@ -73,6 +82,8 @@ pub fn watch_minimize(listener: fn(MinimizeEdge)) -> bool {
         return false;
     }
     // 受け口を足してからウォッチャーを起こす（起動直後の最初の立ち上がりを落とさない）。
+    // 再送の判定から再送の完了まで `DELIVER` を握り、その間はウォッチャーの配信を待たせる。
+    let _deliver = lock_deliver();
     let (added, replay) = {
         let mut st = lock();
         if st
@@ -124,7 +135,9 @@ fn watch() {
         if let Some(hwnd) = crate::window()
             && let Some(edge) = tracker.update(is_minimized(hwnd))
         {
-            // 状態と受け口の一覧を同じロックの内側で更新・複製し、呼び出しはロックの外で行う。
+            // `DELIVER` で再送と直列化する。状態と受け口の一覧は `SHARED` の内側で更新・複製し、
+            // 受け口の呼び出しは `SHARED` の外で行う。
+            let _deliver = lock_deliver();
             let listeners = {
                 let mut st = lock();
                 st.minimized = edge == MinimizeEdge::Minimized;

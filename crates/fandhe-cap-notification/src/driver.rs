@@ -59,10 +59,8 @@
 //! 期限は設けない: 権限ダイアログの応答時間は利用者次第で、OS は completion を
 //! 必ず呼ぶ契約（iOS の生体認証経路と同じ判断）。Android も同じ理由で期限を掛けない。
 
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
 use std::sync::Arc;
 
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
 use crate::contract::Notifier;
 use crate::contract::NotifyOutcome;
 use crate::error::NotificationError;
@@ -102,14 +100,21 @@ fn to_outcome(outcome: NotifyOutcome) -> CoreOutcome {
 /// [`drive_callback`] 経由の別経路（モジュール doc 参照）のため本関数の対象外にする
 /// （cfg を揃える、`device-bridge-contracts.md`「7. 対応表・権限」の cfg 一致チェック）。
 /// 画面の状態型に依存しないため、フレームワークの外のアプリも使える入口。iOS / Android は権限ダイアログの結果を
-/// コールバックで受ける別の型（`bridge`）で、同期の [`Notifier`] を持たないため載せない。
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
+/// コールバックで受けるため、[`NativeNotifier`]（結果が届くまで呼び出しスレッドを塞ぐ。UI スレッドから呼ばない）を返す。
 pub fn platform_notification() -> Arc<dyn Notifier> {
     implementation()
 }
 
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
 fn implementation() -> Arc<dyn Notifier> {
+    // iOS / Android は権限確認を含む非同期経路を、結果が届くまで塞ぐ同期の [`Notifier`] に包む。
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    return Arc::new(NativeNotifier);
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    implementation_desktop()
+}
+
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+fn implementation_desktop() -> Arc<dyn Notifier> {
     #[cfg(target_os = "macos")]
     {
         use crate::macos::OsascriptNotifier;
@@ -198,6 +203,25 @@ pub(crate) mod bridge {
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
+    type Raw = Result<super::NotifyOutcome, crate::error::NotificationError>;
+
+    /// 画面を介さない同期入口（[`super::NativeNotifier`]）の待ち手。要求は 1 本だけで、新しい要求は古い待ち手を捨てて置き換える。
+    static WAITER: std::sync::Mutex<Option<(u64, std::sync::mpsc::Sender<Raw>)>> =
+        std::sync::Mutex::new(None);
+
+    pub(crate) fn set_waiter(request_id: u64, tx: std::sync::mpsc::Sender<Raw>) {
+        *WAITER.lock().unwrap_or_else(|e| e.into_inner()) = Some((request_id, tx));
+    }
+
+    fn take_waiter(request_id: u64) -> Option<std::sync::mpsc::Sender<Raw>> {
+        let mut g = WAITER.lock().unwrap_or_else(|e| e.into_inner());
+        if g.as_ref().is_some_and(|(id, _)| *id == request_id) {
+            g.take().map(|(_, tx)| tx)
+        } else {
+            None
+        }
+    }
+
     /// 提示直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
     pub(crate) fn begin() -> u64 {
         SLOT.begin()
@@ -212,6 +236,11 @@ pub(crate) mod bridge {
         request_id: u64,
         result: Result<super::NotifyOutcome, crate::error::NotificationError>,
     ) -> bool {
+        if let Some(tx) = take_waiter(request_id) {
+            let sent = tx.send(result).is_ok();
+            SLOT.clear(request_id);
+            return sent;
+        }
         SLOT.deliver(
             request_id,
             result.map(super::to_outcome).map_err(super::to_message),
@@ -248,6 +277,30 @@ fn present(request_id: u64, title: &str, body: &str) -> bool {
 #[cfg(target_os = "android")]
 fn present(request_id: u64, title: &str, body: &str) -> bool {
     crate::android::request_notification(request_id, title, body)
+}
+
+/// 画面を介さない同期入口（iOS・Android）。権限確認の結果が届くまで呼び出しスレッドを塞ぐ（OS は完了を必ず呼ぶ契約で、
+/// 権限ダイアログは利用者次第のため期限は設けない）。UI スレッドから呼ばない。別の要求に置き換えられたら `Ok(Cancelled)`。
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub struct NativeNotifier;
+
+#[cfg(any(target_os = "ios", target_os = "android"))]
+impl Notifier for NativeNotifier {
+    fn notify(
+        &self,
+        request: &crate::contract::NotificationRequest,
+    ) -> Result<NotifyOutcome, NotificationError> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let request_id = bridge::begin();
+        bridge::set_waiter(request_id, tx);
+        if !present(request_id, request.title(), request.body()) {
+            bridge::deliver(
+                request_id,
+                Err(NotificationError::Internal("notification present")),
+            );
+        }
+        rx.recv().unwrap_or(Ok(NotifyOutcome::Cancelled))
+    }
 }
 
 /// iOS/Android 共通: `notification_send` の要求 1 件を処理する effect ドライバ本体

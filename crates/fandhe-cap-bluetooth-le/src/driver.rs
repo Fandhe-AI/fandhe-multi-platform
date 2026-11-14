@@ -49,12 +49,6 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-#[cfg(not(any(
-    target_os = "ios",
-    target_os = "macos",
-    target_os = "windows",
-    target_os = "android"
-)))]
 use crate::contract::BluetoothLe;
 use crate::contract::{BleDevice, normalize_scan};
 use crate::error::BluetoothLeError;
@@ -263,7 +257,101 @@ pub(crate) static OBSERVED: Observer = Observer::new();
 )]
 pub(crate) fn finish(request_id: u64, result: Result<(), BluetoothLeError>) {
     if let Some(r) = OBSERVED.finish(request_id, result) {
-        bridge::deliver(request_id, r);
+        // 画面を介さない同期入口（[`NativeBluetoothLe`]）の待ち手がいれば、生の結果をそちらへ渡す。
+        if let Some(tx) = take_waiter(request_id) {
+            let _ = tx.send(r);
+            bridge::SLOT.clear(request_id);
+        } else {
+            bridge::deliver(request_id, r);
+        }
+    }
+}
+
+type WaiterTx = std::sync::mpsc::Sender<Result<Vec<BleDevice>, BluetoothLeError>>;
+
+/// 同期入口の待ち手（要求は 1 本だけ。新しい要求は古い待ち手を捨てて置き換える）。
+static WAITER: Mutex<Option<(u64, WaiterTx)>> = Mutex::new(None);
+
+fn take_waiter(request_id: u64) -> Option<WaiterTx> {
+    let mut g = WAITER.lock().unwrap_or_else(|e| e.into_inner());
+    if g.as_ref().is_some_and(|(id, _)| *id == request_id) {
+        g.take().map(|(_, tx)| tx)
+    } else {
+        None
+    }
+}
+
+/// OS へスキャンの開始を依頼する（画面の effect と同期入口で共通）。依頼自体の失敗は [`finish`] へ流す。
+#[cfg(any(
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "android"
+))]
+fn start_native_scan(request_id: u64) {
+    use std::time::Duration;
+    OBSERVED.begin(request_id);
+    let duration = Duration::from_millis(crate::contract::SCAN_DURATION_MS);
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    if !crate::apple::present(request_id, duration) {
+        // 依頼自体が同期的に失敗した（コールバックは二度と来ない）。
+        finish(
+            request_id,
+            Err(BluetoothLeError::Internal("bluetooth_le present")),
+        );
+    }
+    #[cfg(target_os = "windows")]
+    if let Err(e) = crate::windows::present(request_id, duration) {
+        finish(request_id, Err(e));
+    }
+    #[cfg(target_os = "android")]
+    if !crate::android::request_ble_scan(request_id, duration.as_millis() as i32) {
+        finish(
+            request_id,
+            Err(BluetoothLeError::Internal("bluetooth_le present")),
+        );
+    }
+}
+
+/// 画面を介さない同期入口（iOS・macOS・Windows・Android）。`scan` は結果が届くまで呼び出しスレッドを塞ぐため、
+/// UI スレッドから呼ばない。権限ダイアログの回答待ちには期限を設けないが、`scan` 自体は
+/// [`SCAN_DURATION_MS`](crate::contract::SCAN_DURATION_MS) に余裕を足した期限で戻る（超えたらスキャンを止めて `Internal`）。
+#[cfg(any(
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "android"
+))]
+pub struct NativeBluetoothLe;
+
+#[cfg(any(
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "android"
+))]
+impl BluetoothLe for NativeBluetoothLe {
+    fn scan(&self) -> Result<Vec<BleDevice>, BluetoothLeError> {
+        use std::time::Duration;
+        let (tx, rx) = std::sync::mpsc::channel();
+        let request_id = bridge::begin();
+        *WAITER.lock().unwrap_or_else(|e| e.into_inner()) = Some((request_id, tx));
+        start_native_scan(request_id);
+        let limit =
+            Duration::from_millis(crate::contract::SCAN_DURATION_MS) + Duration::from_secs(30);
+        match rx.recv_timeout(limit) {
+            Ok(r) => r,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                // 別の要求に置き換えられた。
+                Err(BluetoothLeError::Cancelled("bluetooth_le"))
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                take_waiter(request_id);
+                stop_shared_scan();
+                bridge::SLOT.clear(request_id);
+                Err(BluetoothLeError::Internal("bluetooth_le timeout"))
+            }
+        }
     }
 }
 
@@ -311,33 +399,11 @@ pub(crate) mod bridge {
 ))]
 fn drive_callback(state: &BleScanState, sender: &CompletionSender<BleScanState>) {
     use fandhe_core::screens::ble_scan::ScanPhase;
-    use std::time::Duration;
 
     if take_request(state).is_some() {
         let _ = sender.send(Box::new(mark_scanning));
 
-        let request_id = bridge::begin();
-        OBSERVED.begin(request_id);
-        let duration = Duration::from_millis(crate::contract::SCAN_DURATION_MS);
-        #[cfg(any(target_os = "ios", target_os = "macos"))]
-        if !crate::apple::present(request_id, duration) {
-            // 依頼自体が同期的に失敗した（コールバックは二度と来ない）。
-            finish(
-                request_id,
-                Err(BluetoothLeError::Internal("bluetooth_le present")),
-            );
-        }
-        #[cfg(target_os = "windows")]
-        if let Err(e) = crate::windows::present(request_id, duration) {
-            finish(request_id, Err(e));
-        }
-        #[cfg(target_os = "android")]
-        if !crate::android::request_ble_scan(request_id, duration.as_millis() as i32) {
-            finish(
-                request_id,
-                Err(BluetoothLeError::Internal("bluetooth_le present")),
-            );
-        }
+        start_native_scan(bridge::begin());
         return;
     }
 
@@ -381,16 +447,22 @@ fn drive(state: &BleScanState, sender: &CompletionSender<BleScanState>, ble: &dy
     }));
 }
 
-/// 同期の [`BluetoothLe`] 実装（`Unsupported` 固定）。iOS・macOS・Windows・Android は権限ダイアログや OS のコールバックの結果を
-/// 受ける pull 型の [`bridge`] / [`OBSERVED`] を使い、同期の [`BluetoothLe`] を持たないため、この入口は上記 4 OS 以外にだけ載せる
-/// （Web は別経路 `fandhe-web-dom`）。
-#[cfg(not(any(
-    target_os = "ios",
-    target_os = "macos",
-    target_os = "windows",
-    target_os = "android"
-)))]
+/// 画面の状態型に依存しない入口。対応 4 OS は結果が届くまで塞ぐ同期実装（[`NativeBluetoothLe`]）、それ以外は
+/// `Unsupported` 固定（Web は別経路 `fandhe-web-dom`）。
 pub fn platform_bluetooth_le() -> Box<dyn BluetoothLe> {
+    #[cfg(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "android"
+    ))]
+    return Box::new(NativeBluetoothLe);
+    #[cfg(not(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "android"
+    )))]
     Box::new(crate::contract::UnsupportedBluetoothLe)
 }
 

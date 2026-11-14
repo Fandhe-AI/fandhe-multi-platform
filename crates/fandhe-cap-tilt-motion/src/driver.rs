@@ -65,6 +65,11 @@ static MOTION: OnceLock<DummyMotion> = OnceLock::new();
 /// （`DummyMotion` は clone しても状態を共有する）。iOS は effect ドライバが毎フレーム pull して書き込み、Android は Java からの
 /// push が書き込み、デスクトップは画面のスライダー値が書き込む。
 pub fn platform_tilt_motion() -> Box<dyn Motion> {
+    // iOS は画面の effect を経由しなくても測れるよう、実センサを直接 pull する実装を返す
+    // （共有値は effect ドライバだけが書くため、返しても初期値のままになる）。
+    #[cfg(target_os = "ios")]
+    return Box::new(crate::ios::IosMotion);
+    #[cfg(not(target_os = "ios"))]
     Box::new(shared_motion().clone())
 }
 
