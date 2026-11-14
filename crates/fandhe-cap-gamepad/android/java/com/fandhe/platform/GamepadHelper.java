@@ -7,7 +7,6 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import androidx.core.util.Consumer;
 
-
 // ゲームコントローラ入力（Issue #935 / #1303）の Java 側。Rust 側
 // （`crates/fandhe-cap-gamepad/src/android.rs`）の JNI エクスポート 5 本へ生値を渡すだけで、
 // ソース判定の最終判断・デッドゾーン・値域正規化・keyCode の写像・状態遷移は Rust 側の状態機械が担う

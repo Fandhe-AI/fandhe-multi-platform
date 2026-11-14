@@ -176,6 +176,10 @@ pub fn window_insets_px() -> Option<[i32; 4]> {
 ///
 /// `JNIEnv`/`jclass` は使わず受けた値を static へ store するだけで、関数本体に `unsafe` 操作は無い。
 /// `#[unsafe(no_mangle)]` はこの 1 関数に閉じる（`.claude/rules/coding-rust.md` の FFI 例外規定準拠）。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[unsafe(no_mangle)]` は JNI 命名規約上の固定
+/// シンボル名で、本クレートは 1 つの Android 実行単位にのみリンクされるため他シンボルと衝突しない。
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_HostInsets_nativeOnWindowInsetsChanged(
