@@ -133,8 +133,6 @@ fn build() {
     compile_ios_music_library();
     // `ios/fandhe_ios_health_data.m`（Issue #1090）。iOS 分岐のみ（macOS は対応表で n-a）。
     compile_ios_health_data();
-    // `ios/fandhe_ios_compass.m`（Issue #1405）。iOS 分岐のみ（macOS は対応表で no）。
-    compile_ios_compass();
     // `ios/fandhe_ios_environment_sensors.m`（Issue #610）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_environment_sensors();
     // `ios/fandhe_ios_motion_raw_sensors.m`（Issue #900）。iOS 分岐のみ（macOS は対応表で no）。
@@ -483,15 +481,6 @@ fn compile_ios_print() {
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_safe_area_insets.rs` が使う）。
 fn compile_ios_safe_area_insets() {
     compile_objc("ios/fandhe_ios_safe_area_insets.m", &["UIKit"]);
-}
-
-/// `ios/fandhe_ios_compass.m` を `cc` でコンパイルする（Issue #1405）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_compass.rs` が使う）。
-fn compile_ios_compass() {
-    compile_objc(
-        "ios/fandhe_ios_compass.m",
-        &["CoreLocation", "Foundation", "UIKit"],
-    );
 }
 
 /// `ios/fandhe_ios_environment_sensors.m` を `cc` でコンパイルする（Issue #610）。

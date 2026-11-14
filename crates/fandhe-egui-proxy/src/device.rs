@@ -44,10 +44,6 @@ pub mod android_background_upload;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_car_display;
-/// Issue #1404: Android 向け方位実装。`device/compass.rs` の android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_compass;
 /// Issue #1279: Android 向けディープリンク（App Links）受信（https の `ACTION_VIEW` を JNI で受ける）。
 /// `device/deep_link.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -280,9 +276,6 @@ pub mod biometric_auth;
 /// Phase 11 の拡充ループ（親 #152、Issue #1116）: 車載ディスプレイの effect ドライバ。
 /// Android は Car App Library 実装（#1117）、他 OS は `UnsupportedCarDisplay` 固定。
 pub mod car_display;
-/// Issue #1404（親 #1154）: 方位（コンパス）の effect ドライバ（Windows・iOS・Android 実装、
-/// 他 OS は `UnsupportedCompass` 固定。Web は `fandhe-web-dom`）。
-pub mod compass;
 /// Phase 11 の拡充ループ（親 #1117、Issue #1220・#1221・#1222）: 連絡先選択の effect ドライバ
 /// （macOS / iOS / Android は pull 型 `bridge`、他 OS は兄弟 issue が入るまで
 /// `UnsupportedContactPicker` 固定）。
@@ -337,10 +330,6 @@ pub mod ios_background_upload;
 /// Issue #557: iOS 向けバーコード・QR 読み取りの骨格（実装は #558）。
 #[cfg(target_os = "ios")]
 pub mod ios_barcode_scan;
-/// Issue #1405: iOS 向け方位実装（`ios/fandhe_ios_compass.m` を呼ぶ C ABI ラッパー、CoreLocation の heading）。`device/compass.rs` の ios 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_compass;
 /// Issue #609: iOS 向け気圧・照度・近接センサー実装。
 /// `device/environment_sensors.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -586,11 +575,6 @@ pub mod windows_background_task;
 /// Windows Hello ラッパー）。`device/biometric_auth.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_biometric;
-/// Issue #1404: Windows 向け方位実装（WinRT `Compass` の pull）。`device/compass.rs` の windows 経路から呼ばれる。
-/// 写像の純関数をホストでテストできるよう cfg は `any(windows, test)`。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_compass;
 /// Issue #609: Windows 向け気圧・照度・近接センサー実装。
 /// `device/environment_sensors.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]

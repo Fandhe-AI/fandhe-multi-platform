@@ -1,4 +1,4 @@
-//! Windows 向け方位実装（Issue #1404、親 #1154）。`device/compass.rs` の Windows 経路から
+//! Windows 向け方位実装（Issue #1404、親 #1154）。本 crate の `driver` の Windows 経路から
 //! UI スレッドで呼ばれ、WinRT `Windows.Devices.Sensors.Compass` の最新値を同期に pull する
 //! （`ReadingChanged` は購読しない。`Compass` トレイトを実装）。
 //!
@@ -24,7 +24,7 @@
 //! - 値は 2° 刻み。Connected Standby 中は null が返りうる（値なし扱い）
 //! - ローカルに MSVC が無く、型検査は `x86_64-pc-windows-gnu` のみ
 
-use fandhe_device::compass::{Accuracy, CompassFailure};
+use crate::contract::{Accuracy, CompassFailure};
 
 /// `E_ACCESSDENIED`（0x80070005）。権限拒否の写像に使う。
 const E_ACCESSDENIED: i32 = 0x8007_0005_u32 as i32;
@@ -66,7 +66,7 @@ mod imp {
     use windows::Devices::Sensors::Compass as WinCompass;
 
     use super::*;
-    use fandhe_device::compass::{normalize_heading, Compass, Heading};
+    use crate::contract::{Compass, Heading, normalize_heading};
 
     /// 保持している `Compass`（プロセスで 1 個）。
     pub(super) struct WindowsCompass {

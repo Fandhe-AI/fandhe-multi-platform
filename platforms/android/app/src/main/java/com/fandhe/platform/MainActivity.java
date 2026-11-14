@@ -334,21 +334,6 @@ public class MainActivity extends GameActivity {
         musicLibraryHelper.cancel(requestId);
     }
 
-    // 方位（Issue #1406）。実装は `CompassHelper`。Rust の `android_compass.rs` が同期 JNI で呼ぶ。
-    private final CompassHelper compassHelper = new CompassHelper(this);
-
-    int compassStart() {
-        return compassHelper.start();
-    }
-
-    long compassRead() {
-        return compassHelper.read();
-    }
-
-    void compassStop() {
-        compassHelper.stop();
-    }
-
     // 気圧・照度・近接（Issue #611）。実装は `EnvironmentSensorsHelper`。Rust の
     // `android_environment_sensors.rs` が同期 JNI で呼ぶ。
     private final EnvironmentSensorsHelper environmentSensorsHelper = new EnvironmentSensorsHelper(this);
@@ -1445,7 +1430,6 @@ public class MainActivity extends GameActivity {
         super.onResume();
         activityResumed = true;
         webAuthSessionHelper.onResume();
-        compassHelper.onResume();
         environmentSensorsHelper.onResume();
         motionRawSensorsHelper.onResume();
         localPeerHelper.onResume();
@@ -1525,7 +1509,6 @@ public class MainActivity extends GameActivity {
         webAuthSessionHelper.onPause();
         lanDiscoveryHelper.onPause();
         localPeerHelper.onPause();
-        compassHelper.onPause();
         environmentSensorsHelper.onPause();
         motionRawSensorsHelper.onPause();
         if (sensorManager != null) {
@@ -3136,7 +3119,6 @@ public class MainActivity extends GameActivity {
         lanDiscoveryHelper.onDestroy();
         localPeerHelper.onDestroy();
         musicLibraryHelper.onDestroy();
-        compassHelper.onDestroy();
         environmentSensorsHelper.onDestroy();
         motionRawSensorsHelper.onDestroy();
         pictureInPictureHelper.onDestroy();

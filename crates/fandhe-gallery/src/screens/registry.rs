@@ -396,7 +396,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "compass_show" => fandhe_core::screens::compass_show::current_screen,
-    fandhe_egui_proxy::device::compass::compass_show_effect,
+    fandhe_cap_compass_heading::compass_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "environment_sensors_show" => fandhe_core::screens::environment_sensors_show::current_screen,

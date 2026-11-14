@@ -1,7 +1,7 @@
 //! iOS 向け方位実装（Issue #1405、親 #1154）。`ios/fandhe_ios_compass.m`（CoreLocation の
 //! heading 購読、`build.rs` が iOS ターゲットの feature `device` 有効時にコンパイルする）を
 //! `unsafe extern "C"` 3 関数で呼ぶ。#1404 のスタブを置き換えたもので、dispatch
-//! （`device/compass.rs`）・共通コア画面・trait 契約（`fandhe_device::compass`）は変えない。
+//! （本 crate の `driver`）・共通コア画面・trait 契約（`crate::contract`）は変えない。
 //!
 //! `.m` は OS の生値と状態コードを返すだけで、範囲検査と契約値への写像は [`start_result`] /
 //! [`read_result`] / [`accuracy_from_degrees`] が行う（ホストでテストできるよう `cfg(any(ios, test))`）。
@@ -9,7 +9,7 @@
 //! # 再描画
 //!
 //! delegate が値・失敗を確定した直後に `.m` が `fandhe_rust_compass_changed` を呼び、
-//! `crate::ios::request_repaint` で次フレームを起こす（入力が無くても画面が止まらない。
+//! `fandhe_runtime::request_repaint` で次フレームを起こす（入力が無くても画面が止まらない。
 //! ドライバの 100 ms 予約とは別経路）。
 //!
 //! # 守る範囲・守らない範囲
@@ -24,7 +24,7 @@
 //!   3 秒期限で `NoReading` になる（嘘の値は出ない）。確認は #1403
 //! - シミュレータは `headingAvailable` が NO で常に `Unsupported`
 
-use fandhe_device::compass::{normalize_heading, Accuracy, CompassFailure, Heading};
+use crate::contract::{Accuracy, CompassFailure, Heading, normalize_heading};
 
 /// `.m` の start の戻り値を契約へ写す（0 成功 / 1 非対応 / 2 権限拒否 / 他 失敗）。
 fn start_result(code: i32) -> Result<(), CompassFailure> {
@@ -73,14 +73,14 @@ fn accuracy_from_degrees(a: f64) -> Accuracy {
 mod imp {
     use std::sync::Arc;
 
-    use fandhe_device::compass::{Compass, CompassFailure, Heading};
+    use crate::contract::{Compass, CompassFailure, Heading};
 
     use super::{read_result, start_result};
 
     // SAFETY: `ios/fandhe_ios_compass.m`（`build.rs` が iOS ターゲットの feature `device` 有効時に
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_ios_compass_start() -> i32;
         fn fandhe_ios_compass_read(degrees: *mut f64, accuracy: *mut f64) -> i32;
         fn fandhe_ios_compass_stop();
@@ -110,7 +110,7 @@ mod imp {
         }
     }
 
-    /// iOS の `Compass` 実装を返す（`device/compass.rs` の iOS 経路から呼ばれる）。
+    /// iOS の `Compass` 実装を返す（本 crate の `driver` の iOS 経路から呼ばれる）。
     pub(crate) fn implementation() -> Arc<dyn Compass> {
         Arc::new(IosCompass)
     }
@@ -123,26 +123,26 @@ pub(crate) use imp::implementation;
 /// しない（契約表 11）。panic しない。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_compass_changed() {
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }
 
 /// 背景遷移の通知（`.m` の `DidEnterBackground` から）。背景中は `NoReading` の待機を止める。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_compass_backgrounded() {
-    super::compass::note_backgrounded();
+    crate::note_backgrounded();
 }
 
 /// 前景復帰の通知（`.m` の `WillEnterForeground` から）。ドライバの待機起点を引き直させる。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_compass_resumed() {
-    super::compass::note_resumed();
-    crate::ios::request_repaint();
+    crate::note_resumed();
+    fandhe_runtime::request_repaint();
 }
 
 #[cfg(test)]

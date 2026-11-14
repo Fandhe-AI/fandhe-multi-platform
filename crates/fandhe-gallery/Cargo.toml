@@ -38,6 +38,7 @@ device = [
   "dep:fandhe-cap-clipboard",
   "dep:fandhe-cap-color-picker",
   "dep:fandhe-cap-companion-device",
+  "dep:fandhe-cap-compass-heading",
   "dep:fandhe-cap-compose-mail-sms",
   "dep:fandhe-cap-device-identifier",
   "dep:fandhe-cap-device-info",
@@ -197,6 +198,7 @@ fandhe-cap-capture-protection = { path = "../fandhe-cap-capture-protection", opt
 fandhe-cap-clipboard = { path = "../fandhe-cap-clipboard", optional = true }
 fandhe-cap-color-picker = { path = "../fandhe-cap-color-picker", optional = true }
 fandhe-cap-companion-device = { path = "../fandhe-cap-companion-device", optional = true }
+fandhe-cap-compass-heading = { path = "../fandhe-cap-compass-heading", optional = true }
 fandhe-cap-compose-mail-sms = { path = "../fandhe-cap-compose-mail-sms", optional = true }
 fandhe-cap-device-identifier = { path = "../fandhe-cap-device-identifier", optional = true }
 fandhe-cap-device-info = { path = "../fandhe-cap-device-info", optional = true }

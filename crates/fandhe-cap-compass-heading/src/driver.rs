@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #1154、Issue #1404）「方位（コンパス）」の effect ドライバ。
 //! `fandhe_core::screens::compass_show`（端末依存ゼロ）の `wanted` の立ち上がりで
-//! `fandhe_device::compass::Compass::start`、立ち下がりで `stop` を呼び、購読中は
+//! `crate::contract::Compass::start`、立ち下がりで `stop` を呼び、購読中は
 //! [`READ_INTERVAL`] ごとに `read` して結果を注入する（`registry.rs` の `effect` 区画から
 //! 毎フレーム同期に呼ばれる）。
 //!
@@ -20,36 +20,34 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use fandhe_core::screens::compass_show::{
-    apply_failure, apply_reading, AccuracyView, CompassFailureView, CompassShowState, CompassView,
-    HeadingView,
-};
 #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
-use fandhe_device::compass::UnsupportedCompass;
-use fandhe_device::compass::{
-    Accuracy, Compass, CompassFailure, Heading, WaitTracker, READ_INTERVAL,
+use crate::contract::UnsupportedCompass;
+use crate::contract::{Accuracy, Compass, CompassFailure, Heading, READ_INTERVAL, WaitTracker};
+use fandhe_core::screens::compass_show::{
+    AccuracyView, CompassFailureView, CompassShowState, CompassView, HeadingView, apply_failure,
+    apply_reading,
 };
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた実装を返す（プロセスで 1 個。購読を二重に作らないため
 /// `OnceLock` で保持する）。
-fn implementation() -> Arc<dyn Compass> {
+pub fn platform_compass_heading() -> Arc<dyn Compass> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn Compass>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "windows")]
             {
-                super::windows_compass::implementation()
+                crate::windows::implementation()
             }
             #[cfg(target_os = "ios")]
             {
-                super::ios_compass::implementation()
+                crate::ios::implementation()
             }
             #[cfg(target_os = "android")]
             {
-                super::android_compass::implementation()
+                crate::android::implementation()
             }
             #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
             {
@@ -245,7 +243,7 @@ pub fn compass_show_effect(state: &CompassShowState, sender: &CompletionSender<C
     drive(
         state,
         sender,
-        implementation().as_ref(),
+        platform_compass_heading().as_ref(),
         Instant::now(),
         RESUME_EPOCH.load(Ordering::SeqCst),
         ds,
@@ -255,17 +253,27 @@ pub fn compass_show_effect(state: &CompassShowState, sender: &CompletionSender<C
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+    use crate::contract::{NO_READING_TIMEOUT_MS, UnsupportedCompass as Unsupported};
     use fandhe_core::screens::compass_show::{heading_text, start, stop};
-    use fandhe_device::compass::{UnsupportedCompass as Unsupported, NO_READING_TIMEOUT_MS};
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex as StdMutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
-    type Rx = std::sync::mpsc::Receiver<crate::app::Completion<CompassShowState>>;
+    type Rx = std::sync::mpsc::Receiver<fandhe_runtime::Completion<CompassShowState>>;
 
     fn channel() -> (CompletionSender<CompassShowState>, Rx) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (
+            fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     fn apply_all(rx: &Rx, s: &mut CompassShowState) {

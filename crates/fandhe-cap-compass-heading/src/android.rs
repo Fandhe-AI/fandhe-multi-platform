@@ -1,5 +1,5 @@
-//! Android 向け方位実装（Issue #1406、親 #1154）。`device/compass.rs` の Android 経路から
-//! egui スレッドで呼ばれ、`MainActivity.compassStart` / `compassRead` / `compassStop` を
+//! Android 向け方位実装（Issue #1406、親 #1154）。本 crate の `driver` の Android 経路から
+//! egui スレッドで呼ばれ、`CompassHelper` の static `start` / `read` / `stop`（第 1 引数は Activity）を
 //! 同期 JNI で呼んで最新値を pull する（要求 id・`RequestSlot` は使わない）。Java 側は
 //! `CompassHelper`（`TYPE_ROTATION_VECTOR`、無ければ加速度 + 磁気を `getRotationMatrix` で合成）。
 //!
@@ -27,7 +27,7 @@
 
 use std::sync::Arc;
 
-use fandhe_device::compass::{normalize_heading, Accuracy, Compass, CompassFailure, Heading};
+use crate::contract::{Accuracy, Compass, CompassFailure, Heading, normalize_heading};
 
 const START_OK: i32 = 0;
 const START_UNSUPPORTED: i32 = 1;
@@ -83,36 +83,35 @@ fn decode_read(raw: i64) -> Result<Option<Heading>, CompassFailure> {
 #[cfg(target_os = "android")]
 struct AndroidCompass;
 
-/// `MainActivity` の同期メソッドを呼ぶ。Activity 未確立・JNI 失敗は `None`。
-/// 2 箇所の `unsafe` は `android_accessibility_prefs.rs::call_read` と同一の根拠。
+/// `CompassHelper` の static メソッドを呼ぶ。Activity 未確立・JNI 失敗は `None`。`unsafe` は共通層
+/// `fandhe_platform_android::with_activity_class` に閉じている。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
-fn call_activity<T>(
-    f: impl FnOnce(&mut jni::Env, &jni::objects::JObject) -> Result<T, super::android::JniCallFailed>,
+fn call_helper<T>(
+    f: impl FnOnce(
+        &mut jni::Env,
+        &jni::objects::JObject,
+        &jni::objects::JClass,
+    ) -> Result<T, fandhe_platform_android::JniCallFailed>,
 ) -> Option<T> {
-    let app = crate::android::android_app()?;
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        f(env, &activity)
-    })
+    let app = fandhe_platform_android::android_app()?;
+    fandhe_platform_android::with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.CompassHelper"),
+        f,
+    )
     .ok()
 }
 
 #[cfg(target_os = "android")]
 impl Compass for AndroidCompass {
     fn start(&self) -> Result<(), CompassFailure> {
-        let code = call_activity(|env, a| {
+        let code = call_helper(|env, a, class| {
             Ok(env
-                .call_method(
-                    a,
-                    jni::jni_str!("compassStart"),
-                    jni::jni_sig!(() -> int),
-                    &[],
+                .call_static_method(
+                    class,
+                    jni::jni_str!("start"),
+                    jni::jni_sig!((android.app.Activity) -> int),
+                    &[jni::objects::JValue::Object(a)],
                 )?
                 .i()?)
         })
@@ -121,13 +120,13 @@ impl Compass for AndroidCompass {
     }
 
     fn read(&self) -> Result<Option<Heading>, CompassFailure> {
-        let raw = call_activity(|env, a| {
+        let raw = call_helper(|env, a, class| {
             Ok(env
-                .call_method(
-                    a,
-                    jni::jni_str!("compassRead"),
-                    jni::jni_sig!(() -> long),
-                    &[],
+                .call_static_method(
+                    class,
+                    jni::jni_str!("read"),
+                    jni::jni_sig!((android.app.Activity) -> long),
+                    &[jni::objects::JValue::Object(a)],
                 )?
                 .j()?)
         })
@@ -136,19 +135,19 @@ impl Compass for AndroidCompass {
     }
 
     fn stop(&self) {
-        let _ = call_activity(|env, a| {
-            env.call_method(
-                a,
-                jni::jni_str!("compassStop"),
-                jni::jni_sig!(() -> ()),
-                &[],
+        let _ = call_helper(|env, a, class| {
+            env.call_static_method(
+                class,
+                jni::jni_str!("stop"),
+                jni::jni_sig!((android.app.Activity) -> ()),
+                &[jni::objects::JValue::Object(a)],
             )?;
             Ok(())
         });
     }
 }
 
-/// Android の `Compass` 実装を返す（`device/compass.rs` の dispatch から呼ばれる）。
+/// Android の `Compass` 実装を返す（本 crate の `driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn Compass> {
     Arc::new(AndroidCompass)
@@ -158,7 +157,7 @@ pub(crate) fn implementation() -> Arc<dyn Compass> {
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 pub(crate) fn implementation() -> Arc<dyn Compass> {
-    Arc::new(fandhe_device::compass::UnsupportedCompass)
+    Arc::new(crate::contract::UnsupportedCompass)
 }
 
 #[cfg(test)]

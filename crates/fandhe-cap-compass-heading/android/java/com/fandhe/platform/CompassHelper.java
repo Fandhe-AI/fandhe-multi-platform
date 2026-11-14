@@ -1,5 +1,9 @@
 package com.fandhe.platform;
 
+import java.util.WeakHashMap;
+import java.util.Map;
+import java.util.Collections;
+import android.app.Activity;
 import android.content.Context;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -7,9 +11,10 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.SystemClock;
 
-// 方位（コンパス）画面（Issue #1406、親 #1154）の Android 実装ヘルパー。MainActivity から
-// 生成・委譲される（Rust の `device/android_compass.rs` が egui スレッドから
-// `MainActivity.compassStart` / `compassRead` / `compassStop` を同期 JNI で呼ぶ）。
+// 方位（コンパス）画面（Issue #1406、親 #1154）の Android 実装ヘルパー。Activity ごとに 1 つ、`CompassLifecycle`
+// （`FeatureLifecycleProvider` 継承）が `attach` で生成して `HELPERS` に持つ（Rust の `fandhe-cap-compass-heading`
+// （`src/android.rs`）が egui スレッドから static の `start` / `read` / `stop`（第 1 引数は Activity）を同期 JNI で呼ぶ）。
+// helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、`start` は失敗・`read` は購読喪失（READ_LOST）で確定する。
 //
 // 戻り値のコード・ビット配置の SSOT はここで、Rust 側 `android_compass.rs` が同じ値で解釈する。
 //   compassStart: 0=OK / 1=センサー無し / 2=登録失敗・破棄済み
@@ -48,8 +53,61 @@ final class CompassHelper {
     private long packed;        // 最新値（0=なし）
     private long receivedAt;    // elapsedRealtime（単調時計）
 
-    CompassHelper(Context context) {
-        this.context = context;
+    // Activity ごとの helper（上記クラス冒頭コメント参照）。
+    private static final Map<Activity, CompassHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    // Activity の生成時（`CompassLifecycle` から、UI スレッド）。
+    static void attach(Activity activity) {
+        HELPERS.put(activity, new CompassHelper(activity));
+    }
+
+    // Activity の破棄時（同上）。再生成を含む。保持している資源を解放し、保留中の要求を捨てる。
+    static void detach(Activity activity) {
+        CompassHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // `CompassLifecycle` から（UI スレッド）。helper が無ければ何もしない。
+    static void resumed(Activity activity) {
+        CompassHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onResume();
+        }
+    }
+
+    // `CompassLifecycle` から（UI スレッド）。helper が無ければ何もしない。
+    static void paused(Activity activity) {
+        CompassHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onPause();
+        }
+    }
+
+    // Rust から呼ぶ入口。helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、失敗で確定する。
+    static int start(Activity activity) {
+        CompassHelper helper = HELPERS.get(activity);
+        return helper == null ? START_FAILED : helper.start();
+    }
+
+    // Rust から呼ぶ入口。helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、失敗で確定する。
+    static long read(Activity activity) {
+        CompassHelper helper = HELPERS.get(activity);
+        return helper == null ? READ_LOST : helper.read();
+    }
+
+    // Rust から呼ぶ入口。helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、失敗で確定する。
+    static void stop(Activity activity) {
+        CompassHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.stop();
+        }
+    }
+
+    private CompassHelper(Activity activity) {
+        this.context = activity;
     }
 
     int start() {
