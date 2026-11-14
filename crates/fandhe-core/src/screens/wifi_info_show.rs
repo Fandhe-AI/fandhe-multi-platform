@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod wifi_info_show;` と対）。自分からのスキャン・BSSID は扱わない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
-//! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-egui-proxy` の `device/wifi_info.rs` が
+//! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-cap-wifi-info` の `driver.rs` が
 //! [`take_request`] で要求を観測し [`finish_read`] で結果を注入する（`music_library_list.rs` と同型）。
 //!
 //! 全対象 OS（macOS / Windows / Android）の文言・状態をここで確定済みで、後続の OS 実装は本画面を

@@ -6,7 +6,7 @@
 //! （`screens/mod.rs` の `pub mod capture_protection_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない。時刻も持たず、読み取り間隔は effect 側が測る）。
-//! OS 呼び出しは本モジュール外（`fandhe-egui-proxy` の `device/capture_protection.rs`）が
+//! OS 呼び出しは本モジュール外（`fandhe-cap-capture-protection` の `driver.rs`）が
 //! [`take_request`] で状態を観測し、[`finish`] / [`apply_read`] で結果を注入する
 //! （`wake_lock_toggle.rs` と同型）。全 OS 分の状態・文言（「検知のみ」「防止のみ」「非対応」を含む）は
 //! 本モジュールで定義済みで、後続の iOS・Android は OS 別モジュールだけを埋める。

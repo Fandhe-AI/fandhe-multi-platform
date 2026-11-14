@@ -4,7 +4,7 @@
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod flashlight_toggle;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない。時刻も持たず、期限は effect 側が測る）。
-//! OS 呼び出しは本モジュール外（`fandhe-egui-proxy` の `device/flashlight.rs`、Web は
+//! OS 呼び出しは本モジュール外（`fandhe-cap-flashlight` の `driver.rs`、Web は
 //! `fandhe-web-dom`）が [`take_request`] / [`confirm_target`] で状態を観測し、[`finish`] /
 //! [`apply_read`] で結果を注入する（`wake_lock_toggle.rs` と同型）。
 //!
