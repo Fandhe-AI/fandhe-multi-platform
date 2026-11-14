@@ -1,5 +1,5 @@
 //! iOS 向け画面キャプチャの検知実装（Issue #583、親 #120）。
-//! `device/capture_protection.rs` の iOS 経路が `implementation()` を呼ぶ（dispatch・共通コア画面・
+//! `driver` の iOS 経路が `implementation()` を呼ぶ（dispatch・共通コア画面・
 //! 文言は #582 で確定済みで触らない）。
 //!
 //! iOS に防止の公式 API は無い。録画・ミラーリングは `ios/fandhe_ios_capture_protection.m` が
@@ -15,7 +15,7 @@
 //!
 //! # 再描画（契約表 4）
 //!
-//! スクショ通知は回数を先に確定してから `crate::ios::request_repaint` を呼ぶ。録画は OS コールバックが
+//! スクショ通知は回数を先に確定してから `fandhe_runtime::request_repaint` を呼ぶ。録画は OS コールバックが
 //! 共有状態へ入れる経路が無く、ドライバの `READ_INTERVAL` ごとの pull で追いつく。
 //!
 //! # 守る範囲 / 守らない範囲
@@ -29,14 +29,14 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 #[cfg(target_os = "ios")]
-use std::sync::atomic::AtomicBool;
-#[cfg(target_os = "ios")]
 use std::sync::Arc;
-
-use fandhe_device::capture_protection::CaptureSupport;
 #[cfg(target_os = "ios")]
-use fandhe_device::capture_protection::{CaptureObservation, CaptureProtection};
-use fandhe_device::DeviceError;
+use std::sync::atomic::AtomicBool;
+
+use crate::contract::CaptureSupport;
+#[cfg(target_os = "ios")]
+use crate::contract::{CaptureObservation, CaptureProtection};
+use crate::error::CaptureProtectionError;
 
 /// iOS の対応範囲。防止は公式 API が無いため false。
 #[cfg_attr(not(any(target_os = "ios", test)), allow(dead_code))]
@@ -71,8 +71,8 @@ fn bump(counter: &AtomicU64) {
 }
 
 /// 防止は iOS では常に未対応（on / off とも嘘の成功にしない）。
-fn set_protected_result() -> Result<(), DeviceError> {
-    Err(DeviceError::Unsupported("capture-protection"))
+fn set_protected_result() -> Result<(), CaptureProtectionError> {
+    Err(CaptureProtectionError::Unsupported)
 }
 
 // `ios/fandhe_ios_capture_protection.m` が定義する C ABI。契約は `.m` 冒頭コメントに集約する。
@@ -96,7 +96,7 @@ impl CaptureProtection for IosCaptureProtection {
         IOS_SUPPORT
     }
 
-    fn set_protected(&self, _on: bool) -> Result<(), DeviceError> {
+    fn set_protected(&self, _on: bool) -> Result<(), CaptureProtectionError> {
         set_protected_result()
     }
 
@@ -135,10 +135,10 @@ pub(crate) fn implementation() -> Arc<dyn CaptureProtection> {
 /// 再描画を起こす。引数なし・ポインタなしで panic しない。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_capture_protection_screenshot_taken() {
     bump(&SCREENSHOT_COUNT);
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }
 
 #[cfg(test)]
@@ -179,7 +179,7 @@ mod tests {
         const _: () = assert!(IOS_SUPPORT.detect_screenshot);
         assert!(matches!(
             set_protected_result(),
-            Err(DeviceError::Unsupported(_))
+            Err(CaptureProtectionError::Unsupported)
         ));
     }
 }

@@ -43,8 +43,6 @@ pub mod bluetooth_classic;
 pub mod bluetooth_le;
 /// Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得（ズーム操作を含む）。
 pub mod camera_preview_stream;
-/// Phase 11（端末機能の拡充ループ、親 #120、Issue #582）: 画面キャプチャの防止・検知。
-pub mod capture_protection;
 /// Phase 11（端末機能の拡充ループ、親 #152、Issue #1116）: 車載ディスプレイの 1 行テキスト。
 pub mod car_display;
 /// Phase 11（端末機能の拡充ループ、親 #1154、Issue #1404）: 方位（コンパス）。

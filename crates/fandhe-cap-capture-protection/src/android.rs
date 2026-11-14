@@ -1,15 +1,15 @@
 //! Android 向け画面キャプチャの防止・検知実装（Issue #584、親 #120）。
-//! `device/capture_protection.rs` の Android 経路から呼ばれ、`FLAG_SECURE` の付け外しと、
+//! `driver` の Android 経路から呼ばれ、`FLAG_SECURE` の付け外しと、
 //! スクリーンショット（API 34+）・録画（API 35+）の検知結果を読む。Java 側の SSOT は
 //! `CaptureProtectionHelper`（結果コード・状態値・対応ビット・UI スレッドへの橋渡し）。
 //!
-//! JNI（`MainActivity` の窓口）は pull 型だけで、Java から Rust への push は無い。
-//! 署名は Java 側・本ファイルの実体・非 Android の no-op スタブの 3 か所でそろえる。
-//! - `captureProtectionSet(boolean) -> int`: UI スレッドで適用し最長 1 秒待つ。
-//! - `captureProtectionIsProtected() -> int`: 読み戻した値。`-1` は読めない。
-//! - `captureProtectionSupport() -> int`: 対応ビット。
-//! - `captureProtectionRecording() -> int`: `-1` 読めない / `0` / `1`。
-//! - `captureProtectionScreenshotCount() -> long`: `-1` 読めない / 回数。
+//! JNI（`CaptureProtectionHelper` の static の入口、第 1 引数は Activity）は pull 型だけで、Java から Rust への push は無い。
+//! 署名は Java 側と本ファイルの実体の 2 か所でそろえる（native を持たないため no-op スタブは置かない）。
+//! - `set(Activity, boolean) -> int`: UI スレッドで適用し最長 1 秒待つ。helper が無ければ失敗。
+//! - `isProtected(Activity) -> int`: 読み戻した値。`-1` は読めない。
+//! - `support(Activity) -> int`: 対応ビット。helper が無ければ 0。
+//! - `recording(Activity) -> int`: `-1` 読めない / `0` / `1`。
+//! - `screenshotCount(Activity) -> long`: `-1` 読めない / 回数。
 //!
 //! 期限: 待ちは Java 側で最長 1 秒（GameActivity の `onPause` との相互待ちを避ける）。期限切れは
 //! `Internal`（失敗表示）で、期限後に遅れて適用されることはない。
@@ -24,9 +24,9 @@
 use std::sync::Arc;
 
 #[cfg(target_os = "android")]
-use fandhe_device::capture_protection::CaptureObservation;
-use fandhe_device::capture_protection::{CaptureProtection, CaptureSupport};
-use fandhe_device::DeviceError;
+use crate::contract::CaptureObservation;
+use crate::contract::{CaptureProtection, CaptureSupport};
+use crate::error::CaptureProtectionError;
 
 /// 結果コード（SSOT は Java 側 `CaptureProtectionHelper.RESULT_*`）。0 以外はすべて失敗。
 const RESULT_OK: i32 = 0;
@@ -42,11 +42,11 @@ const SUPPORT_SCREENSHOT: i32 = 4;
 
 /// 結果コードを契約の結果へ写す純関数。0 以外と未知の値はすべて `Internal`。
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
-fn decode_set(code: i32) -> Result<(), DeviceError> {
+fn decode_set(code: i32) -> Result<(), CaptureProtectionError> {
     if code == RESULT_OK {
         Ok(())
     } else {
-        Err(DeviceError::Internal("capture-protection"))
+        Err(CaptureProtectionError::Internal("capture-protection"))
     }
 }
 
@@ -79,7 +79,7 @@ fn decode_support(bits: i32) -> CaptureSupport {
 #[cfg(target_os = "android")]
 struct AndroidCaptureProtection;
 
-/// 呼び出す `MainActivity` の窓口。
+/// 呼び出す `CaptureProtectionHelper` の static の入口。
 #[cfg(target_os = "android")]
 enum Call {
     Set(bool),
@@ -89,68 +89,66 @@ enum Call {
     ScreenshotCount,
 }
 
-/// `MainActivity.captureProtection*` を JNI で呼び、結果を `i64` で返す（`int` は拡張、
-/// `long` はそのまま）。`None` は呼び出し失敗。
-/// `unsafe` 2 箇所は `android_screen_wake_lock.rs::call_activity` と同一の根拠。
+/// `CaptureProtectionHelper` の static メソッド（第 1 引数は Activity）を JNI で呼び、結果を `i64` で返す
+/// （`int` は拡張、`long` はそのまま）。`None` は呼び出し失敗。JavaVM と Activity の取得は
+/// `fandhe_platform_android::with_activity_class` に任せ、ここは `unsafe` を持たない。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
 fn call_activity(call: Call) -> Option<i64> {
-    use super::android::JniCallFailed;
-    let app = crate::android::android_app()?;
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| -> Result<i64, JniCallFailed> {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        match call {
-            Call::Set(on) => Ok(i64::from(
-                env.call_method(
-                    &activity,
-                    jni::jni_str!("captureProtectionSet"),
-                    jni::jni_sig!((boolean) -> int),
-                    &[jni::objects::JValue::Bool(on)],
-                )?
-                .i()?,
-            )),
-            Call::IsProtected => Ok(i64::from(
-                env.call_method(
-                    &activity,
-                    jni::jni_str!("captureProtectionIsProtected"),
-                    jni::jni_sig!(() -> int),
-                    &[],
-                )?
-                .i()?,
-            )),
-            Call::Support => Ok(i64::from(
-                env.call_method(
-                    &activity,
-                    jni::jni_str!("captureProtectionSupport"),
-                    jni::jni_sig!(() -> int),
-                    &[],
-                )?
-                .i()?,
-            )),
-            Call::Recording => Ok(i64::from(
-                env.call_method(
-                    &activity,
-                    jni::jni_str!("captureProtectionRecording"),
-                    jni::jni_sig!(() -> int),
-                    &[],
-                )?
-                .i()?,
-            )),
-            Call::ScreenshotCount => Ok(env
-                .call_method(
-                    &activity,
-                    jni::jni_str!("captureProtectionScreenshotCount"),
-                    jni::jni_sig!(() -> long),
-                    &[],
-                )?
-                .j()?),
-        }
-    })
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+    use jni::objects::JValue;
+    let app = android_app()?;
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.CaptureProtectionHelper"),
+        |env, activity, class| -> Result<i64, JniCallFailed> {
+            match call {
+                Call::Set(on) => Ok(i64::from(
+                    env.call_static_method(
+                        class,
+                        jni::jni_str!("set"),
+                        jni::jni_sig!((android.app.Activity, boolean) -> int),
+                        &[JValue::Object(activity), JValue::Bool(on)],
+                    )?
+                    .i()?,
+                )),
+                Call::IsProtected => Ok(i64::from(
+                    env.call_static_method(
+                        class,
+                        jni::jni_str!("isProtected"),
+                        jni::jni_sig!((android.app.Activity) -> int),
+                        &[JValue::Object(activity)],
+                    )?
+                    .i()?,
+                )),
+                Call::Support => Ok(i64::from(
+                    env.call_static_method(
+                        class,
+                        jni::jni_str!("support"),
+                        jni::jni_sig!((android.app.Activity) -> int),
+                        &[JValue::Object(activity)],
+                    )?
+                    .i()?,
+                )),
+                Call::Recording => Ok(i64::from(
+                    env.call_static_method(
+                        class,
+                        jni::jni_str!("recording"),
+                        jni::jni_sig!((android.app.Activity) -> int),
+                        &[JValue::Object(activity)],
+                    )?
+                    .i()?,
+                )),
+                Call::ScreenshotCount => Ok(env
+                    .call_static_method(
+                        class,
+                        jni::jni_str!("screenshotCount"),
+                        jni::jni_sig!((android.app.Activity) -> long),
+                        &[JValue::Object(activity)],
+                    )?
+                    .j()?),
+            }
+        },
+    )
     .ok()
 }
 
@@ -169,10 +167,10 @@ impl CaptureProtection for AndroidCaptureProtection {
             .unwrap_or_default()
     }
 
-    fn set_protected(&self, on: bool) -> Result<(), DeviceError> {
+    fn set_protected(&self, on: bool) -> Result<(), CaptureProtectionError> {
         match call_int(Call::Set(on)) {
             Some(code) => decode_set(code),
-            None => Err(DeviceError::Internal("capture-protection")),
+            None => Err(CaptureProtectionError::Internal("capture-protection")),
         }
     }
 
@@ -188,7 +186,7 @@ impl CaptureProtection for AndroidCaptureProtection {
     }
 }
 
-/// Android の `CaptureProtection` 実装を返す（`device/capture_protection.rs` の dispatch から呼ばれる）。
+/// Android の `CaptureProtection` 実装を返す（`driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn CaptureProtection> {
     Arc::new(AndroidCaptureProtection)
@@ -199,7 +197,7 @@ pub(crate) fn implementation() -> Arc<dyn CaptureProtection> {
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 pub(crate) fn implementation() -> Arc<dyn CaptureProtection> {
-    Arc::new(fandhe_device::capture_protection::UnsupportedCaptureProtection)
+    Arc::new(crate::contract::UnsupportedCaptureProtection)
 }
 
 #[cfg(test)]
@@ -210,7 +208,10 @@ mod tests {
     fn decode_set_ok_only_for_zero() {
         assert!(decode_set(RESULT_OK).is_ok());
         for c in [RESULT_TIMEOUT, RESULT_FAILED, -1, 99] {
-            assert!(matches!(decode_set(c), Err(DeviceError::Internal(_))));
+            assert!(matches!(
+                decode_set(c),
+                Err(CaptureProtectionError::Internal(_))
+            ));
         }
     }
 
@@ -258,7 +259,7 @@ mod tests {
         let p = implementation();
         assert!(matches!(
             p.set_protected(true),
-            Err(DeviceError::Unsupported(_))
+            Err(CaptureProtectionError::Unsupported)
         ));
         assert_eq!(p.is_protected(), None);
     }

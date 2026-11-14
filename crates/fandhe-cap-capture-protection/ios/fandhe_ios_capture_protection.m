@@ -1,6 +1,6 @@
 // 画面キャプチャの検知: iOS 実装（Issue #583）。録画・ミラーリングの状態を読み、スクリーンショット通知を数える。
 //
-// `src/device/ios_capture_protection.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐で
+// `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐で
 // `cc` コンパイルする（UIKit / Foundation はリンク済み）。iOS に防止の公式 API は無く、防止は実装しない。
 //
 // 契約:

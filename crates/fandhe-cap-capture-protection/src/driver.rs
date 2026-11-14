@@ -1,10 +1,10 @@
 //! Phase 11（親 #120）型サンプル「画面キャプチャの防止・検知」（Issue #582）の effect ドライバ。
 //! `fandhe_core::screens::capture_protection_show`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::capture_protection::CaptureProtection` で防止を掛ける / 外し、直後に
+//! `crate::contract::CaptureProtection` で防止を掛ける / 外し、直後に
 //! [`CaptureProtection::is_protected`] で実際の状態を読み戻して `CompletionSender` 経由で返す。
 //! 要求がないときは [`READ_INTERVAL`] ごとの間隔付き pull で保護状態・録画・スクショ回数を更新する
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約（エラー種別・守る範囲）の SSOT は `fandhe_device::capture_protection`。
+//! 契約（エラー種別・守る範囲）の SSOT は `crate::contract`。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。
 //!
@@ -23,34 +23,34 @@
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use fandhe_core::screens::capture_protection_show::{
-    apply_read, finish, mark_applying, take_request, CaptureFailure, CaptureProtectionShowState,
-    ReadView, SupportView,
-};
 #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
-use fandhe_device::capture_protection::UnsupportedCaptureProtection;
-use fandhe_device::capture_protection::{CaptureProtection, READ_INTERVAL};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedCaptureProtection;
+use crate::contract::{CaptureProtection, READ_INTERVAL};
+use crate::error::CaptureProtectionError;
+use fandhe_core::screens::capture_protection_show::{
+    CaptureFailure, CaptureProtectionShowState, ReadView, SupportView, apply_read, finish,
+    mark_applying, take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `CaptureProtection` 実装を返す（プロセスで 1 個）。
-fn implementation() -> Arc<dyn CaptureProtection> {
+pub fn platform_capture_protection() -> Arc<dyn CaptureProtection> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn CaptureProtection>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "windows")]
             {
-                super::windows_capture_protection::implementation()
+                crate::windows::implementation()
             }
             #[cfg(target_os = "ios")]
             {
-                super::ios_capture_protection::implementation()
+                crate::ios::implementation()
             }
             #[cfg(target_os = "android")]
             {
-                super::android_capture_protection::implementation()
+                crate::android::implementation()
             }
             #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
             {
@@ -60,12 +60,12 @@ fn implementation() -> Arc<dyn CaptureProtection> {
         .clone()
 }
 
-/// `DeviceError` を画面の失敗種別へ写す。`Unsupported` 以外は固定文言へ畳み、OS のエラーコードを
+/// `CaptureProtectionError` を画面の失敗種別へ写す。`Unsupported` 以外は固定文言へ畳み、OS のエラーコードを
 /// 画面・ログへ出さない（security.md A09）。`PermissionDenied` / `Cancelled` は契約上返らないが、
 /// 返ってきても成功表示にはしない。
-fn to_failure(e: DeviceError) -> CaptureFailure {
+fn to_failure(e: CaptureProtectionError) -> CaptureFailure {
     match e {
-        DeviceError::Unsupported(_) => CaptureFailure::Unsupported,
+        CaptureProtectionError::Unsupported => CaptureFailure::Unsupported,
         _ => CaptureFailure::Failed("OS の呼び出しに失敗しました".to_string()),
     }
 }
@@ -169,7 +169,7 @@ pub fn capture_protection_show_effect(
     drive(
         state,
         sender,
-        implementation().as_ref(),
+        platform_capture_protection().as_ref(),
         Instant::now(),
         &mut timing,
     );
@@ -178,28 +178,34 @@ pub fn capture_protection_show_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::capture_protection_show::{
-        protection_text, turn_off, turn_on, CapturePhase, FAILED_PREFIX,
-        PREVENT_UNSUPPORTED_STATUS, PROTECTED_STATUS, UNPROTECTED_STATUS,
-    };
-    use fandhe_device::capture_protection::{
+    use crate::contract::{
         CaptureObservation, CaptureSupport, UnsupportedCaptureProtection as Unsupported,
+    };
+    use fandhe_core::screens::capture_protection_show::{
+        CapturePhase, FAILED_PREFIX, PREVENT_UNSUPPORTED_STATUS, PROTECTED_STATUS,
+        UNPROTECTED_STATUS, protection_text, turn_off, turn_on,
     };
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::Duration;
 
-    type Rx = std::sync::mpsc::Receiver<crate::app::Completion<CaptureProtectionShowState>>;
+    type Rx = std::sync::mpsc::Receiver<fandhe_runtime::Completion<CaptureProtectionShowState>>;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
 
     fn sender_with_channel() -> (CompletionSender<CaptureProtectionShowState>, Rx) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     /// 成功なら保護状態を要求どおりに更新し、失敗なら変えない Fake。
     struct Fake {
         protected: AtomicBool,
-        fail: Option<fn() -> DeviceError>,
+        fail: Option<fn() -> CaptureProtectionError>,
         /// `Ok` を返すのに状態を変えない（嘘の成功の再現）。
         ignore: bool,
         /// 読み戻しが常に `None`。
@@ -215,7 +221,7 @@ mod tests {
                 detect_screenshot: false,
             }
         }
-        fn set_protected(&self, on: bool) -> Result<(), DeviceError> {
+        fn set_protected(&self, on: bool) -> Result<(), CaptureProtectionError> {
             if let Some(f) = self.fail {
                 return Err(f());
             }
@@ -233,7 +239,11 @@ mod tests {
         }
     }
 
-    fn fake(fail: Option<fn() -> DeviceError>, ignore: bool, unreadable: bool) -> Arc<Fake> {
+    fn fake(
+        fail: Option<fn() -> CaptureProtectionError>,
+        ignore: bool,
+        unreadable: bool,
+    ) -> Arc<Fake> {
         Arc::new(Fake {
             protected: AtomicBool::new(false),
             fail,
@@ -335,10 +345,10 @@ mod tests {
 
     #[test]
     fn every_error_kind_is_failure_not_success() {
-        let kinds: [fn() -> DeviceError; 3] = [
-            || DeviceError::Internal("capture-protection"),
-            || DeviceError::PermissionDenied("capture-protection"),
-            || DeviceError::Cancelled("capture-protection"),
+        let kinds: [fn() -> CaptureProtectionError; 3] = [
+            || CaptureProtectionError::Internal("capture-protection"),
+            || CaptureProtectionError::PermissionDenied,
+            || CaptureProtectionError::Cancelled,
         ];
         for kind in kinds {
             let mut state = CaptureProtectionShowState::default();
@@ -374,8 +384,8 @@ mod tests {
     #[test]
     fn unsupported_os_implementation_is_unsupported() {
         assert!(matches!(
-            implementation().set_protected(true),
-            Err(DeviceError::Unsupported(_))
+            platform_capture_protection().set_protected(true),
+            Err(CaptureProtectionError::Unsupported)
         ));
     }
 

@@ -161,8 +161,6 @@ fn build() {
     compile_ios_web_auth_session();
     // `ios/fandhe_ios_in_app_browser.m`（Issue #702）。iOS 分岐のみ。SafariServices をリンクする。
     compile_ios_in_app_browser();
-    // `ios/fandhe_ios_capture_protection.m`（Issue #583）。iOS 分岐のみ（macOS は対応表で no）。
-    compile_ios_capture_protection();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
     compile_apple_network_status();
     // `apple/fandhe_apple_media_playback.m`（Issue #267）。macOS と iOS（親 #86 の b-ios）で共用する。
@@ -472,15 +470,6 @@ fn compile_apple_now_playing() {
         } else {
             &["Foundation", "MediaPlayer"]
         },
-    );
-}
-
-/// `ios/fandhe_ios_capture_protection.m` を `cc` でコンパイルする（Issue #583）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_capture_protection.rs` が使う）。
-fn compile_ios_capture_protection() {
-    compile_objc(
-        "ios/fandhe_ios_capture_protection.m",
-        &["Foundation", "UIKit"],
     );
 }
 

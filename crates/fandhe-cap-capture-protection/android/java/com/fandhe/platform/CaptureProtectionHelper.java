@@ -7,16 +7,21 @@ import android.os.Build;
 import android.view.Window;
 import android.view.WindowManager;
 
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
-// 画面キャプチャの防止・検知（Issue #584、親 #120）の Android 実装ヘルパー。MainActivity から
-// 生成・委譲され、Rust の `device/android_capture_protection.rs` が egui スレッドから
-// `MainActivity.captureProtection*` を JNI で呼ぶ（`device/capture_protection.rs` のドライバが
-// 要求の直後と 1 秒間隔で読み戻す pull 型。Java から Rust への push は作らない）。
+// 画面キャプチャの防止・検知（Issue #584、親 #120）の Android 実装ヘルパー。利用者の Activity には何も書かせない
+// （Rust の `fandhe-cap-capture-protection/src/android.rs` が egui スレッドから static の `set(Activity, boolean)` などを
+// JNI で呼ぶ。`driver` が要求の直後と 1 秒間隔で読み戻す pull 型で、Java から Rust への push は作らない）。
+// Activity の生成・破棄・Started / Stopped は `CaptureProtectionLifecycle`（非公開 ContentProvider、
+// `FeatureLifecycleProvider` 継承）が知らせる。Activity ごとの helper は `HELPERS` に持つ。helper が無い（生成前・破棄後）
+// 要求は成功にも待ちにもせず、失敗（RESULT_FAILED）・「読めない」（STATE_UNKNOWN）・「何も対応しない」（0）で確定する。
 //
 // 防止: `FLAG_SECURE` を Window に付け外しする（全 API レベル。最近使ったアプリの画面にも効く）。
 // `Window.addFlags/clearFlags` は UI スレッド限定なので、`set` は `runOnUiThread` へ渡して最長
@@ -44,7 +49,7 @@ import java.util.function.Consumer;
 // スクショ通知が届くかは OS 依存（実機確認 #575 で記録）、プロセス終了後は要求を持ち越さない、
 // 外部カメラでの撮影、`FLAG_SECURE` を掛ける前に始まっていた録画。
 final class CaptureProtectionHelper {
-    // 結果コード。SSOT はここで、Rust 側 `android_capture_protection.rs` が同じ値で写像する。
+    // 結果コード。SSOT はここで、Rust 側 `android.rs` が同じ値で写像する。
     static final int RESULT_OK = 0;
     static final int RESULT_TIMEOUT = 1;
     static final int RESULT_FAILED = 2;
@@ -71,6 +76,10 @@ final class CaptureProtectionHelper {
     // スクリーンショットの検知回数。プロセス内で単調増加。
     private static final AtomicLong SCREENSHOT_COUNT = new AtomicLong();
 
+    // Activity ごとの helper。Rust のワーカーと UI スレッドの両方から触るので同期化し、Activity が GC されれば項目も消える。
+    private static final Map<Activity, CaptureProtectionHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     private static final class Call {
         final AtomicInteger state = new AtomicInteger(PENDING);
         final CountDownLatch finished = new CountDownLatch(1);
@@ -87,15 +96,72 @@ final class CaptureProtectionHelper {
     private Object screenshotCallback;
     private boolean screenshotRegistered;
 
-    CaptureProtectionHelper(Activity activity) {
+    private CaptureProtectionHelper(Activity activity) {
         this.activity = activity;
+    }
+
+    // Activity の生成時（`CaptureProtectionLifecycle` から、UI スレッド）。生成と同時に要求値を掛け直す
+    // （最初のフレームと Recents のサムネイルより前。従来の `MainActivity.onCreate` の `super.onCreate` 直後と同じ時点）。
+    static void attach(Activity activity) {
+        CaptureProtectionHelper helper = new CaptureProtectionHelper(activity);
+        HELPERS.put(activity, helper);
+        helper.onCreate();
+    }
+
+    // Activity の破棄時（同上）。旧要求は以後 Window に触れない。
+    static void detach(Activity activity) {
+        CaptureProtectionHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // Rust から呼ぶ入口。helper が無い要求は失敗・「読めない」で確定する。
+    static int set(Activity activity, boolean on) {
+        CaptureProtectionHelper helper = HELPERS.get(activity);
+        return helper == null ? RESULT_FAILED : helper.set(on);
+    }
+
+    static int isProtected(Activity activity) {
+        CaptureProtectionHelper helper = HELPERS.get(activity);
+        return helper == null ? STATE_UNKNOWN : helper.isProtected();
+    }
+
+    static int support(Activity activity) {
+        CaptureProtectionHelper helper = HELPERS.get(activity);
+        return helper == null ? 0 : helper.support();
+    }
+
+    static int recording(Activity activity) {
+        CaptureProtectionHelper helper = HELPERS.get(activity);
+        return helper == null ? STATE_UNKNOWN : helper.recording();
+    }
+
+    static long screenshotCount(Activity activity) {
+        CaptureProtectionHelper helper = HELPERS.get(activity);
+        return helper == null ? -1L : helper.screenshotCount();
+    }
+
+    // `CaptureProtectionLifecycle` から（UI スレッド）。helper が無ければ何もしない。
+    static void started(Activity activity) {
+        CaptureProtectionHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onStart();
+        }
+    }
+
+    static void stopped(Activity activity) {
+        CaptureProtectionHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onStop();
+        }
     }
 
     // ---- 防止 ----
 
     // egui スレッドから呼ぶ。UI スレッドで適用し、結果コードを返す。
     // RESULT_TIMEOUT は「未開始のまま放棄できた」ときだけで、以後 UI 側は Window に触れない。
-    int set(final boolean on) {
+    private int set(final boolean on) {
         final Call call = new Call();
         activity.runOnUiThread(new Runnable() {
             @Override
@@ -188,7 +254,7 @@ final class CaptureProtectionHelper {
     }
 
     // UI スレッドで読み戻してキャッシュした値。
-    int isProtected() {
+    private int isProtected() {
         synchronized (LOCK) {
             return protectedState;
         }
@@ -196,7 +262,7 @@ final class CaptureProtectionHelper {
 
     // ---- 対応状況・検知 ----
 
-    int support() {
+    private int support() {
         int bits = SUPPORT_PREVENT;
         if (screenshotUsable()) {
             bits |= SUPPORT_SCREENSHOT;
@@ -207,13 +273,13 @@ final class CaptureProtectionHelper {
         return bits;
     }
 
-    int recording() {
+    private int recording() {
         synchronized (LOCK) {
             return recordingState;
         }
     }
 
-    long screenshotCount() {
+    private long screenshotCount() {
         synchronized (LOCK) {
             return screenshotRegistered ? SCREENSHOT_COUNT.get() : -1L;
         }
@@ -239,9 +305,8 @@ final class CaptureProtectionHelper {
 
     // ---- ライフサイクル（すべて UI スレッド） ----
 
-    // `MainActivity.onCreate` の `super.onCreate` 直後。最初のフレームと Recents のサムネイル前に
-    // 要求値を掛け直す。
-    void onCreate() {
+    // `attach` から。最初のフレームと Recents のサムネイル前に要求値を掛け直す。
+    private void onCreate() {
         synchronized (LOCK) {
             try {
                 Window window = activity.getWindow();
@@ -255,7 +320,7 @@ final class CaptureProtectionHelper {
         }
     }
 
-    void onStart() {
+    private void onStart() {
         synchronized (LOCK) {
             if (destroyed) {
                 return;
@@ -294,14 +359,14 @@ final class CaptureProtectionHelper {
         }
     }
 
-    void onStop() {
+    private void onStop() {
         synchronized (LOCK) {
             unregisterAll();
         }
     }
 
-    // 再生成を含む破棄。旧要求は以後 Window に触れない。`requested` は次の Activity へ残す。
-    void onDestroy() {
+    // 再生成を含む破棄（`detach` から）。旧要求は以後 Window に触れない。`requested` は次の Activity へ残す。
+    private void onDestroy() {
         synchronized (LOCK) {
             destroyed = true;
             protectedState = STATE_UNKNOWN;

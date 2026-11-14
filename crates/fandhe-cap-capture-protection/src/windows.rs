@@ -1,4 +1,4 @@
-//! Windows 向け画面キャプチャの防止実装（Issue #582）。`device/capture_protection.rs` の Windows
+//! Windows 向け画面キャプチャの防止実装（Issue #582）。`driver` の Windows
 //! 経路から呼ばれ、自プロセスのトップレベルウィンドウに `SetWindowDisplayAffinity`
 //! （`WDA_EXCLUDEFROMCAPTURE`）を掛け / 外し、`GetWindowDisplayAffinity` で読み戻す
 //! （`windows_share.rs` と同じく FFI・`unsafe` を持てる本クレート側から `windows` クレートを直接叩く）。
@@ -14,15 +14,15 @@
 //!   写真での撮影は防げない
 //! - Windows 10 2004 より前では `WDA_EXCLUDEFROMCAPTURE` が使えず黒塗りになる
 //! - プロセス終了時の後片付けは OS がする（ウィンドウと一緒に属性が消える）
-//! - OS のエラーコードをログへ出さない。`DeviceError::Internal` は固定ラベルのみ（security.md A09）
+//! - OS のエラーコードをログへ出さない。`CaptureProtectionError::Internal` は固定ラベルのみ（security.md A09）
 
-use fandhe_device::capture_protection::{CaptureObservation, CaptureProtection, CaptureSupport};
-use fandhe_device::DeviceError;
+use crate::contract::{CaptureObservation, CaptureProtection, CaptureSupport};
+use crate::error::CaptureProtectionError;
 use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowDisplayAffinity, SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE, WDA_NONE,
 };
 
-use super::capture_protection::affinity_to_protected;
+use crate::driver::affinity_to_protected;
 
 /// 状態を持たない実装（毎回 OS から読み戻す）。
 pub(crate) struct WindowsCaptureProtection;
@@ -42,15 +42,16 @@ impl CaptureProtection for WindowsCaptureProtection {
     }
 
     #[allow(unsafe_code)]
-    fn set_protected(&self, on: bool) -> Result<(), DeviceError> {
-        let hwnd = fandhe_platform_windows::window()
-            .ok_or(DeviceError::Internal("capture-protection window"))?;
+    fn set_protected(&self, on: bool) -> Result<(), CaptureProtectionError> {
+        let hwnd = fandhe_platform_windows::window().ok_or(CaptureProtectionError::Internal(
+            "capture-protection window",
+        ))?;
         let affinity = if on { WDA_EXCLUDEFROMCAPTURE } else { WDA_NONE };
         // SAFETY: `hwnd` は `fandhe_platform_windows::window()`（`remember_window` が控えた HWND、
         // `ProxyApp` の生存中はウィンドウも生存する）を経由した有効なハンドルで、
         // ウィンドウを作った UI スレッドから呼ぶ（モジュール doc）。
         unsafe { SetWindowDisplayAffinity(hwnd, affinity) }
-            .map_err(|_| DeviceError::Internal("capture-protection"))
+            .map_err(|_| CaptureProtectionError::Internal("capture-protection"))
     }
 
     #[allow(unsafe_code)]

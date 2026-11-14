@@ -69,11 +69,6 @@ pub mod android_bluetooth_classic;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_camera_preview_stream;
-/// Issue #584: Android 向け画面キャプチャの防止・検知（`CaptureProtectionHelper.java` を JNI で呼ぶ）。
-/// `device/capture_protection.rs` の Android 経路から使われる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_capture_protection;
 /// Issue #1117: Android 向け車載ディスプレイ（Car App Library の Service/Screen を JNI 経由で操作する）。
 /// `device/car_display.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -385,10 +380,6 @@ pub mod bluetooth_le;
 /// （iOS #813・Android #814・macOS #1066 は実装済み、Windows #1102 も実装済みで、他 OS は `UnsupportedCameraPreview`
 /// 固定。Web は `fandhe-web-dom`、#815）。
 pub mod camera_preview_stream;
-/// Phase 11 の拡充ループ（親 #120、Issue #582）: 画面キャプチャの防止・検知の effect ドライバ
-/// （Windows は防止のみ、iOS は検知のみ（#583）、Android は防止・検知（#584）、他 OS は
-/// `UnsupportedCaptureProtection` 固定）。
-pub mod capture_protection;
 /// Phase 11 の拡充ループ（親 #152、Issue #1116）: 車載ディスプレイの effect ドライバ。
 /// Android は Car App Library 実装（#1117）、他 OS は `UnsupportedCarDisplay` 固定。
 pub mod car_display;
@@ -483,11 +474,6 @@ pub mod ios_ble_peripheral;
 #[cfg(any(target_os = "ios", target_os = "macos", test))]
 #[cfg_attr(not(any(target_os = "ios", target_os = "macos")), allow(dead_code))]
 pub mod ios_camera_preview_stream;
-/// Issue #583: iOS 向け画面キャプチャの検知（`ios/fandhe_ios_capture_protection.m` を呼ぶ）。
-/// `device/capture_protection.rs` の iOS 経路から使われる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_capture_protection;
 /// Issue #1405: iOS 向け方位実装（`ios/fandhe_ios_compass.m` を呼ぶ C ABI ラッパー、CoreLocation の heading）。`device/compass.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -825,10 +811,6 @@ pub mod windows_bluetooth_le;
 /// `device/camera_preview_stream.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_camera_preview_stream;
-/// Issue #582: Windows 向け画面キャプチャの防止実装（`SetWindowDisplayAffinity`）。
-/// `device/capture_protection.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_capture_protection;
 /// Issue #1404: Windows 向け方位実装（WinRT `Compass` の pull）。`device/compass.rs` の windows 経路から呼ばれる。
 /// 写像の純関数をホストでテストできるよう cfg は `any(windows, test)`。
 #[cfg(any(target_os = "windows", test))]

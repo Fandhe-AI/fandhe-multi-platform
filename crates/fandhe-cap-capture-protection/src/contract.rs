@@ -3,7 +3,7 @@
 //!
 //! 扱う範囲は「自分のウィンドウを画面の撮影・録画に写さない（防止）」と「録画・ミラーリング中か、
 //! スクリーンショットが撮られたかを知る（検知）」。録る側の機能は別 id の `screen_capture`。
-//! `fandhe-egui-proxy` の橋渡し層が UI スレッドから [`CaptureProtection::set_protected`] を呼び、
+//! 本 crate の `driver` が UI スレッドから [`CaptureProtection::set_protected`] を呼び、
 //! [`CaptureProtection::is_protected`] / [`CaptureProtection::observe`] を [`READ_INTERVAL`] ごとに
 //! 読んで画面（`fandhe_core::screens::capture_protection_show`）へ返す。
 //!
@@ -47,7 +47,7 @@
 
 use std::time::Duration;
 
-use crate::DeviceError;
+use crate::error::CaptureProtectionError;
 
 /// 間隔付き pull の周期。最終読取からこれ以上たったときだけ OS を読む。
 pub const READ_INTERVAL: Duration = Duration::from_secs(1);
@@ -78,7 +78,7 @@ pub trait CaptureProtection: Send + Sync {
     fn support(&self) -> CaptureSupport;
 
     /// `true` で防止を掛け、`false` で外す。冪等。非対応は `Err(Unsupported)`。
-    fn set_protected(&self, on: bool) -> Result<(), DeviceError>;
+    fn set_protected(&self, on: bool) -> Result<(), CaptureProtectionError>;
 
     /// OS から読み戻した防止の状態。`None` は読めない。
     fn is_protected(&self) -> Option<bool>;
@@ -95,8 +95,8 @@ impl CaptureProtection for UnsupportedCaptureProtection {
         CaptureSupport::default()
     }
 
-    fn set_protected(&self, _on: bool) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("capture-protection"))
+    fn set_protected(&self, _on: bool) -> Result<(), CaptureProtectionError> {
+        Err(CaptureProtectionError::Unsupported)
     }
 
     fn is_protected(&self) -> Option<bool> {
@@ -116,7 +116,7 @@ mod tests {
     fn unsupported_is_not_a_fake_success() {
         for on in [true, false] {
             let err = UnsupportedCaptureProtection.set_protected(on).unwrap_err();
-            assert!(matches!(err, DeviceError::Unsupported(_)));
+            assert!(matches!(err, CaptureProtectionError::Unsupported));
         }
         assert_ne!(UnsupportedCaptureProtection.is_protected(), Some(true));
         assert_eq!(

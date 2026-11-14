@@ -581,30 +581,6 @@ public class MainActivity extends GameActivity {
         return screenOrientationHelper.read();
     }
 
-    // 画面キャプチャの防止・検知（Issue #584）。実装は `CaptureProtectionHelper`。Rust の
-    // `android_capture_protection.rs` が egui スレッドから JNI 呼び出しする。
-    private final CaptureProtectionHelper captureProtectionHelper = new CaptureProtectionHelper(this);
-
-    int captureProtectionSet(boolean on) {
-        return captureProtectionHelper.set(on);
-    }
-
-    int captureProtectionIsProtected() {
-        return captureProtectionHelper.isProtected();
-    }
-
-    int captureProtectionSupport() {
-        return captureProtectionHelper.support();
-    }
-
-    int captureProtectionRecording() {
-        return captureProtectionHelper.recording();
-    }
-
-    long captureProtectionScreenshotCount() {
-        return captureProtectionHelper.screenshotCount();
-    }
-
     // 折りたたみの姿勢・ヒンジ（Issue #1098）。実装は `FoldablePostureHelper`。Rust の
     // `android_foldable_posture.rs` が egui スレッドから同期で JNI 呼び出しする。
     private final FoldablePostureHelper foldablePostureHelper = new FoldablePostureHelper(this);
@@ -616,14 +592,12 @@ public class MainActivity extends GameActivity {
     @Override
     protected void onStart() {
         super.onStart();
-        captureProtectionHelper.onStart();
         foldablePostureHelper.onStart();
         activityRecognitionHelper.onStart();
     }
 
     @Override
     protected void onStop() {
-        captureProtectionHelper.onStop();
         foldablePostureHelper.onStop();
         blePeripheralHelper.onStop();
         activityRecognitionHelper.onStop();
@@ -1605,7 +1579,6 @@ public class MainActivity extends GameActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         backgroundUploadHelper.onCreate();
-        captureProtectionHelper.onCreate();
         installAccessibilityOffGuard();
         fullscreenHelper.register();
 
@@ -3820,7 +3793,6 @@ public class MainActivity extends GameActivity {
         cameraPreviewHelper.onDestroy();
         printHelper.onDestroy();
         screenOrientationHelper.onDestroy();
-        captureProtectionHelper.onDestroy();
         foldablePostureHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため
         // `micRecorder == null` で no-op（`onPause` doc 参照）。`onPause` を経由せず
