@@ -1,11 +1,11 @@
-//! Android 向け折りたたみ姿勢実装（Issue #1098、親 #141）。`device/foldable_posture.rs` の
+//! Android 向け折りたたみ姿勢実装（Issue #1098、親 #141）。`driver` の
 //! Android 経路から呼ばれ、Jetpack WindowManager の `WindowLayoutInfo` を Java 側
 //! `FoldablePostureHelper`（`onStart` で購読、`onStop` で解除）が保持したスナップショットとして
-//! 読み、`fandhe_device::foldable_posture` の「Android の写像」表どおりに契約の値へ写す。
+//! 読み、`crate::contract` の「Android の写像」表どおりに契約の値へ写す。
 //!
-//! JNI 窓口（`MainActivity`。Java・本ファイルの `jni_sig!`・本 doc の 3 か所でそろえる）:
+//! JNI 窓口（`FoldablePostureHelper` の static。Java・本ファイルの `jni_sig!`・本 doc の 3 か所でそろえる）:
 //!
-//! - `int[] foldablePostureRead()`: `()[I`。`{status}`（未受信 0・失敗 2）または受信済み
+//! - `static int[] read(Activity)`: `(Landroid/app/Activity;)[I`。helper が無ければ `{2}`（失敗）。`{status}`（未受信 0・失敗 2）または受信済み
 //!   `{1, 窓の幅 px, 窓の高さ px, densityDpi, 件数 n, (state, orientation, left, top, right, bottom) × n}`
 //!
 //! コード表の SSOT は Java 側 `FoldablePostureHelper`。値の検査は [`decode`] が写像の前に f64 で行い、
@@ -16,14 +16,14 @@
 //! Activity 再生成では旧インスタンスが破棄とキャッシュ消去を済ませ、新インスタンスは未受信から
 //! 始まるため、旧値は新しい読み取りに混ざらない。権限は不要。
 //!
-//! 守る範囲・守らない範囲は `fandhe_device::foldable_posture` の doc と同じ。
+//! 守る範囲・守らない範囲は `crate::contract` の doc と同じ。native を持たないため no-op スタブは置かない。
 
 use std::sync::Arc;
 
-use fandhe_device::foldable_posture::{
-    Fold, FoldInfo, FoldOrientation, FoldablePostureSource, Posture, PostureReading, MAX_EXTENT,
+use crate::contract::{
+    Fold, FoldInfo, FoldOrientation, FoldablePostureSource, MAX_EXTENT, Posture, PostureReading,
 };
-use fandhe_device::DeviceError;
+use crate::error::FoldablePostureError;
 
 /// スナップショットの status（SSOT は Java 側 `FoldablePostureHelper.STATUS_*`）。
 /// 失敗（2）と未知の status は `decode` の既定分岐で `Internal` になる。
@@ -40,13 +40,13 @@ const ORIENTATION_HORIZONTAL: i32 = 1;
 /// dp 換算の基準密度（`DisplayMetrics.DENSITY_DEFAULT`）。
 const DENSITY_DEFAULT: f64 = 160.0;
 
-fn internal() -> DeviceError {
-    DeviceError::Internal("foldable-posture")
+fn internal() -> FoldablePostureError {
+    FoldablePostureError::Internal("foldable-posture")
 }
 
 /// スナップショット（`None` は null / JNI 失敗）を契約の結果へ写す純関数。
 #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
-fn decode(values: Option<Vec<i32>>) -> Result<Option<PostureReading>, DeviceError> {
+fn decode(values: Option<Vec<i32>>) -> Result<Option<PostureReading>, FoldablePostureError> {
     let v = values.ok_or_else(internal)?;
     match v.first().copied() {
         Some(STATUS_NONE) if v.len() == 1 => return Ok(None),
@@ -124,37 +124,29 @@ fn decode(values: Option<Vec<i32>>) -> Result<Option<PostureReading>, DeviceErro
 #[cfg(target_os = "android")]
 struct AndroidFoldablePosture;
 
-/// `MainActivity.foldablePosture*` を JNI で呼ぶ。`None` は呼び出し失敗。
-/// `unsafe` 2 箇所は `android_screen_orientation.rs::call_activity` と同一の根拠。
-#[cfg(target_os = "android")]
-#[allow(unsafe_code)]
-fn call_activity<T>(
-    f: impl FnOnce(&mut jni::Env, &jni::objects::JObject) -> Result<T, super::android::JniCallFailed>,
-) -> Option<T> {
-    use super::android::JniCallFailed;
-    let app = crate::android::android_app()?;
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| -> Result<T, JniCallFailed> {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        f(env, &activity)
-    })
-    .ok()
-}
-
 #[cfg(target_os = "android")]
 impl FoldablePostureSource for AndroidFoldablePosture {
-    fn read(&self) -> Result<Option<PostureReading>, DeviceError> {
-        use jni::objects::JIntArray;
-        let values = call_activity(|env, a| {
-            let ret = env.call_method(
-                a,
-                jni::jni_str!("foldablePostureRead"),
-                jni::jni_sig!(() -> int[]),
-                &[],
+    fn read(&self) -> Result<Option<PostureReading>, FoldablePostureError> {
+        decode(read_snapshot())
+    }
+}
+
+/// `FoldablePostureHelper.read(Activity)`（static、`int[]`）を JNI で呼ぶ。`None` は null / 呼び出し失敗。
+/// JavaVM と Activity の取得は `fandhe_platform_android::with_activity_class` に任せ、ここは `unsafe` を持たない。
+#[cfg(target_os = "android")]
+fn read_snapshot() -> Option<Vec<i32>> {
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+    use jni::objects::{JIntArray, JValue};
+    let app = android_app()?;
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.FoldablePostureHelper"),
+        |env, activity, class| -> Result<Option<Vec<i32>>, JniCallFailed> {
+            let ret = env.call_static_method(
+                class,
+                jni::jni_str!("read"),
+                jni::jni_sig!((android.app.Activity) -> int[]),
+                &[JValue::Object(activity)],
             )?;
             let arr = env.cast_local::<JIntArray>(ret.l()?)?;
             if arr.is_null() {
@@ -165,13 +157,13 @@ impl FoldablePostureSource for AndroidFoldablePosture {
             let mut buf = vec![0i32; len];
             arr.get_region(env, 0, &mut buf)?;
             Ok(Some(buf))
-        })
-        .flatten();
-        decode(values)
-    }
+        },
+    )
+    .ok()
+    .flatten()
 }
 
-/// Android の `FoldablePostureSource` 実装を返す（`device/foldable_posture.rs` の dispatch から呼ばれる）。
+/// Android の `FoldablePostureSource` 実装を返す（`driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn FoldablePostureSource> {
     Arc::new(AndroidFoldablePosture)
@@ -182,7 +174,7 @@ pub(crate) fn implementation() -> Arc<dyn FoldablePostureSource> {
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 pub(crate) fn implementation() -> Arc<dyn FoldablePostureSource> {
-    Arc::new(fandhe_device::foldable_posture::UnsupportedFoldablePosture)
+    Arc::new(crate::contract::UnsupportedFoldablePosture)
 }
 
 #[cfg(test)]
@@ -197,8 +189,8 @@ mod tests {
         Some(v)
     }
 
-    fn is_internal(r: Result<Option<PostureReading>, DeviceError>) -> bool {
-        matches!(r, Err(DeviceError::Internal(_)))
+    fn is_internal(r: Result<Option<PostureReading>, FoldablePostureError>) -> bool {
+        matches!(r, Err(FoldablePostureError::Internal(_)))
     }
 
     #[test]

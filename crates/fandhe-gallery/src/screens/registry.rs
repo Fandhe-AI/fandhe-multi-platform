@@ -375,7 +375,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "foldable_posture_show" => fandhe_core::screens::foldable_posture_show::current_screen,
-    fandhe_egui_proxy::device::foldable_posture::foldable_posture_show_effect,
+    fandhe_cap_foldable_posture::foldable_posture_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "focus_mode_status_show" => fandhe_core::screens::focus_mode_status_show::current_screen,

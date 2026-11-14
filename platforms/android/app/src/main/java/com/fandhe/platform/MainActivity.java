@@ -581,24 +581,14 @@ public class MainActivity extends GameActivity {
         return screenOrientationHelper.read();
     }
 
-    // 折りたたみの姿勢・ヒンジ（Issue #1098）。実装は `FoldablePostureHelper`。Rust の
-    // `android_foldable_posture.rs` が egui スレッドから同期で JNI 呼び出しする。
-    private final FoldablePostureHelper foldablePostureHelper = new FoldablePostureHelper(this);
-
-    int[] foldablePostureRead() {
-        return foldablePostureHelper.read();
-    }
-
     @Override
     protected void onStart() {
         super.onStart();
-        foldablePostureHelper.onStart();
         activityRecognitionHelper.onStart();
     }
 
     @Override
     protected void onStop() {
-        foldablePostureHelper.onStop();
         blePeripheralHelper.onStop();
         activityRecognitionHelper.onStop();
         super.onStop();
@@ -3793,7 +3783,6 @@ public class MainActivity extends GameActivity {
         cameraPreviewHelper.onDestroy();
         printHelper.onDestroy();
         screenOrientationHelper.onDestroy();
-        foldablePostureHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため
         // `micRecorder == null` で no-op（`onPause` doc 参照）。`onPause` を経由せず
         // 直接 `onDestroy` へ来るケース（Android の契約上は稀）に備えて同じ処理を置く。

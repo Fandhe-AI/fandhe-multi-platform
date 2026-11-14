@@ -1,6 +1,6 @@
 //! 折りたたみ端末の姿勢と折れ目の契約（Issue #723、親 #141）。
 //! 端末が「平ら」か「折れている」か、折れ目がどこを通るかを取得するための橋渡しで、
-//! `fandhe-egui-proxy` の `device/foldable_posture.rs` が間隔つきで
+//! 本 crate の `driver` が間隔つきで
 //! [`FoldablePostureSource::read`] を呼ぶ（pull 型。OS の変更通知は購読しない）。
 //! Web は `fandhe-web-dom` が Device Posture API と Viewport Segments API を読み、
 //! 生の値を本モジュールの [`reading_from_raw`] に通して契約の値へ写す。
@@ -49,9 +49,9 @@
 
 use std::time::Duration;
 
-use crate::DeviceError;
+use crate::error::FoldablePostureError;
 
-/// 画面側が読み直す間隔。`fandhe-egui-proxy` と `fandhe-web-dom` が共有する唯一の値。
+/// 画面側が読み直す間隔。本 crate の `driver` と `fandhe-web-dom` が共有する唯一の値。
 pub const READ_INTERVAL: Duration = Duration::from_secs(1);
 
 /// 区画の座標・大きさとして受け入れる上限（CSS px）。壊れた値を成功にしないための検査用。
@@ -126,7 +126,7 @@ pub struct SegmentRect {
 pub trait FoldablePostureSource: Send + Sync {
     /// 現在の姿勢と折れ目を返す。`Ok(None)` は「未受信」（購読前・最初の通知前・購読解除後）で、
     /// 「平ら」でも失敗でもない。失敗・未受信の後に直前の値を返し続けてはならない。
-    fn read(&self) -> Result<Option<PostureReading>, DeviceError>;
+    fn read(&self) -> Result<Option<PostureReading>, FoldablePostureError>;
 }
 
 /// 常に非対応を返す実装（Android 以外のネイティブ OS の dispatch 先、Android スタブの中身）。
@@ -134,18 +134,18 @@ pub trait FoldablePostureSource: Send + Sync {
 pub struct UnsupportedFoldablePosture;
 
 impl FoldablePostureSource for UnsupportedFoldablePosture {
-    fn read(&self) -> Result<Option<PostureReading>, DeviceError> {
-        Err(DeviceError::Unsupported("foldable_posture"))
+    fn read(&self) -> Result<Option<PostureReading>, FoldablePostureError> {
+        Err(FoldablePostureError::Unsupported("foldable_posture"))
     }
 }
 
-fn bad() -> DeviceError {
-    DeviceError::Internal("foldable_posture read")
+fn bad() -> FoldablePostureError {
+    FoldablePostureError::Internal("foldable_posture read")
 }
 
 /// Device Posture API の `type` 文字列を姿勢へ写す。完全一致の 2 値以外
 /// （空・大文字違い・前後の空白つきを含む）は `Internal` とし、「平ら」へ倒さない。
-pub fn parse_posture(type_str: &str) -> Result<Posture, DeviceError> {
+pub fn parse_posture(type_str: &str) -> Result<Posture, FoldablePostureError> {
     match type_str {
         "continuous" => Ok(Posture::Flat),
         "folded" => Ok(Posture::Folded),
@@ -164,7 +164,7 @@ fn close(a: f64, b: f64) -> bool {
 }
 
 /// 帯の太さを検査する。誤差内の負値は 0、それを超える負値（重なり）は `Internal`。
-fn thickness_of(gap: f64) -> Result<f64, DeviceError> {
+fn thickness_of(gap: f64) -> Result<f64, FoldablePostureError> {
     if gap < -ALIGN_TOLERANCE {
         Err(bad())
     } else {
@@ -177,7 +177,9 @@ fn thickness_of(gap: f64) -> Result<f64, DeviceError> {
 /// - `None`・1 区画・3 区画以上は `Ok(Unknown)`（取れないときに折れ目なしと言わない）。0 区画は `Internal`
 /// - 2 区画は値域を検査（f32 へ変換する前。契約表 5）したうえで、上端と高さが揃えば左右並び、
 ///   左端と幅が揃えば上下並びとして求める。どちらでもなければ `Internal`
-pub fn fold_from_segments(segments: Option<&[SegmentRect]>) -> Result<FoldInfo, DeviceError> {
+pub fn fold_from_segments(
+    segments: Option<&[SegmentRect]>,
+) -> Result<FoldInfo, FoldablePostureError> {
     let Some(segs) = segments else {
         return Ok(FoldInfo::Unknown);
     };
@@ -218,7 +220,7 @@ pub fn fold_from_segments(segments: Option<&[SegmentRect]>) -> Result<FoldInfo, 
 pub fn reading_from_raw(
     type_str: &str,
     segments: Option<&[SegmentRect]>,
-) -> Result<PostureReading, DeviceError> {
+) -> Result<PostureReading, FoldablePostureError> {
     Ok(PostureReading {
         posture: parse_posture(type_str)?,
         fold: fold_from_segments(segments)?,
@@ -238,15 +240,15 @@ mod tests {
         }
     }
 
-    fn is_internal<T: std::fmt::Debug>(v: Result<T, DeviceError>) -> bool {
-        matches!(v, Err(DeviceError::Internal(_)))
+    fn is_internal<T: std::fmt::Debug>(v: Result<T, FoldablePostureError>) -> bool {
+        matches!(v, Err(FoldablePostureError::Internal(_)))
     }
 
     #[test]
     fn unsupported_never_succeeds() {
         assert!(matches!(
             UnsupportedFoldablePosture.read(),
-            Err(DeviceError::Unsupported("foldable_posture"))
+            Err(FoldablePostureError::Unsupported("foldable_posture"))
         ));
     }
 

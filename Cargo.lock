@@ -1427,6 +1427,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-foldable-posture"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-gamepad"
 version = "0.2.0"
 dependencies = [
@@ -2230,6 +2241,7 @@ dependencies = [
  "fandhe-cap-file-watch",
  "fandhe-cap-flashlight",
  "fandhe-cap-focus-mode-status",
+ "fandhe-cap-foldable-posture",
  "fandhe-cap-gamepad",
  "fandhe-cap-geocoding-search",
  "fandhe-cap-global-hotkey",
@@ -2394,6 +2406,7 @@ dependencies = [
  "fandhe-cap-external-app-launch",
  "fandhe-cap-file-watch",
  "fandhe-cap-flashlight",
+ "fandhe-cap-foldable-posture",
  "fandhe-cap-gamepad",
  "fandhe-cap-http-get",
  "fandhe-cap-local-fonts",
