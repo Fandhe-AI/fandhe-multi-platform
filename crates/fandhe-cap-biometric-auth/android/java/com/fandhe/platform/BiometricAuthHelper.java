@@ -110,6 +110,8 @@ final class BiometricAuthHelper {
         // コールバック経路で `NONE` に戻る（結果は Rust 側が既に破棄済みのため無視される）。
         if (helper.biometricPrompt != null && biometricRequest.current() != RequestTracker.NONE) {
             helper.biometricPrompt.cancelAuthentication();
+            // 新しい helper の prompt では cancel が no-op になり得る。id を残すと以降の tryTrack が失敗し続けるため確実に解放する。
+            biometricRequest.take();
         }
         synchronized (BiometricAuthHelper.class) {
             HELPERS.put(activity, helper);
