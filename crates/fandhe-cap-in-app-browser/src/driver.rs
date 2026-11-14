@@ -215,7 +215,8 @@ fn to_core(f: InAppBrowserFailure) -> CoreFailure {
 }
 
 /// 要求を登録し、検査を通った URL だけを OS へ渡す。検査失敗・同期失敗はその場で確定する。
-fn start_request(bridge: &Bridge, imp: &dyn InAppBrowser, raw_url: &str) {
+/// 登録した要求 id を返す（結果の取得に使う）。
+fn start_request(bridge: &Bridge, imp: &dyn InAppBrowser, raw_url: &str) -> u64 {
     let request_id = bridge.begin();
     match validate_url(raw_url) {
         Err(f) => bridge.complete_from_os(request_id, Err(f)),
@@ -225,6 +226,29 @@ fn start_request(bridge: &Bridge, imp: &dyn InAppBrowser, raw_url: &str) {
             }
         }
     }
+    request_id
+}
+
+/// 画面状態に依存しない公開入口。URL を検査して要求を登録し、現在の OS 実装へ渡して要求 id を返す。
+/// 同時に追跡できる要求は 1 件で、新しい要求は前の要求を置き換える。結果は [`poll_open_result`] で
+/// 取得する（OS 層の `try_begin_present` はこの要求を受理する）。
+pub fn open_url(raw_url: &str) -> u64 {
+    static IMPL: OnceLock<Arc<dyn InAppBrowser>> = OnceLock::new();
+    start_request(
+        bridge(),
+        &**IMPL.get_or_init(platform_in_app_browser),
+        raw_url,
+    )
+}
+
+/// [`open_url`] の結果の取得口。表示開始前に期限を過ぎていれば `TimedOut` を確定し、
+/// 結果が届いていれば 1 度だけ返す（未着・古い id は `None`）。
+pub fn poll_open_result(
+    request_id: u64,
+) -> Option<Result<InAppBrowserOutcome, InAppBrowserFailure>> {
+    let b = bridge();
+    b.expire_if_due();
+    b.slot.take_ready(request_id)
 }
 
 /// 1 フレームぶんの処理。要求の発送・期限判定・完了の画面反映を行う。
@@ -426,6 +450,40 @@ mod tests {
     }
 
     #[test]
+    fn public_entry_registers_request_and_returns_result() {
+        // 公開入口と同じ経路（登録 → OS 呼び出し → 結果取得）が画面状態なしで通る。
+        let bridge = new_bridge(Duration::from_secs(30));
+        let f = fake(Mode::PresentThenClose(0), bridge);
+        let id = start_request(bridge, &*f, "https://example.com/");
+        let end = Instant::now() + Duration::from_secs(5);
+        let r = loop {
+            if let Some(r) = bridge.slot.take_ready(id) {
+                break r;
+            }
+            assert!(Instant::now() < end);
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        assert_eq!(r, Ok(InAppBrowserOutcome::Closed));
+        let id = start_request(bridge, &*f, "file:///x");
+        assert_eq!(
+            bridge.slot.take_ready(id),
+            Some(Err(InAppBrowserFailure::InvalidUrl))
+        );
+    }
+
+    #[test]
+    fn public_open_url_unsupported_off_mobile() {
+        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+        {
+            let id = open_url("https://example.com/");
+            assert_eq!(
+                poll_open_result(id),
+                Some(Err(InAppBrowserFailure::Unsupported))
+            );
+        }
+    }
+
+    #[test]
     fn invalid_url_never_reaches_os() {
         let bridge = new_bridge(Duration::from_secs(30));
         let f = fake(Mode::PresentThenClose(0), bridge);
@@ -434,7 +492,7 @@ mod tests {
             "https://user@example.com/",
             "file:///x",
         ] {
-            start_request(bridge, &*f, raw);
+            let _ = start_request(bridge, &*f, raw);
         }
         assert_eq!(f.calls.load(Ordering::SeqCst), 0);
         let (_, ready) = bridge.slot.snapshot().unwrap();
