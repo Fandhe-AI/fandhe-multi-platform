@@ -178,6 +178,9 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // 「推論する」が飲み込まれる（`fandhe_cap_ml_inference::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_ml_inference::reset_pending_tracking();
+    // 端末内翻訳の処理済み世代も破棄する（画面状態は世代 0 に戻るため。`fandhe_cap_translation::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_translation::reset_pending_tracking();
     // 付属機器のペアリングの保留中の要求も破棄する（理由は ml_inference と同じ。
     // `fandhe_cap_companion_device::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

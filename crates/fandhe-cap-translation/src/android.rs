@@ -1,14 +1,14 @@
-//! Android 向け端末内翻訳（Issue #537、親 #115）。`device/translation.rs::platform` の
+//! Android 向け端末内翻訳（Issue #537、親 #115）。`crate::driver` の dispatch の
 //! Android 経路から呼ばれ、`android.view.translation`（API 31 以上）で固定文を 1 回訳す。
 //! Java 側は `TranslationHelper`（状態確認・Translator の生成と破棄・取り消し）。
 //!
 //! 流れ: `TextTranslator::translate`（ドライバのワーカースレッド）→ [`RequestSlot::begin`] で
-//! id 採番 → JNI `MainActivity.requestTranslation(id, text, source, target)` → Java が結果コードと
+//! id 採番 → JNI `TranslationHelper.request(activity, id, text, source, target)` → Java が結果コードと
 //! 訳文を `nativeOnTranslationResult` で返す → [`decode`] で契約の失敗種別へ写像 → ワーカーが
 //! 周期的に slot を見て受け取る。期限は引数 `remaining`（ドライバが 30 秒を渡す）だけで、
 //! 切れたら `cancelTranslation(id)` で OS 側の翻訳を止めて `Internal(TIMEOUT)`。
 //!
-//! 写像（SSOT は `fandhe_device::translation`）: API 31 未満・翻訳サービスなしは `Unsupported`、
+//! 写像（SSOT は `crate::contract`）: API 31 未満・翻訳サービスなしは `Unsupported`、
 //! 言語の組が非対応は `LANGUAGE_UNSUPPORTED`、言語パック未導入・取得中は `NOT_INSTALLED`
 //! （ダウンロードは始めない）、中断・OS の失敗は `Internal("translation")`、空の訳文は
 //! ドライバの `check_result` が `EMPTY` にする。
@@ -26,12 +26,10 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use fandhe_device::translation::{
-    TextTranslator, EMPTY, LANGUAGE_UNSUPPORTED, NOT_INSTALLED, TIMEOUT,
-};
-use fandhe_device::DeviceError;
+use crate::contract::{EMPTY, LANGUAGE_UNSUPPORTED, NOT_INSTALLED, TIMEOUT, TextTranslator};
+use crate::error::TranslationError;
 
-use super::request_slot::{RequestSlot, POLL_INTERVAL};
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot};
 
 /// 結果コード（SSOT は Java 側 `TranslationHelper.RESULT_*`）。
 const RESULT_OK: i32 = 0;
@@ -43,19 +41,19 @@ const RESULT_NOT_INSTALLED: i32 = 3;
 const RESULT_INTERRUPTED: i32 = 4;
 const RESULT_FAILED: i32 = 5;
 
-type Outcome = Result<String, DeviceError>;
-/// slot に置く生の結果（結果コード, 訳文）。`DeviceError` は `Clone` でないため、写像は受け取る側で行う。
+type Outcome = Result<String, TranslationError>;
+/// slot に置く生の結果（結果コード, 訳文）。`TranslationError` は `Clone` でないため、写像は受け取る側で行う。
 type Raw = (i32, Option<String>);
 
 /// Java の結果コードと訳文を契約の結果へ写像する。空かどうかはドライバが判定する（trim しない）。
 fn decode(code: i32, text: Option<String>) -> Outcome {
     match code {
-        RESULT_OK => text.ok_or(DeviceError::Internal(EMPTY)),
-        RESULT_UNSUPPORTED => Err(DeviceError::Unsupported("translation")),
-        RESULT_LANGUAGE_UNSUPPORTED => Err(DeviceError::Internal(LANGUAGE_UNSUPPORTED)),
-        RESULT_NOT_INSTALLED => Err(DeviceError::Internal(NOT_INSTALLED)),
+        RESULT_OK => text.ok_or(TranslationError::Internal(EMPTY)),
+        RESULT_UNSUPPORTED => Err(TranslationError::Unsupported),
+        RESULT_LANGUAGE_UNSUPPORTED => Err(TranslationError::Internal(LANGUAGE_UNSUPPORTED)),
+        RESULT_NOT_INSTALLED => Err(TranslationError::Internal(NOT_INSTALLED)),
         // 中断（RESULT_INTERRUPTED）・OS の失敗・未知のコード。
-        _ => Err(DeviceError::Internal("translation")),
+        _ => Err(TranslationError::Internal("translation")),
     }
 }
 
@@ -72,7 +70,7 @@ fn translate_with(
     let id = slot.begin();
     if !start(id) {
         slot.clear(id);
-        return Err(DeviceError::Internal("translation"));
+        return Err(TranslationError::Internal("translation"));
     }
     loop {
         // 結果の受理より先に期限を確認する（期限後に届いた結果は捨てる）。
@@ -80,7 +78,7 @@ fn translate_with(
         if now >= deadline {
             slot.clear(id);
             cancel(id);
-            return Err(DeviceError::Internal(TIMEOUT));
+            return Err(TranslationError::Internal(TIMEOUT));
         }
         match slot.snapshot() {
             Some((cur, Some(outcome))) if cur == id => {
@@ -91,7 +89,7 @@ fn translate_with(
             // 差し替え済み（他人の slot は消さない）。Java 側に残る翻訳は止めさせる。
             _ => {
                 cancel(id);
-                return Err(DeviceError::Internal("translation"));
+                return Err(TranslationError::Internal("translation"));
             }
         }
         std::thread::sleep(POLL_INTERVAL.min(deadline - now));
@@ -116,63 +114,71 @@ impl TextTranslator for AndroidTextTranslator {
     }
 }
 
-/// `MainActivity.requestTranslation(long, String, String, String)` を JNI で呼ぶ。`false` は呼び出し失敗。
-/// `unsafe` 2 箇所は `fandhe_platform_android::with_activity` と同一の根拠。
+/// `TranslationHelper.request(Activity, long, String, String, String)`（`Some`）または
+/// `TranslationHelper.cancel(Activity, long)`（`None`）を JNI で呼ぶ。`false` は呼び出し失敗。
+/// `unsafe` は共通層 `fandhe_platform_android::with_activity_class` に閉じている。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
-fn call_request(id: u64, text: &str, source: &str, target: &str) -> bool {
-    use super::android::JniCallFailed;
-    let Some(app) = crate::android::android_app() else {
+fn call_helper(id: u64, args: Option<(&str, &str, &str)>) -> bool {
+    use fandhe_platform_android::{JniCallFailed, with_activity_class};
+    let Some(app) = fandhe_platform_android::android_app() else {
         return false;
     };
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| -> Result<(), JniCallFailed> {
-        let j_text = env.new_string(text)?;
-        let j_source = env.new_string(source)?;
-        let j_target = env.new_string(target)?;
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        env.call_method(
-            &activity,
-            jni::jni_str!("requestTranslation"),
-            jni::jni_sig!((long, java.lang.String, java.lang.String, java.lang.String) -> ()),
-            &[
-                jni::objects::JValue::Long(id as jni::sys::jlong),
-                jni::objects::JValue::Object(&j_text),
-                jni::objects::JValue::Object(&j_source),
-                jni::objects::JValue::Object(&j_target),
-            ],
-        )?;
-        Ok(())
-    })
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.TranslationHelper"),
+        |env, activity, class| -> Result<(), JniCallFailed> {
+            let r = (|| -> Result<(), jni::errors::Error> {
+                match args {
+                    Some((text, source, target)) => {
+                        let j_text = env.new_string(text)?;
+                        let j_source = env.new_string(source)?;
+                        let j_target = env.new_string(target)?;
+                        env.call_static_method(
+                            class,
+                            jni::jni_str!("request"),
+                            jni::jni_sig!((android.app.Activity, long, java.lang.String, java.lang.String, java.lang.String) -> ()),
+                            &[
+                                jni::objects::JValue::Object(activity),
+                                jni::objects::JValue::Long(id as jni::sys::jlong),
+                                jni::objects::JValue::Object(&j_text),
+                                jni::objects::JValue::Object(&j_source),
+                                jni::objects::JValue::Object(&j_target),
+                            ],
+                        )?;
+                    }
+                    None => {
+                        env.call_static_method(
+                            class,
+                            jni::jni_str!("cancel"),
+                            jni::jni_sig!((android.app.Activity, long) -> ()),
+                            &[
+                                jni::objects::JValue::Object(activity),
+                                jni::objects::JValue::Long(id as jni::sys::jlong),
+                            ],
+                        )?;
+                    }
+                }
+                Ok(())
+            })();
+            if r.is_err() && env.exception_check() {
+                // 例外は自動クリアされない（jni 0.22）。後続 JNI に影響させない。
+                env.exception_clear();
+            }
+            Ok(r?)
+        },
+    )
     .is_ok()
 }
 
-/// `MainActivity.cancelTranslation(long)` を JNI で呼ぶ。失敗しても期限切れの確定は変わらない。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
+fn call_request(id: u64, text: &str, source: &str, target: &str) -> bool {
+    call_helper(id, Some((text, source, target)))
+}
+
+/// 失敗しても期限切れの確定は変わらない。
+#[cfg(target_os = "android")]
 fn call_cancel(id: u64) {
-    use super::android::JniCallFailed;
-    let Some(app) = crate::android::android_app() else {
-        return;
-    };
-    // SAFETY: `call_request` と同一の根拠。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    let _ = vm.attach_current_thread(|env: &mut jni::Env| -> Result<(), JniCallFailed> {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: `call_request` と同一の根拠。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        env.call_method(
-            &activity,
-            jni::jni_str!("cancelTranslation"),
-            jni::jni_sig!((long) -> ()),
-            &[jni::objects::JValue::Long(id as jni::sys::jlong)],
-        )?;
-        Ok(())
-    });
+    let _ = call_helper(id, None);
 }
 
 /// `TranslationHelper.nativeOnTranslationResult`（Java 側）から呼ばれる JNI エクスポート。
@@ -184,7 +190,7 @@ fn call_cancel(id: u64) {
 /// JNI 命名規約上の固定シンボル名で、既存の JNI エクスポートと同じ根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_TranslationHelper_nativeOnTranslationResult<'caller>(
     mut unowned_env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
@@ -213,12 +219,12 @@ pub(crate) fn implementation() -> Arc<dyn TextTranslator> {
     Arc::new(AndroidTextTranslator)
 }
 
-/// `device.rs` の `cfg(any(android, test))` でホストのテストビルドにも載るための形。
+/// `lib.rs` の `cfg(any(android, test))` でホストのテストビルドにも載るための形。
 /// dispatch は Android でしか呼ばない。非対応を返し、成功へは倒さない。
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 pub(crate) fn implementation() -> Arc<dyn TextTranslator> {
-    Arc::new(fandhe_device::translation::UnsupportedTextTranslator)
+    Arc::new(crate::contract::UnsupportedTextTranslator)
 }
 
 #[cfg(test)]
@@ -229,7 +235,7 @@ mod tests {
     const T: Duration = Duration::from_millis(500);
 
     fn is_internal(r: &Outcome, s: &str) -> bool {
-        matches!(r, Err(DeviceError::Internal(x)) if *x == s)
+        matches!(r, Err(TranslationError::Internal(x)) if *x == s)
     }
 
     #[test]
@@ -238,7 +244,7 @@ mod tests {
         assert!(is_internal(&decode(RESULT_OK, None), EMPTY));
         assert!(matches!(
             decode(RESULT_UNSUPPORTED, None),
-            Err(DeviceError::Unsupported("translation"))
+            Err(TranslationError::Unsupported)
         ));
         assert!(is_internal(
             &decode(RESULT_LANGUAGE_UNSUPPORTED, None),

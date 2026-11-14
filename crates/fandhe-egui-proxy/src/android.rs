@@ -198,10 +198,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // （`device::picture_in_picture::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::picture_in_picture::reset_pending_tracking();
-    // Issue #535: 端末内翻訳の処理済み世代も破棄する（理由は on_device_llm と同じ。
-    // `device::translation::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::translation::reset_pending_tracking();
     // Issue #560: OS の検索への登録の処理済み世代も破棄する（理由は translation と同じ。
     // `device::spotlight_index::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

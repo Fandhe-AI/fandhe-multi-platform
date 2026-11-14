@@ -178,12 +178,6 @@ pub mod android_screen_orientation;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_spotlight_index;
-/// Issue #537（親 #115）: Android 向け端末内翻訳実装（`android.view.translation`）。
-/// `device/translation.rs` の Android 経路から呼ばれる。JNI の本体はモジュール内側の
-/// `cfg(target_os = "android")` に閉じ、純関数をホストでテストできるよう cfg は `any(android, test)`。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_translation;
 /// Issue #1218: Android 向けカスタム URL scheme 受信実装（Java 側 `MainActivity` の
 /// `onCreate` / `onNewIntent` から JNI で呼ばれる）。`device/url_scheme.rs::
 /// platform_url_scheme` の Android 経路から使われる。
@@ -310,11 +304,6 @@ pub mod apple_speech_recognition;
 /// iOS 経路（#561 で `ios_spotlight_index` 経由）から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_spotlight_index;
-/// Issue #535 macOS・#536 iOS: 端末内翻訳実装（`apple/fandhe_apple_translation.swift` を呼ぶ
-/// C ABI ラッパー）。`device/translation.rs` の macOS 経路と、iOS 経路（#536 で `ios_translation`
-/// 経由）から呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_translation;
 /// Issue #1215・#1217: macOS / iOS 向けカスタム URL scheme 受信（`macos/fandhe_macos_url_scheme.m`
 /// の Apple Event ハンドラ、`ios/fandhe_ios_url_scheme.m` の delegate から呼ばれる C ABI
 /// ラッパー）。`device/url_scheme.rs::platform_url_scheme` の macOS・iOS 経路と
@@ -518,9 +507,6 @@ pub mod ios_screen_orientation;
 /// `device/spotlight_index.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_spotlight_index;
-/// Issue #536: iOS 向け端末内翻訳実装（macOS と共用の `AppleTextTranslator` を返す）。`device/translation.rs` の iOS 経路から呼ばれる。
-#[cfg(target_os = "ios")]
-pub mod ios_translation;
 /// Issue #532: iOS 向け Web 認証セッション実装（`ios/fandhe_ios_web_auth_session.m` の
 /// `ASWebAuthenticationSession` を呼ぶ C ABI ラッパー）。`device/web_auth_session.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -672,10 +658,6 @@ pub mod speech_recognition;
 /// Android 実装、他 OS は `UnsupportedSpotlightIndex` 固定）。
 pub mod spotlight_index;
 pub mod tilt;
-/// Phase 11 の拡充ループ（親 #115、Issue #535）: 端末内翻訳の effect ドライバ（macOS 実装、
-/// iOS・Android も実装済み（#536・#537）、他 OS は `UnsupportedTextTranslator` 固定。Web は
-/// `fandhe-web-dom` が持つ）。
-pub mod translation;
 /// Phase 11 の拡充ループ型サンプル「TSV 読み込み」（親 #979、Issue #980）: `device/
 /// file_pick.rs` のライフサイクル処理（`PickHooks`/`drive_with`/`drive_mobile_with`）と
 /// `bridge` を共有する effect ドライバ。

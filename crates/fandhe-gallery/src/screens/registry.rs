@@ -547,7 +547,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "translation" => fandhe_core::screens::translation::current_screen,
-    fandhe_egui_proxy::device::translation::translation_effect,
+    fandhe_cap_translation::translation_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "spell_check" => fandhe_core::screens::spell_check::current_screen,

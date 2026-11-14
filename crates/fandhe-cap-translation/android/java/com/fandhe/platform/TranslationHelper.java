@@ -23,9 +23,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 
-// 端末内翻訳（Issue #537、親 #115）の Android 実装ヘルパー。MainActivity から生成・委譲される
-// （Rust の `device/android_translation.rs` が `MainActivity.requestTranslation` /
-// `cancelTranslation` を JNI で呼び、結果を `nativeOnTranslationResult` で受ける）。
+// 端末内翻訳（Issue #537、親 #115）の Android 実装ヘルパー。`TranslationLifecycle` が Activity ごとに生成する
+// （Rust の `fandhe-cap-translation/src/android.rs` が static メソッド `request(Activity, ...)` /
+// `cancel(Activity, long)` を JNI で呼び、結果を `nativeOnTranslationResult` で受ける）。
 //
 // 1 回の要求 = `android.view.translation`（API 31 以上）で、翻訳サービスの言語状態を確かめ、
 // 端末内に入っている組だけ Translator を作って 1 回訳す。言語パックのダウンロードは始めない。
@@ -41,7 +41,7 @@ import java.util.concurrent.RejectedExecutionException;
 // API 31 のクラスは `@RequiresApi` を付けた private メソッドの中だけで使い、minSdk 24 の端末で
 // 分岐の手前（`request`）から先へ進まないようにする。原文・訳文・OS の例外メッセージはログに出さない。
 final class TranslationHelper {
-    // 結果コード。SSOT はここで、Rust 側 `android_translation.rs::decode` が同じ値で写像する。
+    // 結果コード。SSOT はここで、Rust 側 `android.rs::decode` が同じ値で写像する。
     static final int RESULT_OK = 0;
     static final int RESULT_UNSUPPORTED = 1;
     static final int RESULT_LANGUAGE_UNSUPPORTED = 2;
@@ -62,7 +62,46 @@ final class TranslationHelper {
     private CancellationSignal signal;
     private volatile boolean destroyed;
 
-    TranslationHelper(ComponentActivity activity) {
+    // Activity ごとの helper。`TranslationLifecycle`（`FeatureLifecycleProvider`）が生成時に付け、破棄時に外す。
+    private static final java.util.Map<android.app.Activity, TranslationHelper> HELPERS =
+            new java.util.WeakHashMap<>();
+
+    static synchronized void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new TranslationHelper(activity));
+    }
+
+    static void detach(android.app.Activity activity) {
+        TranslationHelper helper;
+        synchronized (TranslationHelper.class) {
+            helper = HELPERS.remove(activity);
+        }
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    private static synchronized TranslationHelper of(android.app.Activity activity) {
+        return HELPERS.get(activity);
+    }
+
+    // JNI から呼ばれる入口。helper が無い（生成前・破棄後）ときは失敗で確定する（結果が来ないまま待たせない）。
+    static void request(android.app.Activity activity, long id, String text, String source, String target) {
+        TranslationHelper helper = of(activity);
+        if (helper == null) {
+            nativeOnTranslationResult(id, RESULT_FAILED, null);
+            return;
+        }
+        helper.request(id, text, source, target);
+    }
+
+    static void cancel(android.app.Activity activity, long id) {
+        TranslationHelper helper = of(activity);
+        if (helper != null) {
+            helper.cancel(id);
+        }
+    }
+
+    private TranslationHelper(ComponentActivity activity) {
         this.activity = activity;
     }
 
@@ -96,7 +135,7 @@ final class TranslationHelper {
         release(d, s);
     }
 
-    // MainActivity.onDestroy から UI スレッドで呼ぶ。
+    // `detach`（`TranslationLifecycle.onHostDestroyed`）から UI スレッドで呼ぶ。
     void onDestroy() {
         destroyed = true;
         Runnable d;

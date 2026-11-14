@@ -1,18 +1,18 @@
 //! Phase 11（親 #115）型サンプル「端末内翻訳」（Issue #535）の effect ドライバ。
 //! `fandhe_core::screens::translation`（端末依存ゼロ）の要求を観測し、ワーカースレッドで
-//! `fandhe_device::translation::TextTranslator` を呼んで `CompletionSender` 経由で結果を返す
+//! `crate::contract::TextTranslator` を呼んで `CompletionSender` 経由で結果を返す
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・期限・守る範囲）の SSOT は
-//! `fandhe_device::translation`。
+//! `crate::contract`（`TextTranslator` の doc）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。Web の実体は
 //! `fandhe-web-dom` の非同期 effect（#539）が持つ。
 //!
 //! # OS 別の分担（dispatch は #535 で最終形。後続の子は自分の OS のモジュールだけを埋める）
 //!
-//! - macOS: [`super::apple_translation::AppleTextTranslator`]（#535）
-//! - iOS: `ios_translation`（#536。macOS と共用の `AppleTextTranslator` を返す）
-//! - Android: `android_translation`（#537。`android.view.translation`）
+//! - macOS: [`crate::apple::AppleTextTranslator`]（#535）
+//! - iOS: `crate::ios`（#536。macOS と共用の `AppleTextTranslator` を返す）
+//! - Android: `crate::android`（#537。`android.view.translation`）
 //! - Web: `fandhe-web-dom`（#539。Translator API）
 //! - Windows・Linux: `UnsupportedTextTranslator` 固定（ダミーの成功実装へは倒さない）
 //!
@@ -28,18 +28,18 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::contract::{
+    EMPTY, LANGUAGE_UNSUPPORTED, NOT_INSTALLED, TIMEOUT, TRANSLATE_DEADLINE, TextTranslator,
+    check_result, validate_request,
+};
+use crate::error::TranslationError;
 use fandhe_core::screens::translation::{
-    finish_translate, mark_running, take_request, TranslateFailure, TranslatePhase,
-    TranslationState, SOURCE_LANG, SOURCE_TEXT,
+    SOURCE_LANG, SOURCE_TEXT, TranslateFailure, TranslatePhase, TranslationState, finish_translate,
+    mark_running, take_request,
 };
-use fandhe_device::translation::{
-    check_result, validate_request, TextTranslator, EMPTY, LANGUAGE_UNSUPPORTED, NOT_INSTALLED,
-    TIMEOUT, TRANSLATE_DEADLINE,
-};
-use fandhe_device::DeviceError;
 
-use super::request_slot::{poll_and_finish, RequestSlot, POLL_INTERVAL};
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, poll_and_finish};
 
 const FAILED_MESSAGE: &str = "翻訳できませんでした";
 
@@ -47,19 +47,19 @@ const FAILED_MESSAGE: &str = "翻訳できませんでした";
 fn platform() -> Arc<dyn TextTranslator> {
     #[cfg(target_os = "macos")]
     {
-        Arc::new(super::apple_translation::AppleTextTranslator)
+        Arc::new(crate::apple::AppleTextTranslator)
     }
     #[cfg(target_os = "ios")]
     {
-        super::ios_translation::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_translation::implementation()
+        crate::android::implementation()
     }
     #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
     {
-        Arc::new(fandhe_device::translation::UnsupportedTextTranslator)
+        Arc::new(crate::contract::UnsupportedTextTranslator)
     }
 }
 
@@ -87,23 +87,23 @@ static SESSION: std::sync::OnceLock<Session> = std::sync::OnceLock::new();
 /// 画面状態は `default()`（世代 0）に戻るため、保留が残ると次の「英語に訳す」が発送されず
 /// 飲み込まれる。古いワーカーの結果は照合で捨てられる。走っている OS 呼び出しは止めず走り切らせる。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     if let Some(s) = SESSION.get() {
         s.slot.reset();
         *s.started.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 }
 
-/// `DeviceError` を画面の失敗種別へ写す。内部識別子・OS コード・OS の文言は画面にもログにも出さず、
+/// `TranslationError` を画面の失敗種別へ写す。内部識別子・OS コード・OS の文言は画面にもログにも出さず、
 /// 上記以外は固定文言にする（security.md A09）。
-pub(crate) fn to_failure(e: DeviceError) -> TranslateFailure {
+pub(crate) fn to_failure(e: TranslationError) -> TranslateFailure {
     match e {
-        DeviceError::Unsupported(_) => TranslateFailure::Unsupported,
-        DeviceError::PermissionDenied(_) => TranslateFailure::PermissionDenied,
-        DeviceError::Internal(LANGUAGE_UNSUPPORTED) => TranslateFailure::LanguageUnsupported,
-        DeviceError::Internal(NOT_INSTALLED) => TranslateFailure::NotInstalled,
-        DeviceError::Internal(TIMEOUT) => TranslateFailure::Timeout,
-        DeviceError::Internal(EMPTY) => TranslateFailure::Empty,
+        TranslationError::Unsupported => TranslateFailure::Unsupported,
+        TranslationError::PermissionDenied => TranslateFailure::PermissionDenied,
+        TranslationError::Internal(LANGUAGE_UNSUPPORTED) => TranslateFailure::LanguageUnsupported,
+        TranslationError::Internal(NOT_INSTALLED) => TranslateFailure::NotInstalled,
+        TranslationError::Internal(TIMEOUT) => TranslateFailure::Timeout,
+        TranslationError::Internal(EMPTY) => TranslateFailure::Empty,
         _ => TranslateFailure::Failed(FAILED_MESSAGE.to_string()),
     }
 }
@@ -190,6 +190,12 @@ fn drive(
     );
 }
 
+/// 入口。現在の OS に応じた [`TextTranslator`] を返す（画面の状態型に依存しないため、フレームワークの外のアプリも使える）。
+/// 契約を通らず pull 型で結果を返す経路はなく、Windows・Linux は `Unsupported` 固定の実装を返す。
+pub fn platform_translation() -> Arc<dyn TextTranslator> {
+    platform()
+}
+
 /// `registry.rs` の `effect` 区画から `translation` 画面用に配線される effect ドライバ。
 pub fn translation_effect(state: &TranslationState, sender: &CompletionSender<TranslationState>) {
     static IMPL: std::sync::OnceLock<Arc<dyn TextTranslator>> = std::sync::OnceLock::new();
@@ -206,20 +212,28 @@ pub fn translation_effect(state: &TranslationState, sender: &CompletionSender<Tr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::translation::{request_translate, TargetLang};
-    use fandhe_device::translation::UnsupportedTextTranslator;
+    use fandhe_core::screens::translation::{TargetLang, request_translate};
+    use fandhe_runtime::RepaintWaker;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+    use crate::contract::UnsupportedTextTranslator;
     use std::sync::mpsc;
 
-    type Rx = mpsc::Receiver<crate::app::Completion<TranslationState>>;
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<TranslationState>>;
 
     fn channel() -> (CompletionSender<TranslationState>, Rx) {
         let (tx, rx) = mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     /// 指定の結果を返し、`sleep` だけ待つフェイク。受け取った訳先を記録する。
     struct Fake {
-        result: fn() -> Result<String, DeviceError>,
+        result: fn() -> Result<String, TranslationError>,
         sleep: Duration,
         seen: Mutex<Vec<String>>,
     }
@@ -230,14 +244,14 @@ mod tests {
             _: &str,
             target: &str,
             _: Duration,
-        ) -> Result<String, DeviceError> {
+        ) -> Result<String, TranslationError> {
             self.seen.lock().unwrap().push(target.to_string());
             std::thread::sleep(self.sleep);
             (self.result)()
         }
     }
 
-    fn fake_with(result: fn() -> Result<String, DeviceError>, sleep: Duration) -> Arc<Fake> {
+    fn fake_with(result: fn() -> Result<String, TranslationError>, sleep: Duration) -> Arc<Fake> {
         Arc::new(Fake {
             result,
             sleep,
@@ -245,7 +259,7 @@ mod tests {
         })
     }
 
-    fn fake(result: fn() -> Result<String, DeviceError>) -> Arc<dyn TextTranslator> {
+    fn fake(result: fn() -> Result<String, TranslationError>) -> Arc<dyn TextTranslator> {
         fake_with(result, Duration::ZERO)
     }
 
@@ -344,38 +358,38 @@ mod tests {
 
     #[test]
     fn errors_map_to_failures() {
-        type R = fn() -> Result<String, DeviceError>;
+        type R = fn() -> Result<String, TranslationError>;
         let cases: [(R, TranslateFailure); 8] = [
             (
-                || Err(DeviceError::Unsupported("translation")),
+                || Err(TranslationError::Unsupported),
                 TranslateFailure::Unsupported,
             ),
             (
-                || Err(DeviceError::Internal(LANGUAGE_UNSUPPORTED)),
+                || Err(TranslationError::Internal(LANGUAGE_UNSUPPORTED)),
                 TranslateFailure::LanguageUnsupported,
             ),
             (
-                || Err(DeviceError::Internal(NOT_INSTALLED)),
+                || Err(TranslationError::Internal(NOT_INSTALLED)),
                 TranslateFailure::NotInstalled,
             ),
             (
-                || Err(DeviceError::Internal(TIMEOUT)),
+                || Err(TranslationError::Internal(TIMEOUT)),
                 TranslateFailure::Timeout,
             ),
             (
-                || Err(DeviceError::Internal(EMPTY)),
+                || Err(TranslationError::Internal(EMPTY)),
                 TranslateFailure::Empty,
             ),
             (
-                || Err(DeviceError::PermissionDenied("translation")),
+                || Err(TranslationError::PermissionDenied),
                 TranslateFailure::PermissionDenied,
             ),
             (
-                || Err(DeviceError::InvalidInput("translation lang")),
+                || Err(TranslationError::InvalidInput("translation lang")),
                 TranslateFailure::Failed(FAILED_MESSAGE.into()),
             ),
             (
-                || Err(DeviceError::Internal("translation")),
+                || Err(TranslationError::Internal("translation")),
                 TranslateFailure::Failed(FAILED_MESSAGE.into()),
             ),
         ];
@@ -388,7 +402,7 @@ mod tests {
     #[test]
     fn blank_translation_is_empty_not_success() {
         for f in [
-            (|| Ok(String::new())) as fn() -> Result<String, DeviceError>,
+            (|| Ok(String::new())) as fn() -> Result<String, TranslationError>,
             || Ok("  \n".into()),
         ] {
             let s = run(fake(f));
@@ -398,7 +412,7 @@ mod tests {
 
     #[test]
     fn internal_ids_never_reach_screen_text() {
-        let s = run(fake(|| Err(DeviceError::Internal("secret os detail"))));
+        let s = run(fake(|| Err(TranslationError::Internal("secret os detail"))));
         let text = fandhe_core::screens::translation::error_text(&s);
         assert!(
             !text.contains("secret") && !text.contains("translation "),
@@ -493,7 +507,7 @@ mod tests {
         #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
         assert!(matches!(
             platform().translate("x", "ja", "en", Duration::ZERO),
-            Err(DeviceError::Unsupported(_))
+            Err(TranslationError::Unsupported)
         ));
     }
 }

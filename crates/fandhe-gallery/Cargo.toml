@@ -97,6 +97,7 @@ device = [
   "dep:fandhe-cap-system-accent-color",
   "dep:fandhe-cap-system-sound",
   "dep:fandhe-cap-system-tray",
+  "dep:fandhe-cap-translation",
   "dep:fandhe-cap-usb-device",
   "dep:fandhe-cap-user-idle",
   "dep:fandhe-cap-uwb-ranging",
@@ -242,6 +243,7 @@ fandhe-cap-spell-check = { path = "../fandhe-cap-spell-check", optional = true }
 fandhe-cap-system-accent-color = { path = "../fandhe-cap-system-accent-color", optional = true }
 fandhe-cap-system-sound = { path = "../fandhe-cap-system-sound", optional = true }
 fandhe-cap-system-tray = { path = "../fandhe-cap-system-tray", optional = true }
+fandhe-cap-translation = { path = "../fandhe-cap-translation", optional = true }
 fandhe-cap-usb-device = { path = "../fandhe-cap-usb-device", optional = true }
 fandhe-cap-user-idle = { path = "../fandhe-cap-user-idle", optional = true }
 fandhe-cap-uwb-ranging = { path = "../fandhe-cap-uwb-ranging", optional = true }

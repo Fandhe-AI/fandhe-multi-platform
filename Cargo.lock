@@ -2081,6 +2081,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-translation"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-usb-device"
 version = "0.2.0"
 dependencies = [
@@ -2350,6 +2363,7 @@ dependencies = [
  "fandhe-cap-system-accent-color",
  "fandhe-cap-system-sound",
  "fandhe-cap-system-tray",
+ "fandhe-cap-translation",
  "fandhe-cap-usb-device",
  "fandhe-cap-user-idle",
  "fandhe-cap-uwb-ranging",
@@ -2489,6 +2503,7 @@ dependencies = [
  "fandhe-cap-share-sheet",
  "fandhe-cap-sleep-lock-events",
  "fandhe-cap-system-accent-color",
+ "fandhe-cap-translation",
  "fandhe-cap-usb-device",
  "fandhe-cap-video-capture",
  "fandhe-cap-video-transcode",

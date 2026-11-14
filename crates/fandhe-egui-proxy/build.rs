@@ -117,8 +117,6 @@ fn build() {
     compile_apple_image_recognition();
     // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
     compile_apple_barcode_scan();
-    // `apple/fandhe_apple_translation.swift`（Issue #535 macOS + #536 iOS）も共用する。
-    compile_apple_translation();
     // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
     compile_apple_spotlight_index();
 
@@ -278,20 +276,6 @@ fn compile_apple_image_recognition() {
         "apple/fandhe_apple_image_recognition.m",
         &["Foundation", "Vision"],
     );
-}
-
-/// 端末内翻訳の Swift 薄層 `apple/fandhe_apple_translation.swift`（Issue #535 macOS、iOS は #536）。
-/// Translation を弱リンクする。macOS・iOS の両分岐から呼ぶ。
-fn compile_apple_translation() {
-    compile_swift(&SwiftLib {
-        srcs: &["apple/fandhe_apple_translation.swift"],
-        lib: "fandhe_apple_translation",
-        module: "FandheTranslationBridge",
-        framework: "Translation",
-        weak: true,
-        require_env: "FANDHE_REQUIRE_TRANSLATION",
-        tag: "translation",
-    });
 }
 
 /// アラーム・正確な時刻の予約の Swift 薄層 `ios/fandhe_ios_alarm.swift`（Issue #1077）。
@@ -666,7 +650,6 @@ fn build_macos() {
     compile_apple_image_recognition();
     // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
     compile_apple_barcode_scan();
-    compile_apple_translation();
     // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
     compile_apple_spotlight_index();
     // `apple/fandhe_apple_network_status.m`（Issue #1282）。iOS 分岐と共用する。

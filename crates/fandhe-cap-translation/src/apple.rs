@@ -1,20 +1,20 @@
 //! macOS / iOS 向け端末内翻訳実装（Issue #535 macOS、iOS は #536）。
-//! `device/translation.rs` の macOS 経路（と #536 以降の iOS 経路）から呼ばれ、
+//! `crate::driver` の macOS 経路（と #536 以降の iOS 経路）から呼ばれ、
 //! `apple/fandhe_apple_translation.swift`（Translation。`build.rs` が feature `device` 有効時に
 //! swiftc で静的ライブラリ化）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出し
 //! 1 か所に閉じる（coding-rust.md の FFI 例外規定準拠）。`build.rs` のコンパイル条件・
-//! `device.rs` の mod cfg と同じ OS 集合に保つ。
+//! `lib.rs` の mod cfg と同じ OS 集合に保つ。
 //!
-//! 契約の SSOT は `fandhe_device::translation`。戻りコード → `DeviceError` の写像の SSOT は
+//! 契約の SSOT は `crate::contract`。戻りコード → `TranslationError` の写像の SSOT は
 //! 本ファイルの `match`。呼び出しはブロックするため、呼び出し元はワーカーで呼ぶ。
 
 use std::time::Duration;
 
-use fandhe_device::translation::{
-    check_result, validate_request, TextTranslator, LANGUAGE_UNSUPPORTED, NOT_INSTALLED, TIMEOUT,
-    TRANSLATION_BUF_BYTES,
+use crate::contract::{
+    LANGUAGE_UNSUPPORTED, NOT_INSTALLED, TIMEOUT, TRANSLATION_BUF_BYTES, TextTranslator,
+    check_result, validate_request,
 };
-use fandhe_device::DeviceError;
+use crate::error::TranslationError;
 
 // SAFETY: `apple/fandhe_apple_translation.swift` が `@_cdecl` で定義する C ABI（`build.rs` が
 // macOS・iOS ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は swift 冒頭コメントに集約する。
@@ -45,7 +45,7 @@ impl TextTranslator for AppleTextTranslator {
         source: &str,
         target: &str,
         remaining: Duration,
-    ) -> Result<String, DeviceError> {
+    ) -> Result<String, TranslationError> {
         validate_request(text, source, target)?;
         let deadline_ms = u64::try_from(remaining.as_millis()).unwrap_or(u64::MAX);
         let mut buf = vec![0u8; TRANSLATION_BUF_BYTES];
@@ -72,17 +72,17 @@ impl TextTranslator for AppleTextTranslator {
             0 => {
                 let bytes = buf
                     .get(..out_len)
-                    .ok_or(DeviceError::Internal("translation"))?;
+                    .ok_or(TranslationError::Internal("translation"))?;
                 let text = String::from_utf8(bytes.to_vec())
-                    .map_err(|_| DeviceError::Internal("translation"))?;
+                    .map_err(|_| TranslationError::Internal("translation"))?;
                 check_result(text)
             }
-            1 => Err(DeviceError::Unsupported("translation")),
-            2 => Err(DeviceError::Internal(LANGUAGE_UNSUPPORTED)),
-            3 => Err(DeviceError::Internal(NOT_INSTALLED)),
-            4 => Err(DeviceError::Internal(TIMEOUT)),
-            6 => Err(DeviceError::InvalidInput("translation")),
-            _ => Err(DeviceError::Internal("translation")),
+            1 => Err(TranslationError::Unsupported),
+            2 => Err(TranslationError::Internal(LANGUAGE_UNSUPPORTED)),
+            3 => Err(TranslationError::Internal(NOT_INSTALLED)),
+            4 => Err(TranslationError::Internal(TIMEOUT)),
+            6 => Err(TranslationError::InvalidInput("translation")),
+            _ => Err(TranslationError::Internal("translation")),
         }
     }
 }
@@ -90,7 +90,7 @@ impl TextTranslator for AppleTextTranslator {
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
-    use fandhe_device::translation::TRANSLATE_DEADLINE;
+    use crate::contract::TRANSLATE_DEADLINE;
 
     /// 実呼び出しテストの期限。テスト実行体の main thread は runloop を回さず、Translation の
     /// 問い合わせが返らないことがあるため（実アプリでは winit の runloop が回る）、短くして
@@ -100,11 +100,11 @@ mod tests {
     const TEXT: &str = "今日は良い天気です。";
 
     /// 翻訳の実呼び出し。Ok なら空でない訳文、Err なら契約上の失敗のどれか。
-    fn assert_honest(r: Result<String, DeviceError>) {
+    fn assert_honest(r: Result<String, TranslationError>) {
         match r {
             Ok(t) => assert!(!t.trim().is_empty()),
-            Err(DeviceError::Unsupported(_)) => {}
-            Err(DeviceError::Internal(id)) => {
+            Err(TranslationError::Unsupported) => {}
+            Err(TranslationError::Internal(id)) => {
                 assert!(
                     [NOT_INSTALLED, LANGUAGE_UNSUPPORTED, TIMEOUT].contains(&id),
                     "{id}"
@@ -160,7 +160,7 @@ mod tests {
         ] {
             assert!(matches!(
                 AppleTextTranslator.translate(t, s, d, TRANSLATE_DEADLINE),
-                Err(DeviceError::InvalidInput(_))
+                Err(TranslationError::InvalidInput(_))
             ));
         }
     }
