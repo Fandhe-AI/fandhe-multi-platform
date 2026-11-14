@@ -19,6 +19,7 @@ use fandhe_core::screens::otp_input::{
 };
 use fandhe_device::autofill_otp::AutofillOtp;
 use fandhe_device::DeviceError;
+use fandhe_runtime::{TextInputHint, TextInputHintError};
 
 use crate::app::CompletionSender;
 
@@ -61,12 +62,27 @@ fn drive_wait(state: &OtpInputState, sender: &CompletionSender<OtpInputState>) {
     }));
 }
 
-/// OS 別の [`AutofillOtp`] 実装を返す（後続 issue は各 OS モジュールだけを埋める）。
-fn platform_autofill_otp() -> Box<dyn AutofillOtp> {
-    #[cfg(target_os = "ios")]
-    return super::ios_autofill_otp::implementation();
-    #[cfg(not(target_os = "ios"))]
-    return Box::new(fandhe_device::autofill_otp::UnsupportedAutofillOtp);
+/// 描画層の入力欄のヒント（`HostView::set_text_input_hint`）へつなぐ [`AutofillOtp`] 実装。
+/// 橋渡しを登録するのは iOS だけで、それ以外は描画層が `Unsupported` を返す。`AutofillOtp` は
+/// `Send + Sync` を要求するため、`&dyn HostView` ではなく `&CompletionSender`（`Send + Sync`）を持ち、
+/// 呼ぶたびに `host_view()` を引く。
+struct HostViewAutofillOtp<'a>(&'a CompletionSender<OtpInputState>);
+
+impl AutofillOtp for HostViewAutofillOtp<'_> {
+    fn set_one_time_code_hint(&self, on: bool) -> Result<(), DeviceError> {
+        let hint = if on {
+            TextInputHint::OneTimeCode
+        } else {
+            TextInputHint::Default
+        };
+        self.0
+            .host_view()
+            .set_text_input_hint(hint)
+            .map_err(|e| match e {
+                TextInputHintError::Unsupported => DeviceError::Unsupported("autofill_otp"),
+                TextInputHintError::Failed => DeviceError::Internal("autofill_otp hint"),
+            })
+    }
 }
 
 /// `registry.rs` から配線される effect ドライバ。
@@ -77,7 +93,7 @@ pub fn autofill_otp_effect(state: &OtpInputState, sender: &CompletionSender<OtpI
     if take_hint_request(state).is_none() && take_wait_request(state).is_none() {
         return;
     }
-    drive_hint(state, sender, platform_autofill_otp().as_ref());
+    drive_hint(state, sender, &HostViewAutofillOtp(sender));
     drive_wait(state, sender);
 }
 
@@ -201,12 +217,39 @@ mod tests {
         assert!(s.status.is_empty());
     }
 
+    /// 橋渡しを持たない描画層（ホスト・テスト）では非対応、失敗は固定の内部エラーへ写る。
     #[test]
-    fn host_platform_is_unsupported() {
-        #[cfg(not(target_os = "ios"))]
+    fn host_view_errors_map_to_device_errors() {
+        use fandhe_runtime::{HostView, RepaintWaker};
+        use std::time::Duration;
+
+        struct View(Result<(), TextInputHintError>);
+        impl HostView for View {
+            fn set_text_input_hint(&self, _: TextInputHint) -> Result<(), TextInputHintError> {
+                self.0
+            }
+        }
+        struct Waker(View);
+        impl RepaintWaker for Waker {
+            fn wake(&self) {}
+            fn wake_after(&self, _: Duration) {}
+            fn host_view(&self) -> &dyn HostView {
+                &self.0
+            }
+        }
+        let call = |r| {
+            let (tx, _rx) = std::sync::mpsc::channel();
+            let sender = CompletionSender::new(tx, std::sync::Arc::new(Waker(View(r))));
+            HostViewAutofillOtp(&sender).set_one_time_code_hint(true)
+        };
         assert!(matches!(
-            platform_autofill_otp().set_one_time_code_hint(true),
+            call(Err(TextInputHintError::Unsupported)),
             Err(DeviceError::Unsupported(_))
         ));
+        assert!(matches!(
+            call(Err(TextInputHintError::Failed)),
+            Err(DeviceError::Internal("autofill_otp hint"))
+        ));
+        assert!(call(Ok(())).is_ok());
     }
 }

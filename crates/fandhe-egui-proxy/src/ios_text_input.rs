@@ -37,6 +37,20 @@
 use std::collections::VecDeque;
 
 use crate::soft_keyboard::{keyboard_events, KeyboardSnapshot};
+#[cfg(any(test, target_os = "ios"))]
+use fandhe_runtime::TextInputHintError;
+
+/// `.m` の `fandhe_ios_text_input_set_one_time_code_hint` の戻りコード（0 = 成功、それ以外 =
+/// main 以外・入力欄の橋渡し未完・未知値）を、入力欄のヒントの結果へ写す純関数。
+/// 未完を成功と偽らない（契約表 6）。
+#[cfg(any(test, target_os = "ios"))]
+fn decode_hint_code(code: i32) -> Result<(), TextInputHintError> {
+    if code == 0 {
+        Ok(())
+    } else {
+        Err(TextInputHintError::Failed)
+    }
+}
 
 /// [`QUEUE`] の要素。ObjC 側コールバックの到着順をそのまま保持する
 /// （モジュール doc 参照）。
@@ -268,6 +282,29 @@ mod platform {
     }
 
     // SAFETY: `ios/fandhe_ios_text_input.m` が定義する C ABI（上記
+    // `fandhe_ios_text_input_install` と同じ根拠）。`fandhe_ios_text_input_set_one_time_code_hint` は
+    // 値渡しの i32 1 つだけを取りポインタを経由しない。main スレッドの検査は `.m` 側で行い、
+    // main 以外では UIKit に触れず 2 を返す。
+    #[allow(unsafe_code)]
+    unsafe extern "C" {
+        fn fandhe_ios_text_input_set_one_time_code_hint(on: i32) -> i32;
+    }
+
+    /// `HostView::set_text_input_hint` のフック（`fandhe_render_egui::app::set_text_input_hint_hook`
+    /// へ [`TextInputApp::new`] が登録する）。隠し入力欄の `textContentType` と数字キーボードを
+    /// 切り替える。`Default` は `nil` と既定キーボードへ戻す（日本語入力へ影響を残さない）。
+    /// ワンタイムコードの値はこの経路を通らない。
+    pub(super) fn text_input_hint(
+        hint: fandhe_runtime::TextInputHint,
+    ) -> Result<(), TextInputHintError> {
+        let on = matches!(hint, fandhe_runtime::TextInputHint::OneTimeCode);
+        // SAFETY: 上記 `unsafe extern "C"` ブロックの SAFETY コメント参照。引数は値渡しの i32 のみ。
+        #[allow(unsafe_code)]
+        let code = unsafe { fandhe_ios_text_input_set_one_time_code_hint(i32::from(on)) };
+        decode_hint_code(code)
+    }
+
+    // SAFETY: `ios/fandhe_ios_text_input.m` が定義する C ABI（上記
     // `fandhe_ios_text_input_install` と同じ根拠）。`fandhe_ios_text_input_clear` は
     // 引数・戻り値を持たず、[`TextInputApp::update`] からメインスレッド上でのみ呼ぶ契約。
     // `.m` 側はフィールド未生成なら no-op で、`text` をプログラム的に空にするのみ
@@ -289,6 +326,8 @@ mod platform {
 
     impl TextInputApp {
         pub(crate) fn new(inner: Box<dyn fandhe_render_egui::EguiApp>) -> Self {
+            // 入力欄のヒント（ワンタイムコード等）の橋渡しを描画層へ登録する（プロセスで 1 回）。
+            fandhe_render_egui::app::set_text_input_hint_hook(text_input_hint);
             Self { inner }
         }
     }
@@ -372,6 +411,14 @@ mod tests {
         KeyboardSnapshot {
             committed: committed.to_string(),
             compose: compose.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn hint_code_zero_is_ok_and_others_fail() {
+        assert!(decode_hint_code(0).is_ok());
+        for code in [2, 3, -1, 99] {
+            assert_eq!(decode_hint_code(code), Err(TextInputHintError::Failed));
         }
     }
 

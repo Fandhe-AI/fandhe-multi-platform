@@ -358,8 +358,8 @@ pub mod apple_translation;
 /// `main.rs`（登録）から使われる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_url_scheme;
-/// Phase 11 の拡充ループ（親 #121、Issue #585）: ワンタイムコード入力の effect ドライバ（iOS は
-/// `ios_autofill_otp.rs` で実装、Android・macOS は保留、Windows は非対応で `UnsupportedAutofillOtp` 固定。
+/// Phase 11 の拡充ループ（親 #121、Issue #585）: ワンタイムコード入力の effect ドライバ（iOS は描画層の入力欄の橋渡し
+/// （`HostView::set_text_input_hint`、実装は `ios_text_input.rs`）で実装、Android・macOS は保留、Windows は非対応で `UnsupportedAutofillOtp` 固定。
 /// Web は `fandhe-web-dom` が担う）。
 pub mod autofill_otp;
 /// Phase 11 の拡充ループ（親 #100、Issue #390）: OS 管理のバックグラウンドダウンロードの effect ドライバ
@@ -459,11 +459,6 @@ pub mod ios_alarm;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_app_shortcuts;
-/// Issue #585: iOS 向けワンタイムコード自動入力の骨格（実装は #586）。
-/// `device/autofill_otp.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_autofill_otp;
 /// Issue #390: iOS 向けバックグラウンドダウンロード実装。
 /// `device/background_download.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]

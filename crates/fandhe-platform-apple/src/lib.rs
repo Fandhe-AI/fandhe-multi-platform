@@ -15,6 +15,11 @@
 //!   外部ディスプレイ・URL・ショートカットの通知を受ける機能 crate が本 crate に依存するため、ここに置く。
 //!   winit が scene に対応（upstream #4723）したら削除する。
 //!
+//! - `include/fandhe_ios_app_events.h`（iOS、Issue #1325）: URL・activity の通知名と、共通層の application delegate
+//!   （`ios/fandhe_ios_app_delegate.m`）への登録口 `fandhe_ios_register_background_session`・
+//!   `fandhe_ios_app_delegate_install`。機能の `.m` が `#import` して受ける（Rust の登録 API は持たない）。
+//!   共通層は機能の記号を参照しない。
+//!
 //! `ios_text_input` は winit の補完でレンダラ固有のため、本 crate には置かない。
 
 #![deny(unsafe_code)]

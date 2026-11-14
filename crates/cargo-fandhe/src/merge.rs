@@ -8,7 +8,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Map, Value};
 
-use crate::declaration::{Component, Declaration, Extension, IntentFilter};
+use crate::declaration::{
+    Component, Declaration, Extension, IntentFilter, MetaData, PermissionFlag,
+};
 
 /// 統合できない不一致。どの欄で、どの 2 機能が食い違ったかを含む。
 #[derive(Debug, thiserror::Error, PartialEq)]
@@ -31,10 +33,23 @@ pub struct AppleMerged {
     pub extensions: BTreeMap<String, Extension>,
 }
 
+/// 統合した権限 1 件。
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct PermissionMerged {
+    /// `max-sdk`（None は無指定）。
+    pub max_sdk: Option<u32>,
+    /// `usesPermissionFlags`。機能間で食い違えばエラーなので、統合結果は全機能で同じ集合。
+    pub flags: BTreeSet<PermissionFlag>,
+}
+
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct AndroidMerged {
-    /// 権限名 → `max-sdk`（None は無指定）。
-    pub permissions: BTreeMap<String, Option<u32>>,
+    /// 権限名 → 統合結果。
+    pub permissions: BTreeMap<String, PermissionMerged>,
+    /// MainActivity の追加属性（キー → 値）。
+    pub main_activity_attributes: BTreeMap<String, String>,
+    /// `<application>` 直下の meta-data（`name` → 宣言）。
+    pub application_meta_data: BTreeMap<String, MetaData>,
     /// feature 名 → `required`。
     pub features: BTreeMap<String, bool>,
     pub gradle: BTreeSet<String>,
@@ -147,6 +162,42 @@ fn merge_map(
     }
 }
 
+/// 名前で統合する共通処理。同内容は 1 つ、違えば最初に書いた機能との競合を積む。
+// 呼び出し 4 か所が同じ owners・errs を共有するため、構造体にまとめず引数で渡す。
+#[allow(clippy::too_many_arguments)]
+fn merge_named<T: PartialEq + Clone>(
+    into: &mut BTreeMap<String, T>,
+    name: &str,
+    item: &T,
+    field: String,
+    detail: &str,
+    owners: &mut BTreeMap<String, BTreeMap<String, String>>,
+    id: &str,
+    errs: &mut Vec<MergeError>,
+) {
+    match into.get(name) {
+        Some(cur) if cur != item => errs.push(MergeError {
+            a: owners
+                .entry(field.clone())
+                .or_default()
+                .get("")
+                .cloned()
+                .unwrap_or_default(),
+            field,
+            b: id.to_string(),
+            detail: detail.into(),
+        }),
+        Some(_) => {}
+        None => {
+            owners
+                .entry(field)
+                .or_default()
+                .insert(String::new(), id.to_string());
+            into.insert(name.to_string(), item.clone());
+        }
+    }
+}
+
 /// 宣言を統合する。`decls` は `(id, 宣言)`。id 順に並べ替えて処理する。
 pub fn merge(decls: &[(&str, &Declaration)]) -> Result<Merged, Vec<MergeError>> {
     let mut sorted: Vec<_> = decls.to_vec();
@@ -182,30 +233,16 @@ pub fn merge(decls: &[(&str, &Declaration)]) -> Result<Merged, Vec<MergeError>> 
                 );
             }
             for e in &a.extensions {
-                let key = format!("{os}.extensions.{}", e.name);
-                match dst.extensions.get(&e.name) {
-                    Some(cur) if cur != e => {
-                        errs.push(MergeError {
-                            field: key.clone(),
-                            a: owners
-                                .entry(key)
-                                .or_default()
-                                .get("")
-                                .cloned()
-                                .unwrap_or_default(),
-                            b: id.to_string(),
-                            detail: "同名の拡張で内容が違います".into(),
-                        });
-                    }
-                    Some(_) => {}
-                    None => {
-                        owners
-                            .entry(key)
-                            .or_default()
-                            .insert(String::new(), id.to_string());
-                        dst.extensions.insert(e.name.clone(), e.clone());
-                    }
-                }
+                merge_named(
+                    &mut dst.extensions,
+                    &e.name,
+                    e,
+                    format!("{os}.extensions.{}", e.name),
+                    "同名の拡張で内容が違います",
+                    &mut owners,
+                    id,
+                    &mut errs,
+                );
                 for s in &e.sources {
                     out.extension_sources.push((
                         id.to_string(),
@@ -219,11 +256,42 @@ pub fn merge(decls: &[(&str, &Declaration)]) -> Result<Merged, Vec<MergeError>> 
         if let Some(a) = &d.android {
             let dst = &mut out.android;
             for p in &a.permissions {
-                // 片方が無指定なら無指定、両方指定なら大きい方。
-                dst.permissions
-                    .entry(p.name.clone())
-                    .and_modify(|cur| *cur = cur.zip(p.max_sdk).map(|(x, y)| x.max(y)))
-                    .or_insert(p.max_sdk);
+                let key = format!("android.permissions.{}", p.name);
+                match dst.permissions.get_mut(&p.name) {
+                    Some(cur) => {
+                        if cur.flags != p.flags {
+                            errs.push(MergeError {
+                                a: owners
+                                    .entry(key.clone())
+                                    .or_default()
+                                    .get("")
+                                    .cloned()
+                                    .unwrap_or_default(),
+                                field: key,
+                                b: id.to_string(),
+                                detail: format!(
+                                    "同じ権限で flags が違います: {:?} と {:?}",
+                                    cur.flags, p.flags
+                                ),
+                            });
+                        }
+                        // 片方が無指定なら無指定、両方指定なら大きい方。
+                        cur.max_sdk = cur.max_sdk.zip(p.max_sdk).map(|(x, y)| x.max(y));
+                    }
+                    None => {
+                        owners
+                            .entry(key)
+                            .or_default()
+                            .insert(String::new(), id.to_string());
+                        dst.permissions.insert(
+                            p.name.clone(),
+                            PermissionMerged {
+                                max_sdk: p.max_sdk,
+                                flags: p.flags.clone(),
+                            },
+                        );
+                    }
+                }
             }
             for f in &a.features {
                 dst.features
@@ -238,30 +306,40 @@ pub fn merge(decls: &[(&str, &Declaration)]) -> Result<Merged, Vec<MergeError>> 
                 }
             }
             for k in &a.components {
-                let key = format!("android.components.{}", k.name);
-                match dst.components.get(&k.name) {
-                    Some(cur) if cur != k => {
-                        errs.push(MergeError {
-                            field: key.clone(),
-                            a: owners
-                                .entry(key)
-                                .or_default()
-                                .get("")
-                                .cloned()
-                                .unwrap_or_default(),
-                            b: id.to_string(),
-                            detail: "同名のコンポーネントで内容が違います".into(),
-                        });
-                    }
-                    Some(_) => {}
-                    None => {
-                        owners
-                            .entry(key)
-                            .or_default()
-                            .insert(String::new(), id.to_string());
-                        dst.components.insert(k.name.clone(), k.clone());
-                    }
-                }
+                merge_named(
+                    &mut dst.components,
+                    &k.name,
+                    k,
+                    format!("android.components.{}", k.name),
+                    "同名のコンポーネントで内容が違います",
+                    &mut owners,
+                    id,
+                    &mut errs,
+                );
+            }
+            for m in &a.application_meta_data {
+                merge_named(
+                    &mut dst.application_meta_data,
+                    &m.name,
+                    m,
+                    format!("android.application-meta-data.{}", m.name),
+                    "同名の meta-data で内容が違います",
+                    &mut owners,
+                    id,
+                    &mut errs,
+                );
+            }
+            for (k, v) in &a.main_activity_attributes {
+                merge_named(
+                    &mut dst.main_activity_attributes,
+                    k,
+                    v,
+                    format!("android.main-activity-attributes.{k}"),
+                    "同じ属性で値が違います",
+                    &mut owners,
+                    id,
+                    &mut errs,
+                );
             }
             dst.java
                 .extend(a.java.iter().map(|p| (id.to_string(), p.clone())));

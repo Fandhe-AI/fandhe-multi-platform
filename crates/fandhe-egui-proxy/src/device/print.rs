@@ -18,7 +18,7 @@
 //! 文章の印刷と共用する。
 //!
 //! 1. 取り込み段（全 OS 共通）: 要求の世代を [`CAPTURE`] に期限（単調時計 `Instant` で 2 秒）つきで置き、
-//!    `request_screenshot` で次フレームの読み戻しを依頼する。届いた読み戻しは世代タグで照合し、
+//!    `HostView::request_screenshot` で次フレームの読み戻しを依頼する。届いた読み戻しは世代タグで照合し、
 //!    [`capture_step`] が判定と除去を同じロックの中で行う（契約表 2）。期限切れ・寸法不正は
 //!    OS を呼ばず `Internal("print capture")` で確定する（ダイアログを出す前の失敗）
 //! 2. OS への受け渡し: macOS / Windows は [`Print::print_image`] を UI スレッドで同期に呼ぶ。
@@ -53,6 +53,7 @@ use fandhe_device::print::Print;
 
 use crate::app::CompletionSender;
 use crate::device::request_slot::POLL_INTERVAL;
+use fandhe_runtime::Screenshot;
 
 /// 画面の取り込みを待つ期限（単調時計で測る。契約表 3）。
 #[cfg(any(
@@ -322,7 +323,7 @@ fn capture_step(
     slot: &Mutex<Option<PendingCapture>>,
     generation: u64,
     now: Instant,
-    shot: Option<&egui::ColorImage>,
+    shot: Option<Screenshot>,
 ) -> CaptureStep {
     let mut guard = slot.lock().unwrap_or_else(|e| e.into_inner());
     let Some(pending) = *guard else {
@@ -340,9 +341,8 @@ fn capture_step(
         return CaptureStep::Waiting;
     };
     *guard = None;
-    let [w, h] = shot.size;
-    let image = match (u32::try_from(w), u32::try_from(h)) {
-        (Ok(w), Ok(h)) => PrintImage::new(shot.as_raw().to_vec(), w, h),
+    let image = match (u32::try_from(shot.width), u32::try_from(shot.height)) {
+        (Ok(w), Ok(h)) => PrintImage::new(shot.rgba, w, h),
         _ => Err(DeviceError::Internal("print capture")),
     };
     CaptureStep::Done(image)
@@ -370,7 +370,7 @@ fn drive_screen(
     printer: &dyn Print,
     slot: &Mutex<Option<PendingCapture>>,
     now: Instant,
-    shot: Option<&egui::ColorImage>,
+    shot: Option<Screenshot>,
 ) {
     use fandhe_core::screens::print_page::PrintPhase;
 
@@ -394,9 +394,8 @@ fn drive_screen(
     target_os = "android"
 ))]
 fn on_screen_request(generation: u64, sender: &CompletionSender<PrintPageState>) {
-    use crate::app::EguiSenderExt as _;
     arm_capture(&CAPTURE, generation, Instant::now());
-    sender.request_screenshot(generation);
+    sender.host_view().request_screenshot(generation);
 }
 
 /// Linux ほか: 取り込みをせず、非対応で即確定する。
@@ -419,15 +418,14 @@ pub fn print_screen_page_effect(state: &PrintPageState, sender: &CompletionSende
         on_screen_request(view.generation, sender);
         return;
     }
-    use crate::app::EguiSenderExt as _;
-    let shot = sender.tagged_screenshot(state.generation);
+    let shot = sender.host_view().tagged_screenshot(state.generation);
     drive_screen(
         state,
         sender,
         platform_print().as_ref(),
         &CAPTURE,
         Instant::now(),
-        shot.as_deref(),
+        shot,
     );
 }
 
@@ -446,9 +444,8 @@ pub fn print_screen_page_effect(state: &PrintPageState, sender: &CompletionSende
         return;
     }
     let generation = state.generation;
-    use crate::app::EguiSenderExt as _;
-    let shot = sender.tagged_screenshot(generation);
-    match capture_step(&CAPTURE, generation, Instant::now(), shot.as_deref()) {
+    let shot = sender.host_view().tagged_screenshot(generation);
+    match capture_step(&CAPTURE, generation, Instant::now(), shot) {
         // 取り込みは済んでいる。OS のダイアログの結果を待つ。
         CaptureStep::Idle => poll_bridge(state, sender),
         CaptureStep::Waiting => sender.request_repaint_after(POLL_INTERVAL),
@@ -525,8 +522,12 @@ mod tests {
         slot
     }
 
-    fn red(w: usize, h: usize) -> egui::ColorImage {
-        egui::ColorImage::filled([w, h], egui::Color32::RED)
+    fn red(w: usize, h: usize) -> Screenshot {
+        Screenshot {
+            width: w,
+            height: h,
+            rgba: [255u8, 0, 0, 255].repeat(w * h),
+        }
     }
 
     #[test]
@@ -538,13 +539,13 @@ mod tests {
             CaptureStep::Waiting
         ));
         let img = red(2, 3);
-        let CaptureStep::Done(Ok(p)) = capture_step(&slot, 1, t0, Some(&img)) else {
+        let CaptureStep::Done(Ok(p)) = capture_step(&slot, 1, t0, Some(img.clone())) else {
             panic!("取り込めるはず");
         };
         assert_eq!((p.width(), p.height()), (2, 3));
         // 除去済み。2 回目は何もしない。
         assert!(matches!(
-            capture_step(&slot, 1, t0, Some(&img)),
+            capture_step(&slot, 1, t0, Some(img.clone())),
             CaptureStep::Idle
         ));
     }
@@ -557,11 +558,11 @@ mod tests {
         let img = red(1, 1);
         // 期限後に読み戻しが届いていても成功にしない。
         assert!(matches!(
-            capture_step(&slot, 1, late, Some(&img)),
+            capture_step(&slot, 1, late, Some(img.clone())),
             CaptureStep::Done(Err(DeviceError::Internal("print capture")))
         ));
         assert!(matches!(
-            capture_step(&slot, 1, late, Some(&img)),
+            capture_step(&slot, 1, late, Some(img.clone())),
             CaptureStep::Idle
         ));
     }
@@ -572,7 +573,7 @@ mod tests {
         let slot = pending_slot(1, t0);
         let img = red(1, 1);
         assert!(matches!(
-            capture_step(&slot, 2, t0, Some(&img)),
+            capture_step(&slot, 2, t0, Some(img.clone())),
             CaptureStep::Idle
         ));
         // 古い待ちは除去されている。
@@ -585,7 +586,7 @@ mod tests {
         let slot = pending_slot(1, t0);
         let img = red(0, 0);
         assert!(matches!(
-            capture_step(&slot, 1, t0, Some(&img)),
+            capture_step(&slot, 1, t0, Some(img.clone())),
             CaptureStep::Done(Err(DeviceError::Internal("print capture")))
         ));
     }
@@ -769,7 +770,7 @@ mod tests {
         fn run_screen(
             printer: &dyn Print,
             elapsed: Duration,
-            shot: Option<&egui::ColorImage>,
+            shot: Option<Screenshot>,
         ) -> PrintPageState {
             let mut s = PrintPageState::default();
             screen::print(&mut s);
@@ -788,7 +789,7 @@ mod tests {
         #[test]
         fn screen_submitted_calls_os_once() {
             let f = fake_image(|| Ok(PrintOutcome::Submitted));
-            let s = run_screen(&f, Duration::ZERO, Some(&red(2, 2)));
+            let s = run_screen(&f, Duration::ZERO, Some(red(2, 2)));
             assert_eq!(s.status, screen::SUBMITTED_STATUS);
             assert_eq!(f.calls.load(Ordering::SeqCst), 1);
         }
@@ -805,7 +806,7 @@ mod tests {
         fn screen_expired_capture_never_reaches_os_or_submitted() {
             let f = fake_image(|| Ok(PrintOutcome::Submitted));
             let late = CAPTURE_DEADLINE + Duration::from_millis(1);
-            let s = run_screen(&f, late, Some(&red(2, 2)));
+            let s = run_screen(&f, late, Some(red(2, 2)));
             assert_eq!(f.calls.load(Ordering::SeqCst), 0);
             assert_eq!(
                 s.error,
@@ -821,7 +822,7 @@ mod tests {
         #[test]
         fn screen_invalid_size_never_reaches_os() {
             let f = fake_image(|| Ok(PrintOutcome::Submitted));
-            let s = run_screen(&f, Duration::ZERO, Some(&red(0, 0)));
+            let s = run_screen(&f, Duration::ZERO, Some(red(0, 0)));
             assert_eq!(f.calls.load(Ordering::SeqCst), 0);
             assert!(s.error.starts_with(screen::FAILED_PREFIX));
         }
@@ -829,7 +830,7 @@ mod tests {
         #[test]
         fn screen_cancelled_is_neither_error_nor_submitted() {
             let f = fake_image(|| Ok(PrintOutcome::Cancelled));
-            let s = run_screen(&f, Duration::ZERO, Some(&red(1, 1)));
+            let s = run_screen(&f, Duration::ZERO, Some(red(1, 1)));
             assert_eq!(s.status, screen::CANCELLED_STATUS);
             assert!(s.error.is_empty());
         }
@@ -837,7 +838,7 @@ mod tests {
         #[test]
         fn screen_unsupported_os_shows_unsupported() {
             // 既定実装の print_image は非対応。
-            let s = run_screen(&UnsupportedPrint, Duration::ZERO, Some(&red(1, 1)));
+            let s = run_screen(&UnsupportedPrint, Duration::ZERO, Some(red(1, 1)));
             assert_eq!(s.status, screen::UNSUPPORTED_STATUS);
             assert_ne!(s.status, screen::SUBMITTED_STATUS);
         }
@@ -852,7 +853,7 @@ mod tests {
             let slot = pending_slot(s.generation.wrapping_sub(1), t0);
             let (tx, rx) = std::sync::mpsc::channel();
             let sender = crate::app::egui_sender(tx, egui::Context::default());
-            drive_screen(&s, &sender, &f, &slot, t0, Some(&red(1, 1)));
+            drive_screen(&s, &sender, &f, &slot, t0, Some(red(1, 1)));
             assert!(rx.try_recv().is_err());
             assert_eq!(f.calls.load(Ordering::SeqCst), 0);
         }

@@ -10,7 +10,7 @@
 //! - レンダラ実装は [`RepaintWaker`] を実装して [`CompletionSender`] へ渡す
 //! - OS コールバックのように sender を持たない経路は [`request_repaint`] で起こす
 //!   （レンダラ実装が起動時に [`set_repaint_waker`] で登録する）
-//! - 描画層の観測値と操作（フォーカス・ファイルのドラッグ・拡大率）は [`HostView`]。
+//! - 描画層の観測値と操作（フォーカス・ファイルのドラッグ・拡大率・画面の読み戻し・ウィンドウ操作・入力欄のヒント）は [`HostView`]。
 //!   [`Renderer`] には載せず、[`RepaintWaker::host_view`] で [`CompletionSender::host_view`] へ届ける
 //! - [`image_store`] は effect ドライバが復号済みの画素を描画側へ渡す 1 枠の保管所
 //! - [`request_slot`] は request/response 型の端末機能が使う「要求 1 件の追跡」
@@ -31,8 +31,10 @@ use std::time::Duration;
 /// 描画命令。定義は `fandhe-core`（`Widget::paint` が返すため）にあり、ここは再公開のみ。
 pub use fandhe_core::PaintCommand;
 use fandhe_core::{Screen, StateStore};
-pub use host_view::HostView;
 use host_view::NoHostView;
+pub use host_view::{
+    HostView, Screenshot, TextInputHint, TextInputHintError, WindowCommand, WindowRect, WindowState,
+};
 
 /// レンダラ差し替えの契約。1 フレーム分の `screen` を描き、UI イベントを `store.dispatch` へ流す。
 ///
@@ -226,6 +228,15 @@ mod tests {
         assert!(!v.pointer_primary_down());
         v.set_zoom_factor(2.0);
         assert_eq!(v.applied_zoom_factor(), None);
+        v.request_screenshot(1);
+        assert!(v.tagged_screenshot(1).is_none());
+        assert_eq!(v.viewport_size(), None);
+        assert_eq!(v.window_state(), WindowState::default());
+        v.request_window(WindowCommand::AlwaysOnTop(true));
+        assert_eq!(
+            v.set_text_input_hint(TextInputHint::OneTimeCode),
+            Err(TextInputHintError::Unsupported)
+        );
     }
 
     struct ViewWaker;

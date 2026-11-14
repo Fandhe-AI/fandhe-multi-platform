@@ -8,7 +8,7 @@
 //! 殻（Android の Gradle・Manifest、iOS の Info.plist）が要る値のうち、機能の宣言とアプリの crate から
 //! 決まるものもここで出す（#1259）。基盤の Gradle 依存は `fandhe-platform-android` の宣言から、
 //! MainActivity の宣言（exported・launchMode・configChanges・ライブラリ名・LAUNCHER）と
-//! `FandheLibrary.NAME`、iOS の確定値の Info.plist（実行体名・bundle id・版・`UIDeviceFamily` 等）は
+//! `FandheLibrary.NAME`（機能の宣言からは、MainActivity の許可済み属性と `<application>` 直下の meta-data も出す）、iOS の確定値の Info.plist（実行体名・bundle id・版・`UIDeviceFamily` 等）は
 //! アプリの crate（lib/bin target・version）と `fandhe-app.ios.bundle-id` から出す。
 //!
 //! iOS の `UIApplicationSceneManifest` も殻の確定値として常に出す（アプリ全体の構成で、機能の宣言に
@@ -29,6 +29,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
+use crate::declaration::{main_activity_attribute_allows, ComponentKind, MetaData};
 use crate::merge::{merge, AndroidMerged, AppleMerged};
 use crate::reach::{lib_name, reachable};
 use crate::workspace::{collect, run_metadata, Found};
@@ -302,18 +303,38 @@ fn filter_xml(f: &crate::declaration::IntentFilter, pad: &str, out: &mut String)
     out.push_str(&format!("{pad}</intent-filter>\n"));
 }
 
+/// `<meta-data>` 1 件。コンポーネント内と `<application>` 直下で共用する。
+fn meta_data_xml(md: &MetaData, pad: &str, out: &mut String) {
+    let val = match (&md.resource, &md.value) {
+        (Some(r), _) => xml_attr("resource", r),
+        (None, Some(v)) => xml_attr("value", v),
+        (None, None) => String::new(),
+    };
+    out.push_str(&format!(
+        "{pad}<meta-data{}{val} />\n",
+        xml_attr("name", &md.name)
+    ));
+}
+
 /// manifest merger 用の overlay。`package` 属性は持たず、アプリ本体の Manifest へ足される。
 /// MainActivity の宣言は常に出す（`MAIN_ACTIVITY` は cargo-fandhe の契約）。機能の intent-filter はその後に続ける。
 fn android_manifest(m: &AndroidMerged, lib: &str) -> Result<String, String> {
     let mut o = String::from(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- cargo fandhe gen が生成。編集しない -->\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n",
     );
-    for (name, max) in &m.permissions {
-        let max = max
+    for (name, p) in &m.permissions {
+        let max = p
+            .max_sdk
             .map(|n| xml_attr("maxSdkVersion", &n.to_string()))
             .unwrap_or_default();
+        let flags = if p.flags.is_empty() {
+            String::new()
+        } else {
+            let v: Vec<_> = p.flags.iter().map(|f| f.as_str()).collect();
+            xml_attr("usesPermissionFlags", &v.join("|"))
+        };
         o.push_str(&format!(
-            "    <uses-permission{}{max} />\n",
+            "    <uses-permission{}{max}{flags} />\n",
             xml_attr("name", name)
         ));
     }
@@ -326,8 +347,20 @@ fn android_manifest(m: &AndroidMerged, lib: &str) -> Result<String, String> {
     }
     {
         o.push_str("    <application>\n");
+        // 許可リスト外のキーは殻の属性との二重出力や公開範囲の変更になるので、`merge` を直接呼ぶ経路でも拒否する。
+        let mut extra = String::new();
+        for (k, v) in &m.main_activity_attributes {
+            match main_activity_attribute_allows(k, v) {
+                None => return Err(format!("MainActivity の属性 `{k}` は書けません")),
+                Some(false) => {
+                    return Err(format!("MainActivity の属性 `{k}` の値 {v:?} は使えません"))
+                }
+                Some(true) => {}
+            }
+            extra.push_str(&xml_attr(k, v));
+        }
         o.push_str(&format!(
-            "        <activity{}{}{}{}>\n",
+            "        <activity{}{}{}{}{extra}>\n",
             xml_attr("name", MAIN_ACTIVITY),
             xml_attr("exported", "true"),
             xml_attr("launchMode", "singleTask"),
@@ -343,9 +376,17 @@ fn android_manifest(m: &AndroidMerged, lib: &str) -> Result<String, String> {
             filter_xml(f, "            ", &mut o);
         }
         o.push_str("        </activity>\n");
-        for (name, c) in &m.components {
-            let kind = format!("{:?}", c.kind).to_lowercase();
+        // alias は対象の <activity> が先に宣言されている必要があるので、非 alias → alias の順に出す。
+        let (aliases, others): (Vec<_>, Vec<_>) = m
+            .components
+            .iter()
+            .partition(|(_, c)| c.kind == ComponentKind::ActivityAlias);
+        for (name, c) in others.into_iter().chain(aliases) {
+            let kind = c.kind.tag();
             let mut attrs = xml_attr("name", name) + &xml_attr("exported", &c.exported.to_string());
+            if let Some(t) = &c.target_activity {
+                attrs.push_str(&xml_attr("targetActivity", t));
+            }
             for (k, v) in &c.attributes {
                 if !is_ident(k) {
                     return Err(format!("{name}: 属性名 `{k}` が不正です"));
@@ -357,17 +398,13 @@ fn android_manifest(m: &AndroidMerged, lib: &str) -> Result<String, String> {
                 filter_xml(f, "            ", &mut o);
             }
             for md in &c.meta_data {
-                let val = match (&md.resource, &md.value) {
-                    (Some(r), _) => xml_attr("resource", r),
-                    (None, Some(v)) => xml_attr("value", v),
-                    (None, None) => String::new(),
-                };
-                o.push_str(&format!(
-                    "            <meta-data{}{val} />\n",
-                    xml_attr("name", &md.name)
-                ));
+                meta_data_xml(md, "            ", &mut o);
             }
             o.push_str(&format!("        </{kind}>\n"));
+        }
+        // 機能の宣言から来る application 直下の meta-data（コンポーネントの後、name 順）。
+        for md in m.application_meta_data.values() {
+            meta_data_xml(md, "        ", &mut o);
         }
         o.push_str("    </application>\n");
     }

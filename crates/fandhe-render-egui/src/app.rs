@@ -27,7 +27,10 @@ use crate::recyclers::VirtualListRecyclers;
 /// （`ProxyAppDyn::set_inset_margin_supplier` / `android.rs` 参照、Issue #715）。
 pub type InsetMarginSupplier = Box<dyn Fn(&egui::Context) -> egui::Margin>;
 
-use fandhe_runtime::{drain_completions, HostView, Renderer, RepaintWaker};
+use fandhe_runtime::{
+    drain_completions, HostView, Renderer, RepaintWaker, Screenshot, TextInputHint,
+    TextInputHintError, WindowCommand, WindowRect, WindowState,
+};
 /// 起床と完了通知の型は egui 非依存の `fandhe-runtime` が持つ（Issue #1162）。
 /// `crate::app::CompletionSender` などの既存パスを保つための再公開。
 pub use fandhe_runtime::{Completion, CompletionSender, EffectFn};
@@ -100,6 +103,79 @@ impl HostView for EguiWaker {
         self.0
             .data_mut(|d| d.get_persisted::<f32>(applied_zoom_factor_id()))
     }
+
+    /// `ViewportCommand::Screenshot` を `tag` 付きで依頼する（egui 0.33 は要求の次のフレームを撮る）。
+    fn request_screenshot(&self, tag: u64) {
+        self.0
+            .send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::new(
+                ScreenshotTag(tag),
+            )));
+        self.0.request_repaint();
+    }
+
+    /// このフレームの `Event::Screenshot` から、`tag` が一致するものだけを RGBA8 の所有値で返す。
+    fn tagged_screenshot(&self, tag: u64) -> Option<Screenshot> {
+        let image = self.0.input(|i| find_tagged_screenshot(&i.events, tag))?;
+        Some(Screenshot {
+            width: image.width(),
+            height: image.height(),
+            rgba: image.as_raw().to_vec(),
+        })
+    }
+
+    fn viewport_size(&self) -> Option<(f32, f32)> {
+        let size = self.0.input(|i| i.viewport_rect().size());
+        Some((size.x, size.y))
+    }
+
+    /// `ViewportInfo` の矩形・全画面・最小化と、`Context` の拡大率・画素密度を写す。
+    /// `Context` のロックを入れ子にしないため、拡大率・画素密度は `input` の外で読む。
+    fn window_state(&self) -> WindowState {
+        let (outer, inner, fullscreen, minimized) = self.0.input(|i| {
+            let v = i.viewport();
+            (v.outer_rect, v.inner_rect, v.fullscreen, v.minimized)
+        });
+        let rect = |r: egui::Rect| WindowRect {
+            x: r.min.x,
+            y: r.min.y,
+            width: r.width(),
+            height: r.height(),
+        };
+        WindowState {
+            outer: outer.map(rect),
+            inner: inner.map(rect),
+            fullscreen,
+            minimized,
+            zoom_factor: Some(self.0.zoom_factor()),
+            pixels_per_point: Some(self.0.pixels_per_point()),
+        }
+    }
+
+    fn request_window(&self, command: WindowCommand) {
+        use egui::viewport::WindowLevel;
+        let cmd = match command {
+            WindowCommand::OuterPosition { x, y } => {
+                egui::ViewportCommand::OuterPosition(egui::pos2(x, y))
+            }
+            WindowCommand::InnerSize { width, height } => {
+                egui::ViewportCommand::InnerSize(egui::vec2(width, height))
+            }
+            WindowCommand::AlwaysOnTop(on) => egui::ViewportCommand::WindowLevel(if on {
+                WindowLevel::AlwaysOnTop
+            } else {
+                WindowLevel::Normal
+            }),
+        };
+        self.0.send_viewport_cmd(cmd);
+    }
+
+    /// 登録済みのフック（[`set_text_input_hint_hook`]）へ委譲する。未登録は非対応。
+    fn set_text_input_hint(&self, hint: TextInputHint) -> Result<(), TextInputHintError> {
+        match TEXT_INPUT_HINT_HOOK.get() {
+            Some(hook) => hook(hint),
+            None => Err(TextInputHintError::Unsupported),
+        }
+    }
 }
 
 /// テスト専用の直接構築（旧構造の `device/*` のテストが使う。#1194 で撤去）。`device/*` の effect ドライバ単体テストが、自前の
@@ -127,39 +203,6 @@ pub trait EguiSenderExt {
     #[cfg(not(target_arch = "wasm32"))]
     fn egui_context(&self) -> egui::Context {
         self.egui_ctx().clone()
-    }
-
-    /// このフレームのビューポート（描画領域）の大きさ（`egui::InputState::viewport_rect` への
-    /// 薄い委譲）。画面の向きの effect ドライバ（`device/screen_orientation.rs::drive`）専用で、
-    /// 回転による大きさの変化を契機に向きを即時に読み直すために使う。
-    fn viewport_size(&self) -> (f32, f32) {
-        let size = self.egui_ctx().input(|i| i.viewport_rect().size());
-        (size.x, size.y)
-    }
-
-    /// 次のフレームの描画を `tag` 付きで読み戻すよう依頼する（`ViewportCommand::Screenshot`、
-    /// egui 0.33 は要求の次のフレームを撮る）。画面の印刷（`device/print.rs` の print-screen 経路）
-    /// 専用で、タグは [`Self::tagged_screenshot`] で自分の読み戻しだけを選ぶために使う。
-    /// `egui_context()` を流用しないのは、ctx を丸ごと渡す口を増やさないため。
-    #[cfg(any(
-        target_os = "macos",
-        target_os = "windows",
-        target_os = "ios",
-        target_os = "android"
-    ))]
-    fn request_screenshot(&self, tag: u64) {
-        self.egui_ctx()
-            .send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::new(
-                ScreenshotTag(tag),
-            )));
-        self.egui_ctx().request_repaint();
-    }
-
-    /// このフレームに届いた、`tag` 付きの読み戻し（[`Self::request_screenshot`] の応答）を返す。
-    /// 他のタグ・タグ無し（自動撮影）の読み戻しは返さない。
-    fn tagged_screenshot(&self, tag: u64) -> Option<Arc<egui::ColorImage>> {
-        self.egui_ctx()
-            .input(|i| find_tagged_screenshot(&i.events, tag))
     }
 
     /// キャンバス `id` 上で主ボタンを押下中のポインタ位置（キャンバス左上原点）。押していなければ
@@ -626,6 +669,19 @@ static TEARDOWN_HOOKS: std::sync::OnceLock<TeardownHooks> = std::sync::OnceLock:
 /// (on_exit, on_drop)。
 type TeardownHooks = (fn(), fn());
 
+/// [`set_text_input_hint_hook`] が保持するフック。プロセスで 1 つ。
+static TEXT_INPUT_HINT_HOOK: std::sync::OnceLock<
+    fn(TextInputHint) -> Result<(), TextInputHintError>,
+> = std::sync::OnceLock::new();
+
+/// 入力欄のヒント（[`HostView::set_text_input_hint`]）の橋渡しを登録する（プロセスで 1 回。2 回目以降は無視）。
+///
+/// 本 crate は `forbid(unsafe_code)` で OS の入力欄（iOS の UIKit 等）を触れないため、橋渡しを持つ層
+/// （現状は `fandhe-egui-proxy` の iOS 入力橋渡し）が登録する。未登録なら `Unsupported` を返す。
+pub fn set_text_input_hint_hook(hook: fn(TextInputHint) -> Result<(), TextInputHintError>) {
+    let _ = TEXT_INPUT_HINT_HOOK.set(hook);
+}
+
 /// [`ProxyApp`] の終了・破棄時に呼ぶ解放処理を登録する（プロセスで 1 回。2 回目以降は無視）。
 ///
 /// 端末機能（`fandhe-device` 等）を知らない描画層から、端末リソースの解放を呼べるようにする口で、
@@ -769,5 +825,87 @@ mod tagged_screenshot_tests {
         assert!(find_tagged_screenshot(&events, 2).is_none());
         assert!(find_tagged_screenshot(&events[..1], 1).is_none());
         assert!(find_tagged_screenshot(&events, 1).is_some());
+    }
+}
+
+#[cfg(test)]
+mod host_view_readback_tests {
+    use super::*;
+
+    fn waker() -> EguiWaker {
+        EguiWaker(egui::Context::default())
+    }
+
+    /// 一致するタグの画像だけが、寸法と画素列つきで返る。
+    #[test]
+    fn tagged_screenshot_returns_matching_tag_only() {
+        let w = waker();
+        let ev = |ud| egui::Event::Screenshot {
+            viewport_id: egui::ViewportId::ROOT,
+            user_data: ud,
+            image: Arc::new(egui::ColorImage::filled([2, 3], egui::Color32::RED)),
+        };
+        let input = egui::RawInput {
+            events: vec![
+                ev(egui::UserData::default()),
+                ev(egui::UserData::new(ScreenshotTag(7))),
+            ],
+            ..Default::default()
+        };
+        let mut got = (None, None);
+        let _ = w.0.run(input, |_| {
+            got = (w.tagged_screenshot(7), w.tagged_screenshot(8));
+        });
+        let shot = got.0.expect("タグ 7 は返る");
+        assert_eq!((shot.width, shot.height, shot.rgba.len()), (2, 3, 24));
+        assert!(got.1.is_none());
+    }
+
+    /// 読み戻し・ウィンドウ操作の依頼が viewport コマンドとして出る。
+    #[test]
+    fn requests_become_viewport_commands() {
+        let w = waker();
+        w.request_screenshot(1);
+        w.request_window(WindowCommand::AlwaysOnTop(true));
+        w.request_window(WindowCommand::OuterPosition { x: 1.0, y: 2.0 });
+        let out = w.0.run(egui::RawInput::default(), |_| {});
+        let cmds = &out.viewport_output[&egui::ViewportId::ROOT].commands;
+        assert!(cmds
+            .iter()
+            .any(|c| matches!(c, egui::ViewportCommand::Screenshot(_))));
+        assert!(cmds.iter().any(|c| matches!(
+            c,
+            egui::ViewportCommand::WindowLevel(egui::viewport::WindowLevel::AlwaysOnTop)
+        )));
+        assert!(cmds
+            .iter()
+            .any(|c| matches!(c, egui::ViewportCommand::OuterPosition(_))));
+    }
+
+    /// 新規の `Context` では位置・大きさは読めず、拡大率・画素密度は読める。
+    #[test]
+    fn window_state_reads_zoom_and_density() {
+        let s = waker().window_state();
+        assert!(s.outer.is_none() && s.inner.is_none());
+        assert!(s.zoom_factor.is_some() && s.pixels_per_point.is_some());
+    }
+
+    /// フックは未登録なら非対応、登録後は戻り値がそのまま返る（static のため 1 テストにまとめる）。
+    #[test]
+    fn text_input_hint_hook_registration() {
+        let w = waker();
+        assert_eq!(
+            w.set_text_input_hint(TextInputHint::OneTimeCode),
+            Err(TextInputHintError::Unsupported)
+        );
+        set_text_input_hint_hook(|h| match h {
+            TextInputHint::OneTimeCode => Ok(()),
+            TextInputHint::Default => Err(TextInputHintError::Failed),
+        });
+        assert_eq!(w.set_text_input_hint(TextInputHint::OneTimeCode), Ok(()));
+        assert_eq!(
+            w.set_text_input_hint(TextInputHint::Default),
+            Err(TextInputHintError::Failed)
+        );
     }
 }
