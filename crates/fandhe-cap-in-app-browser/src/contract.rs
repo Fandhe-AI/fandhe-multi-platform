@@ -93,6 +93,8 @@ pub enum InAppBrowserFailure {
     TimedOut,
     /// 表示前の中断（背景遷移・Activity 再生成・終了）。
     Interrupted,
+    /// 先行の要求（画面・公開入口）が進行中、または結果が未取得で、新しい要求を受け付けない。
+    Busy,
     /// それ以外・未知のコード。
     Internal,
 }

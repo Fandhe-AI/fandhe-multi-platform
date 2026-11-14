@@ -48,7 +48,7 @@ use fandhe_core::screens::in_app_browser_show::{
 };
 
 use fandhe_runtime::CompletionSender;
-use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, poll_and_finish};
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, SlotOwner, poll_and_finish_owned};
 
 /// OS 層から届く結果。
 type Outcome = Result<InAppBrowserOutcome, InAppBrowserFailure>;
@@ -82,6 +82,10 @@ struct Active {
 /// 引数で渡す（`poll_and_finish` が `'static` を要るためスロットは leak）。
 struct Bridge {
     slot: &'static RequestSlot<Outcome>,
+    /// 公開入口 [`open_url`] が追う要求。画面側はこの要求・未取得の結果を置き換えない。
+    public: &'static SlotOwner,
+    /// 画面 effect が追う要求。公開入口はこの要求・未取得の結果を置き換えない。
+    screen: &'static SlotOwner,
     active: Mutex<Option<Active>>,
     deadline: Duration,
 }
@@ -90,6 +94,8 @@ impl Bridge {
     fn new(deadline: Duration) -> Self {
         Self {
             slot: Box::leak(Box::new(RequestSlot::new())),
+            public: Box::leak(Box::new(SlotOwner::new())),
+            screen: Box::leak(Box::new(SlotOwner::new())),
             active: Mutex::new(None),
             deadline,
         }
@@ -99,21 +105,23 @@ impl Bridge {
         self.active.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// 発送済み（OS 呼び出し中、または結果が画面へ未反映）の要求があるか。
-    fn has_pending(&self) -> bool {
-        self.lock().is_some() || self.slot.snapshot().is_some()
+    /// 画面側の要求が発送済み（OS 呼び出し中、または結果が画面へ未反映）か。
+    fn screen_pending(&self) -> bool {
+        let mine = self.screen.current();
+        mine != 0 && self.slot.snapshot().is_some_and(|(id, _)| id == mine)
     }
 
-    /// 新しい要求を登録して id を返す。OS へ渡す前に呼び、即時の完了も照合できるようにする。
-    fn begin(&self) -> u64 {
+    /// 進行中の要求も未取得の結果（画面・公開とも）も無いときだけ、`owner` の分として登録して id を返す。
+    /// 先行を置き換えず `None`。OS へ渡す前に呼び、即時の完了も照合できるようにする。
+    fn begin(&self, owner: &SlotOwner) -> Option<u64> {
         let mut active = self.lock();
-        let request_id = self.slot.begin();
+        let request_id = owner.begin_excluding(self.slot, &[self.public, self.screen])?;
         *active = Some(Active {
             request_id,
             started: Instant::now(),
             presenting: false,
         });
-        request_id
+        Some(request_id)
     }
 
     #[allow(dead_code)] // 呼び出し元は OS 層（#702・#703）と単体テスト。
@@ -168,6 +176,8 @@ impl Bridge {
         let mut active = self.lock();
         *active = None;
         self.slot.reset();
+        self.public.adopt(0);
+        self.screen.adopt(0);
     }
 }
 
@@ -210,14 +220,19 @@ fn to_core(f: InAppBrowserFailure) -> CoreFailure {
         InAppBrowserFailure::NoBrowser => CoreFailure::NoBrowser,
         InAppBrowserFailure::TimedOut => CoreFailure::TimedOut,
         InAppBrowserFailure::Interrupted => CoreFailure::Interrupted,
-        InAppBrowserFailure::Internal => CoreFailure::Internal,
+        InAppBrowserFailure::Busy | InAppBrowserFailure::Internal => CoreFailure::Internal,
     }
 }
 
 /// 要求を登録し、検査を通った URL だけを OS へ渡す。検査失敗・同期失敗はその場で確定する。
-/// 登録した要求 id を返す（結果の取得に使う）。
-fn start_request(bridge: &Bridge, imp: &dyn InAppBrowser, raw_url: &str) -> u64 {
-    let request_id = bridge.begin();
+/// 登録した要求 id を返す（結果の取得に使う）。先行が進行中・未取得なら置き換えず `None`。
+fn start_request(
+    bridge: &Bridge,
+    imp: &dyn InAppBrowser,
+    owner: &SlotOwner,
+    raw_url: &str,
+) -> Option<u64> {
+    let request_id = bridge.begin(owner)?;
     match validate_url(raw_url) {
         Err(f) => bridge.complete_from_os(request_id, Err(f)),
         Ok(url) => {
@@ -226,19 +241,23 @@ fn start_request(bridge: &Bridge, imp: &dyn InAppBrowser, raw_url: &str) -> u64 
             }
         }
     }
-    request_id
+    Some(request_id)
 }
 
 /// 画面状態に依存しない公開入口。URL を検査して要求を登録し、現在の OS 実装へ渡して要求 id を返す。
-/// 同時に追跡できる要求は 1 件で、新しい要求は前の要求を置き換える。結果は [`poll_open_result`] で
-/// 取得する（OS 層の `try_begin_present` はこの要求を受理する）。
-pub fn open_url(raw_url: &str) -> u64 {
+/// 同時に追跡できる要求は 1 件。先行の要求（画面経由を含む）が進行中、または結果が未取得なら
+/// 置き換えず [`InAppBrowserFailure::Busy`] を返す。結果は [`poll_open_result`] で取得する
+/// （OS 層の `try_begin_present` はこの要求を受理する）。
+pub fn open_url(raw_url: &str) -> Result<u64, InAppBrowserFailure> {
     static IMPL: OnceLock<Arc<dyn InAppBrowser>> = OnceLock::new();
+    let b = bridge();
     start_request(
-        bridge(),
+        b,
         &**IMPL.get_or_init(platform_in_app_browser),
+        b.public,
         raw_url,
     )
+    .ok_or(InAppBrowserFailure::Busy)
 }
 
 /// [`open_url`] の結果の取得口。表示開始前に期限を過ぎていれば `TimedOut` を確定し、
@@ -247,8 +266,16 @@ pub fn poll_open_result(
     request_id: u64,
 ) -> Option<Result<InAppBrowserOutcome, InAppBrowserFailure>> {
     let b = bridge();
+    // 画面側の要求の結果は取らない。
+    if request_id == 0 || request_id != b.public.current() {
+        return None;
+    }
     b.expire_if_due();
-    b.slot.take_ready(request_id)
+    let r = b.slot.take_ready(request_id);
+    if r.is_some() {
+        b.public.release(request_id);
+    }
+    r
 }
 
 /// 1 フレームぶんの処理。要求の発送・期限判定・完了の画面反映を行う。
@@ -260,11 +287,18 @@ fn drive(
 ) {
     if let Some((_, url)) = take_request(state) {
         // 保留ありは発送済み（`mark_running` の適用待ち）。二重に発送しない。
-        if bridge.has_pending() {
+        if bridge.screen_pending() {
             return;
         }
         let _ = sender.send(Box::new(mark_running));
-        start_request(bridge, &**imp, url);
+        // 公開入口などの先行を置き換えず、画面には失敗として返す。
+        if start_request(bridge, &**imp, bridge.screen, url).is_none() {
+            let generation = state.generation;
+            let _ = sender.send(Box::new(move |s: &mut InAppBrowserShowState| {
+                finish_open(s, generation, Err(CoreFailure::Internal));
+            }));
+            return;
+        }
         sender.request_repaint_after(POLL_INTERVAL);
         return;
     }
@@ -273,13 +307,17 @@ fn drive(
     }
     let generation = state.generation;
     bridge.expire_if_due();
-    poll_and_finish(
+    poll_and_finish_owned(
         bridge.slot,
+        bridge.screen,
         sender,
         |_| {},
         move |s: &mut InAppBrowserShowState, outcome| {
             let result = outcome.map(|_| ()).map_err(to_core);
             finish_open(s, generation, result)
+        },
+        move |s: &mut InAppBrowserShowState| {
+            finish_open(s, generation, Err(CoreFailure::Interrupted));
         },
     );
 }
@@ -454,7 +492,7 @@ mod tests {
         // 公開入口と同じ経路（登録 → OS 呼び出し → 結果取得）が画面状態なしで通る。
         let bridge = new_bridge(Duration::from_secs(30));
         let f = fake(Mode::PresentThenClose(0), bridge);
-        let id = start_request(bridge, &*f, "https://example.com/");
+        let id = start_request(bridge, &*f, bridge.public, "https://example.com/").unwrap();
         let end = Instant::now() + Duration::from_secs(5);
         let r = loop {
             if let Some(r) = bridge.slot.take_ready(id) {
@@ -464,7 +502,7 @@ mod tests {
             std::thread::sleep(Duration::from_millis(5));
         };
         assert_eq!(r, Ok(InAppBrowserOutcome::Closed));
-        let id = start_request(bridge, &*f, "file:///x");
+        let id = start_request(bridge, &*f, bridge.public, "file:///x").unwrap();
         assert_eq!(
             bridge.slot.take_ready(id),
             Some(Err(InAppBrowserFailure::InvalidUrl))
@@ -475,12 +513,55 @@ mod tests {
     fn public_open_url_unsupported_off_mobile() {
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         {
-            let id = open_url("https://example.com/");
+            let id = open_url("https://example.com/").unwrap();
             assert_eq!(
                 poll_open_result(id),
                 Some(Err(InAppBrowserFailure::Unsupported))
             );
         }
+    }
+
+    #[test]
+    fn second_open_while_pending_is_busy_and_keeps_first() {
+        let bridge = new_bridge(Duration::from_secs(30));
+        let f = fake(Mode::Silent, bridge);
+        let id = start_request(bridge, &*f, bridge.public, "https://example.com/").unwrap();
+        assert!(start_request(bridge, &*f, bridge.public, "https://example.com/").is_none());
+        assert!(start_request(bridge, &*f, bridge.screen, "https://example.com/").is_none());
+        assert_eq!(f.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(bridge.slot.snapshot(), Some((id, None)));
+    }
+
+    #[test]
+    fn screen_does_not_replace_or_consume_public_result() {
+        let bridge = new_bridge(Duration::from_secs(30));
+        let f = fake(Mode::Interrupt, bridge);
+        let imp: Arc<dyn InAppBrowser> = f.clone();
+        let id = start_request(bridge, &*f, bridge.public, "https://example.com/").unwrap();
+        // 公開入口の結果が未取得のまま画面が要求しても、置き換えず・横取りせず失敗にする。
+        let (sender, rx) = channel();
+        let mut state = InAppBrowserShowState::default();
+        request_open(&mut state);
+        pump(&mut state, &sender, &rx, &imp, bridge);
+        assert_eq!(state.result, Some(Err(CoreFailure::Internal)));
+        assert_eq!(f.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            bridge.slot.snapshot(),
+            Some((id, Some(Err(InAppBrowserFailure::Interrupted))))
+        );
+        assert_eq!(
+            bridge.slot.take_ready(id),
+            Some(Err(InAppBrowserFailure::Interrupted))
+        );
+    }
+
+    #[test]
+    fn public_cannot_poll_screen_request() {
+        let bridge = new_bridge(Duration::from_secs(30));
+        let f = fake(Mode::Silent, bridge);
+        let id = start_request(bridge, &*f, bridge.screen, "https://example.com/").unwrap();
+        assert_ne!(bridge.public.current(), id);
+        assert_eq!(bridge.screen.current(), id);
     }
 
     #[test]
@@ -492,11 +573,14 @@ mod tests {
             "https://user@example.com/",
             "file:///x",
         ] {
-            let _ = start_request(bridge, &*f, raw);
+            let id = start_request(bridge, &*f, bridge.public, raw).unwrap();
+            assert_eq!(
+                bridge.slot.take_ready(id),
+                Some(Err(InAppBrowserFailure::InvalidUrl))
+            );
+            bridge.public.release(id);
         }
         assert_eq!(f.calls.load(Ordering::SeqCst), 0);
-        let (_, ready) = bridge.slot.snapshot().unwrap();
-        assert_eq!(ready, Some(Err(InAppBrowserFailure::InvalidUrl)));
     }
 
     #[test]
@@ -534,7 +618,7 @@ mod tests {
     #[test]
     fn present_attempt_after_deadline_times_out_atomically() {
         let bridge = new_bridge(Duration::from_millis(10));
-        let id = bridge.begin();
+        let id = bridge.begin(bridge.public).unwrap();
         std::thread::sleep(Duration::from_millis(30));
         assert!(!bridge.try_begin_present(id));
         assert_eq!(
@@ -565,7 +649,7 @@ mod tests {
     #[test]
     fn stale_request_id_is_dropped_and_duplicates_first_wins() {
         let bridge = new_bridge(Duration::from_secs(30));
-        let id = bridge.begin();
+        let id = bridge.begin(bridge.public).unwrap();
         assert!(bridge.try_begin_present(id));
         bridge.complete_from_os(id + 1, Err(InAppBrowserFailure::NoBrowser));
         assert_eq!(bridge.slot.snapshot(), Some((id, None)));
@@ -578,7 +662,7 @@ mod tests {
         // 表示開始は 1 回だけ。
         let id2 = {
             bridge.reset();
-            bridge.begin()
+            bridge.begin(bridge.public).unwrap()
         };
         assert!(bridge.try_begin_present(id2));
         assert!(!bridge.try_begin_present(id2));
