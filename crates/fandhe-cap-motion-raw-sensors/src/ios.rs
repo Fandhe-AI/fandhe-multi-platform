@@ -1,8 +1,8 @@
 //! iOS 向けジャイロ・磁気・線形加速度の生値実装（Issue #900、親 #180）。
 //! `ios/fandhe_ios_motion_raw_sensors.m`（CoreMotion `CMMotionManager`、`build.rs` が iOS ターゲットの
 //! feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 3 関数で呼ぶ。#898 のスタブを
-//! 置き換えたもので、dispatch（`device/motion_raw_sensors.rs`）・共通コア画面・trait 契約
-//! （`fandhe_device::motion_raw_sensors`）は変えない。
+//! 置き換えたもので、dispatch（本 crate の `driver`）・共通コア画面・trait 契約
+//! （`crate::contract`）は変えない。
 //!
 //! 角速度は rad/s、磁場は µT、線形加速度は G を、OS が返した単位と軸のまま渡す。`.m` は生の double と
 //! 状態コードを返すだけで、契約値への写像と有限性の検査は [`start_result`] / [`read_result`] が行う
@@ -11,7 +11,7 @@
 //! # 再描画・ライフサイクル
 //!
 //! `.m` が値・失敗を確定した直後（ジャイロ・磁気の handler、前景復帰）に
-//! `fandhe_rust_motion_raw_sensors_changed` を呼び、`crate::ios::request_repaint` で次フレームを起こす。
+//! `fandhe_rust_motion_raw_sensors_changed` を呼び、`fandhe_runtime::request_repaint` で次フレームを起こす。
 //! 背景遷移ではジャイロと磁気の購読を止めて値を捨て、前景復帰で開始したままの分だけ張り直す。
 //!
 //! # 守る範囲・守らない範囲
@@ -27,10 +27,14 @@
 //!   （値は返さない）
 //! - 実際の配信周期は実機で確認する（#885）
 
+// `.m` が tilt-motion の `.m`（`fandhe_ios_shared_motion_manager` など）の記号を使う。依存 crate を実際に参照して、最終成果物の
+// リンク対象から外れないようにする（iOS の `.m` 間の記号参照）。
+#[cfg(target_os = "ios")]
+const _: fn() -> Box<dyn fandhe_cap_tilt_motion::Motion> =
+    fandhe_cap_tilt_motion::platform_tilt_motion;
+
 #[cfg(any(target_os = "ios", test))]
-use fandhe_device::motion_raw_sensors::{
-    validate_reading, RawKind, RawReading, RawSensorFailure, RawUnit,
-};
+use crate::contract::{RawKind, RawReading, RawSensorFailure, RawUnit, validate_reading};
 
 /// `.m` の kind コード（0 角速度 / 1 磁場 / 2 線形加速度）。
 #[cfg(any(target_os = "ios", test))]
@@ -92,10 +96,13 @@ fn read_result(
 #[cfg(target_os = "ios")]
 mod imp {
     use super::*;
-    use fandhe_device::motion_raw_sensors::MotionRawSensors;
+    use crate::contract::MotionRawSensors;
     use std::sync::Arc;
 
-    extern "C" {
+    // SAFETY: `ios/fandhe_ios_motion_raw_sensors.m` が定義する C ABI（`build.rs` が iOS ターゲットでコンパイル）。契約は各呼び出しの
+    // `// SAFETY:` と `.m` 冒頭コメントに集約する。
+    #[allow(unsafe_code)]
+    unsafe extern "C" {
         fn fandhe_ios_motion_raw_start(kind: i32) -> i32;
         fn fandhe_ios_motion_raw_read(kind: i32, x: *mut f64, y: *mut f64, z: *mut f64) -> i32;
         fn fandhe_ios_motion_raw_stop(kind: i32);
@@ -126,7 +133,7 @@ mod imp {
         }
     }
 
-    /// iOS の `MotionRawSensors` 実装を返す（`device/motion_raw_sensors.rs` の iOS 経路から呼ばれる）。
+    /// iOS の `MotionRawSensors` 実装を返す（本 crate の `driver` の iOS 経路から呼ばれる）。
     pub(crate) fn implementation() -> Arc<dyn MotionRawSensors> {
         Arc::new(IosMotionRawSensors)
     }
@@ -139,9 +146,9 @@ pub(crate) use imp::implementation;
 /// しない（契約表 11）。panic しない。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_motion_raw_sensors_changed() {
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }
 
 #[cfg(test)]

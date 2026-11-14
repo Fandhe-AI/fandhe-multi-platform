@@ -1,9 +1,9 @@
 //! Android 向けジャイロ・磁気・線形加速度の生値実装（Issue #901、親 #180）。
-//! `device/motion_raw_sensors.rs` の Android 経路から egui スレッドで呼ばれ、
-//! `MainActivity.motionRawSensorsStart` / `Read` / `Stop` を同期 JNI で呼んで最新値を pull する
+//! 本 crate の `driver` の Android 経路から egui スレッドで呼ばれ、
+//! `MotionRawSensorsHelper` の static `start` / `read` / `stop`（第 1 引数は Activity）を同期 JNI で呼んで最新値を pull する
 //! （継続配信型のため要求 id・`RequestSlot` は使わない）。Java 側は `MotionRawSensorsHelper`
 //! （`TYPE_GYROSCOPE` / `TYPE_MAGNETIC_FIELD` / `TYPE_LINEAR_ACCELERATION`）。
-//! API・単位・背景遷移の扱いは `fandhe_device::motion_raw_sensors` のモジュール doc に従う。
+//! API・単位・背景遷移の扱いは `crate::contract` のモジュール doc に従う。
 //!
 //! # 結果コード（SSOT は Java `MotionRawSensorsHelper`）
 //!
@@ -29,8 +29,8 @@
 
 use std::sync::Arc;
 
-use fandhe_device::motion_raw_sensors::{
-    validate_reading, MotionRawSensors, RawKind, RawReading, RawSensorFailure, RawUnit,
+use crate::contract::{
+    MotionRawSensors, RawKind, RawReading, RawSensorFailure, RawUnit, validate_reading,
 };
 
 const START_OK: i32 = 0;
@@ -98,36 +98,35 @@ fn decode_read(kind: RawKind, v: &[i64]) -> Result<Option<RawReading>, RawSensor
 #[cfg(target_os = "android")]
 struct AndroidMotionRawSensors;
 
-/// `MainActivity` の同期メソッドを呼ぶ。Activity 未確立・JNI 失敗は `None`。
-/// 2 箇所の `unsafe` は `android_environment_sensors.rs::call_activity` と同一の根拠。
+/// `MotionRawSensorsHelper` の static メソッドを呼ぶ。Activity 未確立・JNI 失敗は `None`。`unsafe` は共通層
+/// `fandhe_platform_android::with_activity_class` に閉じている。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
-fn call_activity<T>(
-    f: impl FnOnce(&mut jni::Env, &jni::objects::JObject) -> Result<T, super::android::JniCallFailed>,
+fn call_helper<T>(
+    f: impl FnOnce(
+        &mut jni::Env,
+        &jni::objects::JObject,
+        &jni::objects::JClass,
+    ) -> Result<T, fandhe_platform_android::JniCallFailed>,
 ) -> Option<T> {
-    let app = crate::android::android_app()?;
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        f(env, &activity)
-    })
+    let app = fandhe_platform_android::android_app()?;
+    fandhe_platform_android::with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.MotionRawSensorsHelper"),
+        f,
+    )
     .ok()
 }
 
 #[cfg(target_os = "android")]
 impl MotionRawSensors for AndroidMotionRawSensors {
     fn start(&self, kind: RawKind) -> Result<(), RawSensorFailure> {
-        let code = call_activity(|env, a| {
+        let code = call_helper(|env, a, class| {
             Ok(env
-                .call_method(
-                    a,
-                    jni::jni_str!("motionRawSensorsStart"),
-                    jni::jni_sig!((int) -> int),
-                    &[jni::JValue::Int(kind_code(kind))],
+                .call_static_method(
+                    class,
+                    jni::jni_str!("start"),
+                    jni::jni_sig!((android.app.Activity, int) -> int),
+                    &[jni::JValue::Object(a), jni::JValue::Int(kind_code(kind))],
                 )?
                 .i()?)
         })
@@ -136,13 +135,13 @@ impl MotionRawSensors for AndroidMotionRawSensors {
     }
 
     fn read(&self, kind: RawKind) -> Result<Option<RawReading>, RawSensorFailure> {
-        let values = call_activity(|env, a| {
+        let values = call_helper(|env, a, class| {
             use jni::objects::JLongArray;
-            let ret = env.call_method(
-                a,
-                jni::jni_str!("motionRawSensorsRead"),
-                jni::jni_sig!((int) -> long[]),
-                &[jni::JValue::Int(kind_code(kind))],
+            let ret = env.call_static_method(
+                class,
+                jni::jni_str!("read"),
+                jni::jni_sig!((android.app.Activity, int) -> long[]),
+                &[jni::JValue::Object(a), jni::JValue::Int(kind_code(kind))],
             )?;
             let arr = env.cast_local::<JLongArray>(ret.l()?)?;
             if arr.is_null() {
@@ -162,19 +161,19 @@ impl MotionRawSensors for AndroidMotionRawSensors {
     }
 
     fn stop(&self, kind: RawKind) {
-        let _ = call_activity(|env, a| {
-            env.call_method(
-                a,
-                jni::jni_str!("motionRawSensorsStop"),
-                jni::jni_sig!((int) -> ()),
-                &[jni::JValue::Int(kind_code(kind))],
+        let _ = call_helper(|env, a, class| {
+            env.call_static_method(
+                class,
+                jni::jni_str!("stop"),
+                jni::jni_sig!((android.app.Activity, int) -> ()),
+                &[jni::JValue::Object(a), jni::JValue::Int(kind_code(kind))],
             )?;
             Ok(())
         });
     }
 }
 
-/// Android の `MotionRawSensors` 実装を返す（`device/motion_raw_sensors.rs` の dispatch から呼ばれる）。
+/// Android の `MotionRawSensors` 実装を返す（本 crate の `driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn MotionRawSensors> {
     Arc::new(AndroidMotionRawSensors)
@@ -184,7 +183,7 @@ pub(crate) fn implementation() -> Arc<dyn MotionRawSensors> {
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 pub(crate) fn implementation() -> Arc<dyn MotionRawSensors> {
-    Arc::new(fandhe_device::motion_raw_sensors::UnsupportedMotionRawSensors)
+    Arc::new(crate::contract::UnsupportedMotionRawSensors)
 }
 
 #[cfg(test)]

@@ -321,22 +321,6 @@ public class MainActivity extends GameActivity {
         musicLibraryHelper.cancel(requestId);
     }
 
-    // ジャイロ・磁気・線形加速度の生値（Issue #901）。実装は `MotionRawSensorsHelper`。Rust の
-    // `android_motion_raw_sensors.rs` が同期 JNI で呼ぶ。
-    private final MotionRawSensorsHelper motionRawSensorsHelper = new MotionRawSensorsHelper(this);
-
-    int motionRawSensorsStart(int kind) {
-        return motionRawSensorsHelper.start(kind);
-    }
-
-    long[] motionRawSensorsRead(int kind) {
-        return motionRawSensorsHelper.read(kind);
-    }
-
-    void motionRawSensorsStop(int kind) {
-        motionRawSensorsHelper.stop(kind);
-    }
-
     // OS の検索への登録（Issue #562）。実装は `SpotlightIndexHelper`。Rust の `android_spotlight_index.rs` がワーカースレッドから同期 JNI で呼ぶ。
     int spotlightIndex(String domain, String id, String title, String text, long remainingMs) {
         return SpotlightIndexHelper.index(getApplicationContext(), domain, id, title, text, remainingMs);
@@ -1367,7 +1351,6 @@ public class MainActivity extends GameActivity {
         super.onResume();
         activityResumed = true;
         webAuthSessionHelper.onResume();
-        motionRawSensorsHelper.onResume();
         localPeerHelper.onResume();
         // 測位継続の意思（Issue #890）があり、かつ権限が既にあるなら再登録する
         // （`onPause` で解除済みのため、フォアグラウンド復帰のたびに要る。傾き（#831）
@@ -1441,7 +1424,6 @@ public class MainActivity extends GameActivity {
         webAuthSessionHelper.onPause();
         lanDiscoveryHelper.onPause();
         localPeerHelper.onPause();
-        motionRawSensorsHelper.onPause();
         // 「使用中のみ」の権限のため、バックグラウンドでは測位しない（Issue #890）。
         if (locationManager != null) {
             locationManager.removeUpdates(locationListener);
@@ -3047,7 +3029,6 @@ public class MainActivity extends GameActivity {
         lanDiscoveryHelper.onDestroy();
         localPeerHelper.onDestroy();
         musicLibraryHelper.onDestroy();
-        motionRawSensorsHelper.onDestroy();
         pictureInPictureHelper.onDestroy();
         printHelper.onDestroy();
         screenOrientationHelper.onDestroy();

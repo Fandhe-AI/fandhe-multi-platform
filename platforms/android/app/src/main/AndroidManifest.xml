@@ -427,6 +427,10 @@
             android:authorities="${applicationId}.fandhe.tilt-motion"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.MotionRawSensorsLifecycle"
+            android:authorities="${applicationId}.fandhe.motion-raw-sensors"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.CameraCaptureLifecycle"
             android:authorities="${applicationId}.fandhe.camera-capture"
             android:exported="false" />

@@ -1,6 +1,6 @@
 //! Windows 向けジャイロ・磁気・線形加速度の生値実装（Issue #1145、親 #180）。
-//! `device/motion_raw_sensors.rs` の Windows 経路の dispatch 先で、UI スレッドの driver から種類ごとに
-//! `start` / `read` / `stop` を呼ばれる。契約は `fandhe_device::motion_raw_sensors`（特に
+//! 本 crate の `driver` の Windows 経路の dispatch 先で、UI スレッドの driver から種類ごとに
+//! `start` / `read` / `stop` を呼ばれる。契約は `crate::contract`（特に
 //! 「後続の OS 実装への要点 > Windows」）に従う。
 //!
 //! # 流れ
@@ -40,9 +40,7 @@
 //!   素の exe での HRESULT は実機未確認（#885）
 //! - ローカルの型検査は `x86_64-pc-windows-gnu` のみ
 
-use fandhe_device::motion_raw_sensors::{
-    validate_reading, RawKind, RawReading, RawSensorFailure, RawUnit,
-};
+use crate::contract::{RawKind, RawReading, RawSensorFailure, RawUnit, validate_reading};
 
 /// `E_ACCESSDENIED`（0x80070005）。権限拒否の写像に使う。
 const E_ACCESSDENIED: i32 = 0x8007_0005_u32 as i32;
@@ -210,8 +208,8 @@ mod imp {
     };
 
     use super::*;
-    use fandhe_device::motion_raw_sensors::MotionRawSensors;
-    use fandhe_platform_windows::minimize::{watch_minimize, MinimizeEdge};
+    use crate::contract::MotionRawSensors;
+    use fandhe_platform_windows::minimize::{MinimizeEdge, watch_minimize};
 
     #[derive(Clone)]
     enum Held {

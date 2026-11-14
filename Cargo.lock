@@ -1828,6 +1828,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-motion-raw-sensors"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-tilt-motion",
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-multi-display"
 version = "0.2.0"
 dependencies = [
@@ -2497,6 +2512,7 @@ dependencies = [
  "fandhe-cap-memory-pressure",
  "fandhe-cap-midi",
  "fandhe-cap-ml-inference",
+ "fandhe-cap-motion-raw-sensors",
  "fandhe-cap-multi-display",
  "fandhe-cap-nfc",
  "fandhe-cap-nfc-card-emulation",
@@ -2661,6 +2677,7 @@ dependencies = [
  "fandhe-cap-media-transcode",
  "fandhe-cap-memory-pressure",
  "fandhe-cap-midi",
+ "fandhe-cap-motion-raw-sensors",
  "fandhe-cap-multi-display",
  "fandhe-cap-nfc",
  "fandhe-cap-nlp",

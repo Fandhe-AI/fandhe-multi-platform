@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #180、Issue #898）「ジャイロ・磁気・線形加速度」の effect ドライバ。
 //! `fandhe_core::screens::motion_raw_sensors_show`（端末依存ゼロ）の種類ごとの `wanted` の立ち上がりで
-//! `fandhe_device::motion_raw_sensors::MotionRawSensors::start`、立ち下がりで `stop` を呼び、購読中は
+//! `crate::contract::MotionRawSensors::start`、立ち下がりで `stop` を呼び、購読中は
 //! [`READ_INTERVAL`] ごとに `read` して結果を注入する（`registry.rs` の `effect` 区画から
 //! 毎フレーム同期に呼ばれる）。`environment_sensors.rs` と同型の間隔つき pull を種類ごとに回す。
 //!
@@ -20,37 +20,37 @@
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use fandhe_core::screens::motion_raw_sensors_show::{
-    apply_failure, apply_reading, display_equal, MotionRawSensorsShowState, RawFailureView,
-    RawKindView, RawReadingView, RawSensorView, RawUnitView,
-};
 #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
-use fandhe_device::motion_raw_sensors::UnsupportedMotionRawSensors;
-use fandhe_device::motion_raw_sensors::{
-    validate_reading, MotionRawSensors, RawKind, RawReading, RawSensorFailure, RawUnit,
-    READ_INTERVAL,
+use crate::contract::UnsupportedMotionRawSensors;
+use crate::contract::{
+    MotionRawSensors, READ_INTERVAL, RawKind, RawReading, RawSensorFailure, RawUnit,
+    validate_reading,
+};
+use fandhe_core::screens::motion_raw_sensors_show::{
+    MotionRawSensorsShowState, RawFailureView, RawKindView, RawReadingView, RawSensorView,
+    RawUnitView, apply_failure, apply_reading, display_equal,
 };
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた実装を返す（プロセスで 1 個。購読を二重に作らないため
 /// `OnceLock` で保持する）。
-fn implementation() -> Arc<dyn MotionRawSensors> {
+pub fn platform_motion_raw_sensors() -> Arc<dyn MotionRawSensors> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn MotionRawSensors>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "windows")]
             {
-                super::windows_motion_raw_sensors::implementation()
+                crate::windows::implementation()
             }
             #[cfg(target_os = "ios")]
             {
-                super::ios_motion_raw_sensors::implementation()
+                crate::ios::implementation()
             }
             #[cfg(target_os = "android")]
             {
-                super::android_motion_raw_sensors::implementation()
+                crate::android::implementation()
             }
             #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
             {
@@ -223,23 +223,39 @@ pub fn motion_raw_sensors_show_effect(
 ) {
     let mut guard = DRIVER.lock().unwrap_or_else(|p| p.into_inner());
     let ds = guard.get_or_insert_with(DriverState::default);
-    drive(state, sender, implementation().as_ref(), Instant::now(), ds);
+    drive(
+        state,
+        sender,
+        platform_motion_raw_sensors().as_ref(),
+        Instant::now(),
+        ds,
+    );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+    use crate::contract::UnsupportedMotionRawSensors as Unsupported;
     use fandhe_core::screens::motion_raw_sensors_show::{row_text, start_all, stop_all};
-    use fandhe_device::motion_raw_sensors::UnsupportedMotionRawSensors as Unsupported;
     use std::sync::Mutex as StdMutex;
     use std::time::Duration;
 
-    type Rx = std::sync::mpsc::Receiver<crate::app::Completion<MotionRawSensorsShowState>>;
+    type Rx = std::sync::mpsc::Receiver<fandhe_runtime::Completion<MotionRawSensorsShowState>>;
     type ReadResult = Result<Option<RawReading>, RawSensorFailure>;
 
     fn channel() -> (CompletionSender<MotionRawSensorsShowState>, Rx) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (
+            fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     fn apply_all(rx: &Rx, s: &mut MotionRawSensorsShowState) {
@@ -498,7 +514,7 @@ mod tests {
     #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
     #[test]
     fn host_fallback_never_succeeds() {
-        let imp = implementation();
+        let imp = platform_motion_raw_sensors();
         for k in RawKind::ALL {
             assert_eq!(imp.start(k), Err(RawSensorFailure::UnsupportedOnOs));
             assert_eq!(imp.read(k), Err(RawSensorFailure::UnsupportedOnOs));

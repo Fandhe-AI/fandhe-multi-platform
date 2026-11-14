@@ -1,15 +1,20 @@
 package com.fandhe.platform;
 
+import java.util.WeakHashMap;
+import java.util.Map;
+import java.util.Collections;
+import android.app.Activity;
 import android.content.Context;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 
-// ジャイロ・磁気・線形加速度の生値画面（Issue #901、親 #180）の Android 実装ヘルパー。MainActivity から
-// 生成・委譲される（Rust の `device/android_motion_raw_sensors.rs` が egui スレッドから
-// `MainActivity.motionRawSensorsStart` / `Read` / `Stop` を同期 JNI で呼ぶ。継続配信型のため
-// 要求 id・RequestSlot は使わない）。構造は EnvironmentSensorsHelper と同型。
+// ジャイロ・磁気・線形加速度の生値画面（Issue #901、親 #180）の Android 実装ヘルパー。Activity ごとに 1 つ、
+// `MotionRawSensorsLifecycle`（`FeatureLifecycleProvider` 継承）が `attach` で生成して `HELPERS` に持つ
+// （Rust の `fandhe-cap-motion-raw-sensors`（`src/android.rs`）が egui スレッドから static の `start` / `read` / `stop`
+// （第 1 引数は Activity）を同期 JNI で呼ぶ。継続配信型のため要求 id・RequestSlot は使わない）。構造は EnvironmentSensorsHelper と同型。
+// helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、`start` は失敗・`read` は購読喪失で確定する。
 //
 // 結果コード・配列配置の SSOT はここで、Rust 側が同じ値で解釈する。
 //   kind : 0=角速度(TYPE_GYROSCOPE) / 1=磁場(TYPE_MAGNETIC_FIELD) / 2=線形加速度(TYPE_LINEAR_ACCELERATION)
@@ -66,8 +71,61 @@ final class MotionRawSensorsHelper {
     private boolean foreground = true;
     private boolean destroyed;
 
-    MotionRawSensorsHelper(Context context) {
-        this.context = context;
+    // Activity ごとの helper（上記クラス冒頭コメント参照）。
+    private static final Map<Activity, MotionRawSensorsHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    // Activity の生成時（`MotionRawSensorsLifecycle` から、UI スレッド）。
+    static void attach(Activity activity) {
+        HELPERS.put(activity, new MotionRawSensorsHelper(activity));
+    }
+
+    // Activity の破棄時（同上）。再生成を含む。保持している資源を解放し、保留中の要求を捨てる。
+    static void detach(Activity activity) {
+        MotionRawSensorsHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // `MotionRawSensorsLifecycle` から（UI スレッド）。helper が無ければ何もしない。
+    static void resumed(Activity activity) {
+        MotionRawSensorsHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onResume();
+        }
+    }
+
+    // `MotionRawSensorsLifecycle` から（UI スレッド）。helper が無ければ何もしない。
+    static void paused(Activity activity) {
+        MotionRawSensorsHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onPause();
+        }
+    }
+
+    // Rust から呼ぶ入口。helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、失敗で確定する。
+    static int start(Activity activity, int kind) {
+        MotionRawSensorsHelper helper = HELPERS.get(activity);
+        return helper == null ? START_FAILED : helper.start(kind);
+    }
+
+    // Rust から呼ぶ入口。helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、失敗で確定する。
+    static long[] read(Activity activity, int kind) {
+        MotionRawSensorsHelper helper = HELPERS.get(activity);
+        return helper == null ? result(STATE_LOST, 0L, 0L, 0L) : helper.read(kind);
+    }
+
+    // Rust から呼ぶ入口。helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、失敗で確定する。
+    static void stop(Activity activity, int kind) {
+        MotionRawSensorsHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.stop(kind);
+        }
+    }
+
+    private MotionRawSensorsHelper(Activity activity) {
+        this.context = activity;
     }
 
     private static boolean validKind(int kind) {
