@@ -95,11 +95,12 @@ graph TD
     行います。provider は OS がプロセス開始時に生成し、`ActivityLifecycleCallbacks` で `GameActivity` の生成・状態保存・見える／見えなくなる・前面への復帰・前面離脱・破棄だけを
     機能の helper へ流します。provider は宣言の `android.components`（`kind = "provider"`、`authorities` は
     `${applicationId}.fandhe.<id>`）で出ます。`registerForActivityResult` は登録キーを明示し、生成順への依存を残しません
-  - Activity の入力（`dispatchKeyEvent`・`dispatchGenericMotionEvent` 等）の観測は、provider が `onHostCreated` で
-    `Window.Callback` を包んで行います（#1303、ゲームパッド）。包んだ callback は Activity より前に呼ばれ、従来の override と
+  - Activity の入力（`dispatchKeyEvent`・`dispatchGenericMotionEvent`・`dispatchTouchEvent`）の観測は、provider が `onHostCreated` で
+    共通層の `HostInput` へ観測者を登録して行います（#1303 ゲームパッド、#1327 で包む処理を共通層へ引き上げ）。`HostInput` が `Window.Callback` を包みます。包んだ callback は Activity より前に呼ばれ、従来の override と
     同じイベントを受けます。通知してから元の戻り値をそのまま返し、イベントは消費しません。AppCompat も同じ方法で
     包んでおり、どちらが外側でも委譲は連なります。守らない範囲は、起動後に `getWindow().setCallback()` で callback を
     差し替えた場合に入力が届かなくなることです。`Activity` 内の他の経路（`onNewIntent` など）は `ComponentActivity` のリスナーで足りるため、この方法は入力の観測に限ります
+  - window insets の変化は、共通層の `HostInsets.addListener` へ登録して受けます（#1327）。decorView のリスナーは View につき 1 つのため共通層が 1 つだけ付け、Rust の static への送信と登録済みの機能への配信をそこで行います。PiP の切り替わりは `ComponentActivity.addOnPictureInPictureModeChangedListener` で足ります。手順は `docs/operations/capability-crate-migration.md` §18
   - 利用者の `MainActivity` に要るのは `GameActivity` の継承と、`static` 初期化子での `System.loadLibrary` だけです
   - 採らなかった案: `gen` が委譲コードを生成する（出力と宣言の欄が増える。`gen` は現状 `MainActivity` を出さず、`--eject` も未実装）、利用者の手順書で委譲を案内する（「機能を選ぶだけ」が崩れる）、共通の基底 Activity に集める（機能の一覧を知る手段が別に要る）、
     単一 provider に meta-data を集める（同名コンポーネントの異なる定義を拒否する現行の統合規則に欄の追加が要る）

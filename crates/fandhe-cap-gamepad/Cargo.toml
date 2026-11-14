@@ -42,7 +42,7 @@ frameworks = ["GameController"]
 frameworks = ["GameController"]
 
 # Activity のライフサイクルへ参加する非公開 provider（FeatureLifecycleProvider、fandhe-platform-android）。
-# Window.Callback を包んで入力を観測する（#1303）。利用者の MainActivity に委譲コードを書かせない。
+# 共通層 HostInput へ入力の観測者を登録する（#1303・#1327）。利用者の MainActivity に委譲コードを書かせない。
 # Manifest の同じ要素と完全に一致させる（cargo-fandhe の突き合わせテストが確かめる）。
 [[package.metadata.fandhe.android.components]]
 kind = "provider"

@@ -2,21 +2,11 @@ package com.fandhe.platform;
 
 import android.app.Activity;
 import android.hardware.input.InputManager;
-import android.os.Build;
-import android.view.ActionMode;
 import android.view.InputDevice;
 import android.view.KeyEvent;
-import android.view.KeyboardShortcutGroup;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.MotionEvent;
-import android.view.SearchEvent;
-import android.view.View;
-import android.view.Window;
-import android.view.WindowManager;
-import android.view.accessibility.AccessibilityEvent;
+import androidx.core.util.Consumer;
 
-import java.util.List;
 
 // ゲームコントローラ入力（Issue #935 / #1303）の Java 側。Rust 側
 // （`crates/fandhe-cap-gamepad/src/android.rs`）の JNI エクスポート 5 本へ生値を渡すだけで、
@@ -78,15 +68,15 @@ final class GamepadHelper {
                 }
             };
 
-    // Activity の Window.Callback を包む。`getDecorView()` は呼ばない（`requestWindowFeature` への副作用を避ける）。
-    // 二重に包まない（同じ Window へ複数回呼ばれても 1 段だけ）。
+    // 観測者は static final の同一インスタンスにする（`HostInput` は同じインスタンスの再登録を無視するため、
+    // Activity 再生成後の新しい Window へ登録し直しても二重に呼ばれない）。
+    private static final Consumer<KeyEvent> KEY_OBSERVER = GamepadHelper::observeKey;
+    private static final Consumer<MotionEvent> MOTION_OBSERVER = GamepadHelper::observeMotion;
+
+    // 共通層 `HostInput`（#1327）へキー・汎用モーションの観測者を登録する。イベントは消費されない。
     static void wrap(Activity activity) {
-        Window window = activity.getWindow();
-        Window.Callback current = window.getCallback();
-        if (current == null || current instanceof ObservingCallback) {
-            return;
-        }
-        window.setCallback(new ObservingCallback(current));
+        HostInput.addKeyObserver(activity, KEY_OBSERVER);
+        HostInput.addGenericMotionObserver(activity, MOTION_OBSERVER);
     }
 
     static void onResumed(Activity activity) {
@@ -184,150 +174,6 @@ final class GamepadHelper {
             if (action == KeyEvent.ACTION_DOWN || action == KeyEvent.ACTION_UP) {
                 nativeOnGamepadKey(
                         event.getDeviceId(), source, event.getKeyCode(), action == KeyEvent.ACTION_DOWN);
-            }
-        }
-    }
-
-    // 元の Window.Callback（通常は Activity、または AppCompat の包み）へ全メソッドを委譲し、
-    // `dispatchKeyEvent` / `dispatchGenericMotionEvent` だけ通知してから元の戻り値をそのまま返す。
-    // 【契約】イベントは一切消費しない: TV フォーカス（#280）のリモコン十字キー（`KEYCODE_DPAD_*`）を含む
-    // 既存の入力経路（GameActivity → winit → `egui::Key::Arrow*`）を変えない。
-    // API 24 以降の default メソッドも明示的に委譲し、元の実装を飛ばさない。
-    private static final class ObservingCallback implements Window.Callback {
-        private final Window.Callback wrapped;
-
-        ObservingCallback(Window.Callback wrapped) {
-            this.wrapped = wrapped;
-        }
-
-        @Override
-        public boolean dispatchKeyEvent(KeyEvent event) {
-            observeKey(event);
-            return wrapped.dispatchKeyEvent(event);
-        }
-
-        @Override
-        public boolean dispatchGenericMotionEvent(MotionEvent event) {
-            observeMotion(event);
-            return wrapped.dispatchGenericMotionEvent(event);
-        }
-
-        @Override
-        public boolean dispatchKeyShortcutEvent(KeyEvent event) {
-            return wrapped.dispatchKeyShortcutEvent(event);
-        }
-
-        @Override
-        public boolean dispatchTouchEvent(MotionEvent event) {
-            return wrapped.dispatchTouchEvent(event);
-        }
-
-        @Override
-        public boolean dispatchTrackballEvent(MotionEvent event) {
-            return wrapped.dispatchTrackballEvent(event);
-        }
-
-        @Override
-        public boolean dispatchPopulateAccessibilityEvent(AccessibilityEvent event) {
-            return wrapped.dispatchPopulateAccessibilityEvent(event);
-        }
-
-        @Override
-        public View onCreatePanelView(int featureId) {
-            return wrapped.onCreatePanelView(featureId);
-        }
-
-        @Override
-        public boolean onCreatePanelMenu(int featureId, Menu menu) {
-            return wrapped.onCreatePanelMenu(featureId, menu);
-        }
-
-        @Override
-        public boolean onPreparePanel(int featureId, View view, Menu menu) {
-            return wrapped.onPreparePanel(featureId, view, menu);
-        }
-
-        @Override
-        public boolean onMenuOpened(int featureId, Menu menu) {
-            return wrapped.onMenuOpened(featureId, menu);
-        }
-
-        @Override
-        public boolean onMenuItemSelected(int featureId, MenuItem item) {
-            return wrapped.onMenuItemSelected(featureId, item);
-        }
-
-        @Override
-        public void onWindowAttributesChanged(WindowManager.LayoutParams attrs) {
-            wrapped.onWindowAttributesChanged(attrs);
-        }
-
-        @Override
-        public void onContentChanged() {
-            wrapped.onContentChanged();
-        }
-
-        @Override
-        public void onWindowFocusChanged(boolean hasFocus) {
-            wrapped.onWindowFocusChanged(hasFocus);
-        }
-
-        @Override
-        public void onAttachedToWindow() {
-            wrapped.onAttachedToWindow();
-        }
-
-        @Override
-        public void onDetachedFromWindow() {
-            wrapped.onDetachedFromWindow();
-        }
-
-        @Override
-        public void onPanelClosed(int featureId, Menu menu) {
-            wrapped.onPanelClosed(featureId, menu);
-        }
-
-        @Override
-        public boolean onSearchRequested() {
-            return wrapped.onSearchRequested();
-        }
-
-        @Override
-        public boolean onSearchRequested(SearchEvent searchEvent) {
-            return wrapped.onSearchRequested(searchEvent);
-        }
-
-        @Override
-        public ActionMode onWindowStartingActionMode(ActionMode.Callback callback) {
-            return wrapped.onWindowStartingActionMode(callback);
-        }
-
-        @Override
-        public ActionMode onWindowStartingActionMode(ActionMode.Callback callback, int type) {
-            return wrapped.onWindowStartingActionMode(callback, type);
-        }
-
-        @Override
-        public void onActionModeStarted(ActionMode mode) {
-            wrapped.onActionModeStarted(mode);
-        }
-
-        @Override
-        public void onActionModeFinished(ActionMode mode) {
-            wrapped.onActionModeFinished(mode);
-        }
-
-        @Override
-        public void onProvideKeyboardShortcuts(
-                List<KeyboardShortcutGroup> data, Menu menu, int deviceId) {
-            wrapped.onProvideKeyboardShortcuts(data, menu, deviceId);
-        }
-
-        @Override
-        public void onPointerCaptureChanged(boolean hasCapture) {
-            // API 26 で追加された default メソッド。minSdk 24 の lint（NewApi）に合わせて分岐する。
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                wrapped.onPointerCaptureChanged(hasCapture);
             }
         }
     }

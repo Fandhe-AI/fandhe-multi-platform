@@ -399,93 +399,16 @@ static SOFT_KEYBOARD: std::sync::Mutex<SoftKeyboardState> =
         focused: None,
     });
 
-/// Java 側（`MainActivity.onCreate` の `OnApplyWindowInsetsListener`）から
-/// JNI 経由で書き込まれる window insets（物理 px、systemBars | displayCutout）。
-///
-/// `AndroidApp::content_rect()` は GameActivity 経路（android-activity 0.6.1）で
-/// insets を反映せず常に画面全体を返すことを実機（Pixel 10a / Android 16）で
-/// 実測確認したため、Rust からは取得できない。`GameActivity_getWindowInsets` C API は
-/// `GameActivity*` 構造体ポインタを要求するが、Rust 公開 API（`activity_as_ptr()` =
-/// JNI jobject）からは得られないため、Java 側リスナー → JNI 経由の書き込みに一本化する
-/// （PR #596 是正、Issue #579）。`Ordering::Relaxed` で十分だが、4 本を個別に
-/// 読み書きするため「left/top/right/bottom の組としての原子性」は保証しない:
-/// UI スレッドの書き込み中にレンダースレッドが読むと新旧混在の margin になり得る。
-/// ずれは最大 1 フレームで、次フレームの読み出しで自己修正されるため許容する
-/// （見た目の一瞬のズレのみで、メモリ安全性には影響しない）。
-static INSET_LEFT: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
-static INSET_TOP: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
-static INSET_RIGHT: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
-static INSET_BOTTOM: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
-/// insets を 1 回でも受け取ったか。初期値 0 と「本当に 0」を区別するための印
-/// （`device/android_safe_area_insets.rs` が未受信を 0 にしないために読む。Issue #446）。
-static INSET_RECEIVED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// 受信済みなら insets を物理 px の `[top, right, bottom, left]` で返し、未受信なら `None`。
-/// `device/android_safe_area_insets.rs` から UI スレッドで呼ばれる。
-// ponytail: 4 本の atomic を別々に読むため組は 1 回混ざり得る。組が要るなら `Mutex<Option<[i32; 4]>>` へ。
-#[cfg(feature = "device")]
-pub(crate) fn window_insets_px() -> Option<[i32; 4]> {
-    use std::sync::atomic::Ordering;
-    if !INSET_RECEIVED.load(Ordering::Acquire) {
-        return None;
-    }
-    Some([
-        INSET_TOP.load(Ordering::Relaxed),
-        INSET_RIGHT.load(Ordering::Relaxed),
-        INSET_BOTTOM.load(Ordering::Relaxed),
-        INSET_LEFT.load(Ordering::Relaxed),
-    ])
-}
-
-/// `MainActivity.nativeOnWindowInsetsChanged`（Java 側）から呼ばれる JNI エクスポート関数。
-/// シンボル名はパッケージ名 `com.fandhe.platform` とクラス名 `MainActivity` に
-/// 固定で紐づく（JNI 命名規約。`platforms/android/app/.../MainActivity.java` 側のクラス移動・
-/// rename 時は本関数名も追随が必要）。
-///
-/// `JNIEnv`/`jclass` は本関数内で一切使わず（受け取った値をそのまま static へ store するのみ）、
-/// 生ポインタへのアクセスを行わないため関数本体に `unsafe` 操作は含まない。
-/// `#[no_mangle]` はこの 1 関数に閉じ、`unsafe` を公開 API 側へ漏らさない
-/// （`.claude/rules/coding-rust.md` の FFI 例外規定準拠）。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` により Rust の名前修飾を
-/// 無効化するが、シンボル名は JNI 命名規約上の固定名であり、本クレートは cdylib として
-/// 1 つの Android 実行単位にのみリンクされるため他シンボルと衝突しない
-/// （`android_main`・`read_debug_proxy_app_property` と同じ根拠）。
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnWindowInsetsChanged(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    left: i32,
-    top: i32,
-    right: i32,
-    bottom: i32,
-) {
-    use std::sync::atomic::Ordering;
-    INSET_LEFT.store(left, Ordering::Relaxed);
-    INSET_TOP.store(top, Ordering::Relaxed);
-    INSET_RIGHT.store(right, Ordering::Relaxed);
-    INSET_BOTTOM.store(bottom, Ordering::Relaxed);
-    INSET_RECEIVED.store(true, Ordering::Release);
-}
-
-/// [`INSET_LEFT`] 等の static 4 本（Java 側リスナーが JNI 経由で書き込む物理 px）を読み、
+/// `fandhe_platform_android::window_insets_px`（`HostInsets` が JNI 経由で書く物理 px）を読み、
 /// [`crate::app`] の純関数 `insets_px_to_margin` へ橋渡しして、`CentralPanel` の
-/// `inner_margin` へ加算する `egui::Margin`（論理 pt）を返す（Issue #579）。
+/// `inner_margin` へ加算する `egui::Margin`（論理 pt）を返す（Issue #579）。未受信は 0。
 ///
 /// [`crate::ProxyApp::with_inset_margin_supplier`] / [`crate::TvFocusApp::with_inset_margin_supplier`]
-/// へ渡すクロージャから毎フレーム呼ばれる。static の読み出し自体は毎フレーム発生するが、
-/// insets の値更新は OS 側リスナー（`ViewCompat.setOnApplyWindowInsetsListener`）の
-/// 発火時のみ（イベント駆動）で、回転・折りたたみ等の変化にも次フレームで追従できる。
+/// へ渡すクロージャから毎フレーム呼ばれる。値の更新は OS のリスナー発火時のみ（イベント駆動）で、
+/// 回転・折りたたみ等の変化にも次フレームで追従する。
 fn android_inset_margin(ctx: &egui::Context) -> egui::Margin {
-    use std::sync::atomic::Ordering;
-    let insets_px = (
-        INSET_LEFT.load(Ordering::Relaxed) as f32,
-        INSET_TOP.load(Ordering::Relaxed) as f32,
-        INSET_RIGHT.load(Ordering::Relaxed) as f32,
-        INSET_BOTTOM.load(Ordering::Relaxed) as f32,
-    );
+    let [top, right, bottom, left] = fandhe_platform_android::window_insets_px().unwrap_or([0; 4]);
+    let insets_px = (left as f32, top as f32, right as f32, bottom as f32);
     crate::app::insets_px_to_margin(insets_px, ctx.pixels_per_point())
 }
 

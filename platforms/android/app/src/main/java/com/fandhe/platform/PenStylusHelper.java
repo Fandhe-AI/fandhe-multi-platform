@@ -4,8 +4,8 @@ import android.view.InputDevice;
 import android.view.MotionEvent;
 
 // ペン・筆圧入力（Issue #357、親 #95）の Android 側観測ヘルパー。
-// winit の Android backend は tool type と AXIS_TILT を捨てるため、MainActivity の
-// `dispatchTouchEvent` から MotionEvent を観測し（消費しない）、主ポインタ 1 本の
+// winit の Android backend は tool type と AXIS_TILT を捨てるため、MainActivity が共通層 `HostInput`（#1327）へ登録した
+// タッチの観測者として MotionEvent を受け（消費しない）、主ポインタ 1 本の
 // 種類・筆圧・傾きを Rust の `device/android_pen_stylus.rs`（SharedPen）へ push する。
 // 位置は送らない（egui のポインタから取る）。UI スレッドだけで呼ばれるため lock は持たない。
 // ponytail: 主ポインタ 1 本・履歴サンプルを読まない。速い筆致で点が粗くなるなら getHistorical* を足す。
