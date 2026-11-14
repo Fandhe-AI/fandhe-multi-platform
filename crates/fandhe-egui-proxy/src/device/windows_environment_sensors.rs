@@ -30,14 +30,13 @@
 //! # 背景遷移（最小化）
 //!
 //! eframe は最小化中に `update` を呼ばないため、フレームからは最小化を観測できない。
-//! `fandhe-cap-flashlight` の `driver.rs` と同型のウォッチャー（プロセスに 1 本）が HWND の `IsIconic` を 200 ms 間隔で見て、
-//! 最小化で気圧の受信記録を捨てて `note_backgrounded`、復元で `note_resumed` を呼び、
-//! `InvalidateRect` で 1 フレーム起こす（背景のまま走るフレームが再描画を予約せず、ポーリングが
+//! 共通層のウォッチャー（`fandhe_platform_windows::minimize`。プロセスに 1 本）が HWND の `IsIconic` を 200 ms 間隔で見て、
+//! 最小化の受け口 [`ensure_minimize_watcher`] が気圧の受信記録を捨てて `note_backgrounded`、復元で `note_resumed` を呼ぶ。
+//! 復元では共通層が `InvalidateRect` で 1 フレーム起こす（背景のまま走るフレームが再描画を予約せず、ポーリングが
 //! 止まるのを防ぐ。契約表 4）。背景中に OS 側の購読は止めない。
-//! このウォッチャーは motion-raw-sensors（#1145、`windows_motion_raw_sensors`）と共用し、同じ辺で通知する。
+//! このウォッチャーは motion-raw-sensors（#1145）と共用する（各機能が自分の受け口を登録する）。
 //!
 //! HRESULT・センサー値・デバイス ID・セレクタ文字列はログにも画面にも出さない（security.md A09）。
-//! `unsafe` は `IsIconic` / `InvalidateRect` の呼び出し 2 箇所に限る。
 //!
 //! 一次情報:
 //! <https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.barometer>、
@@ -68,10 +67,6 @@ use fandhe_device::environment_sensors::{
 
 /// `E_ACCESSDENIED`（0x80070005）。権限拒否の写像に使う。
 const E_ACCESSDENIED: i32 = 0x8007_0005_u32 as i32;
-
-/// 最小化の観測間隔。
-#[cfg(any(target_os = "windows", test))]
-const MINIMIZE_POLL_MS: u64 = 200;
 
 /// 開始系の呼び出し（`GetDefault` / `MinimumReportInterval` / `SetReportInterval` /
 /// `GetDeviceSelector` / `FindAllAsync` / `FromId`）の失敗 HRESULT を契約の失敗へ写す。
@@ -245,44 +240,15 @@ impl<T: Clone> ProxState<T> {
     }
 }
 
-/// 最小化の立ち上がり・立ち下がり。
-#[cfg(any(target_os = "windows", test))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Edge {
-    Minimized,
-    Restored,
-}
-
-/// 最小化状態の変化検出。同じ状態の連続では何も返さない。
-#[cfg(any(target_os = "windows", test))]
-#[derive(Debug, Default)]
-struct MinimizeEdge {
-    was: bool,
-}
-
-#[cfg(any(target_os = "windows", test))]
-impl MinimizeEdge {
-    fn update(&mut self, minimized: bool) -> Option<Edge> {
-        let prev = std::mem::replace(&mut self.was, minimized);
-        match (prev, minimized) {
-            (false, true) => Some(Edge::Minimized),
-            (true, false) => Some(Edge::Restored),
-            _ => None,
-        }
-    }
-}
-
 #[cfg(target_os = "windows")]
 mod imp {
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::{self, RecvTimeoutError, Sender};
     use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
     use std::time::Duration;
 
+    use fandhe_platform_windows::minimize::{watch_minimize, MinimizeEdge};
     use windows::Devices::Enumeration::DeviceInformation;
     use windows::Devices::Sensors::{Barometer, LightSensor, ProximitySensor};
-    use windows::Win32::Graphics::Gdi::InvalidateRect;
-    use windows::Win32::UI::WindowsAndMessaging::IsIconic;
     use windows_future::{AsyncOperationCompletedHandler, AsyncStatus};
 
     use super::*;
@@ -601,50 +567,22 @@ mod imp {
         }
     }
 
-    // ---- 最小化ウォッチャー ----
+    // ---- 最小化の受け口 ----
 
-    /// ウォッチャーを 1 回だけ起動する。ウィンドウ未取得なら起動せず次回に再試行する。
-    /// motion-raw-sensors（#1145）と共用する。動いていれば true、HWND 不明・起動失敗は false。
-    pub(crate) fn ensure_minimize_watcher() -> bool {
-        static STARTED: AtomicBool = AtomicBool::new(false);
-        if STARTED.load(Ordering::Acquire) {
-            return true;
+    /// 共通層のウォッチャーへ登録する受け口。最小化で気圧の受信記録を捨てて `note_backgrounded`、復元で `note_resumed`。
+    fn on_minimize(edge: MinimizeEdge) {
+        match edge {
+            MinimizeEdge::Minimized => {
+                drop_pressure_received();
+                super::super::environment_sensors::note_backgrounded();
+            }
+            MinimizeEdge::Restored => super::super::environment_sensors::note_resumed(),
         }
-        if fandhe_platform_windows::window().is_none() {
-            return false;
-        }
-        if STARTED.swap(true, Ordering::AcqRel) {
-            return true;
-        }
-        let spawned = std::thread::Builder::new()
-            .name("fandhe-environment-sensors-minimize".into())
-            .spawn(watch_minimize);
-        if spawned.is_err() {
-            STARTED.store(false, Ordering::Release);
-        }
-        spawned.is_ok()
     }
 
-    fn watch_minimize() {
-        let mut edge = MinimizeEdge::default();
-        loop {
-            if let Some(hwnd) = fandhe_platform_windows::window() {
-                match edge.update(is_minimized(hwnd)) {
-                    Some(Edge::Minimized) => {
-                        drop_pressure_received();
-                        super::super::environment_sensors::note_backgrounded();
-                        super::super::windows_motion_raw_sensors::note_minimized();
-                    }
-                    Some(Edge::Restored) => {
-                        super::super::environment_sensors::note_resumed();
-                        super::super::windows_motion_raw_sensors::note_restored();
-                        wake_frame(hwnd);
-                    }
-                    None => {}
-                }
-            }
-            std::thread::sleep(Duration::from_millis(MINIMIZE_POLL_MS));
-        }
+    /// 受け口を共通層のウォッチャーへ登録する（登録済みなら何もしない）。ウィンドウ未取得なら登録せず次回に再試行する。
+    pub(crate) fn ensure_minimize_watcher() -> bool {
+        watch_minimize(on_minimize)
     }
 
     /// 気圧の受信記録を捨てる（背景で保持値を捨てる）。
@@ -653,24 +591,10 @@ mod imp {
             fresh.drop_received();
         }
     }
-
-    #[allow(unsafe_code)]
-    fn is_minimized(hwnd: windows::Win32::Foundation::HWND) -> bool {
-        // SAFETY: `hwnd` は `remember_window` が控えたメインウィンドウで、プロセス生存中は有効。
-        // `IsIconic` は無効な HWND でも FALSE を返すだけで副作用がない。
-        unsafe { IsIconic(hwnd) }.as_bool()
-    }
-
-    #[allow(unsafe_code)]
-    fn wake_frame(hwnd: windows::Win32::Foundation::HWND) {
-        // SAFETY: 同上。`InvalidateRect` は無効な HWND なら失敗を返すだけで、矩形に NULL を渡すと
-        // クライアント領域全体を無効化する（次の描画を起こすだけ）。
-        let _ = unsafe { InvalidateRect(Some(hwnd), None, false) };
-    }
 }
 
 #[cfg(target_os = "windows")]
-pub(crate) use imp::{ensure_minimize_watcher, implementation};
+pub(crate) use imp::implementation;
 
 #[cfg(test)]
 mod tests {
@@ -797,16 +721,5 @@ mod tests {
         // 開始し直すと失敗は消える。
         s.begin();
         assert_eq!(s.poll(), Ok(None));
-    }
-
-    #[test]
-    fn minimize_edge_reports_each_transition_once() {
-        let mut m = MinimizeEdge::default();
-        assert_eq!(m.update(false), None);
-        assert_eq!(m.update(true), Some(Edge::Minimized));
-        assert_eq!(m.update(true), None);
-        assert_eq!(m.update(false), Some(Edge::Restored));
-        assert_eq!(m.update(false), None);
-        assert_eq!(MINIMIZE_POLL_MS, 200);
     }
 }

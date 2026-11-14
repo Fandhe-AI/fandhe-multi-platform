@@ -7,10 +7,12 @@
 //!   Web 認証の既定ブラウザの起動が共用する。渡すのは各機能が組み立てた固定 scheme の URL だけで、任意の scheme・引数を受ける口ではない
 //! - `&str` を VT_LPWSTR の `PROPVARIANT` にする [`lpwstr_variant`]: スタートメニューのショートカットとジャンプリストの
 //!   プロパティ書き込み（通知の AUMID 登録・アプリのショートカット）が共用する
+//! - メインウィンドウの最小化・復元の切り替わりを配る [`minimize`]: 最小化で保持を手放し復元で取り直す機能（environment-sensors・
+//!   motion-raw-sensors）が、互いの OS 実装を呼び合わずに同じ判定を共用する
 //! - WinRT 非同期操作の完了をキューへ積む [`winrt_async`]: 作業スレッドで完了を待たない機能が共用する
 //!
 //! egui・eframe・winit・`fandhe-device` には依存しない（機能 crate の依存グラフに入れないため）。
-//! Windows 以外ではクレート全体が空。`unsafe` は [`ComInit`] の COM 呼び出し 2 か所と [`open_url`] の `ShellExecuteW` 1 か所と [`lpwstr_variant`] の `PropVariantChangeType` 1 か所の計 4 か所だけで、
+//! Windows 以外ではクレート全体が空。`unsafe` は [`ComInit`] の COM 呼び出し 2 か所と [`open_url`] の `ShellExecuteW` 1 か所と [`lpwstr_variant`] の `PropVariantChangeType` 1 か所と [`minimize`] の `IsIconic`・`InvalidateRect` 2 か所の計 6 か所だけで、
 //! クレートルートは `deny(unsafe_code)`。
 
 #![cfg(target_os = "windows")]
@@ -30,6 +32,7 @@ use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 use windows::core::{HSTRING, PCWSTR, w};
 
+pub mod minimize;
 pub mod winrt_async;
 
 /// [`remember_window`] が控える HWND（`isize` で持つのは `HWND` が `Sync` でないため）。

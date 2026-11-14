@@ -14,7 +14,7 @@
 //!
 //! # 背景遷移（最小化）
 //!
-//! ウォッチャーが最小化で `note_minimized`（保持を全て drop）、復元で `note_restored`（`wanted` の種類に
+//! 共通層のウォッチャー（`fandhe_platform_windows::minimize`）へ登録した受け口が、最小化で `note_minimized`（保持を全て drop）、復元で `note_restored`（`wanted` の種類に
 //! 「取り直し要」の印を立てるだけ。OS は呼ばない）を呼ぶ。`GetDefault` は復元後の UI スレッドの
 //! 次の `read` が行い、失敗はその `read` の `Err` になる。非表示中の `read` は `Ok(None)`。
 //! 判定と更新は 1 本の `Mutex` の内側で行う。
@@ -209,9 +209,9 @@ mod imp {
         Accelerometer, AccelerometerReadingType, Gyrometer, Magnetometer,
     };
 
-    use super::super::windows_environment_sensors::ensure_minimize_watcher;
     use super::*;
     use fandhe_device::motion_raw_sensors::MotionRawSensors;
+    use fandhe_platform_windows::minimize::{watch_minimize, MinimizeEdge};
 
     #[derive(Clone)]
     enum Held {
@@ -288,7 +288,7 @@ mod imp {
 
     impl MotionRawSensors for WindowsMotionRawSensors {
         fn start(&self, kind: RawKind) -> Result<(), RawSensorFailure> {
-            if !ensure_minimize_watcher() {
+            if !watch_minimize(on_minimize) {
                 return Err(RawSensorFailure::Failed);
             }
             with(|s| s.start(kind, || acquire(kind)))
@@ -315,17 +315,17 @@ mod imp {
         Arc::new(WindowsMotionRawSensors)
     }
 
-    pub(crate) fn note_minimized() {
-        with(|s| s.minimize());
-    }
-
-    pub(crate) fn note_restored() {
-        with(|s| s.restore());
+    /// 共通層のウォッチャーへ登録する受け口。最小化で保持を全て drop し、復元で取り直しの印を立てる。
+    fn on_minimize(edge: MinimizeEdge) {
+        match edge {
+            MinimizeEdge::Minimized => with(|s| s.minimize()),
+            MinimizeEdge::Restored => with(|s| s.restore()),
+        }
     }
 }
 
 #[cfg(target_os = "windows")]
-pub(crate) use imp::{implementation, note_minimized, note_restored};
+pub(crate) use imp::implementation;
 
 #[cfg(test)]
 mod tests {
