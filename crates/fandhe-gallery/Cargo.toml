@@ -18,6 +18,7 @@ device = [
   "fandhe-egui-proxy/device",
   # BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
   "dep:fandhe-cap-accessibility-prefs",
+  "dep:fandhe-cap-activity-recognition",
   "dep:fandhe-cap-app-attest",
   "dep:fandhe-cap-app-badge",
   "dep:fandhe-cap-app-lifecycle",
@@ -28,6 +29,8 @@ device = [
   "dep:fandhe-cap-calendar",
   "dep:fandhe-cap-call-ui",
   "dep:fandhe-cap-camera-capture",
+  "dep:fandhe-cap-camera-preview-stream",
+  "dep:fandhe-cap-capture-protection",
   "dep:fandhe-cap-clipboard",
   "dep:fandhe-cap-color-picker",
   "dep:fandhe-cap-companion-device",
@@ -43,7 +46,9 @@ device = [
   "dep:fandhe-cap-file-preview",
   "dep:fandhe-cap-file-provider",
   "dep:fandhe-cap-file-watch",
+  "dep:fandhe-cap-flashlight",
   "dep:fandhe-cap-focus-mode-status",
+  "dep:fandhe-cap-foldable-posture",
   "dep:fandhe-cap-gamepad",
   "dep:fandhe-cap-geocoding-search",
   "dep:fandhe-cap-global-hotkey",
@@ -52,7 +57,9 @@ device = [
   "dep:fandhe-cap-http-get",
   "dep:fandhe-cap-human-presence",
   "dep:fandhe-cap-image-generation",
+  "dep:fandhe-cap-in-app-browser",
   "dep:fandhe-cap-in-app-review",
+  "dep:fandhe-cap-launch-at-login",
   "dep:fandhe-cap-live-activity",
   "dep:fandhe-cap-local-fonts",
   "dep:fandhe-cap-managed-app-config",
@@ -98,6 +105,7 @@ device = [
   "dep:fandhe-cap-volume-control",
   "dep:fandhe-cap-wallpaper-set",
   "dep:fandhe-cap-wifi-connect",
+  "dep:fandhe-cap-wifi-info",
   # END fandhe-cap
 ]
 frame-metrics = ["fandhe-egui-proxy/frame-metrics"]
@@ -135,7 +143,7 @@ NSHomeKitUsageDescription = "型サンプル「スマートホーム操作」の
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」「音声認識」「動画の撮影」の動作確認に使います"
 
 [package.metadata.fandhe-app.macos.usage-descriptions]
-NSLocationUsageDescription = "型サンプル「Wi-Fi への接続」で、接続先の Wi-Fi 名を読むために使います"
+NSLocationUsageDescription = "型サンプル「Wi-Fi 情報」「Wi-Fi への接続」で、接続先の Wi-Fi 名を読むために使います"
 NSCalendarsWriteOnlyAccessUsageDescription = "型サンプル「予定の追加」の動作確認に使います"
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」の動作確認に使います"
 NSCameraUsageDescription = "型サンプル「カメラのライブ映像」「動画の撮影」の動作確認に使います"
@@ -155,6 +163,7 @@ egui = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
 fandhe-cap-accessibility-prefs = { path = "../fandhe-cap-accessibility-prefs", optional = true }
+fandhe-cap-activity-recognition = { path = "../fandhe-cap-activity-recognition", optional = true }
 fandhe-cap-app-attest = { path = "../fandhe-cap-app-attest", optional = true }
 fandhe-cap-app-badge = { path = "../fandhe-cap-app-badge", optional = true }
 fandhe-cap-app-lifecycle = { path = "../fandhe-cap-app-lifecycle", optional = true }
@@ -165,6 +174,8 @@ fandhe-cap-audio-session = { path = "../fandhe-cap-audio-session", optional = tr
 fandhe-cap-calendar = { path = "../fandhe-cap-calendar", optional = true }
 fandhe-cap-call-ui = { path = "../fandhe-cap-call-ui", optional = true }
 fandhe-cap-camera-capture = { path = "../fandhe-cap-camera-capture", optional = true }
+fandhe-cap-camera-preview-stream = { path = "../fandhe-cap-camera-preview-stream", optional = true }
+fandhe-cap-capture-protection = { path = "../fandhe-cap-capture-protection", optional = true }
 fandhe-cap-clipboard = { path = "../fandhe-cap-clipboard", optional = true }
 fandhe-cap-color-picker = { path = "../fandhe-cap-color-picker", optional = true }
 fandhe-cap-companion-device = { path = "../fandhe-cap-companion-device", optional = true }
@@ -180,7 +191,9 @@ fandhe-cap-eye-dropper = { path = "../fandhe-cap-eye-dropper", optional = true }
 fandhe-cap-file-preview = { path = "../fandhe-cap-file-preview", optional = true }
 fandhe-cap-file-provider = { path = "../fandhe-cap-file-provider", optional = true }
 fandhe-cap-file-watch = { path = "../fandhe-cap-file-watch", optional = true }
+fandhe-cap-flashlight = { path = "../fandhe-cap-flashlight", optional = true }
 fandhe-cap-focus-mode-status = { path = "../fandhe-cap-focus-mode-status", optional = true }
+fandhe-cap-foldable-posture = { path = "../fandhe-cap-foldable-posture", optional = true }
 fandhe-cap-gamepad = { path = "../fandhe-cap-gamepad", optional = true }
 fandhe-cap-geocoding-search = { path = "../fandhe-cap-geocoding-search", optional = true }
 fandhe-cap-global-hotkey = { path = "../fandhe-cap-global-hotkey", optional = true }
@@ -189,7 +202,9 @@ fandhe-cap-home-widget = { path = "../fandhe-cap-home-widget", optional = true }
 fandhe-cap-http-get = { path = "../fandhe-cap-http-get", optional = true }
 fandhe-cap-human-presence = { path = "../fandhe-cap-human-presence", optional = true }
 fandhe-cap-image-generation = { path = "../fandhe-cap-image-generation", optional = true }
+fandhe-cap-in-app-browser = { path = "../fandhe-cap-in-app-browser", optional = true }
 fandhe-cap-in-app-review = { path = "../fandhe-cap-in-app-review", optional = true }
+fandhe-cap-launch-at-login = { path = "../fandhe-cap-launch-at-login", optional = true }
 fandhe-cap-live-activity = { path = "../fandhe-cap-live-activity", optional = true }
 fandhe-cap-local-fonts = { path = "../fandhe-cap-local-fonts", optional = true }
 fandhe-cap-managed-app-config = { path = "../fandhe-cap-managed-app-config", optional = true }
@@ -235,6 +250,7 @@ fandhe-cap-video-transcode = { path = "../fandhe-cap-video-transcode", optional 
 fandhe-cap-volume-control = { path = "../fandhe-cap-volume-control", optional = true }
 fandhe-cap-wallpaper-set = { path = "../fandhe-cap-wallpaper-set", optional = true }
 fandhe-cap-wifi-connect = { path = "../fandhe-cap-wifi-connect", optional = true }
+fandhe-cap-wifi-info = { path = "../fandhe-cap-wifi-info", optional = true }
 # END fandhe-cap
 
 # Windows の共通層。起動時にメインウィンドウの HWND を控える（端末機能の有無によらない起動の定型、TASK-21.4 / #1184）。

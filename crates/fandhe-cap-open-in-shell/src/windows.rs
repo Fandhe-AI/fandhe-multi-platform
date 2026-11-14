@@ -9,7 +9,7 @@
 //!   パスは 1 つの引数として渡し、コマンドラインは組み立てない。失敗時に OS のダイアログを出さない
 //! - 選択表示: `ILCreateFromPathW` + `SHOpenFolderAndSelectItems`（cidl = 0）。PIDL は RAII で
 //!   全経路で `ILFree` する
-//! - COM は STA で初期化する（`windows_launch_at_login.rs` の `ComGuard` と同型。可視性を変えずここへ複製）
+//! - COM は STA で初期化する（`fandhe-cap-launch-at-login` の `windows.rs` の `ComGuard` と同型。可視性を変えずここへ複製）
 //!
 //! # パスの正規化（[`to_win32_path`]）
 //!
@@ -269,7 +269,7 @@ mod win {
     use windows::core::{HSTRING, PCWSTR, w};
 
     /// COM（STA）初期化ガード。成功（`S_OK`/`S_FALSE`）時だけ Drop で解放する。
-    /// `windows_launch_at_login.rs` の `ComGuard` と同型。
+    /// `fandhe-cap-launch-at-login` の `windows.rs` の `ComGuard` と同型。
     struct ComGuard(bool);
     impl ComGuard {
         #[allow(unsafe_code)]

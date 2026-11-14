@@ -34,7 +34,7 @@
       "note": "実装済み（#696）。画面のボタンで有効化・無効化・設定画面を開く・状態の読み直しができる。登録後に `status` を読み戻し、`requiresApproval`（承認待ち・利用者が無効化）は有効と表示しない（成功は `Enabled` だけ）。未登録の解除は OS を呼ばずべき等に成功する。macOS 13 未満と、.app 外の素の実行体では `Unsupported`（13 未満の `SMLoginItemSetEnabled` はヘルパーバンドル必須で非推奨のため使わない）。未確認: ad-hoc 署名の .app で登録できるか、`requiresApproval` の出方（どちらも Mac 目視で確かめる）。エラーコードの分類は SMErrors.h の値（SDK ヘッダと照合済み）に基づき、外れても失敗に倒れ成功は作らない",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#694）",
-      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_launch_at_login.m + crates/fandhe-egui-proxy/src/device/macos_launch_at_login.rs + crates/fandhe-egui-proxy/src/device/launch_at_login.rs + crates/fandhe-core/src/screens/launch_at_login_show.rs + crates/fandhe-device/src/launch_at_login.rs、Issue #696"
+      "impl": "crates/fandhe-cap-launch-at-login/macos/fandhe_macos_launch_at_login.m + crates/fandhe-cap-launch-at-login/src/macos.rs + crates/fandhe-cap-launch-at-login/src/driver.rs + crates/fandhe-core/src/screens/launch_at_login_show.rs + crates/fandhe-cap-launch-at-login/src/contract.rs、Issue #696"
     },
     "windows": {
       "status": "done",
@@ -47,7 +47,7 @@
       "note": "実装済み（#697）。MSIX の `StartupTask` は package identity が要るため使わない。HKCU の Run キーに値 `fandhe-egui-proxy` を書く。値データは引用符付きの実行体パス + `--fandhe-launched-at-login`（260 文字以内、`\"` を含むパスは拒否）。StartupApproved は公式文書が無く、読むだけで書かない。値が無ければ有効、先頭バイト 0x02 は有効、0x03 は利用者が無効、それ以外は判別不能と表示する。同じ値名に別の場所の実行体があれば、有効化では上書きせず、解除でも消さず、その旨を表示する。設定画面は `ms-settings:startupapps`。未確認: StartupApproved の値が無い・0x02・0x03 のときの実際の起動有無（Windows 実機で確かめる）",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#694）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_launch_at_login.rs + crates/fandhe-egui-proxy/src/device/launch_at_login.rs + crates/fandhe-core/src/screens/launch_at_login_show.rs + crates/fandhe-device/src/launch_at_login.rs、Issue #697"
+      "impl": "crates/fandhe-cap-launch-at-login/src/windows.rs + crates/fandhe-cap-launch-at-login/src/driver.rs + crates/fandhe-core/src/screens/launch_at_login_show.rs + crates/fandhe-cap-launch-at-login/src/contract.rs、Issue #697"
     },
     "web": {
       "status": "no",

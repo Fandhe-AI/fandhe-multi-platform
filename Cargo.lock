@@ -1075,6 +1075,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-activity-recognition"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-core 0.61.2",
+ "windows-future",
+]
+
+[[package]]
 name = "fandhe-cap-app-attest"
 version = "0.2.0"
 dependencies = [
@@ -1197,6 +1212,36 @@ dependencies = [
  "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-camera-preview-stream"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
+name = "fandhe-cap-capture-protection"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -1387,6 +1432,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-flashlight"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-focus-mode-status"
 version = "0.2.0"
 dependencies = [
@@ -1396,6 +1455,17 @@ dependencies = [
  "jni 0.22.4",
  "thiserror 2.0.20",
  "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-foldable-posture"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -1498,6 +1568,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-in-app-browser"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-in-app-review"
 version = "0.2.0"
 dependencies = [
@@ -1505,6 +1588,18 @@ dependencies = [
  "fandhe-platform-apple",
  "fandhe-runtime",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-launch-at-login"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -2094,6 +2189,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-wifi-info"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-core"
 version = "0.2.0"
 dependencies = [
@@ -2162,6 +2271,7 @@ version = "0.1.0"
 dependencies = [
  "egui",
  "fandhe-cap-accessibility-prefs",
+ "fandhe-cap-activity-recognition",
  "fandhe-cap-app-attest",
  "fandhe-cap-app-badge",
  "fandhe-cap-app-lifecycle",
@@ -2172,6 +2282,8 @@ dependencies = [
  "fandhe-cap-calendar",
  "fandhe-cap-call-ui",
  "fandhe-cap-camera-capture",
+ "fandhe-cap-camera-preview-stream",
+ "fandhe-cap-capture-protection",
  "fandhe-cap-clipboard",
  "fandhe-cap-color-picker",
  "fandhe-cap-companion-device",
@@ -2187,7 +2299,9 @@ dependencies = [
  "fandhe-cap-file-preview",
  "fandhe-cap-file-provider",
  "fandhe-cap-file-watch",
+ "fandhe-cap-flashlight",
  "fandhe-cap-focus-mode-status",
+ "fandhe-cap-foldable-posture",
  "fandhe-cap-gamepad",
  "fandhe-cap-geocoding-search",
  "fandhe-cap-global-hotkey",
@@ -2196,7 +2310,9 @@ dependencies = [
  "fandhe-cap-http-get",
  "fandhe-cap-human-presence",
  "fandhe-cap-image-generation",
+ "fandhe-cap-in-app-browser",
  "fandhe-cap-in-app-review",
+ "fandhe-cap-launch-at-login",
  "fandhe-cap-live-activity",
  "fandhe-cap-local-fonts",
  "fandhe-cap-managed-app-config",
@@ -2242,6 +2358,7 @@ dependencies = [
  "fandhe-cap-volume-control",
  "fandhe-cap-wallpaper-set",
  "fandhe-cap-wifi-connect",
+ "fandhe-cap-wifi-info",
  "fandhe-core",
  "fandhe-egui-proxy",
  "fandhe-platform-android",
@@ -2343,6 +2460,7 @@ dependencies = [
  "fandhe-cap-app-lifecycle",
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
+ "fandhe-cap-camera-preview-stream",
  "fandhe-cap-color-picker",
  "fandhe-cap-compose-mail-sms",
  "fandhe-cap-digital-credentials",
@@ -2350,6 +2468,8 @@ dependencies = [
  "fandhe-cap-dynamic-type",
  "fandhe-cap-external-app-launch",
  "fandhe-cap-file-watch",
+ "fandhe-cap-flashlight",
+ "fandhe-cap-foldable-posture",
  "fandhe-cap-gamepad",
  "fandhe-cap-http-get",
  "fandhe-cap-local-fonts",

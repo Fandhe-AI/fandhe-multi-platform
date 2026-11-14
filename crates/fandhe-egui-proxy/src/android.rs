@@ -186,10 +186,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // （`fandhe_device::contact_picker` モジュール doc）なので、旧要求の遅延完了を id 不一致で無視させる。
     #[cfg(feature = "device")]
     crate::device::contact_pick::reset_pending_tracking();
-    // Issue #812: カメラのライブ映像も同様。画面状態が generation 0 に戻るため、動いたままの
-    // セッションを止めて `ACTIVE` を解放する（`device::camera_preview_stream::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::camera_preview_stream::reset_pending_tracking();
     // Issue #267: 音声再生も同様。画面状態が generation 0 に戻るため、処理済み世代を捨て再生を止める
     // （`device::media_playback::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
@@ -206,10 +202,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // `device::translation::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::translation::reset_pending_tracking();
-    // Issue #701: アプリ内ブラウザの保留中の要求も破棄する（理由は translation と同じ。
-    // `device::in_app_browser::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::in_app_browser::reset_pending_tracking();
     // Issue #560: OS の検索への登録の処理済み世代も破棄する（理由は translation と同じ。
     // `device::spotlight_index::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

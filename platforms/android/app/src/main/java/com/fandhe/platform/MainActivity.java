@@ -368,34 +368,6 @@ public class MainActivity extends GameActivity {
         musicLibraryHelper.cancel(requestId);
     }
 
-    // Wi-Fi 情報画面（Issue #516）。実装は `WifiInfoHelper`（許可ランチャーを STARTED 前に登録）。
-    // Rust の `android_wifi_info.rs` が JNI で呼ぶ。
-    private final WifiInfoHelper wifiInfoHelper = new WifiInfoHelper(this);
-
-    void requestWifiInfo(long requestId) {
-        wifiInfoHelper.read(requestId);
-    }
-
-    void cancelWifiInfo(long requestId) {
-        wifiInfoHelper.cancel(requestId);
-    }
-
-    // 行動認識（Issue #1127）。実装は `ActivityRecognitionHelper`（フィールド初期化子で生成し、STARTED 前に
-    // 許可ランチャーを登録する）。Rust の `android_activity_recognition.rs` が同期 JNI で呼ぶ。
-    private final ActivityRecognitionHelper activityRecognitionHelper = new ActivityRecognitionHelper(this);
-
-    int activityRecognitionStart() {
-        return activityRecognitionHelper.start();
-    }
-
-    long[] activityRecognitionRead() {
-        return activityRecognitionHelper.read();
-    }
-
-    void activityRecognitionStop() {
-        activityRecognitionHelper.stop();
-    }
-
     // 方位（Issue #1406）。実装は `CompassHelper`。Rust の `android_compass.rs` が同期 JNI で呼ぶ。
     private final CompassHelper compassHelper = new CompassHelper(this);
 
@@ -471,26 +443,6 @@ public class MainActivity extends GameActivity {
         return SpotlightIndexHelper.removeAll(getApplicationContext(), domain, remainingMs);
     }
 
-    // カメラのライブ映像（Issue #814）。実装は `CameraPreviewHelper`（許可ランチャーを STARTED 前に登録）。
-    // Rust の `android_camera_preview_stream.rs` が JNI で呼ぶ。
-    private final CameraPreviewHelper cameraPreviewHelper = new CameraPreviewHelper(this);
-
-    int cameraPreviewStart(long id) {
-        return cameraPreviewHelper.start(id);
-    }
-
-    void cameraPreviewStop(long id) {
-        cameraPreviewHelper.stop(id);
-    }
-
-    float[] cameraPreviewZoomRange(long id) {
-        return cameraPreviewHelper.zoomRange(id);
-    }
-
-    int cameraPreviewSetZoom(long id, float ratio) {
-        return cameraPreviewHelper.setZoom(id, ratio);
-    }
-
     // OAuth 用 Web 認証セッション（Issue #534）。実装は `WebAuthSessionHelper`。
     // Rust の `android_web_auth_session.rs` が JNI で呼ぶ。
     private final WebAuthSessionHelper webAuthSessionHelper = new WebAuthSessionHelper(this);
@@ -516,14 +468,6 @@ public class MainActivity extends GameActivity {
 
     void requestPayment(long requestId, boolean pay, String isReadyToPayJson, String paymentDataRequestJson) {
         paymentRequestHelper.request(requestId, pay, isReadyToPayJson, paymentDataRequestJson);
-    }
-
-    // アプリ内ブラウザ（Issue #703）。実装は `InAppBrowserHelper`。
-    // Rust の `android_in_app_browser.rs` が JNI で呼ぶ。
-    private final InAppBrowserHelper inAppBrowserHelper = new InAppBrowserHelper(this);
-
-    void requestInAppBrowserOpen(long requestId, String url) {
-        inAppBrowserHelper.open(requestId, url);
     }
 
     // クイック設定タイル（Issue #720）。実装は `QuickSettingsTileStore`。Rust の
@@ -571,66 +515,14 @@ public class MainActivity extends GameActivity {
         return screenOrientationHelper.read();
     }
 
-    // 画面キャプチャの防止・検知（Issue #584）。実装は `CaptureProtectionHelper`。Rust の
-    // `android_capture_protection.rs` が egui スレッドから JNI 呼び出しする。
-    private final CaptureProtectionHelper captureProtectionHelper = new CaptureProtectionHelper(this);
-
-    int captureProtectionSet(boolean on) {
-        return captureProtectionHelper.set(on);
-    }
-
-    int captureProtectionIsProtected() {
-        return captureProtectionHelper.isProtected();
-    }
-
-    int captureProtectionSupport() {
-        return captureProtectionHelper.support();
-    }
-
-    int captureProtectionRecording() {
-        return captureProtectionHelper.recording();
-    }
-
-    long captureProtectionScreenshotCount() {
-        return captureProtectionHelper.screenshotCount();
-    }
-
-    // 折りたたみの姿勢・ヒンジ（Issue #1098）。実装は `FoldablePostureHelper`。Rust の
-    // `android_foldable_posture.rs` が egui スレッドから同期で JNI 呼び出しする。
-    private final FoldablePostureHelper foldablePostureHelper = new FoldablePostureHelper(this);
-
-    int[] foldablePostureRead() {
-        return foldablePostureHelper.read();
-    }
-
-    // ライト（トーチ）（Issue #461）。実装は `FlashlightHelper`。Rust の `android_flashlight.rs` が
-    // egui スレッドから同期で JNI 呼び出しする。
-    private final FlashlightHelper flashlightHelper = new FlashlightHelper(this);
-
-    int flashlightSet(boolean on) {
-        return flashlightHelper.set(on);
-    }
-
-    int flashlightRead() {
-        return flashlightHelper.read();
-    }
-
     @Override
     protected void onStart() {
         super.onStart();
-        flashlightHelper.onStart();
-        captureProtectionHelper.onStart();
-        foldablePostureHelper.onStart();
-        activityRecognitionHelper.onStart();
     }
 
     @Override
     protected void onStop() {
-        flashlightHelper.onStop();
-        captureProtectionHelper.onStop();
-        foldablePostureHelper.onStop();
         blePeripheralHelper.onStop();
-        activityRecognitionHelper.onStop();
         super.onStop();
     }
 
@@ -1602,7 +1494,6 @@ public class MainActivity extends GameActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         backgroundUploadHelper.onCreate();
-        captureProtectionHelper.onCreate();
         installAccessibilityOffGuard();
         fullscreenHelper.register();
 
@@ -1979,7 +1870,6 @@ public class MainActivity extends GameActivity {
         super.onResume();
         activityResumed = true;
         webAuthSessionHelper.onResume();
-        inAppBrowserHelper.onResume();
         compassHelper.onResume();
         environmentSensorsHelper.onResume();
         motionRawSensorsHelper.onResume();
@@ -1987,7 +1877,6 @@ public class MainActivity extends GameActivity {
         bluetoothClassicHelper.onResume();
         mediaPlaybackHelper.onResume();
         nowPlayingHelper.onResume();
-        cameraPreviewHelper.onResume();
         if (sensorManager != null && motionSensor != null) {
             sensorManager.registerListener(
                     motionListener, motionSensor, SensorManager.SENSOR_DELAY_GAME);
@@ -2070,7 +1959,6 @@ public class MainActivity extends GameActivity {
         activityResumed = false;
         penStylusHelper.onPause();
         webAuthSessionHelper.onPause();
-        inAppBrowserHelper.onPause();
         lanDiscoveryHelper.onPause();
         localPeerHelper.onPause();
         bluetoothClassicHelper.onPause();
@@ -2079,7 +1967,6 @@ public class MainActivity extends GameActivity {
         motionRawSensorsHelper.onPause();
         mediaPlaybackHelper.onPause();
         nowPlayingHelper.onPause();
-        cameraPreviewHelper.onPause();
         if (sensorManager != null) {
             sensorManager.unregisterListener(motionListener);
         }
@@ -3791,7 +3678,6 @@ public class MainActivity extends GameActivity {
         // UI キューを待つネイティブ終了処理（clear）が super.onDestroy() の後ろで詰まらないよう先に解放する。
         nowPlayingHelper.onDestroy();
         super.onDestroy();
-        inAppBrowserHelper.onDestroy();
         paymentRequestHelper.onDestroy();
         healthDataHelper.onDestroy();
         translationHelper.onDestroy();
@@ -3800,19 +3686,13 @@ public class MainActivity extends GameActivity {
         bluetoothClassicHelper.onDestroy();
         blePeripheralHelper.onDestroy();
         musicLibraryHelper.onDestroy();
-        wifiInfoHelper.onDestroy();
         compassHelper.onDestroy();
-        activityRecognitionHelper.onDestroy();
         environmentSensorsHelper.onDestroy();
         motionRawSensorsHelper.onDestroy();
         mediaPlaybackHelper.onDestroy();
         pictureInPictureHelper.onDestroy();
-        cameraPreviewHelper.onDestroy();
         printHelper.onDestroy();
         screenOrientationHelper.onDestroy();
-        captureProtectionHelper.onDestroy();
-        foldablePostureHelper.onDestroy();
-        flashlightHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため
         // `micRecorder == null` で no-op（`onPause` doc 参照）。`onPause` を経由せず
         // 直接 `onDestroy` へ来るケース（Android の契約上は稀）に備えて同じ処理を置く。

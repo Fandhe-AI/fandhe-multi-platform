@@ -5,7 +5,7 @@
 //! effect を渡し、`mount::release_features` が破棄時に `release_mount` を呼ぶ。
 //! 値の取得は Device Posture API（`navigator.devicePosture.type`）と Viewport Segments API
 //! （`window.viewport.segments`）を `js_sys::Reflect` で読む（web-sys に型が無い）。
-//! 共有するのは `fandhe_device::foldable_posture` の `READ_INTERVAL` と契約の写像
+//! 共有するのは `fandhe_cap_foldable_posture` の `READ_INTERVAL` と契約の写像
 //! `reading_from_raw`（SSOT）だけ。`FoldablePostureSource` トレイトは経由しない。
 //!
 //! # 方式
@@ -22,10 +22,10 @@
 //! 守らない範囲: 反映の遅れ（最大 `READ_INTERVAL` + 1 フレーム。背景タブではさらに遅れる）、
 //! 折りたためない端末と広げた端末の区別、複数タブ間の食い違い、zoom が 1 でないときの位置のずれ。
 
+use fandhe_cap_foldable_posture as dev;
+use fandhe_cap_foldable_posture::FoldablePostureError;
 use fandhe_core::screens::foldable_posture_show as screen;
 use fandhe_core::screens::foldable_posture_show::{ReadFailure, FAILED_LABEL};
-use fandhe_device::foldable_posture as dev;
-use fandhe_device::DeviceError;
 
 /// `navigator.devicePosture` から読んだ生の姿勢。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,7 +100,7 @@ pub(crate) fn classify(
             posture: map_posture(r.posture),
             fold: map_fold(r.fold),
         }),
-        Err(DeviceError::Unsupported(_)) => Err(ReadFailure::Unsupported),
+        Err(FoldablePostureError::Unsupported(_)) => Err(ReadFailure::Unsupported),
         Err(_) => Err(failed()),
     }
 }
@@ -118,10 +118,10 @@ mod web {
     use std::collections::HashMap;
     use std::rc::Rc;
 
+    use fandhe_cap_foldable_posture::{SegmentRect, READ_INTERVAL};
     use fandhe_core::screens::foldable_posture_show::{
         apply_read, FoldablePostureShowState, PostureReading, ReadFailure,
     };
-    use fandhe_device::foldable_posture::{SegmentRect, READ_INTERVAL};
     use js_sys::Reflect;
     use wasm_bindgen::prelude::*;
 

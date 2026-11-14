@@ -4,8 +4,8 @@
 //! （`screens/mod.rs` の `pub mod launch_at_login_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS の呼び出しと
-//! `fandhe_device::launch_at_login::LoginItemStatus` からの写像は `fandhe-egui-proxy` の
-//! effect ドライバ（`device/launch_at_login.rs`）の責務で、本モジュールの [`LoginItemState`] は
+//! `fandhe_cap_launch_at_login::LoginItemStatus` からの写像は `fandhe-cap-launch-at-login` の
+//! effect ドライバ（`driver.rs`）の責務で、本モジュールの [`LoginItemState`] は
 //! その写し。macOS・Windows の両方で使う画面で、OS ごとの文言は [`Platform`]
 //! （ドライバが一度だけ注入）で出し分ける。
 //!

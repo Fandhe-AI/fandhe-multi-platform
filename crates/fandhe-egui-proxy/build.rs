@@ -149,22 +149,12 @@ fn build() {
     compile_ios_environment_sensors();
     // `ios/fandhe_ios_motion_raw_sensors.m`（Issue #900）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_motion_raw_sensors();
-    // `ios/fandhe_ios_activity_recognition.m`（Issue #614）。iOS 分岐のみ（macOS は対応表で n-a）。
-    compile_ios_activity_recognition();
-    // `ios/fandhe_ios_camera_preview_stream.m`（Issue #813）。iOS 分岐。macOS 分岐（`build_macos`）も同じ `.m` を共有する（Issue #1066）。
-    compile_ios_camera_preview_stream();
-    // `ios/fandhe_ios_flashlight.m`（Issue #460）。iOS 分岐のみ（macOS は対応表で n-a）。
-    compile_ios_flashlight();
     // `ios/fandhe_ios_pen_stylus.m`（Issue #356）。iOS 分岐のみ。
     compile_ios_pen_stylus();
     // `ios/fandhe_ios_alarm.swift`（Issue #1077）。iOS 分岐のみ。AlarmKit を弱リンクする。
     compile_ios_alarm();
     // `ios/fandhe_ios_web_auth_session.m`（Issue #532）。iOS 分岐のみ。
     compile_ios_web_auth_session();
-    // `ios/fandhe_ios_in_app_browser.m`（Issue #702）。iOS 分岐のみ。SafariServices をリンクする。
-    compile_ios_in_app_browser();
-    // `ios/fandhe_ios_capture_protection.m`（Issue #583）。iOS 分岐のみ（macOS は対応表で no）。
-    compile_ios_capture_protection();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
     compile_apple_network_status();
     // `apple/fandhe_apple_media_playback.m`（Issue #267）。macOS と iOS（親 #86 の b-ios）で共用する。
@@ -477,34 +467,6 @@ fn compile_apple_now_playing() {
     );
 }
 
-/// `macos/fandhe_macos_launch_at_login.m` を `cc` でコンパイルする（Issue #696）。**macOS 分岐のみ**
-/// から呼ばれる（`src/device/macos_launch_at_login.rs` が使う）。ServiceManagement をリンクする
-/// （システムフレームワークで旧 OS にも存在するため強リンクでよい。API は `@available` で守る）。
-fn compile_macos_launch_at_login() {
-    compile_objc(
-        "macos/fandhe_macos_launch_at_login.m",
-        &["Foundation", "ServiceManagement"],
-    );
-}
-
-/// `ios/fandhe_ios_capture_protection.m` を `cc` でコンパイルする（Issue #583）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_capture_protection.rs` が使う）。
-fn compile_ios_capture_protection() {
-    compile_objc(
-        "ios/fandhe_ios_capture_protection.m",
-        &["Foundation", "UIKit"],
-    );
-}
-
-/// `macos/fandhe_macos_wifi_info.m` を `cc` でコンパイルし CoreWLAN をリンクする（Issue #514）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_wifi_info.rs` が使う）。
-fn compile_macos_wifi_info() {
-    compile_objc(
-        "macos/fandhe_macos_wifi_info.m",
-        &["CoreLocation", "CoreWLAN", "Foundation"],
-    );
-}
-
 /// `macos/fandhe_macos_music_library.m` を `cc` でコンパイルし iTunesLibrary をリンクする（Issue #482）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_music_library.rs` が使う）。
 fn compile_macos_music_library() {
@@ -604,15 +566,6 @@ fn compile_ios_web_auth_session() {
     );
 }
 
-/// `ios/fandhe_ios_in_app_browser.m` を `cc` でコンパイルし SafariServices をリンクする（Issue #702）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_in_app_browser.rs` が使う）。
-fn compile_ios_in_app_browser() {
-    compile_objc(
-        "ios/fandhe_ios_in_app_browser.m",
-        &["SafariServices", "UIKit"],
-    );
-}
-
 /// `ios/fandhe_ios_print.m` を `cc` でコンパイルする（Issue #327）。
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_print.rs` が使う）。
 fn compile_ios_print() {
@@ -655,43 +608,6 @@ fn compile_ios_motion_raw_sensors() {
     compile_objc(
         "ios/fandhe_ios_motion_raw_sensors.m",
         &["CoreMotion", "UIKit"],
-    );
-}
-
-/// `ios/fandhe_ios_activity_recognition.m` を `cc` でコンパイルする（Issue #614）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_activity_recognition.rs` が使う）。
-fn compile_ios_activity_recognition() {
-    compile_objc(
-        "ios/fandhe_ios_activity_recognition.m",
-        &["CoreMotion", "Foundation", "UIKit"],
-    );
-}
-
-/// `ios/fandhe_ios_camera_preview_stream.m` を `cc` でコンパイルする（Issue #813、macOS は #1066）。
-/// **iOS・macOS 双方**の分岐から呼ばれる（`src/device/ios_camera_preview_stream.rs` が使う）。
-fn compile_ios_camera_preview_stream() {
-    compile_objc(
-        "ios/fandhe_ios_camera_preview_stream.m",
-        if target_is_ios() {
-            &[
-                "AVFoundation",
-                "CoreMedia",
-                "CoreVideo",
-                "Foundation",
-                "UIKit",
-            ]
-        } else {
-            &["AVFoundation", "CoreMedia", "CoreVideo", "Foundation"]
-        },
-    );
-}
-
-/// `ios/fandhe_ios_flashlight.m` を `cc` でコンパイルする（Issue #460）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_flashlight.rs` が使う）。
-fn compile_ios_flashlight() {
-    compile_objc(
-        "ios/fandhe_ios_flashlight.m",
-        &["AVFoundation", "Foundation", "UIKit"],
     );
 }
 
@@ -740,8 +656,6 @@ fn build_macos() {
     compile_apple_bluetooth_le();
     // `apple/fandhe_apple_ble_peripheral.m`（Issue #778）。macOS・iOS 両分岐から呼ぶ。
     compile_apple_ble_peripheral();
-    // `ios/fandhe_ios_camera_preview_stream.m`（Issue #1066）は iOS 分岐と共有する（`TARGET_OS_IPHONE` で分岐）。
-    compile_ios_camera_preview_stream();
     // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。Network をリンクする。
     compile_apple_lan_discovery();
@@ -769,8 +683,6 @@ fn build_macos() {
     compile_macos_safe_area_insets();
     // `macos/fandhe_macos_window_management.m`（Issue #636）も macOS 専用。
     compile_macos_window_management();
-    // `macos/fandhe_macos_launch_at_login.m`（Issue #696）も macOS 専用。ServiceManagement をリンクする。
-    compile_macos_launch_at_login();
     // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。
     compile_macos_print();
     // `apple/fandhe_apple_media_playback.m`（Issue #267）。iOS 分岐と共用する。
@@ -789,8 +701,6 @@ fn build_macos() {
     compile_macos_music_library();
     // `macos/fandhe_macos_web_auth_session.m`（Issue #530）も macOS 専用。AuthenticationServices を使う。
     compile_macos_web_auth_session();
-    // `macos/fandhe_macos_wifi_info.m`（Issue #514）も macOS 専用。CoreWLAN を使う。
-    compile_macos_wifi_info();
     // `macos/fandhe_macos_bluetooth_classic.m`（Issue #659）も macOS 専用。IOBluetooth を使う。
     compile_macos_bluetooth_classic();
     compile_macos_pen_stylus();

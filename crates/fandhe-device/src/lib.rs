@@ -17,8 +17,6 @@
 //! #745 の API が確定してから #747〜#749 側で行う。
 #![forbid(unsafe_code)]
 
-/// Phase 11（端末機能の拡充ループ、親 #124、Issue #613）: 行動認識（歩行・走行・乗り物など）。
-pub mod activity_recognition;
 /// Phase 11（端末機能の拡充ループ、親 #140、Issue #721）: アラーム・正確な時刻の予約（Windows 実装、他 OS は `Unsupported` 固定）。
 pub mod alarm;
 /// Phase 11（端末機能の拡充ループ、親 #101、Issue #424）: アプリショートカット（長押し・ジャンプリスト・Dock メニュー）の登録。
@@ -41,10 +39,10 @@ pub mod ble_peripheral;
 pub mod bluetooth_classic;
 /// Phase 11（端末機能の拡充ループ）: Bluetooth LE の周辺機器スキャン。
 pub mod bluetooth_le;
-/// Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得（ズーム操作を含む）。
+/// カメラのライブ映像の縮小の部品（`downscale_packed`・`downscale_yuv420`・`preview_size`）だけ。`fandhe-cap-ar` と
+/// `fandhe-web-dom` が共有する純関数で、機能の契約は `fandhe-cap-camera-preview-stream` が持つ（Issue #812 / #1329、
+/// consumer-app-structure.md §8）。
 pub mod camera_preview_stream;
-/// Phase 11（端末機能の拡充ループ、親 #120、Issue #582）: 画面キャプチャの防止・検知。
-pub mod capture_protection;
 /// Phase 11（端末機能の拡充ループ、親 #152、Issue #1116）: 車載ディスプレイの 1 行テキスト。
 pub mod car_display;
 /// Phase 11（端末機能の拡充ループ、親 #1154、Issue #1404）: 方位（コンパス）。
@@ -65,10 +63,6 @@ pub mod eye_dropper;
 pub mod file_association;
 /// Phase 11（端末機能の拡充ループ、Issue #872）: ファイル選択ダイアログ。
 pub mod file_picker;
-/// Phase 11 の拡充ループ（親 #106、Issue #458）: ライト（トーチ）の点灯 / 消灯。
-pub mod flashlight;
-/// Phase 11 の拡充ループ（親 #141、Issue #723）: 折りたたみ端末の姿勢と折れ目。
-pub mod foldable_posture;
 /// Phase 11（端末機能の拡充ループ、親 #1133、Issue #1312）: 全画面表示（システムバー非表示）。
 pub mod fullscreen_immersive;
 /// Phase 11（端末機能の拡充ループ）: location に乗せた Rust 側のジオフェンス判定。
@@ -78,12 +72,8 @@ pub mod health_data;
 pub mod http;
 /// Phase 11（端末機能の拡充ループ、親 #1120、Issue #1250）: 画像内の文字認識（OCR）。
 pub mod image_recognition;
-/// Phase 11（端末機能の拡充ループ、親 #135、Issue #701）: アプリ内ブラウザ（固定の公開 URL を OS のアプリ内ブラウザで開く）。
-pub mod in_app_browser;
 /// Phase 11（端末機能の拡充ループ、親 #109、Issue #486）: LAN のサービス探索（mDNS / Bonjour、`_http._tcp` を固定窓で 1 回探す）。
 pub mod lan_discovery;
-/// Phase 11（端末機能の拡充ループ、親 #134、Issue #696）: ログイン時の自動起動（有効化・無効化・状態の読み戻し）。
-pub mod launch_at_login;
 /// Phase 11（端末機能の拡充ループ、親 #110、Issue #511）: 近くの端末との直接通信（同じアプリを開いた 2 台が固定文字列を 1 回ずつ送り合う）。
 pub mod local_peer;
 /// Phase 11（端末機能の拡充ループ、親 #887、Issue #888）: 継続 push 型の位置情報取得。
@@ -142,7 +132,8 @@ pub mod tts;
 pub mod url_scheme;
 /// Phase 11（端末機能の拡充ループ、親 #113、Issue #530）: OAuth 用の Web 認証セッション（デモ認可ページ + コールバック検査）。
 pub mod web_auth_session;
-/// Phase 11（端末機能の拡充ループ、親 #111、Issue #514）: Wi-Fi 情報（現在の接続と周辺の上位数件）。
+/// Wi-Fi の電源状態の判定（`radio_off`）だけ。wifi-info と wifi-connect が共有する純関数で、機能の契約は `fandhe-cap-wifi-info`
+/// が持つ（Issue #514 / #1329、consumer-app-structure.md §8）。
 pub mod wifi_info;
 /// Phase 11（端末機能の拡充ループ、親 #127、Issue #636）: ウィンドウ管理（位置・サイズ・最前面）。
 pub mod window_management;

@@ -301,7 +301,7 @@ windows = { workspace = true, optional = true, features = [
     # `device/windows_ble_peripheral.rs`（ble-peripheral）が `GattServiceProvider` /
     # `GattLocalCharacteristic`（`Devices_Bluetooth_GenericAttributeProfile`）を呼ぶ。新規パッケージは増えない。
     "Devices_Bluetooth_GenericAttributeProfile",
-    # `device/windows_camera_preview_stream.rs`（camera-preview-stream）が `MediaFrameReader`
+    # `fandhe-cap-camera-preview-stream` の `windows.rs`（移行前の `device/` 実装。現在は機能 crate が自前の依存を持つ）が `MediaFrameReader`
     # （`Media_Capture_Frames`）と `ZoomControl`（`Media_Devices`）を呼ぶ。新規パッケージは増えない。
     "Media_Capture_Frames",
     "Media_Devices",
@@ -340,7 +340,7 @@ windows = { workspace = true, optional = true, features = [
     # `SimpleHapticsController`（`Devices_Haptics`）と、`SupportedFeedback` が返す
     # `IVectorView`（`Foundation_Collections`）を呼ぶ。新規パッケージは増えない。
     "Devices_Haptics",
-    # Issue #459: `device/windows_flashlight.rs` が `Lamp`（`Devices_Lights`）を呼ぶ。新規パッケージは増えない。
+    # Issue #459: `fandhe-cap-flashlight` の `windows.rs`（移行前は `device/windows_flashlight.rs`）が `Lamp`（`Devices_Lights`）を呼ぶ。新規パッケージは増えない。
     "Devices_Lights",
     "Foundation_Collections",
     # Issue #1094: `device/windows_nlp.rs` が `WordsSegmenter` / `WordSegment`
@@ -516,7 +516,7 @@ windows = { workspace = true, optional = true, features = [
     # Issue #487: `device/windows_lan_discovery.rs` が `DnsServiceBrowse`（mDNS / DNS-SD）を呼ぶ。
     # 新規パッケージは増えない（Cargo.lock は不変）。
     "Win32_NetworkManagement_Dns",
-    # Issue #515: `device/windows_wifi_info.rs` が wlanapi（`WlanOpenHandle` / `WlanEnumInterfaces` /
+    # Issue #515: `fandhe-cap-wifi-info` の `windows.rs`（移行前は `device/windows_wifi_info.rs`）が wlanapi（`WlanOpenHandle` / `WlanEnumInterfaces` /
     # `WlanQueryInterface` / `WlanGetNetworkBssList`）を呼ぶ。新規パッケージは増えない（Cargo.lock は不変）。
     "Win32_NetworkManagement_WiFi",
     # Issue #792: `device/windows_wifi_connect.rs` が `WlanConnect` / `WLAN_CONNECTION_PARAMETERS`

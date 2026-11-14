@@ -5,7 +5,7 @@
 //! `fandhe-web-dom` の mount が使う。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。値の取得は
-//! `fandhe-egui-proxy` の `device/foldable_posture.rs`（Web は `fandhe-web-dom`）が一定間隔で
+//! `fandhe-cap-foldable-posture` の `driver.rs`（Web は `fandhe-web-dom`）が一定間隔で
 //! 行い、[`apply_read`] で結果を注入する。`fandhe_device::foldable_posture` の型は
 //! 依存方向の都合でここに写し取る。
 //!

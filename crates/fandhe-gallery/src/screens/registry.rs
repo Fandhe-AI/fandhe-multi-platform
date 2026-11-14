@@ -95,7 +95,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "launch_at_login_show" => fandhe_core::screens::launch_at_login_show::current_screen,
-    fandhe_egui_proxy::device::launch_at_login::launch_at_login_show_effect,
+    fandhe_cap_launch_at_login::launch_at_login_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "app_badge_set" => fandhe_core::screens::app_badge_set::current_screen,
@@ -311,7 +311,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "camera_preview_stream_show" => fandhe_core::screens::camera_preview_stream_show::current_screen,
-    fandhe_egui_proxy::device::camera_preview_stream::camera_preview_stream_show_effect,
+    fandhe_cap_camera_preview_stream::camera_preview_stream_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_provider_show" => fandhe_core::screens::file_provider_show::current_screen,
@@ -375,7 +375,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "foldable_posture_show" => fandhe_core::screens::foldable_posture_show::current_screen,
-    fandhe_egui_proxy::device::foldable_posture::foldable_posture_show_effect,
+    fandhe_cap_foldable_posture::foldable_posture_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "focus_mode_status_show" => fandhe_core::screens::focus_mode_status_show::current_screen,
@@ -395,7 +395,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "activity_recognition_show" => fandhe_core::screens::activity_recognition_show::current_screen,
-    fandhe_egui_proxy::device::activity_recognition::activity_recognition_show_effect,
+    fandhe_cap_activity_recognition::activity_recognition_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ar_show" => fandhe_core::screens::ar_show::current_screen,
@@ -443,7 +443,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "flashlight_toggle" => fandhe_core::screens::flashlight_toggle::current_screen,
-    fandhe_egui_proxy::device::flashlight::flashlight_toggle_effect,
+    fandhe_cap_flashlight::flashlight_toggle_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "nlp_segment" => fandhe_core::screens::nlp_segment::current_screen,
@@ -491,7 +491,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wifi_info_show" => fandhe_core::screens::wifi_info_show::current_screen,
-    fandhe_egui_proxy::device::wifi_info::wifi_info_show_effect,
+    fandhe_cap_wifi_info::wifi_info_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wifi_connect_show" => fandhe_core::screens::wifi_connect_show::current_screen,
@@ -527,7 +527,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "in_app_browser_show" => fandhe_core::screens::in_app_browser_show::current_screen,
-    fandhe_egui_proxy::device::in_app_browser::in_app_browser_show_effect,
+    fandhe_cap_in_app_browser::in_app_browser_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "geocoding_search_show" => fandhe_core::screens::geocoding_search_show::current_screen,
@@ -583,7 +583,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "capture_protection_show" => fandhe_core::screens::capture_protection_show::current_screen,
-    fandhe_egui_proxy::device::capture_protection::capture_protection_show_effect,
+    fandhe_cap_capture_protection::capture_protection_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "video_capture_show" => fandhe_core::screens::video_capture_show::current_screen,

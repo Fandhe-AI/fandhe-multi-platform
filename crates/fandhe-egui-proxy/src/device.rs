@@ -17,18 +17,11 @@
 //! [`http_fetch`] / [`tilt`] サブモジュールに置く（カメラ撮影は機能 crate `fandhe-cap-camera-capture`、#1170）
 //! （`registry.rs` の `effect` 区画から配線される）。
 
-/// Issue #613（親 #124）: 行動認識（歩行・乗車等）の effect ドライバ（Windows 実装、iOS 実装、
-/// Android は b-android が埋めるスタブ、他 OS は `UnsupportedActivityRecognizer` 固定）。
-pub mod activity_recognition;
 /// Phase 11 の拡充ループ（親 #140、Issue #721）: アラーム・正確な時刻の予約の effect
 /// ドライバ（Windows 実装、iOS は AlarmKit、Android は #1078 が埋めるスタブ、他 OS は `Unsupported` 固定）。
 pub mod alarm;
 #[cfg(target_os = "android")]
 pub mod android;
-/// Issue #1126: Android 向け行動認識の骨格（実体は b-android）。`device/activity_recognition.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_activity_recognition;
 /// Issue #1076: Android 向けアラーム実装のスタブ（実装は #1078）。`device/alarm.rs` の Android 経路から呼ばれる。
 /// #1078 が cfg を変えずに済むよう `any(android, test)`。
 #[cfg(any(target_os = "android", test))]
@@ -64,16 +57,6 @@ pub mod android_ble_peripheral;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_bluetooth_classic;
-/// Issue #812: Android 向けカメラのライブ映像実装のスタブ（#814 が埋める）。
-/// `device/camera_preview_stream.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_camera_preview_stream;
-/// Issue #584: Android 向け画面キャプチャの防止・検知（`CaptureProtectionHelper.java` を JNI で呼ぶ）。
-/// `device/capture_protection.rs` の Android 経路から使われる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_capture_protection;
 /// Issue #1117: Android 向け車載ディスプレイ（Car App Library の Service/Screen を JNI 経由で操作する）。
 /// `device/car_display.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -103,16 +86,6 @@ pub mod android_environment_sensors;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_file_association;
-/// Issue #461: Android 向けライト（トーチ）実装（`FlashlightHelper` との JNI 橋渡し）。
-/// `device/flashlight.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_flashlight;
-/// Issue #1098: Android 向け折りたたみ姿勢の実装（`FoldablePostureHelper` との JNI 橋渡し）。
-/// `device/foldable_posture.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_foldable_posture;
 /// Issue #1314: Android 向け全画面表示実装（`FullscreenHelper` との JNI 橋渡し）。
 /// `device/fullscreen_immersive.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -127,11 +100,6 @@ pub mod android_health_data;
 /// `device/image_recognition.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_image_recognition;
-/// Issue #701 / #703（親 #135）: Android 向けアプリ内ブラウザ（Custom Tabs）の骨格。
-/// `device/in_app_browser.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_in_app_browser;
 /// Issue #489: Android 向け LAN のサービス探索（`NsdManager`。Java 側は `LanDiscoveryHelper`、親 #109 の b-android）。
 /// `device/lan_discovery.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
@@ -226,11 +194,6 @@ pub mod android_url_scheme;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_web_auth_session;
-/// Issue #516: Android 向け Wi-Fi 情報・スキャン実装（`WifiManager`、JNI 経由の pull 型 bridge）。
-/// `device/wifi_info.rs` の Android 経路から呼ばれる。純関数をホストでテストするため test でもコンパイルする。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_wifi_info;
 /// Issue #424（親 #101）: アプリショートカット（長押し・ジャンプリスト・Dock メニュー）の登録ドライバ。
 /// `device/url_scheme.rs::url_scheme_show_effect` から呼ばれる。実装は macOS（Dock メニュー）、
 /// iOS は Info.plist の静的宣言（`Declared`、#425）、Android・Windows（ジャンプリスト）は実装済み、他 OS は `UnsupportedAppShortcuts` 固定。
@@ -386,14 +349,6 @@ pub mod bluetooth_classic;
 /// Phase 11 の拡充ループ（親 #1059、Issue #1060）: BLE スキャンの effect ドライバ
 /// （iOS/macOS/Windows/Android 実装、他 OS は `UnsupportedBluetoothLe` 固定。Web は別経路 `fandhe-web-dom`（#1063））。
 pub mod bluetooth_le;
-/// Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得の effect ドライバ
-/// （iOS #813・Android #814・macOS #1066 は実装済み、Windows #1102 も実装済みで、他 OS は `UnsupportedCameraPreview`
-/// 固定。Web は `fandhe-web-dom`、#815）。
-pub mod camera_preview_stream;
-/// Phase 11 の拡充ループ（親 #120、Issue #582）: 画面キャプチャの防止・検知の effect ドライバ
-/// （Windows は防止のみ、iOS は検知のみ（#583）、Android は防止・検知（#584）、他 OS は
-/// `UnsupportedCaptureProtection` 固定）。
-pub mod capture_protection;
 /// Phase 11 の拡充ループ（親 #152、Issue #1116）: 車載ディスプレイの effect ドライバ。
 /// Android は Car App Library 実装（#1117）、他 OS は `UnsupportedCarDisplay` 固定。
 pub mod car_display;
@@ -417,14 +372,6 @@ pub mod environment_sensors;
 /// （macOS・iOS・Windows 実装、Android は未実装のスタブ、他 OS は `Unsupported` 固定）。
 pub mod file_association;
 pub mod file_pick;
-/// Phase 11 の拡充ループ（親 #106、Issue #458）: ライト（トーチ）の effect ドライバ
-/// （iOS・Android・Windows 実装、他 OS は `UnsupportedFlashlight`
-/// 固定。Web は `fandhe-web-dom`）。
-pub mod flashlight;
-/// Phase 11 の拡充ループ（親 #141、Issue #723）: 折りたたみの姿勢の effect ドライバ
-/// （Android は OS 別モジュール（#1098 が埋めるスタブ）、他ネイティブ OS は
-/// `UnsupportedFoldablePosture` 固定。Web は `fandhe-web-dom`）。
-pub mod foldable_posture;
 /// Phase 11 の拡充ループ（親 #1133、Issue #1312）: 全画面表示の effect ドライバ（macOS/Windows は
 /// eframe の viewport コマンド、iOS/Android は OS 別モジュール、他 OS は
 /// `UnsupportedFullscreen` 固定。Web は `fandhe-web-dom`）。
@@ -439,16 +386,8 @@ pub mod health_data;
 /// （macOS・Windows / iOS 実装、Android は骨格のスタブ（対応表で `no`）、他 OS は
 /// `UnsupportedTextRecognizer` 固定。Web は対象外）。
 pub mod image_recognition;
-/// Phase 11 の拡充ループ（親 #135、Issue #701）: アプリ内ブラウザの effect ドライバ（iOS は
-/// `SFSafariViewController`・Android は Custom Tabs で #702・#703 が実装、他 OS は
-/// `UnsupportedInAppBrowser` 固定。Web は対象外）。
-pub mod in_app_browser;
 #[cfg(target_os = "ios")]
 pub mod ios;
-/// Issue #613: iOS 向け行動認識実装。`device/activity_recognition.rs` の ios 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_activity_recognition;
 /// Issue #1077: iOS 向けアラーム実装（AlarmKit を呼ぶ Swift の C ABI ラッパー）。`device/alarm.rs` の iOS 経路から呼ばれる。
 /// ホストのテストでも戻りコード写像を検証できるよう `any(ios, test)`。
 #[cfg(any(target_os = "ios", test))]
@@ -482,16 +421,6 @@ pub mod ios_barcode_scan;
 /// `device/ble_peripheral.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_ble_peripheral;
-/// Issue #813・#1066: iOS・macOS 向けカメラのライブ映像実装（`ios/fandhe_ios_camera_preview_stream.m` を共有）。
-/// `device/camera_preview_stream.rs` の iOS・macOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos", test))]
-#[cfg_attr(not(any(target_os = "ios", target_os = "macos")), allow(dead_code))]
-pub mod ios_camera_preview_stream;
-/// Issue #583: iOS 向け画面キャプチャの検知（`ios/fandhe_ios_capture_protection.m` を呼ぶ）。
-/// `device/capture_protection.rs` の iOS 経路から使われる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_capture_protection;
 /// Issue #1405: iOS 向け方位実装（`ios/fandhe_ios_compass.m` を呼ぶ C ABI ラッパー、CoreLocation の heading）。`device/compass.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -510,11 +439,6 @@ pub mod ios_environment_sensors;
 /// `device/file_association.rs::platform` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_file_association;
-/// Issue #460: iOS 向けライト（トーチ）実装（`ios/fandhe_ios_flashlight.m` を呼ぶ C ABI ラッパー）。
-/// `device/flashlight.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_flashlight;
 /// Issue #1313: iOS 向け全画面表示実装（`ios/fandhe_ios_fullscreen_immersive.m` を呼ぶ
 /// C ABI ラッパー）。
 /// `device/fullscreen_immersive.rs` の iOS 経路から呼ばれる。
@@ -529,11 +453,6 @@ pub mod ios_health_data;
 /// Issue #1252: iOS 向け文字認識（PHPicker + Vision）の effect ドライバ。
 #[cfg(target_os = "ios")]
 pub mod ios_image_recognition;
-/// Issue #701 / #702（親 #135）: iOS 向けアプリ内ブラウザ（`SFSafariViewController`）の骨格。
-/// `device/in_app_browser.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_in_app_browser;
 /// Issue #488: iOS 向け LAN のサービス探索（`apple_lan_discovery` へ委譲する）。
 /// `device/lan_discovery.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -609,9 +528,6 @@ pub mod ios_web_auth_session;
 /// Phase 11 の拡充ループ（親 #109、Issue #486）: LAN のサービス探索の effect ドライバ
 /// （macOS・iOS / Android 実装、Windows は `DnsServiceBrowse`、他 OS は `UnsupportedLanDiscovery` 固定。Web は対象外）。
 pub mod lan_discovery;
-/// Phase 11 の拡充ループ（親 #134、Issue #696）: ログイン時の自動起動の effect ドライバ
-/// （macOS 実装。Windows は HKCU の Run キーで Issue #697。他 OS は `UnsupportedLaunchAtLogin` 固定）。
-pub mod launch_at_login;
 /// Phase 11 の拡充ループ（親 #110、Issue #511）: 近くの端末との直接通信の effect ドライバ
 /// （macOS・iOS / Android 実装、他 OS は `UnsupportedLocalPeer` 固定）。
 pub mod local_peer;
@@ -640,12 +556,6 @@ pub mod macos_bluetooth_classic;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_device_info;
-/// Issue #696: macOS 向けログイン時の自動起動実装（`macos/fandhe_macos_launch_at_login.m` の
-/// `SMAppService.mainApp` を呼ぶ C ABI ラッパー）。`device/launch_at_login.rs` の macOS 経路から呼ばれる。
-/// 写像の純関数をホストでテストできるよう cfg は `any(macos, test)`。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_launch_at_login;
 /// Issue #482: macOS 向け音楽ライブラリ実装（`macos/fandhe_macos_music_library.m` の `ITLibrary` を
 /// 呼ぶ C ABI ラッパー）。`device/music_library.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -672,12 +582,6 @@ pub mod macos_safe_area_insets;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_web_auth_session;
-/// Issue #514: macOS 向け Wi-Fi 情報実装（`macos/fandhe_macos_wifi_info.m` の CoreWLAN と CoreLocation の
-/// 許可判定を呼ぶ C ABI ラッパー）。`device/wifi_info.rs` の macOS 経路から呼ばれる。写像の純関数を
-/// ホストでテストするため test でも載せる。
-#[cfg(any(target_os = "macos", test))]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub mod macos_wifi_info;
 /// Issue #636: macOS 向けウィンドウ管理の読み取り実装（`macos/fandhe_macos_window_management.m` を呼ぶ
 /// C ABI ラッパー）。`device/window_management.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -784,16 +688,9 @@ pub mod url_scheme;
 /// Phase 11 の拡充ループ（親 #113、Issue #530）: OAuth 用 Web 認証セッションの effect ドライバ（macOS・Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedWebAuthSession` 固定。Web は対象外）。
 pub mod web_auth_session;
-/// Phase 11 の拡充ループ（親 #111、Issue #514）: Wi-Fi 情報の effect ドライバ（macOS・Windows・Android 実装、
-/// iOS（deferred）・他 OS は `UnsupportedWifiInfo` 固定。Web は対象外）。
-pub mod wifi_info;
 /// Phase 11 の拡充ループ（親 #127、Issue #636）: ウィンドウ管理（位置・サイズ・最前面）の effect ドライバ
 /// （macOS 実装、Windows は #637、他 OS は `UnsupportedWindowManager` 固定。Web は `fandhe-web-dom`）。
 pub mod window_management;
-/// Issue #613: Windows 向け行動認識実装（WinRT `ActivitySensor` の `ReadingChanged`）。`device/activity_recognition.rs` の windows 経路から呼ばれる。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_activity_recognition;
 /// Issue #721: Windows 向けアラーム実装（`ScheduledToastNotification` +
 /// `scenario="alarm"` のトースト）。`device/alarm.rs` の Windows 経路から呼ばれる。
 /// 時刻変換・検証・XML 定数等の純関数はホストの `cargo test` から検証できるよう
@@ -839,14 +736,6 @@ pub mod windows_bluetooth_classic;
 /// ラッパー）。`device/bluetooth_le.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_bluetooth_le;
-/// Issue #1102: Windows 向けカメラのライブ映像実装（WinRT `MediaCapture` + `MediaFrameReader`）。
-/// `device/camera_preview_stream.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_camera_preview_stream;
-/// Issue #582: Windows 向け画面キャプチャの防止実装（`SetWindowDisplayAffinity`）。
-/// `device/capture_protection.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_capture_protection;
 /// Issue #1404: Windows 向け方位実装（WinRT `Compass` の pull）。`device/compass.rs` の windows 経路から呼ばれる。
 /// 写像の純関数をホストでテストできるよう cfg は `any(windows, test)`。
 #[cfg(any(target_os = "windows", test))]
@@ -868,11 +757,6 @@ pub mod windows_environment_sensors;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_file_association;
-/// Issue #459: Windows 向けライト（トーチ）実装（`Lamp`）。
-/// `device/flashlight.rs` の Windows 経路から呼ばれる。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_flashlight;
 /// Issue #1250: Windows 向け文字認識の骨格（#1251 が WinRT `OcrEngine` 実装に置き換える）。
 /// `device/image_recognition.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
@@ -881,11 +765,6 @@ pub mod windows_image_recognition;
 /// `device/lan_discovery.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_lan_discovery;
-/// Issue #697: Windows 向けログイン時の自動起動（HKCU の Run キー。骨格は Issue #696）。
-/// `device/launch_at_login.rs` の windows 経路から呼ばれる。ホストテストのため test でもコンパイルする。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_launch_at_login;
 /// Issue #267: Windows 向け音声再生実装。`device/media_playback.rs` の
 /// Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
@@ -953,12 +832,6 @@ pub mod windows_url_scheme;
 /// Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_web_auth_session;
-/// Issue #515: Windows 向け Wi-Fi 情報実装（`wlanapi`）。
-/// `device/wifi_info.rs` の Windows 経路から呼ばれる。写像の純関数をホストでテストできるよう
-/// cfg は `any(windows, test)`。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_wifi_info;
 /// Issue #637: Windows 向けウィンドウ管理の読み取り（`NativeReads` の Windows 実装。最前面か・今いる画面の
 /// 作業領域を Win32 で読む）。`device/window_management.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
@@ -995,7 +868,6 @@ pub fn shutdown() {
     now_playing::shutdown();
     picture_in_picture::shutdown();
     web_auth_session::shutdown();
-    camera_preview_stream::shutdown();
 }
 
 fn to_note_storage_error(e: DeviceError) -> NoteStorageError {
