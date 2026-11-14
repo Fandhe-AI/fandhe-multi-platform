@@ -72,7 +72,12 @@ attributes = { permission = "android.permission.BIND_NFC_SERVICE" }
 intent-filters = [{ actions = ["android.nfc.cardemulation.action.HOST_APDU_SERVICE"] }]
 meta-data = [{ name = "android.nfc.cardemulation.host_apdu_service", resource = "@xml/apduservice" }]
 
-# activity-alias は target-activity が必須。対象は同じ宣言の kind = "activity" の name
+[[package.metadata.fandhe.android.components]]
+kind = "activity"
+name = "com.example.RationaleActivity"
+exported = false
+
+# activity-alias は target-activity が必須。対象は同じ宣言の kind = "activity" の name（alias より前に書く）
 [[package.metadata.fandhe.android.components]]
 kind = "activity-alias"
 name = "com.example.ViewPermissionUsageActivity"
