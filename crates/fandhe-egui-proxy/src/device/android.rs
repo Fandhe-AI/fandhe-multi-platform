@@ -36,53 +36,6 @@ pub fn data_dir() -> Option<DataDir> {
 /// （Issue #1046、二重実装を避ける）。
 pub(crate) use fandhe_platform_android::JniCallFailed;
 
-/// `MainActivity.nativeOnMotionChanged`（Java 側）から呼ばれる JNI エクスポート関数
-/// （Issue #831、Phase 10 型サンプル「傾けると玉が転がる」の Android 実センサ経路）。
-/// シンボル名の固定規約は `nativeOnCameraResult`/`android.rs` の
-/// `nativeOnWindowInsetsChanged` と同じ。
-///
-/// `SensorEventListener#onSensorChanged`（UI スレッド）が受けた重力センサ値
-/// `(x, y)` と画面回転 `rotation`（`Surface.ROTATION_*`）をそのまま受け取り、
-/// [`crate::device::tilt::gravity_to_tilt`] で画面座標の傾きへ写像してから
-/// [`crate::device::tilt::shared_motion`] へ push する。`tilt_ball_effect`
-/// （`device/tilt.rs` の `drive`）が毎フレームここを読むだけで実機の傾きが
-/// 反映される（新しい `Motion` 実装は追加しない設計、#831 実装計画 §3(a)）。
-///
-/// `JNIEnv`/`jclass` は本関数内で一切使わず（受け取った値を計算して static へ
-/// store するのみ）、生ポインタへのアクセスを行わないため関数本体に `unsafe`
-/// 操作は含まない。`#[no_mangle]` はこの 1 関数に閉じ、`unsafe` を公開 API 側へ
-/// 漏らさない（`.claude/rules/coding-rust.md` の FFI 例外規定準拠）。
-///
-/// 値の保存自体は画面に関わらず毎回行うが、[`crate::android::request_repaint`] の呼び出しは
-/// [`crate::android::active_screen_uses_tilt`] が真の場合に限る（codex-review 指摘 P2、
-/// Issue #831）。`Java` 側の `motionListener` は画面によらず常にセンサを登録するため、
-/// 無条件に呼ぶと傾きを使わない画面でも `SENSOR_DELAY_GAME` の頻度で再描画要求が発生し
-/// 不要な電力消費になる。傾き画面が有効な場合は、静止時にセンサが厳密な `(0, 0)` を
-/// 送ってきた場合（水平置き等）や初回センサ通知前に `tilt_ball_effect` の `drive` が
-/// 非送信で描画が止まっていても、以後の非ゼロ値到着で確実に再開する
-/// （`drive` 自体の自走に依存しない、codex-review 指摘 PRRT_kwDOTl73E86hCOSM）。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` により Rust の名前修飾を
-/// 無効化するが、シンボル名は JNI 命名規約上の固定名であり、本クレートは cdylib として
-/// 1 つの Android 実行単位にのみリンクされるため他シンボルと衝突しない
-/// （`nativeOnWindowInsetsChanged`・`nativeOnCameraResult` と同じ根拠）。
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnMotionChanged(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    x: f32,
-    y: f32,
-    rotation: i32,
-) {
-    let (tilt_x, tilt_y) = crate::device::tilt::gravity_to_tilt(x, y, rotation);
-    crate::device::tilt::shared_motion().set(tilt_x, tilt_y);
-    if crate::android::active_screen_uses_tilt() {
-        crate::android::request_repaint();
-    }
-}
-
 /// 1 件の request/response 往復を仲介する mailbox のスロット。運ぶ値の型 `T` は
 /// クリップボード（`Option<String>`）・TTS（`()`）で異なるため汎用化する
 /// （Issue #866、`ClipboardMailbox` を一般化したもの。挙動・doc は据え置き）。

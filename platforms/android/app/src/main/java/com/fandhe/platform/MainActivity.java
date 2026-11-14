@@ -45,10 +45,6 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
 import android.icu.text.BreakIterator;
 import android.location.Location;
 import android.location.LocationListener;
@@ -117,15 +113,6 @@ public class MainActivity extends GameActivity {
         // [lib] name と一致させること（3 箇所の SSOT はこのライブラリ名文字列）。
         System.loadLibrary("fandhe_gallery");
     }
-
-    // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
-    // （Issue #831、Phase 10 型サンプル「傾けると玉が転がる」の Android 実センサ経路に
-    // 限り追加。Phase 8 の feature `device` 切り離し時に削除する。docs/architecture/
-    // device-feature-removal.md 参照）。
-    // x, y: 重力センサ（TYPE_GRAVITY、無ければ TYPE_ACCELEROMETER）の生値
-    // （SensorEvent#values[0]/[1]、m/s^2）。rotation: 呼び出し時点の画面回転
-    // （Surface.ROTATION_*）。Rust 側 `gravity_to_tilt` が画面座標の傾きへ写像する。
-    private static native void nativeOnMotionChanged(float x, float y, int rotation);
 
     // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
     // （Issue #866、Phase 11 型サンプル「読み上げ」の Android 経路に限り追加。
@@ -1003,32 +990,6 @@ public class MainActivity extends GameActivity {
         }
     };
 
-    // 傾きセンサの取得元と最新値の Rust 側への中継（Issue #831）。`registerListener`/
-    // `unregisterListener` は onResume/onPause で対にする（Android の推奨作法。
-    // バックグラウンド中の無駄なセンサ計測・バッテリ消費を避ける）。
-    private SensorManager sensorManager;
-    private Sensor motionSensor;
-
-    // 重力センサ（TYPE_GRAVITY）が無い端末向けの fallback。加速度センサは
-    // ユーザー操作由来の線形加速度成分を含むため傾き検出にノイズが乗り得るが、
-    // 実装は追加しない（気になる場合はローパスフィルタを足す、#831 実装計画 §8）。
-    private final SensorEventListener motionListener = new SensorEventListener() {
-        @Override
-        public void onSensorChanged(SensorEvent event) {
-            // 呼び出しごとに取得する（ponytail: 回転変化のたびに読み直すだけの
-            // 軽量呼び出し。負荷が問題になったら onConfigurationChanged でキャッシュ化、
-            // #831 実装計画 §5 ステップ 3）。
-            @SuppressWarnings("deprecation") // minSdk 24 のため Activity#getDisplay()（API 30+）は使えない
-            int rotation = getWindowManager().getDefaultDisplay().getRotation();
-            nativeOnMotionChanged(event.values[0], event.values[1], rotation);
-        }
-
-        @Override
-        public void onAccuracyChanged(Sensor sensor, int accuracy) {
-            // 精度変化の通知は使わない。
-        }
-    };
-
     // 読み上げ（TTS、Issue #866）。`TextToSpeech` は最初の要求で遅延生成し（`onCreate`
     // では作らない。読み上げを 1 度も使わない画面ではエンジン起動コストを払わない）、
     // `OnInitListener` による非同期初期化の完了まで要求を 1 件だけ保留する
@@ -1375,14 +1336,6 @@ public class MainActivity extends GameActivity {
         // その結果が届くまで true のまま残し、新しい起動を断る。
         contactPickRequest.take();
 
-        sensorManager = getSystemService(SensorManager.class);
-        if (sensorManager != null) {
-            motionSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY);
-            if (motionSensor == null) {
-                motionSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-            }
-        }
-
         locationManager = getSystemService(LocationManager.class);
 
         // ファイル選択（Issue #874）は `filePickRequest` を Bundle へ保存・復元
@@ -1416,10 +1369,6 @@ public class MainActivity extends GameActivity {
         webAuthSessionHelper.onResume();
         motionRawSensorsHelper.onResume();
         localPeerHelper.onResume();
-        if (sensorManager != null && motionSensor != null) {
-            sensorManager.registerListener(
-                    motionListener, motionSensor, SensorManager.SENSOR_DELAY_GAME);
-        }
         // 測位継続の意思（Issue #890）があり、かつ権限が既にあるなら再登録する
         // （`onPause` で解除済みのため、フォアグラウンド復帰のたびに要る。傾き（#831）
         // の motionListener と同型の対）。権限が無ければここでは要求しない
@@ -1493,9 +1442,6 @@ public class MainActivity extends GameActivity {
         lanDiscoveryHelper.onPause();
         localPeerHelper.onPause();
         motionRawSensorsHelper.onPause();
-        if (sensorManager != null) {
-            sensorManager.unregisterListener(motionListener);
-        }
         // 「使用中のみ」の権限のため、バックグラウンドでは測位しない（Issue #890）。
         if (locationManager != null) {
             locationManager.removeUpdates(locationListener);

@@ -52,7 +52,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "tilt_ball" => fandhe_core::screens::tilt_ball::current_screen,
-    fandhe_egui_proxy::device::tilt::tilt_ball_effect,
+    fandhe_cap_tilt_motion::tilt_ball_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "clipboard_text" => fandhe_core::screens::clipboard_text::current_screen,

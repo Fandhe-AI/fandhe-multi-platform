@@ -76,7 +76,6 @@ pub mod media_playback;
 pub mod media_transcode;
 /// Phase 11（端末機能の拡充ループ、親 #953、Issue #954）: マイク録音。
 pub mod mic_record;
-pub mod motion;
 /// Phase 11（端末機能の拡充ループ、親 #180、Issue #898）: ジャイロ・磁気・線形加速度の生値。
 pub mod motion_raw_sensors;
 /// Phase 11（端末機能の拡充ループ、親 #108、Issue #482）: 音楽ライブラリ（曲のタイトルとアーティストの先頭 20 件）。

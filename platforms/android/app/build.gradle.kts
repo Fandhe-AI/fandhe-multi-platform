@@ -248,6 +248,8 @@ android {
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-system-sound/android/java")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-tilt-motion/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-usb-device/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-video-capture/android/java")

@@ -18,7 +18,7 @@
         "傾き検出（Roll/Pitch、`CMMotionManager.deviceMotion`）"
       ],
       "implStatus": "実装済み・実機確認済み",
-      "impl": "`crates/fandhe-egui-proxy/ios/fandhe_ios_motion.m`、`crates/fandhe-device/src/motion.rs`、Issue 旧#832 closed（親 旧#827）"
+      "impl": "`crates/fandhe-cap-tilt-motion/ios/fandhe_ios_motion.m`、`crates/fandhe-cap-tilt-motion/src/ios.rs`、`crates/fandhe-cap-tilt-motion/src/driver.rs`、`crates/fandhe-cap-tilt-motion/src/contract.rs`、Issue 旧#832 closed（親 旧#827）"
     },
     "android": {
       "status": "done",
@@ -33,7 +33,7 @@
         "加速度・ジャイロ・傾き（`SensorManager`）"
       ],
       "implStatus": "実装済み・実機確認済み",
-      "impl": "旧#829 / 旧#831 / 旧#845"
+      "impl": "`crates/fandhe-cap-tilt-motion/src/android.rs`、`crates/fandhe-cap-tilt-motion/android/java/com/fandhe/platform/TiltMotionHelper.java`、`crates/fandhe-cap-tilt-motion/android/java/com/fandhe/platform/TiltMotionLifecycle.java`、`crates/fandhe-cap-tilt-motion/src/driver.rs`、Issue 旧#829 / 旧#831 / 旧#845"
     },
     "macos": {
       "status": "done",

@@ -138,6 +138,26 @@ extern "system" fn Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadKey(
 ) {
 }
 
+/// `device` feature 無効ビルド向けの `nativeOnMotionChanged` no-op フォールバック（Issue #831）。
+/// `TiltMotionLifecycle`（#1331）は feature を知らず、`TiltMotionHelper` は feature 構成に関わらず常にセンサを登録して
+/// `nativeOnMotionChanged` を呼ぶため、実体を持つ `fandhe-cap-tilt-motion`（`device` 有効時のみ依存）が無いと初回センサ通知時に
+/// `UnsatisfiedLinkError` でクラッシュする。値を捨てるだけの no-op にして落ちないようにする。実体との二重定義を避けるため
+/// cfg は `device` 無効のときだけ。署名は Java 宣言・実体と一致（`(float, float, int) -> void`）。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、シンボル名は JNI 命名規約上の固定名。
+#[cfg(all(target_os = "android", not(feature = "device")))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_TiltMotionHelper_nativeOnMotionChanged(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _x: f32,
+    _y: f32,
+    _rotation: i32,
+) {
+}
+
 /// `device` feature 無効ビルド向けの `nativeOnForegroundChanged` no-op フォールバック（Issue #611）。
 /// `EnvironmentSensorsLifecycle`（#1331）は feature を知らず、`EnvironmentSensorsHelper.onPause` / `onResume` は
 /// 背景遷移を無条件に通知するため、実体を持つ `fandhe-cap-environment-sensors`（`device` 有効時のみ依存）が無いと
@@ -313,6 +333,7 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     {
         let name = fandhe_egui_proxy::android::requested_app_name();
         fandhe_cap_gamepad::set_screen_active(name == "gamepad_show");
+        fandhe_cap_tilt_motion::set_screen_active(name == "tilt_ball");
         fandhe_cap_drag_drop::set_screen_active(name == "drag_drop");
     }
     // 終了時の解放処理を描画層へ登録する（再生成で再実行されても 2 回目以降は無視される）。

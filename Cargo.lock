@@ -2239,6 +2239,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-tilt-motion"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-usb-device"
 version = "0.2.0"
 dependencies = [
@@ -2519,6 +2529,7 @@ dependencies = [
  "fandhe-cap-system-accent-color",
  "fandhe-cap-system-sound",
  "fandhe-cap-system-tray",
+ "fandhe-cap-tilt-motion",
  "fandhe-cap-usb-device",
  "fandhe-cap-user-idle",
  "fandhe-cap-uwb-ranging",

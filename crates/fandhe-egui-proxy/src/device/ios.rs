@@ -2,10 +2,6 @@
 //! Documents 配下への保存（[`documents_dir`]）などを提供する。実カメラ撮影は機能 crate
 //! `fandhe-cap-camera-capture` へ移した（Issue #1170）。
 //!
-//! 傾きセンサ実装（[`IosMotion`]、Issue #832）も同型: `ios/fandhe_ios_motion.m`
-//! （CoreMotion の `CMMotionManager`）を `unsafe extern "C"` 1 関数で呼び、
-//! `device/tilt.rs` の effect ドライバから毎フレーム pull される。
-//!
 //! 読み上げ実装（[`IosTts`]、Issue #866）も同型: `ios/fandhe_ios_tts.m`
 //! （AVFoundation の `AVSpeechSynthesizer`）を `unsafe extern "C"` 2 関数で呼び、
 //! `device/tts.rs` の TTS ワーカースレッド（`worker_loop`）から呼ばれる。
@@ -34,7 +30,6 @@ use std::sync::atomic::AtomicU64;
 use std::sync::{Condvar, Mutex};
 
 use fandhe_device::file_picker::{read_picked, MAX_FILE_BYTES};
-use fandhe_device::motion::Motion;
 use fandhe_device::tts::Tts;
 use fandhe_device::{DataDir, DeviceError};
 // main thread 判定は Apple 共通層（`fandhe-platform-apple`）が持つ。UIKit を触る呼び出し
@@ -54,71 +49,6 @@ pub fn documents_dir() -> Result<DataDir, DeviceError> {
     std::env::home_dir()
         .map(|home| DataDir(home.join("Documents")))
         .ok_or(DeviceError::Unsupported("home directory not found"))
-}
-
-// SAFETY: `ios/fandhe_ios_motion.m` が定義する C ABI（`build.rs` が iOS ターゲットの
-// み・feature `device` 有効時のみコンパイル・リンクする）。契約は下記 `tilt`
-// 実装のコメントに集約する。
-#[allow(unsafe_code)]
-unsafe extern "C" {
-    fn fandhe_ios_motion_read(out_x: *mut f32, out_y: *mut f32) -> i32;
-}
-
-/// iOS 実センサ実装（`CMMotionManager` の gravity、Issue #832）。
-/// `device/tilt.rs` の effect ドライバから毎フレーム pull される
-/// （push ではなく pull にする設計判断はモジュール doc・`tilt.rs` 冒頭コメント参照）。
-pub struct IosMotion;
-
-impl Motion for IosMotion {
-    #[allow(unsafe_code)]
-    fn tilt(&self) -> Result<(f32, f32), DeviceError> {
-        // `fandhe_ios_motion_read` は main スレッド専用（`is_main_thread` の
-        // ドキュメンテーションコメント参照）。ワーカースレッドから呼ばれた場合は
-        // FFI へ進まずエラーを返す。
-        if !is_main_thread() {
-            return Err(DeviceError::Internal("motion: called off main thread"));
-        }
-
-        let mut out_x: f32 = 0.0;
-        let mut out_y: f32 = 0.0;
-
-        // SAFETY: `fandhe_ios_motion_read` の契約（`.m` ファイル冒頭コメント）:
-        // out 引数はこの関数呼び出し中のみ有効なスタック上の `f32` への
-        // ポインタで、所有権移転・malloc は無い（malloc を伴う camera 経路と違い解放処理が
-        // 不要）。戻り値が 0 以外のとき out 引数は書き換えられない契約のため、
-        // 呼び出し直前の初期値 `(0.0, 0.0)` のまま扱う。
-        let code = unsafe { fandhe_ios_motion_read(&mut out_x, &mut out_y) };
-
-        match code {
-            0 => {}
-            // 1 = 端末が device motion 非対応（シミュレータ等）。0 以外の未知の
-            // コードも安全側で同様に扱う（契約違反を検出した経路）。
-            _ => return Err(DeviceError::Unsupported("motion")),
-        }
-
-        // `fandhe_ios_motion_read` は現在の UI 向き（`UIInterfaceOrientation`）基準
-        // の画面右・画面上方向へ既に回転済みの値を返す（`fandhe_ios_motion.m` の
-        // `FandheRotateGravityToInterfaceOrientation` 参照、Bugbot 指摘 Medium 是正:
-        // portrait 前提の Y 反転のみだと landscape / iPad 回転で玉が誤った軸へ
-        // 転がっていた）。ここではその画面基準の y（上方向が正）を
-        // `fandhe_core::screens::tilt_ball` の座標系（x: 右方向、y: 下方向が正）へ
-        // 合わせるため反転するだけでよい（画面上向き正 → 反転で下向き正、向きが
-        // 変わっても常に「画面の上」基準なのでこの反転だけで全 UI 向きに対応できる）。
-        // NaN → 0.0 置換 + -1.0..=1.0 クランプは `DummyMotion::set` 側でも行う
-        // 二重防御（security.md A08）だが、FFI 境界を越えた値をこの関数内でも
-        // 正規化しておく。
-        Ok((clamp_finite(out_x), clamp_finite(-out_y)))
-    }
-}
-
-/// NaN を `0.0` へ置換してから `-1.0..=1.0` へ丸める（`fandhe_device::motion` の
-/// `clamp_finite` と同じ規則、FFI 境界を越えた値をここでも正規化する）。
-fn clamp_finite(value: f32) -> f32 {
-    if value.is_nan() {
-        0.0
-    } else {
-        value.clamp(-1.0, 1.0)
-    }
 }
 
 // SAFETY: `ios/fandhe_ios_tts.m` が定義する C ABI（`build.rs` が iOS ターゲットの
@@ -586,26 +516,5 @@ mod tts_outcome_tests {
             "begin による置き換えから wait が戻るまで長く掛かりすぎている: {:?}",
             started.elapsed()
         );
-    }
-}
-
-#[cfg(test)]
-mod motion_tests {
-    use super::clamp_finite;
-
-    #[test]
-    fn clamp_finite_replaces_nan_with_zero() {
-        assert_eq!(clamp_finite(f32::NAN), 0.0);
-    }
-
-    #[test]
-    fn clamp_finite_clamps_out_of_range_values() {
-        assert_eq!(clamp_finite(2.0), 1.0);
-        assert_eq!(clamp_finite(-2.0), -1.0);
-    }
-
-    #[test]
-    fn clamp_finite_passes_through_in_range_values() {
-        assert_eq!(clamp_finite(0.25), 0.25);
     }
 }

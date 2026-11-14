@@ -3,18 +3,18 @@
 //! `Camera`/`Http` が単発の request/response なのに対し、傾きセンサは継続 push で
 //! 値が更新され続けるため、本モジュールは「最新値だけを保持する共有状態」を持つ
 //! （`DummyMotion` の `Arc<Mutex<(f32, f32)>>`）。実センサ実装（Android/iOS、#831/#832）は
-//! push 側から `DummyMotion` 相当の `set` を呼ぶ想定で、`fandhe-egui-proxy` 側への配線・
+//! push 側から `DummyMotion` 相当の `set` を呼ぶ想定で、本 crate の `driver` への配線・
 //! スライダー UI は #830〜#832 のスコープであり本モジュールでは行わない。
 
-use crate::DeviceError;
+use crate::error::TiltMotionError;
 use std::sync::{Arc, Mutex};
 
 /// 傾き検知の契約。戻り値は重力ベクトル `(x, y)` で各成分 `-1.0..=1.0` に正規化されている
 /// 前提（`Storage`/`Camera` と同じくスレッド間で共有されうるため `Send + Sync`、#745 参照）。
-/// 対応不可プラットフォームは `DeviceError::Unsupported("motion")` を返す契約とする。
+/// 対応不可プラットフォームは `TiltMotionError::Unsupported("motion")` を返す契約とする。
 pub trait Motion: Send + Sync {
     /// 最新の傾き `(x, y)` を返す。
-    fn tilt(&self) -> Result<(f32, f32), DeviceError>;
+    fn tilt(&self) -> Result<(f32, f32), TiltMotionError>;
 }
 
 /// 外部から値を書き換えられるダミー実装（desktop / Web 向け、型サンプルのスライダー代替が
@@ -45,7 +45,7 @@ impl DummyMotion {
 /// NaN を `0.0` へ置換してから `-1.0..=1.0` へ丸める（`f32::clamp` は NaN との
 /// 比較が常に false になり NaN をそのまま通すため、`DummyMotion::set` 側で
 /// 事前に有限値化する）。
-fn clamp_finite(value: f32) -> f32 {
+pub(crate) fn clamp_finite(value: f32) -> f32 {
     if value.is_nan() {
         0.0
     } else {
@@ -60,7 +60,7 @@ impl Default for DummyMotion {
 }
 
 impl Motion for DummyMotion {
-    fn tilt(&self) -> Result<(f32, f32), DeviceError> {
+    fn tilt(&self) -> Result<(f32, f32), TiltMotionError> {
         // 他所の panic に由来する poison を tilt() の呼び出し側へ伝播させない
         // （coding-rust.md: unwrap/expect を本実装コードで使わない方針。into_inner で復元する）。
         let state = self
@@ -80,8 +80,8 @@ mod tests {
     struct UnsupportedMotion;
 
     impl Motion for UnsupportedMotion {
-        fn tilt(&self) -> Result<(f32, f32), DeviceError> {
-            Err(DeviceError::Unsupported("motion"))
+        fn tilt(&self) -> Result<(f32, f32), TiltMotionError> {
+            Err(TiltMotionError::Unsupported("motion"))
         }
     }
 
@@ -90,6 +90,22 @@ mod tests {
         let motion = DummyMotion::new();
         motion.set(0.5, -0.25);
         assert_eq!(motion.tilt().unwrap(), (0.5, -0.25));
+    }
+
+    #[test]
+    fn clamp_finite_replaces_nan_with_zero() {
+        assert_eq!(clamp_finite(f32::NAN), 0.0);
+    }
+
+    #[test]
+    fn clamp_finite_clamps_out_of_range_values() {
+        assert_eq!(clamp_finite(2.0), 1.0);
+        assert_eq!(clamp_finite(-2.0), -1.0);
+    }
+
+    #[test]
+    fn clamp_finite_passes_through_in_range_values() {
+        assert_eq!(clamp_finite(0.25), 0.25);
     }
 
     #[test]
@@ -119,6 +135,9 @@ mod tests {
     #[test]
     fn unsupported_platform_returns_unsupported_error() {
         let motion = UnsupportedMotion;
-        assert!(matches!(motion.tilt(), Err(DeviceError::Unsupported(_))));
+        assert!(matches!(
+            motion.tilt(),
+            Err(TiltMotionError::Unsupported(_))
+        ));
     }
 }

@@ -1,6 +1,6 @@
 //! Phase 10（親 #827）型サンプル「傾きで玉が転がる」（Issue #830）の effect ドライバ。
 //! `fandhe_core::screens::tilt_ball::{TiltBallState, step}`（端末依存ゼロ）へ、
-//! `fandhe_device::motion::Motion` から読んだ傾き値と実測 `dt` を渡して毎フレーム
+//! `crate::contract::Motion` から読んだ傾き値と実測 `dt` を渡して毎フレーム
 //! 物理を進める（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S,
 //! &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
@@ -12,11 +12,11 @@
 //! [`shared_motion`] が返す `DummyMotion` はプロセス内で 1 個だけ共有する（`OnceLock`）。
 //! デスクトップ（macOS/Windows/Linux）は [`drive`] が毎フレーム
 //! `motion.set(state.tilt_x, state.tilt_y)` でスライダー値を書き込んでから読み戻す
-//! （スライダー UI がセンサの代替として振る舞う、`fandhe_device::motion` モジュール doc
-//! 参照）。iOS（#832）は [`drive`] が毎フレーム `device::ios::IosMotion` を pull し、
+//! （スライダー UI がセンサの代替として振る舞う、`crate::contract` モジュール doc
+//! 参照）。iOS（#832）は [`drive`] が毎フレーム `crate::ios::IosMotion` を pull し、
 //! 読んだ値を `shared_motion().set(x, y)` へ書き込む（CoreMotion に push
 //! コールバックを持たせず、既存の読み出し経路（`Motion::tilt()` 経由）をそのまま
-//! 流用できる設計、`device/ios.rs` のモジュール doc 参照）。Android（#831）は
+//! 流用できる設計、`ios.rs` のモジュール doc 参照）。Android（#831）は
 //! 実センサの push コールバックから直接 `shared_motion().set(x, y)` を呼ぶ想定
 //! （`set` 呼び出し自体はデスクトップ/iOS 側の pull・Android の push で行い、
 //! 実機では [`drive`] のデスクトップ分岐が上書きしないようにする）。
@@ -24,10 +24,10 @@
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
-use fandhe_core::screens::tilt_ball::{is_at_rest, step, TiltBallState};
-use fandhe_device::motion::{DummyMotion, Motion};
+use crate::contract::{DummyMotion, Motion};
+use fandhe_core::screens::tilt_ball::{TiltBallState, is_at_rest, step};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 1 フレームで進める時間の上限（`fandhe_core::screens::tilt_ball::step` と同じ値。
 /// ProMotion 120Hz・バックグラウンド復帰の飛び対策）。
@@ -60,6 +60,13 @@ const IOS_IDLE_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_mi
 /// プロセス内で共有する `DummyMotion`（デスクトップのスライダー代替・#831/#832 の
 /// push 先、モジュール doc 参照）。
 static MOTION: OnceLock<DummyMotion> = OnceLock::new();
+
+/// 共有の傾き状態を `Motion` として返す入口。画面の状態型に依存しないため、フレームワークの外のアプリも使える
+/// （`DummyMotion` は clone しても状態を共有する）。iOS は effect ドライバが毎フレーム pull して書き込み、Android は Java からの
+/// push が書き込み、デスクトップは画面のスライダー値が書き込む。
+pub fn platform_tilt_motion() -> Box<dyn Motion> {
+    Box::new(shared_motion().clone())
+}
 
 /// 共有 `DummyMotion` への参照を返す。
 pub fn shared_motion() -> &'static DummyMotion {
@@ -160,7 +167,7 @@ fn drive(
     // （device motion 非対応、シミュレータ等）場合は共有状態を書き換えず、
     // 既存の `(0.0, 0.0)` 初期値のまま扱う。
     #[cfg(target_os = "ios")]
-    if let Ok((x, y)) = crate::device::ios::IosMotion.tilt() {
+    if let Ok((x, y)) = crate::ios::IosMotion.tilt() {
         motion.set(x, y);
     }
 
@@ -203,15 +210,24 @@ pub fn tilt_ball_effect(state: &TiltBallState, sender: &CompletionSender<TiltBal
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
     use fandhe_core::screens::tilt_ball::TiltBallState;
 
     fn sender_with_channel() -> (
         CompletionSender<TiltBallState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<TiltBallState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<TiltBallState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     #[test]

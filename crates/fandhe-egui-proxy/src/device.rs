@@ -519,7 +519,6 @@ pub mod speech_recognition;
 /// Phase 11 の拡充ループ（親 #117、Issue #560）: OS の検索への登録の effect ドライバ（macOS・iOS・
 /// Android 実装、他 OS は `UnsupportedSpotlightIndex` 固定）。
 pub mod spotlight_index;
-pub mod tilt;
 /// Phase 11 の拡充ループ（親 #115、Issue #535）: 端末内翻訳の effect ドライバ（macOS 実装、
 /// iOS・Android も実装済み（#536・#537）、他 OS は `UnsupportedTextTranslator` 固定。Web は
 /// `fandhe-web-dom` が持つ）。

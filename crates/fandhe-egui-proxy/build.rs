@@ -56,9 +56,6 @@ fn build() {
         return;
     }
 
-    // `ios/fandhe_ios_motion.m`（Issue #832、実センサ傾き）。
-    compile_objc("ios/fandhe_ios_motion.m", &["CoreMotion", "UIKit"]);
-
     // `ios/fandhe_ios_tts.m`（Issue #866、`AVSpeechSynthesizer` による読み上げ）。
     compile_objc("ios/fandhe_ios_tts.m", &["AVFoundation"]);
 
