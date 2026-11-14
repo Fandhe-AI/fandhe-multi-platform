@@ -154,17 +154,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // Issue #511: `local_peer::bridge::SLOT` / `PENDING` も同じ理由でプロセス static のため捨てる。
     #[cfg(feature = "device")]
     crate::device::local_peer::reset_pending_tracking();
-    // Issue #1006: `notification::bridge::SLOT` も同じ理由でプロセス static のため
-    // Activity 再生成をまたいで残る。新しい画面 `NotificationSendState::default()`
-    // （`Idle`）を構築する前にここで捨て、再生成前に開始した権限確認が後から完了
-    // しても黙って失われず、以後確実に「未接続」（次の操作からやり直し）として
-    // 扱われるようにする。Java 側（`MainActivity.onCreate`）に対になる no-op
-    // スタブは置かない: Rust の `request_notification` を経ないと Java が
-    // `nativeOnNotificationResult` を呼ぶ経路自体が無く、`feature = "device"`
-    // 無効ビルドでは到達しないため（`location`/`mic_record` と同じ理由）
-    // （`device::notification::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::notification::reset_pending_tracking();
     // Issue #1104: `photo_pick::bridge::SLOT` もプロセス static のため再生成をまたいで残る。
     // 写真選択の契約は「保留中の要求は復元せず破棄」（`fandhe_device::photo_picker` モジュール
     // doc）なので、新しい `Idle` の画面状態を作る前に捨て、旧要求の遅延完了を id 不一致で

@@ -19,6 +19,7 @@ device = [
   # BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
   "dep:fandhe-cap-accessibility-prefs",
   "dep:fandhe-cap-activity-recognition",
+  "dep:fandhe-cap-alarm",
   "dep:fandhe-cap-app-attest",
   "dep:fandhe-cap-app-badge",
   "dep:fandhe-cap-app-lifecycle",
@@ -74,6 +75,7 @@ device = [
   "dep:fandhe-cap-nfc",
   "dep:fandhe-cap-nfc-card-emulation",
   "dep:fandhe-cap-nlp",
+  "dep:fandhe-cap-notification",
   "dep:fandhe-cap-now-playing-controls",
   "dep:fandhe-cap-on-device-llm",
   "dep:fandhe-cap-open-in-shell",
@@ -145,6 +147,7 @@ NSLocalNetworkUsageDescription = "型サンプル「LAN のサービス探索」
 NSNearbyInteractionUsageDescription = "型サンプル「UWB による距離」で、近くの端末までの距離を測るために使います"
 NSHomeKitUsageDescription = "型サンプル「スマートホーム操作」の動作確認に使います"
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」「音声認識」「動画の撮影」の動作確認に使います"
+NSAlarmKitUsageDescription = "型サンプル「アラーム」の動作確認に使います"
 
 [package.metadata.fandhe-app.macos.usage-descriptions]
 NSLocationUsageDescription = "型サンプル「Wi-Fi 情報」「Wi-Fi への接続」で、接続先の Wi-Fi 名を読むために使います"
@@ -170,6 +173,7 @@ egui = { workspace = true }
 # BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
 fandhe-cap-accessibility-prefs = { path = "../fandhe-cap-accessibility-prefs", optional = true }
 fandhe-cap-activity-recognition = { path = "../fandhe-cap-activity-recognition", optional = true }
+fandhe-cap-alarm = { path = "../fandhe-cap-alarm", optional = true }
 fandhe-cap-app-attest = { path = "../fandhe-cap-app-attest", optional = true }
 fandhe-cap-app-badge = { path = "../fandhe-cap-app-badge", optional = true }
 fandhe-cap-app-lifecycle = { path = "../fandhe-cap-app-lifecycle", optional = true }
@@ -225,6 +229,7 @@ fandhe-cap-multi-display = { path = "../fandhe-cap-multi-display", optional = tr
 fandhe-cap-nfc = { path = "../fandhe-cap-nfc", optional = true }
 fandhe-cap-nfc-card-emulation = { path = "../fandhe-cap-nfc-card-emulation", optional = true }
 fandhe-cap-nlp = { path = "../fandhe-cap-nlp", optional = true }
+fandhe-cap-notification = { path = "../fandhe-cap-notification", optional = true }
 fandhe-cap-now-playing-controls = { path = "../fandhe-cap-now-playing-controls", optional = true }
 fandhe-cap-on-device-llm = { path = "../fandhe-cap-on-device-llm", optional = true }
 fandhe-cap-open-in-shell = { path = "../fandhe-cap-open-in-shell", optional = true }

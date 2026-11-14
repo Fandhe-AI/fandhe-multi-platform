@@ -1,135 +1,26 @@
-//! ローカル通知の抽象（Phase 11、親 #1003、Issue #1004）。
+//! macOS 向けローカル通知実装（Phase 11、親 #1003、Issue #1004）。`osascript display notification` を子プロセスで起動する
+//! [`OsascriptNotifier`]。`crate::driver` の macOS 経路が使う（`UNUserNotificationCenter` を使わない理由は `crate::driver` の
+//! モジュール doc 参照）。ホストの `cargo test` でも純関数（AppleScript の組み立て・エスケープ）と子プロセスの挙動を検証できるよう、
+//! cfg は macOS とテストにしている（実体は std だけで OS 非依存）。
 //!
-//! `Share`/`Tts` と同じ request/response の一発呼び出し型（1 回の `notify()` = OS へ
-//! 通知の表示を 1 回依頼する）。継続 push の共有状態は持たない。プッシュ通知
-//! （APNs/FCM）は扱わない（対応表 `docs/device/capabilities/notification.json` の
-//! トップレベル `note` 参照。本 Issue はローカル通知のみ）。
-//!
-//! # 契約（各実装・呼び出し元が守る不変条件）
-//!
-//! - 結果は 3 値: OS から表示されたことを確かめられた `Ok(Shown)`（本 Issue の
-//!   macOS/Windows 実装では返さない。iOS の `willPresent`・Web の `onshow` 等、
-//!   確認手段を持つ実装が後続 Issue で使う）/ OS へ渡したが表示されたかは確かめ
-//!   られない `Ok(Submitted)`（macOS `osascript`・Windows Toast はこちら）/
-//!   権限ダイアログを閉じただけで未決定の `Ok(Cancelled)`（失敗ではない。
-//!   `device-bridge-contracts.md` の「10. キャンセル・正常終了・失敗の三値」参照。
-//!   本 Issue の macOS/Windows 実装では発生しない）
-//! - 失敗は `Err(DeviceError)`。写像は次のとおり
-//!   - タイトル・本文の検証違反 → `InvalidInput`（[`NotificationRequest::new`]）
-//!   - 利用者が通知を拒否 → `PermissionDenied("notification")`
-//!   - OS 全体・グループポリシーで通知が無効 → `Disabled("notification")`
-//!   - API・コマンドが無い（Linux、`osascript` 不在等） → `Unsupported("notification")`
-//!   - 子プロセス異常終了・期限超過・OS 呼び出し失敗 → `Internal("notification ...")`
-//! - タイトル・本文はログにも、エラーの文言にも出さない（security.md A09）
-//! - 初期化に失敗した実装は `Unsupported` を返し、ダミーの成功実装へは倒さない
-//!   （`device-bridge-contracts.md` の「6. 嘘の成功」参照。[`UnsupportedNotifier`] を使う）
+//! 守る範囲: タイトル・本文を argv に出さないこと（`ps` からの露出防止）、スクリプト文字列へのインジェクションの禁止、
+//! 子プロセスの確実な回収（期限・失敗の全経路）。守らない範囲: 通知が実際に表示されたかの確認（`Submitted` までで `Shown` は返さない）。
 
-use crate::DeviceError;
-
-/// タイトルの最大長（バイト）。macOS 実装は `osascript` へ標準入力経由で
-/// AppleScript ソースを渡す（[`osascript_script`] 参照。argv には出さない、
-/// codex 指摘 P1、PR #1008）が、通知の実用上十分な長さとして OS 標準的な
-/// 通知のタイトル欄の目安を採用し、際限なく長い入力は事前に弾く。
-const TITLE_MAX_LEN: usize = 256;
-
-/// 本文の最大長（バイト）。[`TITLE_MAX_LEN`] と同じ理由。通知本文は複数行を
-/// 想定するため、タイトルより広く確保する。
-const BODY_MAX_LEN: usize = 4096;
-
-/// 通知の結果。[`Notifier::notify`] の契約（モジュール doc）を参照。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NotifyOutcome {
-    /// OS から実際に表示されたことを確かめられた（本 Issue の実装では返さない）。
-    Shown,
-    /// OS へ渡したが、表示されたかどうかは確かめられない。
-    Submitted,
-    /// 利用者が権限ダイアログを閉じるだけで未決定のまま終わった（失敗ではない）。
-    Cancelled,
-}
-
-/// 検証済みの通知内容。[`NotificationRequest::new`] 以外で作れない（検証の SSOT、
-/// `fandhe_device::share::ShareRequest::new` と同じ方針）。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NotificationRequest {
-    title: String,
-    body: String,
-}
-
-impl NotificationRequest {
-    /// `title`・`body` を検証して構築する。
-    ///
-    /// - `title`: trim 後に空なら `InvalidInput("notification title")`。NUL 混入・
-    ///   [`TITLE_MAX_LEN`] 超過も同様
-    /// - `body`: 空でもよい（trim 後の空判定はしない）。NUL 混入・[`BODY_MAX_LEN`]
-    ///   超過は `InvalidInput("notification body")`
-    /// - 値は trim せずそのまま保持する（`device-bridge-contracts.md` の「8. 秘密値」の
-    ///   「入力どおりに保存する」方針を通知文にも適用する）
-    /// - 長さ上限は際限のない入力による子プロセスへの負荷・スクリプト生成コストを
-    ///   避けるための事前検証（codex 指摘、PR #1008）
-    pub fn new(title: &str, body: &str) -> Result<Self, DeviceError> {
-        if title.trim().is_empty() {
-            return Err(DeviceError::InvalidInput("notification title"));
-        }
-        if title.contains('\0') {
-            return Err(DeviceError::InvalidInput("notification title"));
-        }
-        if title.len() > TITLE_MAX_LEN {
-            return Err(DeviceError::InvalidInput("notification title"));
-        }
-        if body.contains('\0') {
-            return Err(DeviceError::InvalidInput("notification body"));
-        }
-        if body.len() > BODY_MAX_LEN {
-            return Err(DeviceError::InvalidInput("notification body"));
-        }
-        Ok(Self {
-            title: title.to_string(),
-            body: body.to_string(),
-        })
-    }
-
-    /// 通知のタイトル（trim 前・NUL 無しを保証）。
-    pub fn title(&self) -> &str {
-        &self.title
-    }
-
-    /// 通知の本文（空文字列を許容、NUL 無しを保証）。
-    pub fn body(&self) -> &str {
-        &self.body
-    }
-}
-
-/// ローカル通知の契約（モジュール doc の「契約」節を参照）。
-pub trait Notifier: Send + Sync {
-    /// OS へ通知の表示を 1 回依頼する。
-    fn notify(&self, request: &NotificationRequest) -> Result<NotifyOutcome, DeviceError>;
-}
-
-/// 対応不可プラットフォーム用（Linux、初期化失敗時のフォールバック）。常に
-/// `Unsupported("notification")` を返す（ダミーの成功実装へは倒さない契約）。
-pub struct UnsupportedNotifier;
-
-impl Notifier for UnsupportedNotifier {
-    fn notify(&self, _request: &NotificationRequest) -> Result<NotifyOutcome, DeviceError> {
-        Err(DeviceError::Unsupported("notification"))
-    }
-}
+use crate::contract::{NotificationRequest, Notifier, NotifyOutcome};
+use crate::error::NotificationError;
 
 /// macOS 向け `osascript` 起動コマンドの絶対パス。PATH 探索による差し替え
 /// （PATH 乗っ取り）を避けるため常に絶対パスで起動する（security.md A03/A05）。
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 const OSASCRIPT_PATH: &str = "/usr/bin/osascript";
 
 /// `osascript` の子プロセスに設けるタイムアウト。この時間を超えても終了しない
 /// 場合は kill + wait で回収する（`device-bridge-contracts.md` の「3. 期限・キャンセル」
 /// 「9. 失敗時のリソース解放」参照）。
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 const SEND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// `try_wait` のポーリング間隔（`fandhe_device::tts::WAIT_OUTCOME_POLL_INTERVAL` と
 /// 同型の考え方。短すぎる busy loop を避けつつ、タイムアウト検知の遅延を体感で
 /// 問題にならない範囲に収める）。
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(20);
 
 /// AppleScript の二重引用符文字列リテラルへ安全に埋め込めるようエスケープする
@@ -139,7 +30,6 @@ const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(20);
 /// （LF/CR）を含められずコンパイルエラーになるため、改行を含む値は
 /// [`applescript_string_literal`] を使う（本関数はセグメント単位のエスケープの
 /// み担う）。
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn escape_applescript_string(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
@@ -150,7 +40,6 @@ fn escape_applescript_string(value: &str) -> String {
 /// AppleScript の `linefeed`（LF）/`return`（CR）定数との連結式
 /// （`"a" & linefeed & "b"`）へ組み立て直す。改行を含まない場合は単純な
 /// 二重引用符リテラルを返す。
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn applescript_string_literal(value: &str) -> String {
     if !value.contains(['\n', '\r']) {
         return format!("\"{}\"", escape_applescript_string(value));
@@ -190,7 +79,6 @@ fn applescript_string_literal(value: &str) -> String {
 /// （cursor Bugbot 指摘、PR #1008 #discussion_r4135838290。括弧なしだと
 /// AppleScript のラベル付き引数構文が `&` 連結を単一の引数として解釈できず
 /// コンパイルに失敗する）。単純な二重引用符リテラルの場合も括弧は無害。
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn osascript_script(title: &str, body: &str) -> String {
     format!(
         "on run\n  display notification ({}) with title ({})\nend run\n",
@@ -211,23 +99,23 @@ pub struct OsascriptNotifier {
 impl OsascriptNotifier {
     /// 既定のパス（[`OSASCRIPT_PATH`]）で構築する。存在しなければ
     /// `Err(Unsupported("notification"))`（ダミーへは倒さない）。
-    pub fn new() -> Result<Self, DeviceError> {
+    pub fn new() -> Result<Self, NotificationError> {
         Self::with_program(std::path::PathBuf::from(OSASCRIPT_PATH))
     }
 
     /// 任意のプログラムパスで構築する（テストから存在しないパス・`/bin/sh` 等の
     /// 代替コマンドを注入するための入口。`fandhe_device::tts::CommandTts::with_program`
     /// と同型）。
-    fn with_program(program: std::path::PathBuf) -> Result<Self, DeviceError> {
+    fn with_program(program: std::path::PathBuf) -> Result<Self, NotificationError> {
         if !program.is_file() {
-            return Err(DeviceError::Unsupported("notification"));
+            return Err(NotificationError::Unsupported("notification"));
         }
         Ok(Self { program })
     }
 }
 
 impl Notifier for OsascriptNotifier {
-    fn notify(&self, request: &NotificationRequest) -> Result<NotifyOutcome, DeviceError> {
+    fn notify(&self, request: &NotificationRequest) -> Result<NotifyOutcome, NotificationError> {
         use std::io::Write;
         use std::process::{Command, Stdio};
 
@@ -241,7 +129,7 @@ impl Notifier for OsascriptNotifier {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|_| DeviceError::Internal("notification send"))?;
+            .map_err(|_| NotificationError::Internal("notification send"))?;
 
         // 期限は書き込み開始時点から測る。子プロセスが標準入力を読まず、かつ
         // スクリプトがパイプ容量（OS 既定で数十 KB）を超える場合、書き込み側の
@@ -283,7 +171,7 @@ impl Notifier for OsascriptNotifier {
                     let _ = writer.join();
                     let _ = child.kill();
                     let _ = child.wait();
-                    return Err(DeviceError::Internal("notification send"));
+                    return Err(NotificationError::Internal("notification send"));
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     // 期限超過。書き込みがブロックしたまま。子プロセスを kill して
@@ -293,14 +181,14 @@ impl Notifier for OsascriptNotifier {
                     let _ = child.kill();
                     let _ = writer.join();
                     let _ = child.wait();
-                    return Err(DeviceError::Internal("notification timeout"));
+                    return Err(NotificationError::Internal("notification timeout"));
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                     // 送信側スレッドが panic 等で `tx.send` に届かず終了した異常系。
                     let _ = writer.join();
                     let _ = child.kill();
                     let _ = child.wait();
-                    return Err(DeviceError::Internal("notification send"));
+                    return Err(NotificationError::Internal("notification send"));
                 }
             }
         }
@@ -311,7 +199,7 @@ impl Notifier for OsascriptNotifier {
                     return if status.success() {
                         Ok(NotifyOutcome::Submitted)
                     } else {
-                        Err(DeviceError::Internal("notification send"))
+                        Err(NotificationError::Internal("notification send"))
                     };
                 }
                 Ok(None) => {
@@ -320,7 +208,7 @@ impl Notifier for OsascriptNotifier {
                         // （`device-bridge-contracts.md` の「9. 失敗時のリソース解放」）。
                         let _ = child.kill();
                         let _ = child.wait();
-                        return Err(DeviceError::Internal("notification timeout"));
+                        return Err(NotificationError::Internal("notification timeout"));
                     }
                     std::thread::sleep(POLL_INTERVAL);
                 }
@@ -331,7 +219,7 @@ impl Notifier for OsascriptNotifier {
                     // 「9. 失敗時のリソース解放」参照。Unix ではゾンビ化を防ぐ）。
                     let _ = child.kill();
                     let _ = child.wait();
-                    return Err(DeviceError::Internal("notification send"));
+                    return Err(NotificationError::Internal("notification send"));
                 }
             }
         }
@@ -341,102 +229,15 @@ impl Notifier for OsascriptNotifier {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn new_rejects_empty_title() {
-        let err = NotificationRequest::new("", "body").unwrap_err();
-        assert!(matches!(
-            err,
-            DeviceError::InvalidInput("notification title")
-        ));
-    }
-
-    #[test]
-    fn new_rejects_blank_only_title() {
-        let err = NotificationRequest::new("   ", "body").unwrap_err();
-        assert!(matches!(
-            err,
-            DeviceError::InvalidInput("notification title")
-        ));
-    }
-
-    #[test]
-    fn new_rejects_title_with_embedded_nul() {
-        let err = NotificationRequest::new("a\0b", "body").unwrap_err();
-        assert!(matches!(
-            err,
-            DeviceError::InvalidInput("notification title")
-        ));
-    }
-
-    #[test]
-    fn new_rejects_body_with_embedded_nul() {
-        let err = NotificationRequest::new("title", "a\0b").unwrap_err();
-        assert!(matches!(
-            err,
-            DeviceError::InvalidInput("notification body")
-        ));
-    }
-
-    #[test]
-    fn new_rejects_title_over_max_len() {
-        let title = "a".repeat(TITLE_MAX_LEN + 1);
-        let err = NotificationRequest::new(&title, "body").unwrap_err();
-        assert!(matches!(
-            err,
-            DeviceError::InvalidInput("notification title")
-        ));
-    }
-
-    #[test]
-    fn new_accepts_title_at_max_len() {
-        let title = "a".repeat(TITLE_MAX_LEN);
-        assert!(NotificationRequest::new(&title, "body").is_ok());
-    }
-
-    #[test]
-    fn new_rejects_body_over_max_len() {
-        let body = "a".repeat(BODY_MAX_LEN + 1);
-        let err = NotificationRequest::new("title", &body).unwrap_err();
-        assert!(matches!(
-            err,
-            DeviceError::InvalidInput("notification body")
-        ));
-    }
-
-    #[test]
-    fn new_accepts_body_at_max_len() {
-        let body = "a".repeat(BODY_MAX_LEN);
-        assert!(NotificationRequest::new("title", &body).is_ok());
-    }
-
-    #[test]
-    fn new_accepts_empty_body() {
-        let request = NotificationRequest::new("title", "").unwrap();
-        assert_eq!(request.title(), "title");
-        assert_eq!(request.body(), "");
-    }
-
-    #[test]
-    fn new_does_not_trim_title_or_body() {
-        let request = NotificationRequest::new("  title  ", "  body  ").unwrap();
-        assert_eq!(request.title(), "  title  ");
-        assert_eq!(request.body(), "  body  ");
-    }
-
-    #[test]
-    fn unsupported_notifier_returns_unsupported_error() {
-        let request = NotificationRequest::new("title", "body").unwrap();
-        let err = UnsupportedNotifier.notify(&request).unwrap_err();
-        assert!(matches!(err, DeviceError::Unsupported("notification")));
-    }
-
     #[test]
     fn osascript_notifier_with_nonexistent_program_is_unsupported() {
         let err =
             OsascriptNotifier::with_program(std::path::PathBuf::from("/nonexistent/osascript"))
                 .unwrap_err();
-        assert!(matches!(err, DeviceError::Unsupported("notification")));
+        assert!(matches!(
+            err,
+            NotificationError::Unsupported("notification")
+        ));
     }
 
     #[test]
@@ -523,23 +324,9 @@ mod tests {
             .expect("/usr/bin/false は存在する");
         let request = NotificationRequest::new("title", "body").unwrap();
         let err = notifier.notify(&request).unwrap_err();
-        assert!(matches!(err, DeviceError::Internal("notification send")));
-    }
-
-    /// モック `Notifier`（`PermissionDenied` 固定）が成功へ化けないことを固定する
-    /// （`share.rs::AlwaysCancelledShare` と同じ「契約側の経路を固定する」目的）。
-    struct AlwaysDeniedNotifier;
-
-    impl Notifier for AlwaysDeniedNotifier {
-        fn notify(&self, _request: &NotificationRequest) -> Result<NotifyOutcome, DeviceError> {
-            Err(DeviceError::PermissionDenied("notification"))
-        }
-    }
-
-    #[test]
-    fn mock_permission_denied_does_not_become_success() {
-        let request = NotificationRequest::new("title", "body").unwrap();
-        let err = AlwaysDeniedNotifier.notify(&request).unwrap_err();
-        assert!(matches!(err, DeviceError::PermissionDenied("notification")));
+        assert!(matches!(
+            err,
+            NotificationError::Internal("notification send")
+        ));
     }
 }

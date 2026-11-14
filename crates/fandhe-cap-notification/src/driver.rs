@@ -1,15 +1,15 @@
 //! Phase 11（親 #1003）型サンプル「通知」（Issue #1004）の effect ドライバ。
 //! `fandhe_core::screens::notification_send`（端末依存ゼロ）の `pending` 要求を観測し、
-//! `fandhe_device::notification::Notifier` で OS へローカル通知の表示を依頼して
+//! `crate::contract::Notifier` で OS へローカル通知の表示を依頼して
 //! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
-//! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`device/secure_credential.rs` と同型）。
+//! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`secure_credential` と同型）。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
 //! （`device.rs` モジュール doc と同じ理由）。
 //!
 //! # 別スレッドで OS を呼ぶ理由
 //!
-//! macOS の `osascript`（子プロセス起動、最大 [`fandhe_device::notification`] の
+//! macOS の `osascript`（子プロセス起動、最大 `crate::macos` の
 //! `SEND_TIMEOUT` だけブロック）・Windows の WinRT Toast はいずれも
 //! `ProxyApp::update`（UI スレッド）から直接呼ぶと画面が固まるため、
 //! `secure_credential.rs::drive` と同型に別スレッドへ逃がす。`notification_send`
@@ -21,8 +21,7 @@
 //! `UNUserNotificationCenter` はアプリバンドル外（署名済み `.app` を経ないプロセス）
 //! から呼ぶと例外で落ちる。本フレームワークの desktop 実行体は `cargo run` で
 //! バンドル無しのまま起動するため使えない。`osascript display notification` は
-//! バンドル無しでも動く代替経路（`crates/fandhe-device/src/notification.rs`
-//! モジュール doc の設計判断参照）。
+//! バンドル無しでも動く代替経路（`crate::contract` の設計判断参照）。
 //!
 //! # iOS/Android: pull 型 `bridge`（OS の許可ダイアログはコールバック型、Issue #1005・#1006）
 //!
@@ -63,28 +62,28 @@
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 use std::sync::Arc;
 
-use fandhe_core::screens::notification_send::{
-    finish_notify, mark_sending, take_request, NotificationSendState, NotifyOutcome as CoreOutcome,
-};
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
-use fandhe_device::notification::Notifier;
-use fandhe_device::notification::NotifyOutcome;
-use fandhe_device::DeviceError;
+use crate::contract::Notifier;
+use crate::contract::NotifyOutcome;
+use crate::error::NotificationError;
+use fandhe_core::screens::notification_send::{
+    NotificationSendState, NotifyOutcome as CoreOutcome, finish_notify, mark_sending, take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
-/// `DeviceError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
-/// それ以外は `Display` の文言のみを転送する（`DeviceError` の内部構造は漏らさない、
-/// security.md A09。タイトル・本文は `DeviceError` のどのバリアントにも含まれない、
+/// `NotificationError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
+/// それ以外は `Display` の文言のみを転送する（`NotificationError` の内部構造は漏らさない、
+/// security.md A09。タイトル・本文は `NotificationError` のどのバリアントにも含まれない、
 /// `NotificationRequest::new` はタイトル・本文をエラーへ含めない設計）。
-fn to_message(e: DeviceError) -> String {
+fn to_message(e: NotificationError) -> String {
     match e {
-        DeviceError::Unsupported(_) => "この環境では通知を使えません".to_string(),
+        NotificationError::Unsupported(_) => "この環境では通知を使えません".to_string(),
         other => other.to_string(),
     }
 }
 
-/// `fandhe_device::notification::NotifyOutcome` を core 側の 3 腕へ写す
+/// `crate::contract::NotifyOutcome` を core 側の 3 腕へ写す
 /// （`fandhe-core` は `fandhe-device` に依存しないため、写像は本クレート側の責務）。
 fn to_outcome(outcome: NotifyOutcome) -> CoreOutcome {
     match outcome {
@@ -96,23 +95,30 @@ fn to_outcome(outcome: NotifyOutcome) -> CoreOutcome {
 
 /// 現在のプラットフォームに応じた `Notifier` 実装を返す。
 ///
-/// macOS は [`fandhe_device::notification::OsascriptNotifier`]（初期化失敗時は
+/// macOS は [`crate::macos::OsascriptNotifier`]（初期化失敗時は
 /// `UnsupportedNotifier` へ、ダミーの成功実装へは倒さない。`device-bridge-contracts.md`
-/// の「6. 嘘の成功」参照）、Windows は [`super::windows_notification::WindowsToastNotifier`]。
+/// の「6. 嘘の成功」参照）、Windows は `crate::windows::WindowsToastNotifier`。
 /// それ以外（Linux・Web）は `UnsupportedNotifier`。iOS/Android は [`bridge`]/
 /// [`drive_callback`] 経由の別経路（モジュール doc 参照）のため本関数の対象外にする
 /// （cfg を揃える、`device-bridge-contracts.md`「7. 対応表・権限」の cfg 一致チェック）。
+/// 画面の状態型に依存しないため、フレームワークの外のアプリも使える入口。iOS / Android は権限ダイアログの結果を
+/// コールバックで受ける別の型（`bridge`）で、同期の [`Notifier`] を持たないため載せない。
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+pub fn platform_notification() -> Arc<dyn Notifier> {
+    implementation()
+}
+
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 fn implementation() -> Arc<dyn Notifier> {
     #[cfg(target_os = "macos")]
     {
-        use fandhe_device::notification::OsascriptNotifier;
+        use crate::macos::OsascriptNotifier;
         use std::sync::OnceLock;
         static INSTANCE: OnceLock<Arc<dyn Notifier>> = OnceLock::new();
         INSTANCE
             .get_or_init(|| match OsascriptNotifier::new() {
                 Ok(n) => Arc::new(n),
-                Err(_) => Arc::new(fandhe_device::notification::UnsupportedNotifier),
+                Err(_) => Arc::new(crate::contract::UnsupportedNotifier),
             })
             .clone()
     }
@@ -121,7 +127,7 @@ fn implementation() -> Arc<dyn Notifier> {
         use std::sync::OnceLock;
         static INSTANCE: OnceLock<Arc<dyn Notifier>> = OnceLock::new();
         INSTANCE
-            .get_or_init(|| Arc::new(super::windows_notification::WindowsToastNotifier))
+            .get_or_init(|| Arc::new(crate::windows::WindowsToastNotifier))
             .clone()
     }
     #[cfg(not(any(
@@ -134,13 +140,13 @@ fn implementation() -> Arc<dyn Notifier> {
         use std::sync::OnceLock;
         static INSTANCE: OnceLock<Arc<dyn Notifier>> = OnceLock::new();
         INSTANCE
-            .get_or_init(|| Arc::new(fandhe_device::notification::UnsupportedNotifier))
+            .get_or_init(|| Arc::new(crate::contract::UnsupportedNotifier))
             .clone()
     }
 }
 
-/// `.m` 側の結果コード（[`super::ios_notification::fandhe_rust_notification_outcome`]
-/// から渡される）、および Android 側の `MainActivity.NOTIFICATION_RESULT_*` 定数
+/// `.m` 側の結果コード（`crate::ios::fandhe_rust_notification_outcome`
+/// から渡される）、および Android 側の `NotificationHelper.RESULT_*` 定数
 /// （`nativeOnNotificationResult`）→ 画面へ反映する結果の写像（iOS/Android 共通の
 /// SSOT。cfg は付けず全ターゲットでコンパイル・テスト対象にする
 /// （`biometric_auth.rs::outcome_from_verification` と同じ理由。呼び出し元
@@ -168,14 +174,14 @@ fn implementation() -> Arc<dyn Notifier> {
 /// | それ以外 | 未知のコード | 未知のコード | `Err(Internal("notification"))`（偽の成功・
 ///     偽のキャンセルを作らない、`outcome_from_reply` と同じ方針） |
 #[cfg_attr(not(any(target_os = "ios", target_os = "android")), allow(dead_code))]
-pub(crate) fn outcome_from_code(code: i32) -> Result<NotifyOutcome, DeviceError> {
+pub(crate) fn outcome_from_code(code: i32) -> Result<NotifyOutcome, NotificationError> {
     match code {
         0 => Ok(NotifyOutcome::Submitted),
         1 => Ok(NotifyOutcome::Cancelled),
-        2 => Err(DeviceError::PermissionDenied("notification")),
-        3 => Err(DeviceError::Internal("notification authorization")),
-        4 => Err(DeviceError::Internal("notification add")),
-        _ => Err(DeviceError::Internal("notification")),
+        2 => Err(NotificationError::PermissionDenied("notification")),
+        3 => Err(NotificationError::Internal("notification authorization")),
+        4 => Err(NotificationError::Internal("notification add")),
+        _ => Err(NotificationError::Internal("notification")),
     }
 }
 
@@ -185,7 +191,7 @@ pub(crate) fn outcome_from_code(code: i32) -> Result<NotifyOutcome, DeviceError>
 pub(crate) mod bridge {
     use fandhe_core::screens::notification_send::NotifyOutcome as CoreOutcome;
 
-    use crate::device::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::RequestSlot;
 
     /// 画面へ反映する完了結果（`super::to_outcome`/`super::to_message` 後の形）。
     pub(crate) type Outcome = Result<CoreOutcome, String>;
@@ -204,7 +210,7 @@ pub(crate) mod bridge {
     /// 不一致・未登録・既に結果ありは捨てて `false`。
     pub(crate) fn deliver(
         request_id: u64,
-        result: Result<super::NotifyOutcome, fandhe_device::DeviceError>,
+        result: Result<super::NotifyOutcome, crate::error::NotificationError>,
     ) -> bool {
         SLOT.deliver(
             request_id,
@@ -236,19 +242,19 @@ pub(crate) mod bridge {
 /// `biometric_auth::present` と同型）。
 #[cfg(target_os = "ios")]
 fn present(request_id: u64, title: &str, body: &str) -> bool {
-    super::ios_notification::present(request_id, title, body)
+    crate::ios::present(request_id, title, body)
 }
 
 #[cfg(target_os = "android")]
 fn present(request_id: u64, title: &str, body: &str) -> bool {
-    super::android::request_notification(request_id, title, body)
+    crate::android::request_notification(request_id, title, body)
 }
 
 /// iOS/Android 共通: `notification_send` の要求 1 件を処理する effect ドライバ本体
 /// （`biometric_auth::drive_callback` と同型）。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 fn drive_callback(state: &NotificationSendState, sender: &CompletionSender<NotificationSendState>) {
-    use fandhe_device::notification::NotificationRequest as DeviceRequest;
+    use crate::contract::NotificationRequest as DeviceRequest;
 
     if let Some(request) = take_request(state) {
         let _ = sender.send(Box::new(mark_sending));
@@ -260,7 +266,9 @@ fn drive_callback(state: &NotificationSendState, sender: &CompletionSender<Notif
                     // 提示依頼自体が同期的に失敗した（completion は二度と来ない）。
                     bridge::deliver(
                         request_id,
-                        Err(fandhe_device::DeviceError::Internal("notification present")),
+                        Err(crate::error::NotificationError::Internal(
+                            "notification present",
+                        )),
                     );
                 }
             }
@@ -276,7 +284,7 @@ fn drive_callback(state: &NotificationSendState, sender: &CompletionSender<Notif
         return;
     }
     let generation = state.generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         &bridge::SLOT,
         sender,
         |_request_id| {},
@@ -313,11 +321,10 @@ fn drive(
     let generation = request.generation;
     let sender = sender.clone();
     std::thread::spawn(move || {
-        let result =
-            fandhe_device::notification::NotificationRequest::new(&request.title, &request.body)
-                .and_then(|r| notifier.notify(&r))
-                .map(to_outcome)
-                .map_err(to_message);
+        let result = crate::contract::NotificationRequest::new(&request.title, &request.body)
+            .and_then(|r| notifier.notify(&r))
+            .map(to_outcome)
+            .map_err(to_message);
         let _ = sender.send(Box::new(move |s: &mut NotificationSendState| {
             finish_notify(s, generation, result);
         }));
@@ -347,7 +354,7 @@ pub fn notification_send_effect(
 /// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照。
 /// `device::biometric_auth::reset_pending_tracking` と同じ命名・位置づけ）。
 #[cfg(target_os = "android")]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     bridge::reset();
 }
 
@@ -357,13 +364,19 @@ mod tests {
     use super::*;
     use fandhe_core::screens::notification_send::{notify, set_body, set_title};
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     fn sender_with_channel() -> (
         CompletionSender<NotificationSendState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<NotificationSendState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<NotificationSendState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     /// 常に `Submitted` を返すモック（正常系の写像を確認する）。
@@ -372,8 +385,8 @@ mod tests {
     impl Notifier for AlwaysSubmittedNotifier {
         fn notify(
             &self,
-            _request: &fandhe_device::notification::NotificationRequest,
-        ) -> Result<NotifyOutcome, DeviceError> {
+            _request: &crate::contract::NotificationRequest,
+        ) -> Result<NotifyOutcome, NotificationError> {
             Ok(NotifyOutcome::Submitted)
         }
     }
@@ -384,9 +397,9 @@ mod tests {
     impl Notifier for UnsupportedMockNotifier {
         fn notify(
             &self,
-            _request: &fandhe_device::notification::NotificationRequest,
-        ) -> Result<NotifyOutcome, DeviceError> {
-            Err(DeviceError::Unsupported("notification"))
+            _request: &crate::contract::NotificationRequest,
+        ) -> Result<NotifyOutcome, NotificationError> {
+            Err(NotificationError::Unsupported("notification"))
         }
     }
 
@@ -396,9 +409,9 @@ mod tests {
     impl Notifier for DeniedMockNotifier {
         fn notify(
             &self,
-            _request: &fandhe_device::notification::NotificationRequest,
-        ) -> Result<NotifyOutcome, DeviceError> {
-            Err(DeviceError::PermissionDenied("notification"))
+            _request: &crate::contract::NotificationRequest,
+        ) -> Result<NotifyOutcome, NotificationError> {
+            Err(NotificationError::PermissionDenied("notification"))
         }
     }
 
@@ -506,7 +519,7 @@ mod outcome_from_code_tests {
     fn maps_two_to_permission_denied() {
         assert!(matches!(
             outcome_from_code(2),
-            Err(DeviceError::PermissionDenied("notification"))
+            Err(NotificationError::PermissionDenied("notification"))
         ));
     }
 
@@ -514,7 +527,7 @@ mod outcome_from_code_tests {
     fn maps_three_to_internal_authorization_error() {
         assert!(matches!(
             outcome_from_code(3),
-            Err(DeviceError::Internal("notification authorization"))
+            Err(NotificationError::Internal("notification authorization"))
         ));
     }
 
@@ -522,7 +535,7 @@ mod outcome_from_code_tests {
     fn maps_four_to_internal_add_error() {
         assert!(matches!(
             outcome_from_code(4),
-            Err(DeviceError::Internal("notification add"))
+            Err(NotificationError::Internal("notification add"))
         ));
     }
 
@@ -532,7 +545,7 @@ mod outcome_from_code_tests {
             assert!(
                 matches!(
                     outcome_from_code(code),
-                    Err(DeviceError::Internal("notification"))
+                    Err(NotificationError::Internal("notification"))
                 ),
                 "code={code}"
             );

@@ -261,6 +261,10 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // カメラのライブ映像も同様。画面状態が generation 0 に戻るため、動いたままのセッションを止めて `ACTIVE` を解放する（`fandhe_cap_camera_preview_stream::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_camera_preview_stream::reset_pending_tracking();
+    // ローカル通知の保留中の要求も破棄する。`bridge::SLOT` はプロセス static のため再生成をまたいで残り、画面状態は `Idle` で
+    // 作り直されるため、再生成前に開始した権限確認が後から完了しても黙って失われる（`fandhe_cap_notification::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_notification::reset_pending_tracking();
     // 音声再生も同様。画面状態が generation 0 に戻るため、処理済み世代を捨て再生を止める
     // （`fandhe_cap_media_playback::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

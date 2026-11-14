@@ -399,6 +399,10 @@
             android:authorities="${applicationId}.fandhe.now-playing-controls"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.NotificationLifecycle"
+            android:authorities="${applicationId}.fandhe.notification"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.CameraCaptureLifecycle"
             android:authorities="${applicationId}.fandhe.camera-capture"
             android:exported="false" />

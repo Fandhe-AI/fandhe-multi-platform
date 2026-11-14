@@ -1,7 +1,7 @@
 // アラーム・正確な時刻の予約（AlarmKit）の Swift 薄層（Issue #1077、親 #1056）。
 //
 // `AlarmManager` は Swift 専用 API で ObjC から呼べないため、`build.rs` の `compile_ios_alarm` が
-// swiftc で静的ライブラリ化し、Rust の `device/ios_alarm.rs` が `@_cdecl` の C ABI 3 関数だけを呼ぶ。
+// swiftc で静的ライブラリ化し、Rust の `fandhe-cap-alarm` の `src/ios.rs` が `@_cdecl` の C ABI 3 関数だけを呼ぶ。
 // AlarmKit は iOS 26 以降の API のため弱リンクし、`canImport` と `#available` で囲む。
 // 26 専用 API は旧 SDK（Xcode 16 は Swift 6.1 以下）に無く `#available` では型検査を除外できないため、
 // `compiler(>=6.2)`（Xcode 26 以降）でも囲み、旧 SDK では 1（非対応）にする。

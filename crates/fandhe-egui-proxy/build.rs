@@ -74,9 +74,6 @@ fn build() {
         &["ImageIO", "PhotosUI", "UIKit", "UniformTypeIdentifiers"],
     );
 
-    // `ios/fandhe_ios_notification.m`（通知）。
-    compile_objc("ios/fandhe_ios_notification.m", &["UserNotifications"]);
-
     compile_apple_location();
 
     // `apple/fandhe_apple_biometric.m`（Issue #906）も macOS 分岐と共用する。
@@ -149,8 +146,6 @@ fn build() {
     compile_ios_motion_raw_sensors();
     // `ios/fandhe_ios_pen_stylus.m`（Issue #356）。iOS 分岐のみ。
     compile_ios_pen_stylus();
-    // `ios/fandhe_ios_alarm.swift`（Issue #1077）。iOS 分岐のみ。AlarmKit を弱リンクする。
-    compile_ios_alarm();
     // `ios/fandhe_ios_web_auth_session.m`（Issue #532）。iOS 分岐のみ。
     compile_ios_web_auth_session();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
@@ -285,20 +280,6 @@ fn compile_apple_translation() {
         weak: true,
         require_env: "FANDHE_REQUIRE_TRANSLATION",
         tag: "translation",
-    });
-}
-
-/// アラーム・正確な時刻の予約の Swift 薄層 `ios/fandhe_ios_alarm.swift`（Issue #1077）。
-/// AlarmKit（iOS 26 以降）を弱リンクする。iOS 分岐のみから呼ぶ（`src/device/ios_alarm.rs` が使う）。
-fn compile_ios_alarm() {
-    compile_swift(&SwiftLib {
-        srcs: &["ios/fandhe_ios_alarm.swift"],
-        lib: "fandhe_ios_alarm",
-        module: "FandheIosAlarmBridge",
-        framework: "AlarmKit",
-        weak: true,
-        require_env: "FANDHE_REQUIRE_ALARM",
-        tag: "alarm",
     });
 }
 

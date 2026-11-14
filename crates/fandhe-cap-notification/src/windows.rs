@@ -1,6 +1,6 @@
 //! Windows 向けローカル通知実装（Issue #1004、AUMID 登録は Issue #1033）。
 //! `device/notification.rs` の Windows 経路から呼ばれ、
-//! `fandhe_device::notification::Notifier` を WinRT `Windows.UI.Notifications`
+//! `crate::contract::Notifier` を WinRT `Windows.UI.Notifications`
 //! （Toast）で実装する。
 //!
 //! # AUMID（Application User Model ID）の登録方式
@@ -40,36 +40,36 @@
 //! 参照カウント解放は `windows` クレートの `Drop` に任せ、手動では行わない。
 //!
 //! Toast が実際に画面へ出たかどうかは確かめられない（`Failed` イベントは購読
-//! しない、YAGNI）ため [`fandhe_device::notification::NotifyOutcome::Shown`] は
+//! しない、YAGNI）ため [`crate::contract::NotifyOutcome::Shown`] は
 //! 返さず、常に `Submitted` を返す。
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
-use fandhe_device::notification::{NotificationRequest, Notifier, NotifyOutcome};
-use fandhe_device::DeviceError;
+use crate::contract::{NotificationRequest, Notifier, NotifyOutcome};
+use crate::error::NotificationError;
 use fandhe_platform_windows::ComInit;
-use windows::core::{Interface, HSTRING};
 use windows::Data::Xml::Dom::XmlDocument;
-use windows::Win32::Foundation::ERROR_ALREADY_EXISTS;
-use windows::Win32::Storage::EnhancedStorage::PKEY_AppUserModel_ID;
-use windows::Win32::Storage::FileSystem::{
-    MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVE_FILE_FLAGS,
-};
-use windows::Win32::System::Com::StructuredStorage::PropVariantToBSTR;
-use windows::Win32::System::Com::{
-    CoCreateInstance, IPersistFile, CLSCTX_INPROC_SERVER, STGM_READ,
-};
-use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
-use windows::Win32::UI::Shell::{IShellLinkW, SetCurrentProcessExplicitAppUserModelID, ShellLink};
 use windows::UI::Notifications::{
     NotificationSetting, ToastNotification, ToastNotificationManager, ToastTemplateType,
 };
+use windows::Win32::Foundation::ERROR_ALREADY_EXISTS;
+use windows::Win32::Storage::EnhancedStorage::PKEY_AppUserModel_ID;
+use windows::Win32::Storage::FileSystem::{
+    MOVE_FILE_FLAGS, MOVEFILE_REPLACE_EXISTING, MoveFileExW,
+};
+use windows::Win32::System::Com::StructuredStorage::PropVariantToBSTR;
+use windows::Win32::System::Com::{
+    CLSCTX_INPROC_SERVER, CoCreateInstance, IPersistFile, STGM_READ,
+};
+use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
+use windows::Win32::UI::Shell::{IShellLinkW, SetCurrentProcessExplicitAppUserModelID, ShellLink};
+use windows::core::{HSTRING, Interface};
 
 /// 本アプリ固有の AUMID。他アプリ（PowerShell 等）の識別子は借用しない
 /// （モジュール doc 参照）。`windows_secure_credential.rs::RESOURCE` と同じ識別子を
 /// 流用し、Windows 側の資源識別子を 1 か所に揃える。
-pub(super) const APP_AUMID: &str = "com.fandhe.egui-proxy-desktop";
+pub const APP_AUMID: &str = "com.fandhe.egui-proxy-desktop";
 
 /// スタートメニューに置くショートカットのファイル名。表示名はトーストの送り元名
 /// としても使われる。
@@ -81,7 +81,7 @@ const SHORTCUT_FILE: &str = "Fandhe egui proxy.lnk";
 /// `NotificationSetting` の discriminant は WinRT の固定値
 /// （0=Enabled, 1=DisabledForApplication, 2=DisabledForUser,
 /// 3=DisabledByGroupPolicy, 4=DisabledByManifest）。
-fn setting_result(code: i32) -> Result<(), DeviceError> {
+fn setting_result(code: i32) -> Result<(), NotificationError> {
     setting_result_for(code, "notification", "notification setting")
 }
 
@@ -89,17 +89,17 @@ fn setting_result(code: i32) -> Result<(), DeviceError> {
 /// トーストを使う `windows_alarm.rs`（Issue #721）が、自機能のラベルで同じ写像を
 /// 共用する。未知の値の `Internal` ラベルは呼び出し元が `internal` で渡す
 /// （機能名の文字列比較で切り替えない）。
-pub(super) fn setting_result_for(
+pub fn setting_result_for(
     code: i32,
     feature: &'static str,
     internal: &'static str,
-) -> Result<(), DeviceError> {
+) -> Result<(), NotificationError> {
     match code {
         0 => Ok(()),
-        1 => Err(DeviceError::PermissionDenied(feature)),
-        2 | 3 => Err(DeviceError::Disabled(feature)),
-        4 => Err(DeviceError::Unsupported(feature)),
-        _ => Err(DeviceError::Internal(internal)),
+        1 => Err(NotificationError::PermissionDenied(feature)),
+        2 | 3 => Err(NotificationError::Disabled(feature)),
+        4 => Err(NotificationError::Unsupported(feature)),
+        _ => Err(NotificationError::Internal(internal)),
     }
 }
 
@@ -140,7 +140,7 @@ fn shortcut_path(appdata: &OsStr) -> PathBuf {
 /// 呼び出し元 `notify` が [`ComInit`] で COM を初期化済みのスレッド上で
 /// のみ呼ばれる契約。
 #[allow(unsafe_code)]
-fn ensure_shortcut(path: &Path, exe: &Path) -> Result<bool, DeviceError> {
+fn ensure_shortcut(path: &Path, exe: &Path) -> Result<bool, NotificationError> {
     // 既にある場合は中身を確かめる（存在だけで登録済み扱いにしない、codex 指摘
     // P1・PR #1035）。自分の AUMID でリンク先も今の実行ファイルならそのまま使い、
     // 自分の AUMID でリンク先が古ければ作り直して置き換える。AUMID が違う（または
@@ -150,7 +150,7 @@ fn ensure_shortcut(path: &Path, exe: &Path) -> Result<bool, DeviceError> {
             Existing::Current => return Ok(false),
             Existing::Stale => true,
             Existing::Foreign => {
-                return Err(DeviceError::Internal("notification shortcut foreign"));
+                return Err(NotificationError::Internal("notification shortcut foreign"));
             }
         }
     } else {
@@ -158,8 +158,9 @@ fn ensure_shortcut(path: &Path, exe: &Path) -> Result<bool, DeviceError> {
     };
     let parent = path
         .parent()
-        .ok_or(DeviceError::Internal("notification shortcut"))?;
-    std::fs::create_dir_all(parent).map_err(|_| DeviceError::Internal("notification shortcut"))?;
+        .ok_or(NotificationError::Internal("notification shortcut"))?;
+    std::fs::create_dir_all(parent)
+        .map_err(|_| NotificationError::Internal("notification shortcut"))?;
 
     // プロセス ID + スレッド ID で一意にし、同一プロセス内の並行呼び出しとも
     // 衝突しないようにする（`notify` は呼び出しごとに専用スレッドで動く）。
@@ -220,8 +221,10 @@ fn ensure_shortcut(path: &Path, exe: &Path) -> Result<bool, DeviceError> {
             let _ = std::fs::remove_file(&tmp_path);
             match inspect_shortcut(path, exe)? {
                 Existing::Current => Ok(false),
-                Existing::Stale => Err(DeviceError::Internal("notification shortcut stale")),
-                Existing::Foreign => Err(DeviceError::Internal("notification shortcut foreign")),
+                Existing::Stale => Err(NotificationError::Internal("notification shortcut stale")),
+                Existing::Foreign => {
+                    Err(NotificationError::Internal("notification shortcut foreign"))
+                }
             }
         }
         Err(_) => {
@@ -230,7 +233,7 @@ fn ensure_shortcut(path: &Path, exe: &Path) -> Result<bool, DeviceError> {
             // rename/move エラーを競合とみなして `Ok(false)` を返すと、
             // 未登録の AUMID のまま通知を試みてしまう）。
             let _ = std::fs::remove_file(&tmp_path);
-            Err(DeviceError::Internal("notification shortcut"))
+            Err(NotificationError::Internal("notification shortcut"))
         }
     }
 }
@@ -256,20 +259,20 @@ enum Existing {
 /// `.lnk` として読めない・AUMID が無い場合は [`Existing::Foreign`]（上書きしない）。
 /// 呼び出し元 `notify` が [`ComInit`] で COM を初期化済みのスレッド上でのみ呼ばれる契約。
 #[allow(unsafe_code)]
-fn inspect_shortcut(path: &Path, exe: &Path) -> Result<Existing, DeviceError> {
+fn inspect_shortcut(path: &Path, exe: &Path) -> Result<Existing, NotificationError> {
     // SAFETY: COM 初期化済みスレッド上の呼び出し（上記の契約）。定数のみを渡す。
     let link: IShellLinkW = unsafe { CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER) }
-        .map_err(|_| DeviceError::Internal("notification shortcut"))?;
+        .map_err(|_| NotificationError::Internal("notification shortcut"))?;
     let persist: IPersistFile = link
         .cast()
-        .map_err(|_| DeviceError::Internal("notification shortcut"))?;
+        .map_err(|_| NotificationError::Internal("notification shortcut"))?;
     // SAFETY: `persist` は有効な COM ポインタ、`path` は絶対パス。読み取り専用で開く。
     if unsafe { persist.Load(&HSTRING::from(path.as_os_str()), STGM_READ) }.is_err() {
         return Ok(Existing::Foreign);
     }
     let store: IPropertyStore = link
         .cast()
-        .map_err(|_| DeviceError::Internal("notification shortcut"))?;
+        .map_err(|_| NotificationError::Internal("notification shortcut"))?;
     // SAFETY: `store` は有効な COM ポインタ、`PKEY_AppUserModel_ID` は定数。
     let aumid = unsafe { store.GetValue(&PKEY_AppUserModel_ID) }
         .ok()
@@ -299,46 +302,46 @@ fn inspect_shortcut(path: &Path, exe: &Path) -> Result<Existing, DeviceError> {
 
 /// [`ensure_shortcut`] の本体。COM 経由で `.lnk` を 1 本書き出す。
 #[allow(unsafe_code)]
-fn write_shortcut(path: &Path, exe: &Path) -> Result<(), DeviceError> {
+fn write_shortcut(path: &Path, exe: &Path) -> Result<(), NotificationError> {
     // SAFETY: 呼び出し元 `notify` が `ComInit` で COM を初期化済みのスレッド上での
     // み呼ぶ契約。`ShellLink`/`CLSCTX_INPROC_SERVER` はどちらも定数で、戻り値は
     // 失敗時 `Err` として扱う。
     let link: IShellLinkW = unsafe { CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER) }
-        .map_err(|_| DeviceError::Internal("notification shortcut"))?;
+        .map_err(|_| NotificationError::Internal("notification shortcut"))?;
     // SAFETY: `link` は上で取得した有効な COM ポインタ。`exe` は呼び出し元
     // （`notify`）が `current_exe()` から得た絶対パス。
     unsafe { link.SetPath(&HSTRING::from(exe.as_os_str())) }
-        .map_err(|_| DeviceError::Internal("notification shortcut"))?;
+        .map_err(|_| NotificationError::Internal("notification shortcut"))?;
 
     // `System.AppUserModel.ID`（PKEY_AppUserModel_ID）の正規型は VT_LPWSTR。
     let store: IPropertyStore = link
         .cast()
-        .map_err(|_| DeviceError::Internal("notification shortcut"))?;
+        .map_err(|_| NotificationError::Internal("notification shortcut"))?;
     let lpwstr_variant = fandhe_platform_windows::lpwstr_variant(APP_AUMID)
-        .map_err(|_| DeviceError::Internal("notification shortcut"))?;
+        .map_err(|_| NotificationError::Internal("notification shortcut"))?;
     // SAFETY: `store` は上で取得した有効な COM ポインタ、`PKEY_AppUserModel_ID` は
     // 定数、`lpwstr_variant` は直前に変換した有効な PROPVARIANT。
     unsafe { store.SetValue(&PKEY_AppUserModel_ID, &lpwstr_variant) }
-        .map_err(|_| DeviceError::Internal("notification shortcut"))?;
+        .map_err(|_| NotificationError::Internal("notification shortcut"))?;
     // SAFETY: `store` は上と同じ有効な COM ポインタ。
-    unsafe { store.Commit() }.map_err(|_| DeviceError::Internal("notification shortcut"))?;
+    unsafe { store.Commit() }.map_err(|_| NotificationError::Internal("notification shortcut"))?;
 
     let persist: IPersistFile = link
         .cast()
-        .map_err(|_| DeviceError::Internal("notification shortcut"))?;
+        .map_err(|_| NotificationError::Internal("notification shortcut"))?;
     // SAFETY: `persist` は上で取得した有効な COM ポインタ、`path` は呼び出し元が
     // 組み立てた絶対パス。
     unsafe { persist.Save(&HSTRING::from(path.as_os_str()), true) }
-        .map_err(|_| DeviceError::Internal("notification shortcut"))
+        .map_err(|_| NotificationError::Internal("notification shortcut"))
 }
 
 /// スタートメニューのショートカットで [`APP_AUMID`] を登録済みにする（無ければ作る）。
 /// `notify` と `windows_alarm.rs`（Issue #721）が同じ送り手を使うための共通入口。
 /// `feature` は APPDATA・実行ファイルが取れないときの `Unsupported` のラベル。
 /// 呼び出し元が [`ComInit`] で COM を初期化済みのスレッド上でのみ呼ぶ契約。
-pub(super) fn ensure_app_aumid(feature: &'static str) -> Result<(), DeviceError> {
-    let appdata = std::env::var_os("APPDATA").ok_or(DeviceError::Unsupported(feature))?;
-    let exe = std::env::current_exe().map_err(|_| DeviceError::Unsupported(feature))?;
+pub fn ensure_app_aumid(feature: &'static str) -> Result<(), NotificationError> {
+    let appdata = std::env::var_os("APPDATA").ok_or(NotificationError::Unsupported(feature))?;
+    let exe = std::env::current_exe().map_err(|_| NotificationError::Unsupported(feature))?;
     let path = shortcut_path(&appdata);
     ensure_shortcut(&path, &exe)?;
     Ok(())
@@ -348,11 +351,12 @@ pub(super) fn ensure_app_aumid(feature: &'static str) -> Result<(), DeviceError>
 pub(crate) struct WindowsToastNotifier;
 
 impl Notifier for WindowsToastNotifier {
-    fn notify(&self, request: &NotificationRequest) -> Result<NotifyOutcome, DeviceError> {
+    fn notify(&self, request: &NotificationRequest) -> Result<NotifyOutcome, NotificationError> {
         // COM 初期化はこのガードが生存する間だけ有効（宣言順が Drop 順を決めるため、
         // COM オブジェクトより先に宣言し、関数末尾で最後に解放する）。初期化自体が
         // 失敗したら後続の COM 操作へ進まず、ここで止める。
-        let _com = ComInit::new().map_err(|_| DeviceError::Internal("notification com init"))?;
+        let _com =
+            ComInit::new().map_err(|_| NotificationError::Internal("notification com init"))?;
 
         // `ensure_shortcut` の失敗（作成そのものの失敗）はここで作りかけのファイルを
         // 自前で消して `Err` を返す（内部で完結、下記参照）。一方 `show_toast` の
@@ -370,7 +374,7 @@ impl Notifier for WindowsToastNotifier {
 /// 登録済みの [`APP_AUMID`] でトーストを送る。[`ensure_shortcut`] の後にのみ
 /// 呼ばれる契約（AUMID が未登録のまま呼ぶと通常失敗する）。
 #[allow(unsafe_code)]
-fn show_toast(request: &NotificationRequest) -> Result<NotifyOutcome, DeviceError> {
+fn show_toast(request: &NotificationRequest) -> Result<NotifyOutcome, NotificationError> {
     // プロセスの AUMID をここで明示する。タスクバーのまとめは UI 表示前に設定した
     // 場合のみ効く（Microsoft のドキュメント上の推奨）が、`notify` はウィンドウ
     // 生成後のワーカースレッドから呼ばれるため、この呼び出しの時点ではタスクバー
@@ -384,29 +388,29 @@ fn show_toast(request: &NotificationRequest) -> Result<NotifyOutcome, DeviceErro
     // 登録済みの AUMID で試みる。登録後も失敗し得る（インデックス未反映等）ため
     // `Unsupported` ではなく `Internal` へ写す（未対応ではなく実行時エラーの扱い）。
     let notifier = ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(APP_AUMID))
-        .map_err(|_| DeviceError::Internal("notification send"))?;
+        .map_err(|_| NotificationError::Internal("notification send"))?;
 
     let setting: NotificationSetting = notifier
         .Setting()
-        .map_err(|_| DeviceError::Internal("notification setting"))?;
+        .map_err(|_| NotificationError::Internal("notification setting"))?;
     setting_result(setting.0)?;
 
     let xml: XmlDocument =
         ToastNotificationManager::GetTemplateContent(ToastTemplateType::ToastText02)
-            .map_err(|_| DeviceError::Internal("notification send"))?;
+            .map_err(|_| NotificationError::Internal("notification send"))?;
     let texts = xml
         .GetElementsByTagName(&HSTRING::from("text"))
-        .map_err(|_| DeviceError::Internal("notification send"))?;
+        .map_err(|_| NotificationError::Internal("notification send"))?;
     // XML 文字列を連結せず `CreateTextNode`/`AppendChild` で値を差し込む
     // （XML 注入を防ぐ、security.md A03）。
     set_text_at(&xml, &texts, 0, request.title())?;
     set_text_at(&xml, &texts, 1, request.body())?;
 
     let toast = ToastNotification::CreateToastNotification(&xml)
-        .map_err(|_| DeviceError::Internal("notification send"))?;
+        .map_err(|_| NotificationError::Internal("notification send"))?;
     notifier
         .Show(&toast)
-        .map_err(|_| DeviceError::Internal("notification send"))?;
+        .map_err(|_| NotificationError::Internal("notification send"))?;
 
     // Toast が実際に表示されたかは確かめられない（モジュール doc 参照）ため
     // `Submitted` を返す（`Shown` は返さない）。
@@ -421,15 +425,15 @@ fn set_text_at(
     texts: &windows::Data::Xml::Dom::XmlNodeList,
     index: u32,
     value: &str,
-) -> Result<(), DeviceError> {
+) -> Result<(), NotificationError> {
     let node = texts
         .Item(index)
-        .map_err(|_| DeviceError::Internal("notification send"))?;
+        .map_err(|_| NotificationError::Internal("notification send"))?;
     let text_node = xml
         .CreateTextNode(&HSTRING::from(value))
-        .map_err(|_| DeviceError::Internal("notification send"))?;
+        .map_err(|_| NotificationError::Internal("notification send"))?;
     node.AppendChild(&text_node)
-        .map_err(|_| DeviceError::Internal("notification send"))?;
+        .map_err(|_| NotificationError::Internal("notification send"))?;
     Ok(())
 }
 
@@ -463,7 +467,7 @@ mod tests {
     fn setting_result_maps_disabled_for_application_to_permission_denied() {
         assert!(matches!(
             setting_result(1),
-            Err(DeviceError::PermissionDenied("notification"))
+            Err(NotificationError::PermissionDenied("notification"))
         ));
     }
 
@@ -471,7 +475,7 @@ mod tests {
     fn setting_result_maps_disabled_for_user_to_disabled() {
         assert!(matches!(
             setting_result(2),
-            Err(DeviceError::Disabled("notification"))
+            Err(NotificationError::Disabled("notification"))
         ));
     }
 
@@ -479,7 +483,7 @@ mod tests {
     fn setting_result_maps_disabled_by_group_policy_to_disabled() {
         assert!(matches!(
             setting_result(3),
-            Err(DeviceError::Disabled("notification"))
+            Err(NotificationError::Disabled("notification"))
         ));
     }
 
@@ -487,7 +491,7 @@ mod tests {
     fn setting_result_maps_disabled_by_manifest_to_unsupported() {
         assert!(matches!(
             setting_result(4),
-            Err(DeviceError::Unsupported("notification"))
+            Err(NotificationError::Unsupported("notification"))
         ));
     }
 
@@ -495,7 +499,7 @@ mod tests {
     fn setting_result_maps_unknown_code_to_internal() {
         assert!(matches!(
             setting_result(99),
-            Err(DeviceError::Internal("notification setting"))
+            Err(NotificationError::Internal("notification setting"))
         ));
     }
 }

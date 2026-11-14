@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ローカル通知（Issue #1006）の通知チャンネル表示名（システム設定 > アプリ > 通知 に出る名前）。
+     機能 crate 側の資源で、アプリの strings.xml には置かない。 -->
+<resources>
+    <string name="notification_channel_name">通知</string>
+</resources>

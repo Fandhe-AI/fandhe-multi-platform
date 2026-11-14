@@ -1090,6 +1090,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-alarm"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-notification",
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-app-attest"
 version = "0.2.0"
 dependencies = [
@@ -1791,6 +1806,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-notification"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-now-playing-controls"
 version = "0.2.0"
 dependencies = [
@@ -2331,6 +2360,7 @@ dependencies = [
  "egui",
  "fandhe-cap-accessibility-prefs",
  "fandhe-cap-activity-recognition",
+ "fandhe-cap-alarm",
  "fandhe-cap-app-attest",
  "fandhe-cap-app-badge",
  "fandhe-cap-app-lifecycle",
@@ -2386,6 +2416,7 @@ dependencies = [
  "fandhe-cap-nfc",
  "fandhe-cap-nfc-card-emulation",
  "fandhe-cap-nlp",
+ "fandhe-cap-notification",
  "fandhe-cap-now-playing-controls",
  "fandhe-cap-on-device-llm",
  "fandhe-cap-open-in-shell",
@@ -2545,6 +2576,7 @@ dependencies = [
  "fandhe-cap-multi-display",
  "fandhe-cap-nfc",
  "fandhe-cap-nlp",
+ "fandhe-cap-notification",
  "fandhe-cap-now-playing-controls",
  "fandhe-cap-on-device-llm",
  "fandhe-cap-passkey-signin",

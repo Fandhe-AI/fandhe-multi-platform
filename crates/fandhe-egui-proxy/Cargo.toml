@@ -319,7 +319,7 @@ windows = { workspace = true, optional = true, features = [
     # Issue #290: device/windows_ml_inference.rs が WinML（LearningModel / LearningModelSession /
     # TensorFloat）を呼ぶ。AI → Foundation のみに依存し新規パッケージは増えない。
     "AI_MachineLearning",
-    # Issue #1004: `device/windows_notification.rs` が `ToastNotificationManager`/
+    # Issue #1004: `fandhe-cap-notification` の `windows.rs`（移行前の `device/windows_notification.rs`） が `ToastNotificationManager`/
     # `ToastNotifier`/`ToastNotification` で WinRT Toast を出すために使う。
     "UI_Notifications",
     # Issue #1004: Toast のテンプレート XML（`GetTemplateContent` が返す
@@ -413,7 +413,7 @@ windows = { workspace = true, optional = true, features = [
     # Issue #470: `device/windows_pdf_viewer.rs` が `PdfDocument` / `PdfPage` /
     # `PdfPageRenderOptions`（`Data_Pdf`）を呼ぶ。新規パッケージは増えない。
     "Data_Pdf",
-    # Issue #1033: `device/windows_notification.rs` がスタートメニューへ `.lnk`
+    # Issue #1033: `fandhe-cap-notification` の `windows.rs`（移行前の `device/windows_notification.rs`） がスタートメニューへ `.lnk`
     # ショートカットを作って AUMID を登録するために使う。`IShellLinkW`/`ShellLink`
     # は `Win32_UI_Shell`（上で導入済み）が持つ。
     # `CoCreateInstance`/`CoInitializeEx`/`CoUninitialize`/`IPersistFile` に使う。

@@ -17,7 +17,7 @@
 //!
 //! # unsafe
 //!
-//! COM 呼び出しに閉じ、各呼び出しの直前に `// SAFETY:` を付ける（`windows_notification.rs` と
+//! COM 呼び出しに閉じ、各呼び出しの直前に `// SAFETY:` を付ける（`fandhe-cap-notification` の `windows.rs` と
 //! 同型。`lib.rs` の Windows `deny(unsafe_code)` は関数単位の `allow` で緩める）。`PROPVARIANT` は
 //! `Drop` を持たないため `PropVariantClear` を全経路で手動で呼ぶ。
 //!

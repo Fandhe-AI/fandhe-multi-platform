@@ -96,9 +96,6 @@ import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.biometric.BiometricManager;
 import androidx.biometric.BiometricPrompt;
-import androidx.core.app.NotificationChannelCompat;
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.location.LocationManagerCompat;
 import androidx.security.crypto.EncryptedSharedPreferences;
@@ -308,30 +305,6 @@ public class MainActivity extends GameActivity {
     // 無視される（`filePickRequest` と同じ理屈）。UI スレッドのみで読み書きするため
     // 追加の同期は不要。
     private static final RequestTracker biometricRequest = new RequestTracker();
-
-    // ローカル通知（Issue #1006、Phase 11 型サンプル「通知」の Android 経路）。Rust 側
-    // `device/notification.rs::bridge` と pull 型で橋渡しする（`biometricRequest`/
-    // `requestBiometric` と同型）。Rust 側は `MainActivity.requestNotification(long,
-    // String, String)`（提示依頼）を呼び、結果は `nativeOnNotificationResult` で
-    // 非同期に返す。code の意味（本ファイルが SSOT、Rust 側 `notification::
-    // outcome_from_code` の doc と対）: 0=送信した（`NotificationManagerCompat.notify`
-    // が例外無しで完了）／1=キャンセル（Android では出ない。`outcome_from_code` の
-    // doc 参照）／2=権限拒否（実行時許可の拒否・通知オフ・チャンネルブロックを
-    // 区別せず畳む、`ActivityResultContracts.RequestPermission` が拒否とダイアログを
-    // 閉じただけを区別できないのと同じ制約）／3=内部エラー（権限確認自体の失敗）／
-    // 4=内部エラー（`notify()` 呼び出し自体の失敗）。
-    private static native void nativeOnNotificationResult(long requestId, int code);
-
-    // 上記 code 定数（`requestNotificationPermission`/`requestNotification`/
-    // `postNotification` からも参照するため）。
-    private static final int NOTIFICATION_RESULT_SUBMITTED = 0;
-    // Android では発生しない（`ActivityResultContracts.RequestPermission` が「拒否」と
-    // 「ダイアログを閉じただけ」を区別できないため）。Rust 側 `outcome_from_code` の
-    // 写像表との対応を示すためだけに宣言する。
-    private static final int NOTIFICATION_RESULT_CANCELLED = 1;
-    private static final int NOTIFICATION_RESULT_PERMISSION_DENIED = 2;
-    private static final int NOTIFICATION_RESULT_AUTH_ERROR = 3;
-    private static final int NOTIFICATION_RESULT_POST_ERROR = 4;
 
     // ヘルスデータ（今日の歩数、Issue #1100）。実装は `HealthDataHelper`（フィールド初期化子で
     // 生成し、STARTED 前に許可ランチャーを登録する）。Rust の `android_health_data.rs` が JNI で呼ぶ。
@@ -619,42 +592,6 @@ public class MainActivity extends GameActivity {
     void pipShutdown() {
         pictureInPictureHelper.shutdown();
     }
-
-    // 通知チャンネル ID（`postNotification`/`onCreate` から参照）。
-    private static final String NOTIFICATION_CHANNEL_ID = "fandhe_default";
-
-    // コールバック時に requestId を思い出すためだけの唯一の static（`biometricRequest`
-    // と同じ理由）。UI スレッドのみで読み書きするため追加の同期は不要。
-    private static final RequestTracker notificationRequest = new RequestTracker();
-
-    // 権限ダイアログ表示中に `requestNotificationPermission` コールバックが読む
-    // タイトル・本文（`micRequestedMaxDurationMs` と同じ理由で退避する）。UI スレッド
-    // のみで読み書きする。
-    private String pendingNotificationTitle;
-    private String pendingNotificationBody;
-
-    // 通知の実行時許可要求（`requestMicPermission` と同型）。許可が下りたら
-    // `postNotification` を呼ぶ。ダイアログ自体が Activity を pause させるため、
-    // `requestMicPermission` と異なり `activityResumed` はここでは見ない: 通知の
-    // 投稿は背景でも正当な操作であり、`micStartPendingResume` のような保留は不要
-    // （実装計画 §4 参照）。
-    private final ActivityResultLauncher<String> requestNotificationPermission =
-            getActivityResultRegistry().register("fandhe:MainActivity:1", this, new ActivityResultContracts.RequestPermission(), granted -> {
-                long id = notificationRequest.take();
-                if (id == RequestTracker.NONE) {
-                    // 既に破棄済み（Activity 再生成等）。
-                    return;
-                }
-                String title = pendingNotificationTitle;
-                String body = pendingNotificationBody;
-                pendingNotificationTitle = null;
-                pendingNotificationBody = null;
-                if (!granted) {
-                    nativeOnNotificationResult(id, NOTIFICATION_RESULT_PERMISSION_DENIED);
-                    return;
-                }
-                postNotification(id, title, body);
-            });
 
     // マイク録音（Issue #957、Phase 11 型サンプル「マイク録音」の Android 経路）。
     // `MicRecorder` trait は通らない（`device/mic_record.rs` モジュール doc の
@@ -1494,15 +1431,6 @@ public class MainActivity extends GameActivity {
         if (biometricRequest.current() != RequestTracker.NONE) {
             biometricPrompt.cancelAuthentication();
         }
-
-        // ローカル通知（Issue #1006）: `notificationRequest` は static のため Activity
-        // 再生成をまたいで残るが、権限ダイアログ待ち中に破棄された要求の宛先は失われる。
-        // 保留中の要求をここで捨て、Rust 側 `android_main` の `notification::
-        // reset_pending_tracking()` と対で「宛先を失った」要求を残さない
-        // （`biometricRequest`/`micRecordRequest` と同じ位置づけ、順序非依存）。
-        notificationRequest.take();
-        pendingNotificationTitle = null;
-        pendingNotificationBody = null;
 
         // マイク録音（Issue #957）: `micRecordRequest` は static のため Activity 再生成を
         // またいで残るが、`MediaRecorder`（`micRecorder`）はインスタンスフィールドで
@@ -2671,91 +2599,6 @@ public class MainActivity extends GameActivity {
         PhotoSaveHelper.save(getApplicationContext().getContentResolver(), requestId, png);
     }
 
-    // Rust 側 bridge モジュール（`device/notification.rs`）の `present`（Android 分岐）から
-    // JNI 経由で呼ばれる（Issue #1006）。`requestBiometric` と同じ「即時 return・結果は
-    // 非同期通知」の形。`title`/`body` は Rust 側 `NotificationRequest::new`（空・NUL・
-    // 長さ検証）を通した文字列の契約。表示にのみ使い、ログへ出さない
-    // （security.md A03/A09）。
-    private void requestNotification(long requestId, String title, String body) {
-        runOnUiThread(() -> {
-            if (Build.VERSION.SDK_INT < 33
-                    || ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                            == PackageManager.PERMISSION_GRANTED) {
-                // API 33 未満は実行時許可自体が存在しないため要求しない
-                // （device-bridge-contracts.md「対応表・権限」節）。
-                postNotification(requestId, title, body);
-                return;
-            }
-            if (isFinishing() || isDestroyed() || !activityResumed) {
-                // 非前景でダイアログを出さない（`requestBiometric`/`requestMicRecordStart`
-                // と同じ非前景ガード）。
-                nativeOnNotificationResult(requestId, NOTIFICATION_RESULT_AUTH_ERROR);
-                return;
-            }
-            notificationRequest.track(requestId);
-            pendingNotificationTitle = title;
-            pendingNotificationBody = body;
-            try {
-                requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS);
-            } catch (RuntimeException e) {
-                // `launch()` 自体が例外を送出した場合（`requestMicRecordStart` と同じ
-                // 理由）。コールバックは二度と来ないため、ここで直接失敗を通知する。
-                notificationRequest.take();
-                pendingNotificationTitle = null;
-                pendingNotificationBody = null;
-                nativeOnNotificationResult(requestId, NOTIFICATION_RESULT_AUTH_ERROR);
-            }
-        });
-    }
-
-    // 権限確認後（`requestNotification`/`requestNotificationPermission` 許可コールバック
-    // のいずれか）に呼ぶ。常に UI スレッドから呼ばれる契約（`requestNotification` の
-    // `runOnUiThread`、`requestNotificationPermission` の `ActivityResultLauncher`
-    // コールバックはいずれも UI スレッド）。
-    private void postNotification(long requestId, String title, String body) {
-        NotificationManagerCompat manager = NotificationManagerCompat.from(this);
-        NotificationChannelCompat channel = new NotificationChannelCompat.Builder(
-                        NOTIFICATION_CHANNEL_ID, NotificationManagerCompat.IMPORTANCE_DEFAULT)
-                .setName(getString(R.string.notification_channel_name))
-                .build();
-        try {
-            // `areNotificationsEnabled`/`createNotificationChannel`/`getNotificationChannelCompat`
-            // は通知サービスとの IPC を伴い、サービス側の異常で `RuntimeException` を送出し得る
-            // （Codex 指摘、PR #1010）。ここを try の外に置くと UI スレッドの未捕捉例外で
-            // アプリが終了し、`nativeOnNotificationResult` へ失敗を返せなくなる。
-            if (!manager.areNotificationsEnabled()) {
-                // API 33 未満で利用者が設定から通知を切った場合を含む（嘘の成功を出さない、
-                // device-bridge-contracts.md「嘘の成功」節）。
-                nativeOnNotificationResult(requestId, NOTIFICATION_RESULT_PERMISSION_DENIED);
-                return;
-            }
-            manager.createNotificationChannel(channel);
-            NotificationChannelCompat created = manager.getNotificationChannelCompat(NOTIFICATION_CHANNEL_ID);
-            if (created != null && created.getImportance() == NotificationManagerCompat.IMPORTANCE_NONE) {
-                // チャンネル単位でブロックされている（設定アプリからチャンネルを個別に
-                // オフにした場合）。
-                nativeOnNotificationResult(requestId, NOTIFICATION_RESULT_PERMISSION_DENIED);
-                return;
-            }
-        } catch (RuntimeException e) {
-            nativeOnNotificationResult(requestId, NOTIFICATION_RESULT_POST_ERROR);
-            return;
-        }
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.sym_def_app_icon)
-                .setContentTitle(title)
-                .setContentText(body)
-                .setAutoCancel(true);
-        try {
-            manager.notify((int) requestId, builder.build());
-            nativeOnNotificationResult(requestId, NOTIFICATION_RESULT_SUBMITTED);
-        } catch (SecurityException e) {
-            nativeOnNotificationResult(requestId, NOTIFICATION_RESULT_PERMISSION_DENIED);
-        } catch (RuntimeException e) {
-            nativeOnNotificationResult(requestId, NOTIFICATION_RESULT_POST_ERROR);
-        }
-    }
-
     // Rust 側（`device/mic_record.rs` の「停止」ボタンハンドラ）から JNI 経由で呼ばれる
     // （Issue #957）。`requestId` が現在の要求と一致しない場合は no-op（旧要求の遅延
     // 到着、`apple_mic_record.rs::request_stop` の Android 版）。
@@ -3414,20 +3257,6 @@ public class MainActivity extends GameActivity {
         } catch (IOException | RuntimeException e) {
             nativeOnFilePickerResult(requestId, 2, null, -1);
         }
-    }
-
-    // Rust 側（`device/android_alarm.rs`、Issue #1078）から JNI 経由でワーカースレッドが同期で呼ぶ
-    // 3 本。シグネチャは `(J)I` / `()I` / `()J`。結果コードは `AlarmHelper` 冒頭を参照。
-    private int alarmSchedule(long fireAtMs) {
-        return AlarmHelper.schedule(this, fireAtMs);
-    }
-
-    private int alarmCancel() {
-        return AlarmHelper.cancel(getApplicationContext());
-    }
-
-    private long alarmState() {
-        return AlarmHelper.state(getApplicationContext());
     }
 
     // 資格情報保存（Issue #924）の op 定数。Rust 側 `device/android.rs::

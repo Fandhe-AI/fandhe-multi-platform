@@ -17,8 +17,8 @@ import android.provider.Settings;
 
 import androidx.core.app.NotificationManagerCompat;
 
-// アラーム・正確な時刻の予約（Issue #1078、親 #1056）。Rust 側 `device/android_alarm.rs` が
-// `MainActivity.alarmSchedule/alarmCancel/alarmState` 経由でワーカースレッドから同期で呼ぶ。
+// アラーム・正確な時刻の予約（Issue #1078、親 #1056）。Rust の `fandhe-cap-alarm`（`src/android.rs`）が
+// static の `schedule` / `cancel` / `state`（第 1 引数は Activity）をワーカースレッドから JNI で同期に呼ぶ。
 // 保留中の要求・要求 id・native コールバックを持たないので、Activity 再生成時に破棄するものは無い。
 //
 // 結果コード（Rust 側 `schedule_result` / `cancel_result` の match が SSOT。値を揃えること）:
@@ -104,6 +104,10 @@ public final class AlarmHelper {
                 openExactAlarmSettings(a);
                 return EXACT_ALARM_DENIED;
             }
+            // 利用者が開くアプリの入口（鳴る時刻の表示から開く画面）。無ければ予約を作らず失敗にする
+            // （`MainActivity` のクラスを直接参照せず、自パッケージの起動 Intent を使う）。
+            Intent show = c.getPackageManager().getLaunchIntentForPackage(c.getPackageName());
+            if (show == null) return FAILED;
             // 置き換え: 古い予約を先に取り消す（失敗時に古い予約は戻さない）。
             PendingIntent old = receiverIntent(c, false);
             if (old != null) {
@@ -114,7 +118,6 @@ public final class AlarmHelper {
             if (!sp.edit().putLong(KEY_FIRE_AT, fireAtMs).commit()) return FAILED;
             PendingIntent pi = receiverIntent(c, true);
             try {
-                Intent show = new Intent(c, MainActivity.class);
                 PendingIntent showPi = PendingIntent.getActivity(
                         c, REQUEST_CODE, show, PendingIntent.FLAG_IMMUTABLE);
                 am.setAlarmClock(new AlarmManager.AlarmClockInfo(fireAtMs, showPi), pi);

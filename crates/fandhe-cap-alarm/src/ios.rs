@@ -1,9 +1,9 @@
 //! iOS 向けアラーム実装（Issue #1077、親 #1056）。`device/alarm.rs` の iOS 経路から呼ばれ、
-//! `fandhe_device::alarm::Alarm` を AlarmKit（`ios/fandhe_ios_alarm.swift`。`build.rs` が feature
+//! `crate::contract::Alarm` を AlarmKit（`ios/fandhe_ios_alarm.swift`。`build.rs` が feature
 //! `device` 有効時に swiftc で静的ライブラリ化し弱リンクする）で実装する。`unsafe` は
 //! `@_cdecl` の C ABI 3 関数の宣言と呼び出し 3 か所に閉じる（coding-rust.md の FFI 例外規定準拠）。
 //!
-//! 契約の SSOT は `fandhe_device::alarm`。戻りコード → `DeviceError` の写像の SSOT は本ファイルの
+//! 契約の SSOT は `crate::contract`。戻りコード → `AlarmError` の写像の SSOT は本ファイルの
 //! `match`（`unit_from_code`・`state_from_code`）で、Swift 冒頭コメントはその写し。
 //!
 //! # 守る範囲
@@ -14,14 +14,14 @@
 //!   1 本の順序にする。
 //! - OS コールバックが共有状態へ書く経路は無い。結果は Swift 関数の戻り値として同期に返り、
 //!   ドライバが `CompletionSender::send`（内部で `request_repaint` を起こす）で画面へ届けるため、
-//!   `crate::ios::request_repaint` をここで重ねて呼ばない。
+//!   `fandhe_runtime::request_repaint` をここで重ねて呼ばない。
 //! - iOS 26 未満・旧 SDK は `Unsupported`、許可の拒否は `PermissionDenied`。ホスト（`cargo test`）では
 //!   `UnsupportedAlarm` を返し、成功へ倒さない。
 
 use std::sync::Arc;
 
-use fandhe_device::alarm::{Alarm, AlarmState};
-use fandhe_device::DeviceError;
+use crate::contract::{Alarm, AlarmState};
+use crate::error::AlarmError;
 
 /// 戻りコード 8（予約中。`state` 専用）。
 const CODE_SCHEDULED: i32 = 8;
@@ -29,7 +29,7 @@ const CODE_SCHEDULED: i32 = 8;
 /// `schedule`・`cancel` の戻りコードを写す。`state` 専用の 8 は成功へ畳まず `Internal` にする。
 // ホストのビルドでは iOS 実体（`imp`）が無く、テストからしか呼ばれない。
 #[cfg_attr(not(any(target_os = "ios", test)), allow(dead_code))]
-fn unit_from_code(code: i32) -> Result<(), DeviceError> {
+fn unit_from_code(code: i32) -> Result<(), AlarmError> {
     match code {
         0 => Ok(()),
         c => Err(error_from_code(c)),
@@ -38,7 +38,7 @@ fn unit_from_code(code: i32) -> Result<(), DeviceError> {
 
 /// `state` の戻りコードを写す。`out_ms` は 8 のときだけ読む。
 #[cfg_attr(not(any(target_os = "ios", test)), allow(dead_code))]
-fn state_from_code(code: i32, out_ms: u64) -> Result<AlarmState, DeviceError> {
+fn state_from_code(code: i32, out_ms: u64) -> Result<AlarmState, AlarmError> {
     match code {
         0 => Ok(AlarmState::NotScheduled),
         CODE_SCHEDULED => Ok(AlarmState::Scheduled {
@@ -48,24 +48,24 @@ fn state_from_code(code: i32, out_ms: u64) -> Result<AlarmState, DeviceError> {
     }
 }
 
-/// 成功以外の戻りコードを `DeviceError` へ写す（同じ意味のコードを 1 つに潰さない）。
+/// 成功以外の戻りコードを `AlarmError` へ写す（同じ意味のコードを 1 つに潰さない）。
 #[cfg_attr(not(any(target_os = "ios", test)), allow(dead_code))]
-fn error_from_code(code: i32) -> DeviceError {
+fn error_from_code(code: i32) -> AlarmError {
     match code {
-        1 => DeviceError::Unsupported("alarm"),
-        2 => DeviceError::PermissionDenied("alarm"),
-        3 => DeviceError::Internal("alarm limit"),
-        4 | 5 => DeviceError::Internal("alarm add"),
-        6 => DeviceError::Internal("alarm list"),
-        7 => DeviceError::Internal("alarm remove"),
-        _ => DeviceError::Internal("alarm"),
+        1 => AlarmError::Unsupported,
+        2 => AlarmError::PermissionDenied,
+        3 => AlarmError::Internal("alarm limit"),
+        4 | 5 => AlarmError::Internal("alarm add"),
+        6 => AlarmError::Internal("alarm list"),
+        7 => AlarmError::Internal("alarm remove"),
+        _ => AlarmError::Internal("alarm"),
     }
 }
 
 #[cfg(target_os = "ios")]
 mod imp {
     use super::*;
-    use crate::device::alarm::{now_unix_ms, validate_fire_at};
+    use crate::{now_unix_ms, validate_fire_at};
     use std::sync::Mutex;
 
     // SAFETY: `ios/fandhe_ios_alarm.swift` が `@_cdecl` で定義する C ABI（`build.rs` が iOS ターゲットの
@@ -96,7 +96,7 @@ mod imp {
 
     impl Alarm for IosAlarm {
         #[allow(unsafe_code)]
-        fn schedule(&self, fire_at_unix_ms: u64) -> Result<(), DeviceError> {
+        fn schedule(&self, fire_at_unix_ms: u64) -> Result<(), AlarmError> {
             validate_fire_at(fire_at_unix_ms, now_unix_ms()?)?;
             let _g = self.guard();
             // SAFETY: 引数は値渡しのみ。
@@ -104,14 +104,14 @@ mod imp {
         }
 
         #[allow(unsafe_code)]
-        fn cancel(&self) -> Result<(), DeviceError> {
+        fn cancel(&self) -> Result<(), AlarmError> {
             let _g = self.guard();
             // SAFETY: 引数なし。
             unit_from_code(unsafe { fandhe_ios_alarm_cancel() })
         }
 
         #[allow(unsafe_code)]
-        fn state(&self) -> Result<AlarmState, DeviceError> {
+        fn state(&self) -> Result<AlarmState, AlarmError> {
             let _g = self.guard();
             let mut out_ms = 0u64;
             // SAFETY: `out_ms` は呼び出しの間生存する 1 要素の書き込み先で、Swift は呼び出しの間だけ
@@ -130,7 +130,7 @@ pub(crate) fn implementation() -> Arc<dyn Alarm> {
     }
     #[cfg(not(target_os = "ios"))]
     {
-        Arc::new(fandhe_device::alarm::UnsupportedAlarm)
+        Arc::new(crate::contract::UnsupportedAlarm)
     }
 }
 
@@ -142,15 +142,12 @@ mod tests {
     #[cfg(not(target_os = "ios"))]
     fn host_is_not_a_fake_success() {
         let a = implementation();
-        assert!(matches!(
-            a.schedule(u64::MAX),
-            Err(DeviceError::Unsupported(_))
-        ));
-        assert!(matches!(a.cancel(), Err(DeviceError::Unsupported(_))));
-        assert!(matches!(a.state(), Err(DeviceError::Unsupported(_))));
+        assert!(matches!(a.schedule(u64::MAX), Err(AlarmError::Unsupported)));
+        assert!(matches!(a.cancel(), Err(AlarmError::Unsupported)));
+        assert!(matches!(a.state(), Err(AlarmError::Unsupported)));
     }
 
-    /// `DeviceError` は `PartialEq` を持たないので Debug 表現で比べる。
+    /// `AlarmError` は `PartialEq` を持たないので Debug 表現で比べる。
     fn dbg<T: std::fmt::Debug>(v: T) -> String {
         format!("{v:?}")
     }
@@ -159,8 +156,8 @@ mod tests {
     fn unit_codes_map_without_collapsing() {
         assert!(unit_from_code(0).is_ok());
         let cases = [
-            (1, "Unsupported(\"alarm\")"),
-            (2, "PermissionDenied(\"alarm\")"),
+            (1, "Unsupported"),
+            (2, "PermissionDenied"),
             (3, "Internal(\"alarm limit\")"),
             (4, "Internal(\"alarm add\")"),
             (5, "Internal(\"alarm add\")"),
@@ -191,11 +188,11 @@ mod tests {
         ));
         assert!(matches!(
             state_from_code(2, 0),
-            Err(DeviceError::PermissionDenied(_))
+            Err(AlarmError::PermissionDenied)
         ));
         assert!(matches!(
             state_from_code(-1, 0),
-            Err(DeviceError::Internal("alarm"))
+            Err(AlarmError::Internal("alarm"))
         ));
     }
 }

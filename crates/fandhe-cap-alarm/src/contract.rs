@@ -43,7 +43,7 @@
 //!   アプリを開くこと
 //!   （`AGENTS.md`「端末機能の並行性は守備範囲で判定する」）
 
-use crate::DeviceError;
+use crate::error::AlarmError;
 
 /// 予約状態（[`Alarm::state`] の戻り値）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,11 +60,11 @@ pub enum AlarmState {
 /// アラームの契約（モジュール doc の「契約」節参照）。
 pub trait Alarm: Send + Sync {
     /// 壁時計の絶対時刻（UNIX ms）で 1 件予約する。既存の予約は置き換える。
-    fn schedule(&self, fire_at_unix_ms: u64) -> Result<(), DeviceError>;
+    fn schedule(&self, fire_at_unix_ms: u64) -> Result<(), AlarmError>;
     /// 予約を取り消す。予約が無くても `Ok(())`（べき等）。
-    fn cancel(&self) -> Result<(), DeviceError>;
+    fn cancel(&self) -> Result<(), AlarmError>;
     /// OS の予約一覧を読み、このアプリの予約が残っているかを返す。
-    fn state(&self) -> Result<AlarmState, DeviceError>;
+    fn state(&self) -> Result<AlarmState, AlarmError>;
 }
 
 /// 非対応 OS 用（初期化失敗時のフォールバックも含む）。常に
@@ -72,16 +72,16 @@ pub trait Alarm: Send + Sync {
 pub struct UnsupportedAlarm;
 
 impl Alarm for UnsupportedAlarm {
-    fn schedule(&self, _fire_at_unix_ms: u64) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("alarm"))
+    fn schedule(&self, _fire_at_unix_ms: u64) -> Result<(), AlarmError> {
+        Err(AlarmError::Unsupported)
     }
 
-    fn cancel(&self) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("alarm"))
+    fn cancel(&self) -> Result<(), AlarmError> {
+        Err(AlarmError::Unsupported)
     }
 
-    fn state(&self) -> Result<AlarmState, DeviceError> {
-        Err(DeviceError::Unsupported("alarm"))
+    fn state(&self) -> Result<AlarmState, AlarmError> {
+        Err(AlarmError::Unsupported)
     }
 }
 
@@ -92,11 +92,8 @@ mod tests {
     #[test]
     fn unsupported_never_reports_success() {
         let a = UnsupportedAlarm;
-        assert!(matches!(
-            a.schedule(1),
-            Err(DeviceError::Unsupported("alarm"))
-        ));
-        assert!(matches!(a.cancel(), Err(DeviceError::Unsupported("alarm"))));
-        assert!(matches!(a.state(), Err(DeviceError::Unsupported("alarm"))));
+        assert!(matches!(a.schedule(1), Err(AlarmError::Unsupported)));
+        assert!(matches!(a.cancel(), Err(AlarmError::Unsupported)));
+        assert!(matches!(a.state(), Err(AlarmError::Unsupported)));
     }
 }

@@ -1,6 +1,6 @@
 //! Phase 11（親 #140、Issue #721）型サンプル「アラーム・正確な時刻の予約」の
 //! effect ドライバ。`fandhe_core::screens::alarm_show`（端末依存ゼロ）のボタン要求を
-//! 観測して `fandhe_device::alarm::Alarm` を呼び、`CompletionSender` 経由で結果を
+//! 観測して `crate::contract::Alarm` を呼び、`CompletionSender` 経由で結果を
 //! 返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)`
 //! として呼ばれる契約、`device/background_task.rs` と同型）。
 //!
@@ -27,23 +27,23 @@
 //!
 //! # 実装
 //!
-//! Windows は [`super::windows_alarm::WindowsAlarm`]。iOS は `ios_alarm`（AlarmKit を呼ぶ
-//! Swift の C ABI ラッパー）、Android は `android_alarm`（同、#1078）。それ以外
-//! （macOS・Linux 等）は [`fandhe_device::alarm::UnsupportedAlarm`] 固定で、`Unsupported` は固定文言に
+//! Windows は `crate::windows::WindowsAlarm`。iOS は `ios`（AlarmKit を呼ぶ
+//! Swift の C ABI ラッパー）、Android は `android`（同、#1078）。それ以外
+//! （macOS・Linux 等）は [`crate::contract::UnsupportedAlarm`] 固定で、`Unsupported` は固定文言に
 //! 畳む（[`to_message`]）。
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use crate::contract::{Alarm, AlarmState};
+use crate::error::AlarmError;
 use fandhe_core::screens::alarm_show::{
-    apply_check_failure, apply_snapshot, finish_action, mark_in_flight, take_request, Action,
-    AlarmShowState, Phase, ScheduleView, PERMISSION_DENIED_TEXT,
+    Action, AlarmShowState, PERMISSION_DENIED_TEXT, Phase, ScheduleView, apply_check_failure,
+    apply_snapshot, finish_action, mark_in_flight, take_request,
 };
-use fandhe_device::alarm::{Alarm, AlarmState};
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 画面の表示中、OS の予約状態を確かめ直す間隔。
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
@@ -51,14 +51,14 @@ const POLL_INTERVAL: Duration = Duration::from_secs(1);
 /// 「1 分後」の長さ。
 const DELAY: Duration = Duration::from_secs(60);
 
-/// `DeviceError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
+/// `AlarmError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
 /// それ以外は `Display` の文言のみを転送する（内部構造・パスは漏らさない、
 /// security.md A09）。
-fn to_message(e: DeviceError) -> String {
+fn to_message(e: AlarmError) -> String {
     match e {
-        DeviceError::Unsupported(_) => "この環境ではアラームを予約できません".to_string(),
+        AlarmError::Unsupported => "この環境ではアラームを予約できません".to_string(),
         // OS のエラー文は出さず固定文言へ畳む（security.md A09）。
-        DeviceError::PermissionDenied(_) => PERMISSION_DENIED_TEXT.to_string(),
+        AlarmError::PermissionDenied => PERMISSION_DENIED_TEXT.to_string(),
         other => other.to_string(),
     }
 }
@@ -75,13 +75,13 @@ enum Observation {
     Unavailable,
 }
 
-fn to_observation(state: Result<AlarmState, DeviceError>) -> Observation {
+fn to_observation(state: Result<AlarmState, AlarmError>) -> Observation {
     match state {
         Ok(AlarmState::NotScheduled) => Observation::View(ScheduleView::NotScheduled),
         Ok(AlarmState::Scheduled { fire_at_unix_ms }) => {
             Observation::View(ScheduleView::Scheduled { fire_at_unix_ms })
         }
-        Err(DeviceError::Unsupported(_)) => Observation::Unavailable,
+        Err(AlarmError::Unsupported) => Observation::Unavailable,
         // OS のエラー文は画面へ出さない（固定文言のみ）。
         Err(_) => Observation::Failed,
     }
@@ -92,46 +92,46 @@ fn to_observation(state: Result<AlarmState, DeviceError>) -> Observation {
 /// OS を呼ぶ前に `validate_fire_at(fire_at, now_unix_ms()?)` で検査する共通の道具。
 // 他 OS の実体（#1077・#1078）が使うまで、ホストのビルドでは未使用になる。
 #[allow(dead_code)]
-pub(super) fn validate_fire_at(fire_at_unix_ms: u64, now_unix_ms: u64) -> Result<(), DeviceError> {
+pub(crate) fn validate_fire_at(fire_at_unix_ms: u64, now_unix_ms: u64) -> Result<(), AlarmError> {
     if fire_at_unix_ms <= now_unix_ms {
-        Err(DeviceError::InvalidInput("alarm time"))
+        Err(AlarmError::InvalidInput("alarm time"))
     } else {
         Ok(())
     }
 }
 
 /// 現在の壁時計（UNIX ms）。エポックより前・範囲外は `Internal`。
-pub(super) fn now_unix_ms() -> Result<u64, DeviceError> {
+pub(crate) fn now_unix_ms() -> Result<u64, AlarmError> {
     let d = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|_| DeviceError::Internal("alarm clock"))?;
-    u64::try_from(d.as_millis()).map_err(|_| DeviceError::Internal("alarm clock"))
+        .map_err(|_| AlarmError::Internal("alarm clock"))?;
+    u64::try_from(d.as_millis()).map_err(|_| AlarmError::Internal("alarm clock"))
 }
 
 /// 現在のプラットフォームに応じた `Alarm` 実装を返す。Windows は
-/// [`super::windows_alarm::WindowsAlarm`]、iOS・Android は OS 別モジュール
-/// （`ios_alarm`・`android_alarm`）、それ以外は `UnsupportedAlarm`
+/// `crate::windows::WindowsAlarm`、iOS・Android は OS 別モジュール
+/// （`ios`・`android`）、それ以外は `UnsupportedAlarm`
 /// （ダミーの成功実装へは倒さない。`device-bridge-contracts.md`「6. 嘘の成功」）。
-fn implementation() -> Arc<dyn Alarm> {
+pub fn platform_alarm() -> Arc<dyn Alarm> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn Alarm>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "windows")]
             {
-                Arc::new(super::windows_alarm::WindowsAlarm::new()) as Arc<dyn Alarm>
+                Arc::new(crate::windows::WindowsAlarm::new()) as Arc<dyn Alarm>
             }
             #[cfg(target_os = "ios")]
             {
-                super::ios_alarm::implementation()
+                crate::ios::implementation()
             }
             #[cfg(target_os = "android")]
             {
-                super::android_alarm::implementation()
+                crate::android::implementation()
             }
             #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
             {
-                Arc::new(fandhe_device::alarm::UnsupportedAlarm) as Arc<dyn Alarm>
+                Arc::new(crate::contract::UnsupportedAlarm) as Arc<dyn Alarm>
             }
         })
         .clone()
@@ -143,7 +143,7 @@ fn drive_request(
     state: &AlarmShowState,
     sender: &CompletionSender<AlarmShowState>,
     alarm: Arc<dyn Alarm>,
-    now: fn() -> Result<u64, DeviceError>,
+    now: fn() -> Result<u64, AlarmError>,
 ) -> bool {
     let Some(request) = take_request(state) else {
         return false;
@@ -156,7 +156,7 @@ fn drive_request(
     let action = request.action;
     let sender = sender.clone();
     std::thread::spawn(move || {
-        let result: Result<Option<u64>, DeviceError> = match action {
+        let result: Result<Option<u64>, AlarmError> = match action {
             Action::Schedule => now().and_then(|n| {
                 let fire_at = n.saturating_add(DELAY.as_millis() as u64);
                 alarm.schedule(fire_at).map(|()| Some(fire_at))
@@ -291,7 +291,7 @@ pub fn alarm_show_effect(state: &AlarmShowState, sender: &CompletionSender<Alarm
     drive_effect(
         state,
         sender,
-        implementation(),
+        platform_alarm(),
         now_unix_ms,
         poll_due,
         poll_in_flight(),
@@ -307,7 +307,7 @@ fn drive_effect(
     state: &AlarmShowState,
     sender: &CompletionSender<AlarmShowState>,
     alarm: Arc<dyn Alarm>,
-    now: fn() -> Result<u64, DeviceError>,
+    now: fn() -> Result<u64, AlarmError>,
     due: fn() -> bool,
     in_flight: Arc<AtomicBool>,
     unavailable: Arc<AtomicBool>,
@@ -328,20 +328,35 @@ fn drive_effect(
 mod tests {
     use super::*;
     use fandhe_core::screens::alarm_show::{
-        cancel, error_text, schedule, status_text, CANCELLED_STATUS, FAILED_PREFIX,
-        SCHEDULED_STATUS,
+        CANCELLED_STATUS, FAILED_PREFIX, SCHEDULED_STATUS, cancel, error_text, schedule,
+        status_text,
     };
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
+    /// `wake_after` で予約された遅延を記録する waker。
+    struct RecordingWaker(Arc<Mutex<Vec<Duration>>>);
+    impl fandhe_runtime::RepaintWaker for RecordingWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, delay: Duration) {
+            self.0.lock().unwrap().push(delay);
+        }
+    }
 
     fn sender_with_channel() -> (
         CompletionSender<AlarmShowState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<AlarmShowState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<AlarmShowState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
-    /// 呼び出しごとの結果を固定する偽実装（`DeviceError` は `Clone` ではないため
+    /// 呼び出しごとの結果を固定する偽実装（`AlarmError` は `Clone` ではないため
     /// 固定バリアントから都度組み立てる）。
     #[derive(Clone, Copy)]
     enum Outcome {
@@ -352,12 +367,12 @@ mod tests {
     }
 
     impl Outcome {
-        fn into_result(self) -> Result<(), DeviceError> {
+        fn into_result(self) -> Result<(), AlarmError> {
             match self {
                 Outcome::Ok => Ok(()),
-                Outcome::Unsupported => Err(DeviceError::Unsupported("alarm")),
-                Outcome::PermissionDenied => Err(DeviceError::PermissionDenied("alarm")),
-                Outcome::InvalidInput => Err(DeviceError::InvalidInput("alarm time")),
+                Outcome::Unsupported => Err(AlarmError::Unsupported),
+                Outcome::PermissionDenied => Err(AlarmError::PermissionDenied),
+                Outcome::InvalidInput => Err(AlarmError::InvalidInput("alarm time")),
             }
         }
     }
@@ -369,14 +384,14 @@ mod tests {
     }
 
     impl Alarm for Fake {
-        fn schedule(&self, _fire_at_unix_ms: u64) -> Result<(), DeviceError> {
+        fn schedule(&self, _fire_at_unix_ms: u64) -> Result<(), AlarmError> {
             self.schedule.into_result()
         }
-        fn cancel(&self) -> Result<(), DeviceError> {
+        fn cancel(&self) -> Result<(), AlarmError> {
             self.cancel.into_result()
         }
-        fn state(&self) -> Result<AlarmState, DeviceError> {
-            self.state.ok_or(DeviceError::Internal("alarm list"))
+        fn state(&self) -> Result<AlarmState, AlarmError> {
+            self.state.ok_or(AlarmError::Internal("alarm list"))
         }
     }
 
@@ -388,7 +403,7 @@ mod tests {
         })
     }
 
-    fn fixed_now() -> Result<u64, DeviceError> {
+    fn fixed_now() -> Result<u64, AlarmError> {
         Ok(1_700_000_000_000)
     }
 
@@ -429,7 +444,7 @@ mod tests {
 
     #[test]
     fn unsupported_os_never_reports_success() {
-        let state = run_schedule(Arc::new(fandhe_device::alarm::UnsupportedAlarm));
+        let state = run_schedule(Arc::new(crate::contract::UnsupportedAlarm));
         assert_eq!(status_text(&state), "");
         assert_eq!(
             error_text(&state),
@@ -455,7 +470,7 @@ mod tests {
     #[test]
     fn permission_denied_message_is_fixed() {
         assert_eq!(
-            to_message(DeviceError::PermissionDenied("alarm")),
+            to_message(AlarmError::PermissionDenied),
             PERMISSION_DENIED_TEXT
         );
     }
@@ -464,11 +479,11 @@ mod tests {
     fn past_and_present_times_are_rejected() {
         assert!(matches!(
             validate_fire_at(100, 200),
-            Err(DeviceError::InvalidInput("alarm time"))
+            Err(AlarmError::InvalidInput("alarm time"))
         ));
         assert!(matches!(
             validate_fire_at(200, 200),
-            Err(DeviceError::InvalidInput("alarm time"))
+            Err(AlarmError::InvalidInput("alarm time"))
         ));
         assert!(validate_fire_at(201, 200).is_ok());
     }
@@ -477,8 +492,8 @@ mod tests {
     #[test]
     fn fallback_implementation_is_unsupported() {
         assert!(matches!(
-            implementation().state(),
-            Err(DeviceError::Unsupported(_))
+            platform_alarm().state(),
+            Err(AlarmError::Unsupported)
         ));
     }
 
@@ -494,8 +509,8 @@ mod tests {
 
     #[test]
     fn clock_failure_is_a_failure_not_a_schedule() {
-        fn broken_now() -> Result<u64, DeviceError> {
-            Err(DeviceError::Internal("alarm clock"))
+        fn broken_now() -> Result<u64, AlarmError> {
+            Err(AlarmError::Internal("alarm clock"))
         }
         let (sender, rx) = sender_with_channel();
         let mut state = AlarmShowState::default();
@@ -674,7 +689,7 @@ mod tests {
 
     type RecordingSender = (
         CompletionSender<AlarmShowState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<AlarmShowState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<AlarmShowState>>,
         Arc<Mutex<Vec<Duration>>>,
     );
 
@@ -690,12 +705,10 @@ mod tests {
 
     /// `request_repaint_after` で予約された遅延を記録するコンテキスト付き sender。
     fn sender_recording_delays() -> RecordingSender {
-        let ctx = egui::Context::default();
         let delays = Arc::new(Mutex::new(Vec::new()));
-        let rec = delays.clone();
-        ctx.set_request_repaint_callback(move |info| rec.lock().unwrap().push(info.delay));
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx, delays)
+        let waker = RecordingWaker(Arc::clone(&delays));
+        (CompletionSender::new(tx, Arc::new(waker)), rx, delays)
     }
 
     #[test]
@@ -766,7 +779,7 @@ mod tests {
         drive_poll(
             &state,
             &sender,
-            Arc::new(fandhe_device::alarm::UnsupportedAlarm),
+            Arc::new(crate::contract::UnsupportedAlarm),
             flag.clone(),
             unavailable.clone(),
         );
@@ -817,11 +830,11 @@ mod tests {
     #[test]
     fn read_failure_is_failed_not_unknown_or_scheduled() {
         assert_eq!(
-            to_observation(Err(DeviceError::Internal("alarm list"))),
+            to_observation(Err(AlarmError::Internal("alarm list"))),
             Observation::Failed
         );
         assert_eq!(
-            to_observation(Err(DeviceError::Unsupported("alarm"))),
+            to_observation(Err(AlarmError::Unsupported)),
             Observation::Unavailable
         );
     }
@@ -917,7 +930,7 @@ mod tests {
     #[test]
     fn unsupported_state_does_not_poll_forever() {
         let (sender, rx) = sender_with_channel();
-        let alarm = fandhe_device::alarm::UnsupportedAlarm;
+        let alarm = crate::contract::UnsupportedAlarm;
         assert!(!poll_once(&alarm, ScheduleView::Unknown, false, 0, &sender));
         assert!(rx.try_recv().is_err());
     }
@@ -925,7 +938,7 @@ mod tests {
     #[test]
     fn unsupported_message_is_fixed() {
         assert_eq!(
-            to_message(DeviceError::Unsupported("alarm")),
+            to_message(AlarmError::Unsupported),
             "この環境ではアラームを予約できません"
         );
         let _ = Outcome::Unsupported.into_result();

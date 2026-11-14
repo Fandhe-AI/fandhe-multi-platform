@@ -104,7 +104,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "alarm_show" => fandhe_core::screens::alarm_show::current_screen,
-    fandhe_egui_proxy::device::alarm::alarm_show_effect,
+    fandhe_cap_alarm::alarm_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "launch_at_login_show" => fandhe_core::screens::launch_at_login_show::current_screen,
@@ -216,7 +216,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "notification_send" => fandhe_core::screens::notification_send::current_screen,
-    fandhe_egui_proxy::device::notification::notification_send_effect,
+    fandhe_cap_notification::notification_send_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "drag_drop" => fandhe_core::screens::drag_drop::current_screen,

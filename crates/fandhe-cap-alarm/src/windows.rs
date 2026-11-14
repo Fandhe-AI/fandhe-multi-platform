@@ -1,13 +1,13 @@
 //! Windows 向けアラーム実装（Issue #721、親 #140）。`device/alarm.rs` の Windows
-//! 経路から呼ばれ、`fandhe_device::alarm::Alarm` を WinRT
+//! 経路から呼ばれ、`crate::contract::Alarm` を WinRT
 //! `ScheduledToastNotification` + `ToastNotifier::AddToSchedule` で実装する。
 //! `scenario="alarm"` のトーストは閉じるまで画面に残り、アラーム音を繰り返す
 //! （公式）。予約したトーストはアプリが動いていなくても OS が時刻に出す。
 //!
 //! # 送り手（AUMID）
 //!
-//! 通知機能（`windows_notification.rs`）が登録するスタートメニューのショートカット
-//! の AUMID を使い回す（[`super::windows_notification::ensure_app_aumid`]）。他アプリの
+//! 通知機能（`fandhe-cap-notification` の `windows.rs`）が登録するスタートメニューのショートカット
+//! の AUMID を使い回す（`fandhe_cap_notification::ensure_app_aumid`）。他アプリの
 //! AUMID は借りず、新しい権限・manifest・package identity も足さない。
 //!
 //! # 嘘の成功の防止
@@ -21,7 +21,7 @@
 //!
 //! # 守る範囲・守らない範囲
 //!
-//! trait doc（`fandhe_device::alarm`）の契約に従う。実装固有の点は次のとおり。
+//! trait doc（`crate::contract`）の契約に従う。実装固有の点は次のとおり。
 //! XML と予約オブジェクトを作り切ってから古い予約を消して新しい予約を足す。
 //! 失敗で古い予約が失われるのは、古い予約の削除後の `AddToSchedule` の失敗だけで、
 //! その場合は戻らず「予約なし」になる。schedule・cancel・state はプロセス内で `Mutex` により直列化し、
@@ -31,7 +31,7 @@
 //! 検証できるよう `cfg(target_os = "windows")` を付けない。WinRT 呼び出しだけを
 //! [`imp`] に閉じる。`unsafe` は使わない（safe な WinRT API と既存の `ComInit` のみ）。
 
-use fandhe_device::DeviceError;
+use crate::error::AlarmError;
 
 /// 本アプリの予約を識別する Id（`ScheduledToastNotification::SetId` は 16 文字以下）。
 const ALARM_ID: &str = "fandhe-alarm";
@@ -59,12 +59,12 @@ const TICKS_PER_MS: i64 = 10_000;
 
 /// UNIX ms を WinRT `DateTime.UniversalTime`（1601 年基準の 100ns 刻み）へ変換する。
 /// オーバーフローは `InvalidInput`（範囲の検証は変換前に済ませず、変換自体で行う）。
-pub(crate) fn unix_ms_to_filetime_ticks(ms: u64) -> Result<i64, DeviceError> {
+pub(crate) fn unix_ms_to_filetime_ticks(ms: u64) -> Result<i64, AlarmError> {
     i64::try_from(ms)
         .ok()
         .and_then(|v| v.checked_mul(TICKS_PER_MS))
         .and_then(|v| v.checked_add(UNIX_EPOCH_AS_FILETIME_TICKS))
-        .ok_or(DeviceError::InvalidInput("alarm time"))
+        .ok_or(AlarmError::InvalidInput("alarm time"))
 }
 
 /// [`unix_ms_to_filetime_ticks`] の逆変換。UNIX エポックより前は `None`。
@@ -89,23 +89,23 @@ pub(super) use imp::WindowsAlarm;
 mod imp {
     use std::sync::Mutex;
 
-    use fandhe_device::alarm::{Alarm, AlarmState};
-    use fandhe_device::DeviceError;
-    use windows::core::HSTRING;
+    use crate::contract::{Alarm, AlarmState};
+    use crate::error::AlarmError;
     use windows::Data::Xml::Dom::XmlDocument;
     use windows::Foundation::DateTime;
     use windows::UI::Notifications::{
         ScheduledToastNotification, ToastNotificationManager, ToastNotifier,
     };
+    use windows::core::HSTRING;
 
     use fandhe_platform_windows::ComInit;
 
-    use super::super::alarm::{now_unix_ms, validate_fire_at};
-    use super::super::windows_notification::{ensure_app_aumid, setting_result_for, APP_AUMID};
     use super::{
-        filetime_ticks_to_unix_ms, is_alarm_id, unix_ms_to_filetime_ticks, ALARM_ID, TOAST_BODY,
-        TOAST_TITLE, TOAST_XML,
+        ALARM_ID, TOAST_BODY, TOAST_TITLE, TOAST_XML, filetime_ticks_to_unix_ms, is_alarm_id,
+        unix_ms_to_filetime_ticks,
     };
+    use crate::{now_unix_ms, validate_fire_at};
+    use fandhe_cap_notification::{APP_AUMID, ensure_app_aumid, setting_result_for};
 
     /// WinRT による `Alarm` 実装。`lock` は schedule・cancel・state を直列化する。
     pub(crate) struct WindowsAlarm {
@@ -124,19 +124,19 @@ mod imp {
     /// 取り消しはこれだけで足り、通知が後から無効化されても予約を消せる・読める
     /// ようにする。AUMID の登録（ショートカット作成）という副作用も起こさない。
     /// 呼び出し元が `ComInit` 済みのスレッド上で呼ぶ契約。
-    fn open_list_notifier() -> Result<ToastNotifier, DeviceError> {
+    fn open_list_notifier() -> Result<ToastNotifier, AlarmError> {
         ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(APP_AUMID))
-            .map_err(|_| DeviceError::Internal("alarm notifier"))
+            .map_err(|_| AlarmError::Internal("alarm notifier"))
     }
 
     /// AUMID を登録し、通知設定が有効であることを確かめた送り手を作る。予約
     /// （schedule）だけが使う。呼び出し元が `ComInit` 済みのスレッド上で呼ぶ契約。
-    fn open_notifier() -> Result<ToastNotifier, DeviceError> {
+    fn open_notifier() -> Result<ToastNotifier, AlarmError> {
         ensure_app_aumid("alarm")?;
         let notifier = open_list_notifier()?;
         let setting = notifier
             .Setting()
-            .map_err(|_| DeviceError::Internal("alarm setting"))?;
+            .map_err(|_| AlarmError::Internal("alarm setting"))?;
         setting_result_for(setting.0, "alarm", "toast setting")?;
         Ok(notifier)
     }
@@ -144,8 +144,8 @@ mod imp {
     /// 予約一覧のうち本アプリの予約を集める。
     fn own_entries(
         notifier: &ToastNotifier,
-    ) -> Result<Vec<ScheduledToastNotification>, DeviceError> {
-        const ERR: DeviceError = DeviceError::Internal("alarm list");
+    ) -> Result<Vec<ScheduledToastNotification>, AlarmError> {
+        const ERR: AlarmError = AlarmError::Internal("alarm list");
         let list = notifier.GetScheduledToastNotifications().map_err(|_| ERR)?;
         let size = list.Size().map_err(|_| ERR)?;
         let mut out = Vec::new();
@@ -160,8 +160,8 @@ mod imp {
     }
 
     /// 固定 XML に表題・本文を `CreateTextNode` で差し込む。
-    fn build_xml() -> Result<XmlDocument, DeviceError> {
-        const ERR: DeviceError = DeviceError::Internal("alarm xml");
+    fn build_xml() -> Result<XmlDocument, AlarmError> {
+        const ERR: AlarmError = AlarmError::Internal("alarm xml");
         let xml = XmlDocument::new().map_err(|_| ERR)?;
         xml.LoadXml(&HSTRING::from(TOAST_XML)).map_err(|_| ERR)?;
         let texts = xml
@@ -176,14 +176,14 @@ mod imp {
     }
 
     impl Alarm for WindowsAlarm {
-        fn schedule(&self, fire_at_unix_ms: u64) -> Result<(), DeviceError> {
+        fn schedule(&self, fire_at_unix_ms: u64) -> Result<(), AlarmError> {
             let _guard = self
                 .lock
                 .lock()
-                .map_err(|_| DeviceError::Internal("alarm lock"))?;
+                .map_err(|_| AlarmError::Internal("alarm lock"))?;
             validate_fire_at(fire_at_unix_ms, now_unix_ms()?)?;
             let ticks = unix_ms_to_filetime_ticks(fire_at_unix_ms)?;
-            let _com = ComInit::new().map_err(|_| DeviceError::Internal("alarm com init"))?;
+            let _com = ComInit::new().map_err(|_| AlarmError::Internal("alarm com init"))?;
             let notifier = open_notifier()?;
 
             // XML と予約オブジェクトは古い予約を消す前に作り切る。以降で失敗しうるのは
@@ -195,50 +195,50 @@ mod imp {
                     UniversalTime: ticks,
                 },
             )
-            .map_err(|_| DeviceError::Internal("alarm create"))?;
+            .map_err(|_| AlarmError::Internal("alarm create"))?;
             toast
                 .SetId(&HSTRING::from(ALARM_ID))
-                .map_err(|_| DeviceError::Internal("alarm create"))?;
+                .map_err(|_| AlarmError::Internal("alarm create"))?;
 
             // 置き換え: 既存の予約を先に全部消す。以降で失敗しても古い予約は
             // 戻さない（trait doc の契約）。
             for old in own_entries(&notifier)? {
                 notifier
                     .RemoveFromSchedule(&old)
-                    .map_err(|_| DeviceError::Internal("alarm remove"))?;
+                    .map_err(|_| AlarmError::Internal("alarm remove"))?;
             }
             notifier
                 .AddToSchedule(&toast)
-                .map_err(|_| DeviceError::Internal("alarm add"))?;
+                .map_err(|_| AlarmError::Internal("alarm add"))?;
 
             // OS が予約を黙って捨てていないかを読み直して確かめる（嘘の成功の禁止）。
             if own_entries(&notifier)?.is_empty() {
-                return Err(DeviceError::Unsupported("alarm"));
+                return Err(AlarmError::Unsupported);
             }
             Ok(())
         }
 
-        fn cancel(&self) -> Result<(), DeviceError> {
+        fn cancel(&self) -> Result<(), AlarmError> {
             let _guard = self
                 .lock
                 .lock()
-                .map_err(|_| DeviceError::Internal("alarm lock"))?;
-            let _com = ComInit::new().map_err(|_| DeviceError::Internal("alarm com init"))?;
+                .map_err(|_| AlarmError::Internal("alarm lock"))?;
+            let _com = ComInit::new().map_err(|_| AlarmError::Internal("alarm com init"))?;
             let notifier = open_list_notifier()?;
             for old in own_entries(&notifier)? {
                 notifier
                     .RemoveFromSchedule(&old)
-                    .map_err(|_| DeviceError::Internal("alarm remove"))?;
+                    .map_err(|_| AlarmError::Internal("alarm remove"))?;
             }
             Ok(())
         }
 
-        fn state(&self) -> Result<AlarmState, DeviceError> {
+        fn state(&self) -> Result<AlarmState, AlarmError> {
             let _guard = self
                 .lock
                 .lock()
-                .map_err(|_| DeviceError::Internal("alarm lock"))?;
-            let _com = ComInit::new().map_err(|_| DeviceError::Internal("alarm com init"))?;
+                .map_err(|_| AlarmError::Internal("alarm lock"))?;
+            let _com = ComInit::new().map_err(|_| AlarmError::Internal("alarm com init"))?;
             let notifier = open_list_notifier()?;
             let entries = own_entries(&notifier)?;
             let Some(first) = entries.first() else {
@@ -246,9 +246,9 @@ mod imp {
             };
             let delivery = first
                 .DeliveryTime()
-                .map_err(|_| DeviceError::Internal("alarm list"))?;
+                .map_err(|_| AlarmError::Internal("alarm list"))?;
             let fire_at_unix_ms = filetime_ticks_to_unix_ms(delivery.UniversalTime)
-                .ok_or(DeviceError::Internal("alarm list"))?;
+                .ok_or(AlarmError::Internal("alarm list"))?;
             Ok(AlarmState::Scheduled { fire_at_unix_ms })
         }
     }
@@ -288,11 +288,11 @@ mod tests {
     fn overflow_is_invalid_input() {
         assert!(matches!(
             unix_ms_to_filetime_ticks(u64::MAX),
-            Err(DeviceError::InvalidInput("alarm time"))
+            Err(AlarmError::InvalidInput("alarm time"))
         ));
         assert!(matches!(
             unix_ms_to_filetime_ticks(i64::MAX as u64),
-            Err(DeviceError::InvalidInput("alarm time"))
+            Err(AlarmError::InvalidInput("alarm time"))
         ));
     }
 

@@ -17,16 +17,8 @@
 //! [`http_fetch`] / [`tilt`] サブモジュールに置く（カメラ撮影は機能 crate `fandhe-cap-camera-capture`、#1170）
 //! （`registry.rs` の `effect` 区画から配線される）。
 
-/// Phase 11 の拡充ループ（親 #140、Issue #721）: アラーム・正確な時刻の予約の effect
-/// ドライバ（Windows 実装、iOS は AlarmKit、Android は #1078 が埋めるスタブ、他 OS は `Unsupported` 固定）。
-pub mod alarm;
 #[cfg(target_os = "android")]
 pub mod android;
-/// Issue #1076: Android 向けアラーム実装のスタブ（実装は #1078）。`device/alarm.rs` の Android 経路から呼ばれる。
-/// #1078 が cfg を変えずに済むよう `any(android, test)`。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_alarm;
 /// Issue #426: Android 向けアプリショートカット実装（`ShortcutManager` の動的ショートカット）。
 /// `device/app_shortcuts.rs` の android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -350,11 +342,6 @@ pub mod health_data;
 pub mod image_recognition;
 #[cfg(target_os = "ios")]
 pub mod ios;
-/// Issue #1077: iOS 向けアラーム実装（AlarmKit を呼ぶ Swift の C ABI ラッパー）。`device/alarm.rs` の iOS 経路から呼ばれる。
-/// ホストのテストでも戻りコード写像を検証できるよう `any(ios, test)`。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_alarm;
 /// Issue #425: iOS 向けアプリショートカット実装（Info.plist の静的宣言。`Declared` を返す）。
 /// `device/app_shortcuts.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -432,10 +419,6 @@ pub mod ios_music_library;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_network_status;
-/// Issue #1005: iOS 向けローカル通知実装（`ios/fandhe_ios_notification.m` を呼ぶ
-/// C ABI ラッパー）。`device/notification.rs` の iOS 経路から呼ばれる。
-#[cfg(target_os = "ios")]
-pub mod ios_notification;
 /// Issue #356: iOS 向けペン・筆圧入力実装（`ios/fandhe_ios_pen_stylus.m` の観測専用
 /// `UIGestureRecognizer` が値を置く C ABI ラッパー）。`device/pen_stylus.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -545,9 +528,6 @@ pub mod music_library;
 /// （Windows / macOS / iOS 実装、Android は #1284、他 OS は
 /// `UnsupportedNetworkStatus` 固定。Web は `fandhe-web-dom`）。
 pub mod network_status;
-/// Phase 11 の拡充ループ（親 #1003、Issue #1004/#1005）: ローカル通知の effect
-/// ドライバ（macOS/Windows/iOS 実装、Android は #1006）。
-pub mod notification;
 /// Phase 11 の拡充ループ（親 #114、Issue #541・#1130）: 決済シートの effect ドライバ（Android は
 /// pull 型 bridge、他のネイティブは `UnsupportedPaymentSheet` 固定の同期経路。dispatch は最終形。
 /// Web は `fandhe-web-dom`）。
@@ -622,14 +602,6 @@ pub mod web_auth_session;
 /// Phase 11 の拡充ループ（親 #127、Issue #636）: ウィンドウ管理（位置・サイズ・最前面）の effect ドライバ
 /// （macOS 実装、Windows は #637、他 OS は `UnsupportedWindowManager` 固定。Web は `fandhe-web-dom`）。
 pub mod window_management;
-/// Issue #721: Windows 向けアラーム実装（`ScheduledToastNotification` +
-/// `scenario="alarm"` のトースト）。`device/alarm.rs` の Windows 経路から呼ばれる。
-/// 時刻変換・検証・XML 定数等の純関数はホストの `cargo test` から検証できるよう
-/// `cfg(target_os = "windows")` を付けず、WinRT 呼び出しだけをモジュール内の
-/// `cfg(target_os = "windows")` に閉じる。Windows 以外では利用者が無いため
-/// `dead_code` を許容する。
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_alarm;
 /// Issue #424 / #428: Windows 向けアプリショートカット実装（ジャンプリストのタスク 1 件）。
 /// `device/app_shortcuts.rs` の windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
@@ -710,10 +682,6 @@ pub mod windows_music_library;
 /// `cargo test` で検査するため cfg を付けず、WinRT 呼び出しだけをモジュール内に閉じる。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_network_status;
-/// Issue #1004: Windows 向けローカル通知実装（WinRT `ToastNotificationManager` ラッパー）。
-/// `device/notification.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_notification;
 /// Issue #359: Windows 向けペン・筆圧入力実装（`SetWindowSubclass` の観測専用サブクラスが
 /// `WM_POINTER*` から値を置く）。`device/pen_stylus.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]

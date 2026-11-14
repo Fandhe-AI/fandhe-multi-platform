@@ -1,5 +1,5 @@
 //! Android 向けアラーム（正確な時刻の予約）の実装（Issue #1078、親 #1056）。`device/alarm.rs` の
-//! Android 経路から、ワーカースレッドが操作ごとに同期で呼ぶ。契約の SSOT は `fandhe_device::alarm`。
+//! Android 経路から、ワーカースレッドが操作ごとに同期で呼ぶ。契約の SSOT は `crate::contract`。
 //!
 //! Java 側 `MainActivity.alarmSchedule(long)I` / `alarmCancel()I` / `alarmState()J` が
 //! `AlarmHelper`（`AlarmManager.setAlarmClock` + `FLAG_ONE_SHOT` の `PendingIntent`）へ委譲する。
@@ -32,49 +32,49 @@
 
 use std::sync::Arc;
 
-use fandhe_device::alarm::{Alarm, AlarmState};
-use fandhe_device::DeviceError;
+use crate::contract::{Alarm, AlarmState};
+use crate::error::AlarmError;
 
 /// 鳴る時刻（UNIX ms）を JNI の `long` へ。範囲外は入力不正（丸めない）。
-fn to_jlong(fire_at: u64) -> Result<i64, DeviceError> {
-    i64::try_from(fire_at).map_err(|_| DeviceError::InvalidInput("alarm time"))
+fn to_jlong(fire_at: u64) -> Result<i64, AlarmError> {
+    i64::try_from(fire_at).map_err(|_| AlarmError::InvalidInput("alarm time"))
 }
 
 /// `alarmSchedule` の戻りコードを契約の結果へ写す。
-fn schedule_result(code: i32) -> Result<(), DeviceError> {
+fn schedule_result(code: i32) -> Result<(), AlarmError> {
     match code {
         0 => Ok(()),
-        1 | 2 => Err(DeviceError::PermissionDenied("alarm")),
-        _ => Err(DeviceError::Internal("alarm add")),
+        1 | 2 => Err(AlarmError::PermissionDenied),
+        _ => Err(AlarmError::Internal("alarm add")),
     }
 }
 
 /// `alarmCancel` の戻りコードを契約の結果へ写す。
-fn cancel_result(code: i32) -> Result<(), DeviceError> {
+fn cancel_result(code: i32) -> Result<(), AlarmError> {
     match code {
         0 => Ok(()),
-        _ => Err(DeviceError::Internal("alarm remove")),
+        _ => Err(AlarmError::Internal("alarm remove")),
     }
 }
 
 /// `alarmState` の戻りを契約の状態へ写す。
-fn state_result(raw: i64) -> Result<AlarmState, DeviceError> {
+fn state_result(raw: i64) -> Result<AlarmState, AlarmError> {
     match raw {
         0 => Ok(AlarmState::NotScheduled),
         t if t > 0 => Ok(AlarmState::Scheduled {
             fire_at_unix_ms: t as u64,
         }),
-        _ => Err(DeviceError::Internal("alarm list")),
+        _ => Err(AlarmError::Internal("alarm list")),
     }
 }
 
 #[cfg(target_os = "android")]
 mod jni_impl {
     use super::{cancel_result, schedule_result, state_result, to_jlong};
-    use crate::device::alarm::{now_unix_ms, validate_fire_at};
-    use crate::device::android::JniCallFailed;
-    use fandhe_device::alarm::{Alarm, AlarmState};
-    use fandhe_device::DeviceError;
+    use crate::contract::{Alarm, AlarmState};
+    use crate::error::AlarmError;
+    use crate::{now_unix_ms, validate_fire_at};
+    use fandhe_platform_android::JniCallFailed;
 
     enum Call {
         Schedule(i64),
@@ -82,54 +82,55 @@ mod jni_impl {
         State,
     }
 
-    /// `MainActivity` のメソッドを 1 回呼び、戻り値を `i64` に揃えて返す（int は拡張）。
-    #[allow(unsafe_code)]
+    /// `AlarmHelper` の static メソッドを 1 回呼び、戻り値を `i64` に揃えて返す（int は拡張）。
+    /// `unsafe` は共通層 `fandhe_platform_android::with_activity_class` に閉じている。
     fn call(c: Call) -> Option<i64> {
-        let app = crate::android::android_app()?;
-        // SAFETY: `AndroidClipboard::request` と同一の根拠。`vm_as_ptr()` は android-activity が
-        // 管理する有効な `JavaVM*`、`app` は呼び出し中生存する。
-        let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-        vm.attach_current_thread(|env: &mut jni::Env| -> Result<i64, JniCallFailed> {
-            let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: 同上。未所有の JNI グローバル参照を `Cast` で包むだけで delete は試みない。
-            let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-            let ret = match c {
-                Call::Schedule(ms) => env
-                    .call_method(
-                        &activity,
-                        jni::jni_str!("alarmSchedule"),
-                        jni::jni_sig!((long) -> int),
-                        &[jni::objects::JValue::Long(ms as jni::sys::jlong)],
-                    )
-                    .and_then(|v| v.i().map(i64::from)),
-                Call::Cancel => env
-                    .call_method(
-                        &activity,
-                        jni::jni_str!("alarmCancel"),
-                        jni::jni_sig!(() -> int),
-                        &[],
-                    )
-                    .and_then(|v| v.i().map(i64::from)),
-                Call::State => env
-                    .call_method(
-                        &activity,
-                        jni::jni_str!("alarmState"),
-                        jni::jni_sig!(() -> long),
-                        &[],
-                    )
-                    .and_then(|v| v.j()),
-            };
-            match ret {
-                Ok(v) => Ok(v),
-                Err(e) => {
-                    // 例外は自動クリアされない（jni 0.22）。文言は読まない。
-                    if env.exception_check() {
-                        env.exception_clear();
+        let app = fandhe_platform_android::android_app()?;
+        fandhe_platform_android::with_activity_class(
+            &app,
+            jni::jni_str!("com.fandhe.platform.AlarmHelper"),
+            |env, activity, class| -> Result<i64, JniCallFailed> {
+                let ret = match c {
+                    Call::Schedule(ms) => env
+                        .call_static_method(
+                            class,
+                            jni::jni_str!("schedule"),
+                            jni::jni_sig!((android.app.Activity, long) -> int),
+                            &[
+                                jni::objects::JValue::Object(activity),
+                                jni::objects::JValue::Long(ms as jni::sys::jlong),
+                            ],
+                        )
+                        .and_then(|v| v.i().map(i64::from)),
+                    Call::Cancel => env
+                        .call_static_method(
+                            class,
+                            jni::jni_str!("cancel"),
+                            jni::jni_sig!((android.content.Context) -> int),
+                            &[jni::objects::JValue::Object(activity)],
+                        )
+                        .and_then(|v| v.i().map(i64::from)),
+                    Call::State => env
+                        .call_static_method(
+                            class,
+                            jni::jni_str!("state"),
+                            jni::jni_sig!((android.content.Context) -> long),
+                            &[jni::objects::JValue::Object(activity)],
+                        )
+                        .and_then(|v| v.j()),
+                };
+                match ret {
+                    Ok(v) => Ok(v),
+                    Err(e) => {
+                        // 例外は自動クリアされない（jni 0.22）。文言は読まない。
+                        if env.exception_check() {
+                            env.exception_clear();
+                        }
+                        Err(e.into())
                     }
-                    Err(e.into())
                 }
-            }
-        })
+            },
+        )
         .ok()
     }
 
@@ -137,26 +138,26 @@ mod jni_impl {
     pub(super) struct AndroidAlarm;
 
     impl Alarm for AndroidAlarm {
-        fn schedule(&self, fire_at_unix_ms: u64) -> Result<(), DeviceError> {
+        fn schedule(&self, fire_at_unix_ms: u64) -> Result<(), AlarmError> {
             validate_fire_at(fire_at_unix_ms, now_unix_ms()?)?;
             let ms = to_jlong(fire_at_unix_ms)?;
             match call(Call::Schedule(ms)) {
                 Some(code) => schedule_result(code as i32),
-                None => Err(DeviceError::Internal("alarm add")),
+                None => Err(AlarmError::Internal("alarm add")),
             }
         }
 
-        fn cancel(&self) -> Result<(), DeviceError> {
+        fn cancel(&self) -> Result<(), AlarmError> {
             match call(Call::Cancel) {
                 Some(code) => cancel_result(code as i32),
-                None => Err(DeviceError::Internal("alarm remove")),
+                None => Err(AlarmError::Internal("alarm remove")),
             }
         }
 
-        fn state(&self) -> Result<AlarmState, DeviceError> {
+        fn state(&self) -> Result<AlarmState, AlarmError> {
             match call(Call::State) {
                 Some(raw) => state_result(raw),
-                None => Err(DeviceError::Internal("alarm list")),
+                None => Err(AlarmError::Internal("alarm list")),
             }
         }
     }
@@ -171,7 +172,7 @@ pub(crate) fn implementation() -> Arc<dyn Alarm> {
 /// ホスト（`cfg(test)`）ではビルド確認用に `Unsupported` を返す（Android ビルドでは使われない）。
 #[cfg(not(target_os = "android"))]
 pub(crate) fn implementation() -> Arc<dyn Alarm> {
-    Arc::new(fandhe_device::alarm::UnsupportedAlarm)
+    Arc::new(crate::contract::UnsupportedAlarm)
 }
 
 #[cfg(test)]
@@ -184,11 +185,11 @@ mod tests {
         for c in [1, 2] {
             assert!(matches!(
                 schedule_result(c),
-                Err(DeviceError::PermissionDenied(_))
+                Err(AlarmError::PermissionDenied)
             ));
         }
         for c in [3, 4, -1, 99] {
-            assert!(matches!(schedule_result(c), Err(DeviceError::Internal(_))));
+            assert!(matches!(schedule_result(c), Err(AlarmError::Internal(_))));
         }
     }
 
@@ -196,7 +197,7 @@ mod tests {
     fn cancel_codes() {
         assert!(cancel_result(0).is_ok());
         for c in [1, 4, -1, 99] {
-            assert!(matches!(cancel_result(c), Err(DeviceError::Internal(_))));
+            assert!(matches!(cancel_result(c), Err(AlarmError::Internal(_))));
         }
     }
 
@@ -212,7 +213,7 @@ mod tests {
             Ok(AlarmState::Scheduled { fire_at_unix_ms }) if fire_at_unix_ms == i64::MAX as u64
         ));
         for v in [-1, i64::MIN] {
-            assert!(matches!(state_result(v), Err(DeviceError::Internal(_))));
+            assert!(matches!(state_result(v), Err(AlarmError::Internal(_))));
         }
     }
 
@@ -221,7 +222,7 @@ mod tests {
         assert_eq!(to_jlong(5).unwrap(), 5);
         assert!(matches!(
             to_jlong(u64::MAX),
-            Err(DeviceError::InvalidInput(_))
+            Err(AlarmError::InvalidInput(_))
         ));
     }
 }
