@@ -79,13 +79,18 @@ pub(crate) mod bridge {
     use crate::error::ContactsError;
     use fandhe_core::screens::contact_pick::ContactPickOutcome;
 
-    use fandhe_runtime::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::{RequestSlot, SlotOwner};
 
     pub(crate) static SLOT: RequestSlot<ContactPickOutcome> = RequestSlot::new();
 
-    /// 提示直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
+    /// 画面の effect が登録した要求の印。公開入口（`platform_contacts`）の完了を画面が取り込まないために使う。
+    pub(crate) static SCREEN: SlotOwner = SlotOwner::new();
+
+    /// 画面用の提示直前に呼ぶ。戻り値の `request_id` を OS へ渡す（先行の要求は置き換える）。
     pub(crate) fn begin() -> u64 {
-        SLOT.begin()
+        let id = SLOT.begin();
+        SCREEN.adopt(id);
+        id
     }
 
     /// OS からの結果を画面用へ変換して置く（main queue から届く契約）。`request_id` 不一致・
@@ -140,8 +145,9 @@ fn drive_callback(state: &ContactPickState, sender: &CompletionSender<ContactPic
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &bridge::SCREEN,
         sender,
         |_request_id| {},
         move |s: &mut ContactPickState, outcome| {
@@ -152,6 +158,14 @@ fn drive_callback(state: &ContactPickState, sender: &CompletionSender<ContactPic
             } else {
                 false
             }
+        },
+        // 自分の要求が公開入口に置き換えられた・破棄された。失敗を確定して画面を処理中のまま残さない。
+        move |s: &mut ContactPickState| {
+            finish_pick(
+                s,
+                generation,
+                to_outcome(Err(ContactsError::Internal("contact_picker superseded"))),
+            );
         },
     );
 }
@@ -193,7 +207,8 @@ struct BridgeContactPicker;
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 impl crate::contract::ContactPicker for BridgeContactPicker {
     fn pick(&self) -> Result<PickedContact, ContactsError> {
-        let request_id = bridge::begin();
+        // 画面の印は付けない（画面は自分の分だけを取り込む）。
+        let request_id = bridge::SLOT.begin();
         if !present(request_id) {
             bridge::SLOT.clear(request_id);
             return Err(ContactsError::Internal("contact_picker present"));

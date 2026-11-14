@@ -23,7 +23,7 @@
 //! （`device/share.rs` の `.m` 側コールバックと同じ構造）。
 //!
 //! `IAsyncOperation` は完了ハンドラが呼ばれる前にドロップされないよう、
-//! スレッドローカルの [`HELD`] へ保持する（次回 [`present`] で前回分を置き換える）。
+//! プロセス全体の [`HELD`] へ保持する（次回 [`present`] で前回分を置き換える）。
 //!
 //! `CheckAvailabilityAsync` は別途呼ばない（実装計画の設計判断 3 参照）:
 //! `UserConsentVerificationResult` 自体が `DeviceNotPresent`/`NotConfiguredForUser`/
@@ -33,7 +33,7 @@
 //! Windows Hello 端末所有者認証でも返る既知の制約（`biometric_auth::outcome_from_verification`
 //! の doc 参照）。
 
-use std::cell::RefCell;
+use std::sync::Mutex;
 
 use windows::Security::Credentials::UI::{UserConsentVerificationResult, UserConsentVerifier};
 use windows::Win32::System::WinRT::IUserConsentVerifierInterop;
@@ -47,15 +47,11 @@ use crate::error::BiometricAuthError;
 
 use crate::driver::{bridge, outcome_from_verification};
 
-thread_local! {
-    /// 直近の `present` が発行した `IAsyncOperation`（完了ハンドラが呼ばれる前に
-    /// ドロップされないよう保持する。次回 `present` で置き換わる、
-    /// `windows_share.rs::HELD` と同じスレッドローカル方針: `present` は
-    /// `biometric_auth::drive_callback` から egui の update ループ（UI/メインスレッド）
-    /// 上でのみ呼ばれる契約のため `Mutex` は不要）。
-    static HELD: RefCell<Option<IAsyncOperation<UserConsentVerificationResult>>> =
-        const { RefCell::new(None) };
-}
+/// 直近の `present` が発行した `IAsyncOperation`（完了ハンドラが呼ばれる前にドロップされないよう保持する。
+/// 次回 `present` で置き換わる）。`present` は画面の effect（UI スレッド）と公開入口
+/// （`platform_biometric_auth` を呼ぶワーカー）の両方から呼ばれるため、スレッドローカルではなく
+/// プロセス全体の `Mutex` に置く（ワーカー終了で operation が落ちない・どのスレッドからでも置き換えられる）。
+static HELD: Mutex<Option<IAsyncOperation<UserConsentVerificationResult>>> = Mutex::new(None);
 
 /// `device/biometric_auth.rs` の Windows 経路から呼ばれる。`request_id` は
 /// `crate::driver::bridge::begin` が払い出したプロセス内一意な ID
@@ -92,6 +88,6 @@ pub(crate) fn present(request_id: u64, reason: &str) -> Result<(), BiometricAuth
     }))
     .map_err(|_| BiometricAuthError::Internal("biometric completed"))?;
 
-    HELD.with_borrow_mut(|held| *held = Some(op));
+    *HELD.lock().unwrap_or_else(|e| e.into_inner()) = Some(op);
     Ok(())
 }

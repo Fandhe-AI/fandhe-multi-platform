@@ -174,16 +174,22 @@ pub(crate) mod bridge {
     use crate::error::BiometricAuthError;
     use fandhe_core::screens::biometric_check::AuthOutcome as CoreAuthOutcome;
 
-    use fandhe_runtime::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::{RequestSlot, SlotOwner};
 
     /// 画面へ反映する完了結果（`super::to_outcome` 後の形）。
     pub(crate) type Outcome = Result<CoreAuthOutcome, String>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
-    /// 提示直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
+    /// 画面の effect が登録した要求の印。公開入口（`platform_biometric_auth`）の完了を画面が
+    /// 取り込まないために使う（1 回の OS 完了が両方を完了させない）。
+    pub(crate) static SCREEN: SlotOwner = SlotOwner::new();
+
+    /// 画面用の提示直前に呼ぶ。戻り値の `request_id` を OS へ渡す（先行の要求は置き換える）。
     pub(crate) fn begin() -> u64 {
-        SLOT.begin()
+        let id = SLOT.begin();
+        SCREEN.adopt(id);
+        id
     }
 
     /// OS からの結果（`crate::contract::AuthOutcome` を経由した生の
@@ -282,8 +288,9 @@ fn drive_callback(state: &BiometricCheckState, sender: &CompletionSender<Biometr
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &bridge::SCREEN,
         sender,
         |_request_id| {},
         move |s: &mut BiometricCheckState, outcome| {
@@ -297,6 +304,10 @@ fn drive_callback(state: &BiometricCheckState, sender: &CompletionSender<Biometr
             } else {
                 false
             }
+        },
+        // 自分の要求が公開入口に置き換えられた・破棄された。失敗を確定して画面を処理中のまま残さない。
+        move |s: &mut BiometricCheckState| {
+            finish_auth(s, generation, Err("biometric superseded".to_string()));
         },
     );
 }
@@ -331,7 +342,7 @@ fn drive(
 /// フレームワークの外のアプリも使える）。macOS・iOS・Android・Windows は OS の認証 UI がコールバック型のため、
 /// 実装は pull 型 `bridge` へ要求を出して結果が届くまで呼び出しスレッドで待つ（固定タイムアウトなし）。
 /// UI を駆動するスレッド（macOS・iOS のメインスレッド、Android の UI スレッド）から呼ばない（結果がそこへ届くため待ちが解けない）。
-/// 画面の effect ドライバ（[`biometric_check_effect`]）と同じ `bridge` を共有するため、同時には使わない
+/// 画面の effect ドライバ（[`biometric_check_effect`]）と同じ slot を共有するが、結果は要求の持ち主（画面 / 公開入口）だけが取り込む。同時には使わない
 /// （後から始めた要求が先の要求を置き換え、先の呼び出しは `Internal` で返る）。
 /// `available` は OS へ問い合わせる実装を持たないため `Unsupported`（成功へ倒さない）。Linux は `authenticate` も `Unsupported`。
 pub fn platform_biometric_auth() -> Box<dyn crate::contract::BiometricAuth> {
@@ -373,7 +384,8 @@ impl crate::contract::BiometricAuth for BridgeBiometricAuth {
 
     fn authenticate(&self, reason: &str) -> Result<DeviceAuthOutcome, BiometricAuthError> {
         let reason = validate_reason(reason)?;
-        let request_id = bridge::begin();
+        // 画面の印は付けない（画面は自分の分だけを取り込む）。
+        let request_id = bridge::SLOT.begin();
         #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
         if !present(request_id, reason) {
             bridge::SLOT.clear(request_id);
