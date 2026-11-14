@@ -29,6 +29,11 @@ final class RequestTracker {
         current.set(requestId);
     }
 
+    /** 追跡中の要求が無いときだけ記録して true。進行中なら上書きせず false（原子的）。 */
+    boolean tryTrack(long requestId) {
+        return current.compareAndSet(NONE, requestId);
+    }
+
     /** 照合せずに現在値を読む（Bundle 保存・「追跡中か」判定・照合前のスナップショット用）。 */
     long current() {
         return current.get();

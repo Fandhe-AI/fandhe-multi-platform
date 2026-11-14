@@ -307,7 +307,11 @@ fn drive_callback(state: &BiometricCheckState, sender: &CompletionSender<Biometr
         },
         // 自分の要求が公開入口に置き換えられた・破棄された。失敗を確定して画面を処理中のまま残さない。
         move |s: &mut BiometricCheckState| {
-            finish_auth(s, generation, Err("biometric superseded".to_string()));
+            finish_auth(
+                s,
+                generation,
+                to_outcome(Err(BiometricAuthError::Internal("biometric superseded"))),
+            );
         },
     );
 }
@@ -396,6 +400,7 @@ impl crate::contract::BiometricAuth for BridgeBiometricAuth {
             bridge::SLOT.clear(request_id);
             return Err(e);
         }
+        let deadline = std::time::Instant::now() + AUTHENTICATE_TIMEOUT;
         loop {
             if let Some(outcome) = bridge::SLOT.take_ready(request_id) {
                 return match outcome {
@@ -413,10 +418,26 @@ impl crate::contract::BiometricAuth for BridgeBiometricAuth {
             {
                 return Err(BiometricAuthError::Internal("biometric superseded"));
             }
+            // 結果が一切届かない場合に永久に待たない（OS 側の取りこぼし・古い要求による上書き対策）。
+            if std::time::Instant::now() >= deadline {
+                if bridge::SLOT.clear_if_pending(request_id) {
+                    return Err(BiometricAuthError::Internal("biometric timeout"));
+                }
+                continue;
+            }
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
     }
 }
+
+/// 公開入口 `authenticate` が結果を待つ上限。
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "android",
+    target_os = "windows"
+))]
+const AUTHENTICATE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
 
 /// `registry.rs` の `effect` 区画から `biometric_check` 画面用に配線される effect
 /// ドライバ（macOS/iOS/Android/Windows 版、モジュール doc「pull 型」参照）。

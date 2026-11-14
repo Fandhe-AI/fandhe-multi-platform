@@ -148,7 +148,11 @@ final class BiometricAuthHelper {
             nativeOnBiometricResult(requestId, BIOMETRIC_RESULT_INTERNAL_ERROR);
             return;
         }
-        biometricRequest.track(requestId);
+        // 進行中の認証があれば新しい要求は拒否する（id を上書きすると旧認証の完了が新要求の成功になる）。
+        if (!biometricRequest.tryTrack(requestId)) {
+            nativeOnBiometricResult(requestId, BIOMETRIC_RESULT_INTERNAL_ERROR);
+            return;
+        }
         activity.runOnUiThread(() -> helper.present(requestId, reason));
     }
 
@@ -157,14 +161,14 @@ final class BiometricAuthHelper {
         // resumed でない状態はすり抜ける。`resumed` は `onPause` で false に落ちるため、ここで見れば state-save 後の呼び出しを
         // 確実に弾ける。
         if (biometricPrompt == null || activity.isFinishing() || activity.isDestroyed() || !resumed) {
-            biometricRequest.take();
+            biometricRequest.complete(requestId);
             nativeOnBiometricResult(requestId, BIOMETRIC_RESULT_INTERNAL_ERROR);
             return;
         }
         if (BiometricManager.from(activity).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
                 != BiometricManager.BIOMETRIC_SUCCESS) {
             // 未登録・非対応ハードウェア・OS 側要件未達等（可否判定の失敗を「認証した」にしない）。
-            biometricRequest.take();
+            biometricRequest.complete(requestId);
             nativeOnBiometricResult(requestId, BIOMETRIC_RESULT_UNAVAILABLE);
             return;
         }
@@ -178,7 +182,7 @@ final class BiometricAuthHelper {
             biometricPrompt.authenticate(promptInfo);
         } catch (RuntimeException e) {
             // 提示依頼自体が例外を送出した場合。コールバックは二度と来ないため、ここで直接内部エラーを通知する。
-            biometricRequest.take();
+            biometricRequest.complete(requestId);
             nativeOnBiometricResult(requestId, BIOMETRIC_RESULT_INTERNAL_ERROR);
         }
     }

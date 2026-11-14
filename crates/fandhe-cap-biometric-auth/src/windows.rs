@@ -51,7 +51,11 @@ use crate::driver::{bridge, outcome_from_verification};
 /// 次回 `present` で置き換わる）。`present` は画面の effect（UI スレッド）と公開入口
 /// （`platform_biometric_auth` を呼ぶワーカー）の両方から呼ばれるため、スレッドローカルではなく
 /// プロセス全体の `Mutex` に置く（ワーカー終了で operation が落ちない・どのスレッドからでも置き換えられる）。
-static HELD: Mutex<Option<IAsyncOperation<UserConsentVerificationResult>>> = Mutex::new(None);
+///
+/// 要求 id と組で持つ。古い要求の `present` が遅れて届いても、新しい要求の operation を上書きしない
+/// （id が自分より新しい保持があれば自分の operation を保持せず捨てる）。
+type Held = (u64, IAsyncOperation<UserConsentVerificationResult>);
+static HELD: Mutex<Option<Held>> = Mutex::new(None);
 
 /// `device/biometric_auth.rs` の Windows 経路から呼ばれる。`request_id` は
 /// `crate::driver::bridge::begin` が払い出したプロセス内一意な ID
@@ -84,10 +88,18 @@ pub(crate) fn present(request_id: u64, reason: &str) -> Result<(), BiometricAuth
             _ => Err(BiometricAuthError::Internal("biometric outcome")),
         };
         bridge::deliver(request_id, result);
+        // 完了済みの自分の operation を手放す（新しい要求の保持は触らない）。
+        let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());
+        if held.as_ref().is_some_and(|(id, _)| *id == request_id) {
+            *held = None;
+        }
         Ok(())
     }))
     .map_err(|_| BiometricAuthError::Internal("biometric completed"))?;
 
-    *HELD.lock().unwrap_or_else(|e| e.into_inner()) = Some(op);
+    let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());
+    if held.as_ref().is_none_or(|(id, _)| *id <= request_id) {
+        *held = Some((request_id, op));
+    }
     Ok(())
 }
