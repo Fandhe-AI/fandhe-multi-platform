@@ -10,22 +10,18 @@
 // ファイル URL（`file://`）は `apple/fandhe_apple_file_association.m` が受けるため、ここでは無視する。
 //
 // 経路は 2 つ。(1) Info.plist の `UIApplicationSceneManifest`（Issue #27）で scene 形態になった今は、
-// `ios/fandhe_ios_scene.m` の scene delegate が受けた URL（`connectionOptions.URLContexts` と
+// `fandhe-platform-apple` の scene delegate が受けた URL（`connectionOptions.URLContexts` と
 // `scene:openURLContexts:`）を通知 `FandheSceneOpenURLNotification` で投げ、ここで受ける。
-// (2) 旧来経路: winit 0.30.13 の iOS は application delegate を持たず
-// （`UIApplicationMain(argc, argv, nil, nil)`）、scene 形態でない場合の `application:openURL:options:`
-// を受けるために自前の delegate を差し込む（scene 形態では呼ばれないが害は無い）。
-// `UIApplicationMain` より前は `sharedApplication` が無いので、最も早い
-// `UIApplicationDidFinishLaunchingNotification` で `delegate == nil` のときだけ差し込む。
-// 実装するのは `application:openURL:options:` と、背景ダウンロード・背景送信の
-// `application:handleEventsForBackgroundURLSession:completionHandler:`（Issue #391、#836。`UIApplication.delegate` は
-// 1 枠しかなく、UIKit は setDelegate 時に応答メソッドを記録するため、別の delegate を差さず本クラスへ足す。
-// 転送先は `apple/fandhe_apple_background_upload.m`、外れたら `apple/fandhe_apple_background_download.m`）だけで、UIKit の既定動作は変えない。
+// (2) 旧来経路: scene 形態でない場合の `application:openURL:options:` は、共通層の application delegate
+// （`fandhe-platform-apple` の `ios/fandhe_ios_app_delegate.m`、Issue #1325）が同じ通知へ合流させる。
+// 本ファイルは `fandhe_ios_app_delegate_install()` で delegate の差し込みを依頼するだけで、delegate は持たない。
+// 背景ダウンロード・背景送信の `handleEventsForBackgroundURLSession` は、各機能が
+// `fandhe_ios_register_background_session` で登録して直接受ける（本ファイルは関与しない）。
 //
 // 契約:
 //   fandhe_apple_url_scheme_register(void) -> void
-//     main thread から `UIApplicationMain` より前に呼ぶ。冪等。起動通知の observer と
-//     delegate は static の強参照で持ち続ける（`UIApplication.delegate` は weak のため）。
+//     main thread から `UIApplicationMain` より前に呼ぶ。冪等。起動通知と scene 通知の observer は
+//     static の強参照で持ち続ける。
 //   fandhe_rust_url_scheme_received(const uint8_t *ptr, size_t len) -> Rust 側
 //     （`apple_url_scheme.rs`）が公開する `extern "C"` 関数。URL を UTF-8 で渡す。
 //     文字列が取れなかったときは (NULL, 0)。ポインタは呼び出し中だけ有効。
@@ -44,9 +40,9 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 
+#import "fandhe_ios_app_events.h"
+
 extern void fandhe_rust_url_scheme_received(const uint8_t *ptr, size_t len);
-extern bool fandhe_apple_bgul_handle_events(NSString *identifier, void (^handler)(void));
-extern void fandhe_apple_bgdl_handle_events(NSString *identifier, void (^handler)(void));
 
 static void fandhe_forward_url(NSURL *url) {
   // `fandhe://web-auth/*` は Web 認証セッション（`fandhe_ios_web_auth_session.m`）の専用経路。
@@ -83,44 +79,17 @@ static void fandhe_handle_open_url(NSURL *url) {
   }
 }
 
-@interface FandheUrlSchemeAppDelegate : NSObject <UIApplicationDelegate>
-@end
-
-@implementation FandheUrlSchemeAppDelegate
-- (BOOL)application:(UIApplication *)app
-            openURL:(NSURL *)url
-            options:(NSDictionary<UIApplicationOpenURLOptionsKey, id> *)options {
-  @autoreleasepool {
-    fandhe_handle_open_url(url);
-  }
-  return YES;
-}
-
-// OS が背景転送の完了でアプリを起こした。identifier で振り分ける。download 側は未知の identifier の
-// handler を即返すので、upload を先に照合し、外れたときだけ download へ渡す。handler は `.m` が 1 回だけ呼ぶ。
-- (void)application:(UIApplication *)application
-    handleEventsForBackgroundURLSession:(NSString *)identifier
-                      completionHandler:(void (^)(void))completionHandler {
-  @autoreleasepool {
-    if (!fandhe_apple_bgul_handle_events(identifier, completionHandler)) {
-      fandhe_apple_bgdl_handle_events(identifier, completionHandler);
-    }
-  }
-}
-@end
-
-static FandheUrlSchemeAppDelegate *g_delegate = nil;
 static id g_launch_observer = nil;
 static id g_active_observer = nil;
 static id g_scene_observer = nil;
 
 void fandhe_apple_url_scheme_register(void) {
-  if (g_delegate != nil) {
+  if (g_scene_observer != nil) {
     return;
   }
-  g_delegate = [[FandheUrlSchemeAppDelegate alloc] init];
+  fandhe_ios_app_delegate_install();
   g_scene_observer = [[NSNotificationCenter defaultCenter]
-      addObserverForName:@"FandheSceneOpenURLNotification"
+      addObserverForName:FandheSceneOpenURLNotification
                   object:nil
                    queue:[NSOperationQueue mainQueue]
               usingBlock:^(NSNotification *note) {
@@ -133,9 +102,7 @@ void fandhe_apple_url_scheme_register(void) {
   g_launch_observer = [[NSNotificationCenter defaultCenter]
       addObserverForName:UIApplicationDidFinishLaunchingNotification
                   object:nil
-                   // queue:nil は投稿スレッド（main）で同期実行される。mainQueue 指定だと次の run loop へ
-                   // 回り、同じ起動ターンで届く handleEventsForBackgroundURLSession（relaunch）に
-                   // delegate が間に合わない（Issue #391）。
+                   // queue:nil は投稿スレッド（main）で同期実行される。起動時の URL を次の run loop まで待たせない。
                    queue:nil
               usingBlock:^(NSNotification *note) {
                 @autoreleasepool {
@@ -147,13 +114,6 @@ void fandhe_apple_url_scheme_register(void) {
                   if ([launched isKindOfClass:[NSURL class]]) {
                     g_launch_url = launched;
                     fandhe_forward_url(launched);
-                  }
-                  UIApplication *app = note.object;
-                  // ponytail: delegate が既にある場合（将来 winit が持った場合）は上書きせず、
-                  // ウォーム経路はつながらない。そうなったら class_addMethod で既存 delegate の
-                  // クラスへ application:openURL:options: を足す。
-                  if ([app isKindOfClass:[UIApplication class]] && app.delegate == nil) {
-                    app.delegate = g_delegate;
                   }
                 }
               }];
