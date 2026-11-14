@@ -287,6 +287,17 @@ fn take_waiter(request_id: u64) -> Option<WaiterTx> {
     }
 }
 
+/// 画面側の要求の持ち主印。同期入口の要求が [`bridge::SLOT`] を置き換えたとき、画面を `Scanning` のまま止めず
+/// キャンセルで完了させるため、自分の分の id だけを追う。
+#[cfg(any(
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "android"
+))]
+static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
+    fandhe_runtime::request_slot::SlotOwner::new();
+
 /// 要求登録から OS への開始依頼までの直列化ロック（[`start_native_scan`]）。
 #[cfg(any(
     target_os = "ios",
@@ -309,8 +320,9 @@ fn start_native_scan(waiter: Option<WaiterTx>) {
     // 古い開始依頼が新しい要求の観測を置き換えるのを防ぐ。OS コールバックはこのロックを取らない）。
     let _guard = START.lock().unwrap_or_else(|e| e.into_inner());
     let request_id = bridge::begin();
-    if let Some(tx) = waiter {
-        *WAITER.lock().unwrap_or_else(|e| e.into_inner()) = Some((request_id, tx));
+    match waiter {
+        Some(tx) => *WAITER.lock().unwrap_or_else(|e| e.into_inner()) = Some((request_id, tx)),
+        None => SCREEN_OWNER.adopt(request_id),
     }
     OBSERVED.begin(request_id);
     let duration = Duration::from_millis(crate::contract::SCAN_DURATION_MS);
@@ -421,8 +433,9 @@ fn drive_callback(state: &BleScanState, sender: &CompletionSender<BleScanState>)
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &SCREEN_OWNER,
         sender,
         |_request_id| {},
         move |s: &mut BleScanState, outcome| {
@@ -433,6 +446,16 @@ fn drive_callback(state: &BleScanState, sender: &CompletionSender<BleScanState>)
                 true
             } else {
                 false
+            }
+        },
+        // 同期入口・Activity 再生成で自分の要求が置き換わった／失われた。処理中のまま止めない。
+        move |s: &mut BleScanState| {
+            if s.phase != ScanPhase::Idle {
+                finish_scan(
+                    s,
+                    generation,
+                    Err(fandhe_core::screens::ble_scan::ScanError::Cancelled),
+                );
             }
         },
     );

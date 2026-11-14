@@ -203,6 +203,11 @@ pub(crate) mod bridge {
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
+    /// 画面側の要求の持ち主印。公開入口の要求が [`SLOT`] を置き換えたとき、画面を処理中のまま止めず
+    /// キャンセルで完了させるため、自分の分の id だけを追う。
+    pub(crate) static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
+        fandhe_runtime::request_slot::SlotOwner::new();
+
     type Raw = Result<super::NotifyOutcome, crate::error::NotificationError>;
 
     /// 画面を介さない同期入口（[`super::NativeNotifier`]）の待ち手。要求は 1 本だけで、新しい要求は古い待ち手を捨てて置き換える。
@@ -328,6 +333,7 @@ fn drive_callback(state: &NotificationSendState, sender: &CompletionSender<Notif
 
         let _guard = bridge::START.lock().unwrap_or_else(|e| e.into_inner());
         let request_id = bridge::begin();
+        bridge::SCREEN_OWNER.adopt(request_id);
         match DeviceRequest::new(&request.title, &request.body) {
             Ok(validated) => {
                 if !present(request_id, validated.title(), validated.body()) {
@@ -352,8 +358,9 @@ fn drive_callback(state: &NotificationSendState, sender: &CompletionSender<Notif
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &bridge::SCREEN_OWNER,
         sender,
         |_request_id| {},
         move |s: &mut NotificationSendState, outcome| {
@@ -365,6 +372,12 @@ fn drive_callback(state: &NotificationSendState, sender: &CompletionSender<Notif
                 true
             } else {
                 false
+            }
+        },
+        // 公開入口・Activity 再生成で自分の要求が置き換わった／失われた。処理中のまま止めない。
+        move |s: &mut NotificationSendState| {
+            if s.phase != fandhe_core::screens::notification_send::NotificationPhase::Idle {
+                finish_notify(s, generation, Ok(CoreOutcome::Cancelled));
             }
         },
     );

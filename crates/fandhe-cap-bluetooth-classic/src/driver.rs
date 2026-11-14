@@ -241,11 +241,21 @@ fn take_callback(request_id: u64) -> Option<DiscoverCallback> {
     }
 }
 
-/// 保留中の完了通知を `Cancelled` で完了させる（ロックの外で呼ぶ）。
+/// 保留中の完了通知を取り出す。通知の実行は後片付け（観測の破棄等）を終えてから [`fire_cancelled`] で行う
+/// （通知内で再登録された新しい要求の状態を、後片付けが消さないため）。
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
-fn cancel_callback() {
-    let old = CALLBACK.lock().unwrap_or_else(|e| e.into_inner()).take();
-    if let Some((_, cb)) = old {
+fn take_pending_callback() -> Option<DiscoverCallback> {
+    CALLBACK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+        .map(|(_, cb)| cb)
+}
+
+/// 取り出した完了通知を `Cancelled` で完了させる（ロックの外で呼ぶ）。
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
+fn fire_cancelled(cb: Option<DiscoverCallback>) {
+    if let Some(cb) = cb {
         cb(Err(BluetoothClassicError::Cancelled("bluetooth_classic")));
     }
 }
@@ -429,9 +439,10 @@ pub fn bluetooth_classic_show_effect(
 /// Java 側の追跡は Activity インスタンスのフィールドで、再生成で一緒に消える）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
-    cancel_callback();
+    let old = take_pending_callback();
     bridge::SLOT.reset();
     OBSERVED.clear();
+    fire_cancelled(old);
 }
 
 /// アプリ終了時に進行中の検索を止める（`fandhe-gallery` の終了処理から呼ばれる）。
@@ -440,12 +451,15 @@ pub fn reset_pending_tracking() {
 /// `OBSERVED.clear()` はロックを解放してから OS 側を止める。
 pub fn stop_shared_discovery() {
     #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
-    cancel_callback();
+    let old = take_pending_callback();
     OBSERVED.clear();
     #[cfg(target_os = "macos")]
     crate::macos::stop();
     #[cfg(target_os = "windows")]
     crate::windows::stop_shared();
+    // 後片付けを終えてから通知する（通知内の再開始を消さない）。
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
+    fire_cancelled(old);
 }
 
 #[cfg(test)]
