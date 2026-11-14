@@ -1,7 +1,7 @@
 # 機能の宣言の形式と検証
 
 状態: 形式・検証・到達判定・生成（`cargo fandhe gen`）を実装済み。先行 5 機能の宣言は現行設定と突き合わせ済み（§6）。
-対応: REQ-21 / TASK-21.2・21.3、Issue #1160・#1176。上位の方針は `consumer-app-structure.md` の 4 節。
+対応: REQ-21 / TASK-21.2・21.3・21.4、Issue #1160・#1176・#1328。上位の方針は `consumer-app-structure.md` の 4 節。
 
 ## 1. 概要
 
@@ -53,7 +53,9 @@ entitlements = {}
 info-plist = { NSExtension = { NSExtensionPointIdentifier = "com.apple.widgetkit-extension" } }
 
 [package.metadata.fandhe.android]
-permissions = [{ name = "android.permission.NFC" }]  # 任意で max-sdk
+permissions = [{ name = "android.permission.NFC" }]  # 任意で max-sdk・flags（例 flags = ["neverForLocation"]）
+main-activity-attributes = { supportsPictureInPicture = "true" }  # 書けるキーは許可リストのみ
+application-meta-data = [{ name = "com.google.android.gms.wallet.api.enabled", value = "true" }]  # resource = "@xml/..." も可
 features = [{ name = "android.hardware.nfc.hce", required = false }]
 gradle = ["com.google.android.gms:play-services-mlkit-document-scanner:16.0.0"]
 java = ["android/java"]
@@ -63,12 +65,21 @@ main-activity-intent-filters = [
 ]
 
 [[package.metadata.fandhe.android.components]]
-kind = "service"              # activity / service / receiver / provider
+kind = "service"              # activity / activity-alias / service / receiver / provider
 name = "com.example.NfcCardEmulationService"
 exported = true
 attributes = { permission = "android.permission.BIND_NFC_SERVICE" }
 intent-filters = [{ actions = ["android.nfc.cardemulation.action.HOST_APDU_SERVICE"] }]
 meta-data = [{ name = "android.nfc.cardemulation.host_apdu_service", resource = "@xml/apduservice" }]
+
+# activity-alias は target-activity が必須。対象は同じ宣言の kind = "activity" の name
+[[package.metadata.fandhe.android.components]]
+kind = "activity-alias"
+name = "com.example.ViewPermissionUsageActivity"
+exported = true
+target-activity = "com.example.RationaleActivity"
+attributes = { permission = "android.permission.START_VIEW_PERMISSION_USAGE" }
+intent-filters = [{ actions = ["android.intent.action.VIEW_PERMISSION_USAGE"] }]
 
 [package.metadata.fandhe.windows]
 identity = true
@@ -91,12 +102,14 @@ params = { text = "share_text", url = "share_url" }
 | `entitlements` | entitlements | App Group は書かず `app-groups` を使う |
 | `app-groups` | `application-groups` entitlement | 記号名。OS ごとの正式 ID へ生成時に展開する |
 | `extensions` | Apple の拡張ターゲット | `sources` は crate からの相対パス。`usage-descriptions` も書ける（本体と同じくキーだけで、文言の生成は #1176） |
-| `permissions` | `<uses-permission>` | `max-sdk` は `maxSdkVersion` |
+| `permissions` | `<uses-permission>` | `max-sdk` は `maxSdkVersion`、`flags` は `usesPermissionFlags`（値は Android の原語。いまは `neverForLocation` だけ） |
 | `features` | `<uses-feature>` | `required` は省略不可 |
 | `gradle` | 依存の宣言 | `group:artifact:version` の固定版 |
 | `java`・`res` | ソースとリソースのディレクトリ | crate からの相対パス |
 | `main-activity-intent-filters` | 既存の MainActivity への追記 | |
-| `components` | `<activity>`・`<service>`・`<receiver>`・`<provider>` | `exported` は省略不可。`attributes` は他の `android:*` 属性 |
+| `main-activity-attributes` | MainActivity の開始タグの属性 | 書けるのは `supportsPictureInPicture` だけ（許可リスト） |
+| `application-meta-data` | `<application>` 直下の `<meta-data>` | `resource`（`@` 始まり）か `value` の一方。コンポーネントの後に `name` 順で出す |
+| `components` | `<activity>`・`<activity-alias>`・`<service>`・`<receiver>`・`<provider>` | `exported` は省略不可。`attributes` は他の `android:*` 属性。`activity-alias` は `target-activity` が必須で、alias は対象の後に出す |
 | `windows.identity` | パッケージ ID | 生成は #1208 |
 | `web.manifest` | Web App Manifest のメンバー | 書けるのは `share_target` だけ（許可リスト）。基礎 manifest へ足される（7 節、#1238） |
 
@@ -106,6 +119,9 @@ params = { text = "share_text", url = "share_url" }
 - `app-groups` が記号名なのは、正式 ID が iOS と macOS で形が違い、Team ID を宣言に混ぜないためです
 - `permissions` を文字列でなくテーブルにしたのは、`maxSdkVersion` 付きの権限が実在し、後から形を変えると破壊的変更になるためです
 - `required`・`exported` を省略不可にするのは、Android の暗黙の既定値による端末の除外や意図しない公開を防ぐためです
+- `flags` を enum にするのは、綴り間違いを `check` で落とすためです。Android がフラグを足し、使う機能が出たら足します
+- `main-activity-attributes` を許可リストにするのは、MainActivity がアプリ本体の入口で、`exported`・`launchMode`・`taskAffinity`・`permission` などを依存 crate が書き換えると、起動不能やタスク乗っ取りにつながるためです。`web.manifest` と同じ形で、要る機能が出たら足します
+- alias の対象を同じ宣言内に限るのは、別機能の Activity を指すと、その機能を選ばないアプリで Manifest が壊れるためです。`target-activity` を専用の欄にしたのは、必須・参照先の検査・出力順の制御に使うためです
 
 ## 3. 検証規則
 
@@ -118,8 +134,10 @@ params = { text = "share_text", url = "share_url" }
 - 拡張は `NSExtension` が必須で、`deployment-target` は `数字.数字`、`sources` は 1 件以上です
 - 権限・feature・コンポーネントの `name` はドット区切りの識別子です。先頭 `.` の相対名は、利用者の applicationId で解決されて壊れるため拒否します
 - `gradle` は 3 部で、版は数字始まりの固定版です（`+`・`latest`・範囲・変数・`-SNAPSHOT` は拒否）
-- `attributes` のキーは英字のみで、`name`・`exported` は置けません
-- `meta-data` は `resource`（`@` 始まり）か `value` のどちらか一方です
+- `attributes` のキーは英字のみで、`name`・`exported`・`targetActivity` は置けません
+- `meta-data`（コンポーネントの中も `application-meta-data` も）は `resource`（`@` 始まり）か `value` のどちらか一方です。`application-meta-data` の `name` は宣言内で重複できません
+- `activity-alias` は `target-activity` が必須で、同じ宣言の `kind = "activity"` の `name` を指します。alias 以外に `target-activity` は書けません
+- `main-activity-attributes` のキーは許可リスト（`supportsPictureInPicture`）だけです。`flags` は `neverForLocation` のみです
 - パスは相対のみです（空・絶対・`..`・`\`・`:` は拒否）。実在と、symlink 解決後に crate 内に収まることも確かめます
 - 文字列と plist の値に制御文字は置けません
 - `web.manifest` のキーは許可リスト（`share_target`）だけで、値はオブジェクトです。`start_url`・`scope`・`name`・`icons` などアプリの同一性に関わる値を、依存 crate が書き換えられないようにするためです。別のメンバーを機能へ移すときは許可リストに足します
@@ -136,10 +154,11 @@ params = { text = "share_text", url = "share_url" }
 |----|------|
 | `usage-descriptions`・`frameworks`・`app-groups`・`gradle`（完全一致） | 和集合 |
 | `gradle`（同じ成果物で版違い） | 両方を出力し、Gradle の解決に任せる（高い版が勝つ） |
-| `permissions` | `name` で統合。`max-sdk` は大きい方。片方が無指定なら無指定 |
+| `permissions` | `name` で統合。`max-sdk` は大きい方。片方が無指定なら無指定。`flags` が違えばエラー（`neverForLocation` を外すと位置を求めない機能の結果が届かなくなり、付けると位置を導く機能の結果が間引かれる。どちらへ寄せても片方が黙って壊れる） |
 | `features` | `name` で統合。`required` はどちらかが true なら true |
 | `info-plist`・`entitlements` | 同じ値は 1 つ。配列は和集合（出現順）。オブジェクトは再帰。それ以外の不一致はエラー |
-| `components`・`extensions` | `name` で統合。内容が同じなら 1 つ、違えばエラー |
+| `components`・`extensions`・`application-meta-data` | `name` で統合。内容が同じなら 1 つ、違えばエラー |
+| `main-activity-attributes` | キーごとに統合。同値なら 1 つ、違えばエラー |
 | `main-activity-intent-filters` | 内容が同じなら 1 つ |
 | `java`・`res`・`sources` | 統合しない。crate ごとに集める。同名リソースの衝突は Gradle のマージに任せる |
 | `windows.identity` | どれかが true なら true |
@@ -154,6 +173,10 @@ params = { text = "share_text", url = "share_url" }
 | `windows.capabilities` | #1208 で必要になれば足す |
 | 形式の版番号 | 未知キーの拒否で足りる。要否は #1224 で判断する |
 | 到達判定（対象アプリが使う機能だけを生成に入れる） | 実装済み（`crates/cargo-fandhe/src/reach.rs`、#1176）。次を満たす: `cargo tree` の文字列解析に頼らず、`cargo metadata` の `resolve` の package ID で対応付ける / feature の統合が他の workspace member から混ざらない（`resolve.nodes[].features` は使わず、アプリの `default` から feature を自前で活性化する。辺は通常依存のみ） / 対象 OS 限定の依存（`[target.'cfg(...)'.dependencies]`）を含める / 取得元違いの同名同版を区別する / default-members に左右されない |
+| MainActivity を指す alias（ランチャーアイコンの切り替え等） | 使う機能が無い。必要になった issue で足す |
+| `<application>` の属性（`localeConfig` 等） | アプリ全体の値で、機能の宣言に書かない |
+| `neverForLocation` 以外の権限フラグ | 使う機能が出たとき enum に足す |
+| 統合エラー（flags・meta-data・属性の食い違い）を利用者が上書きする手段 | 追記・`--eject`（#1202）の範囲 |
 | Gradle の版の正本 | #1194 までは `scripts/android/versions.env` が手書きビルドの正本で、宣言の版は突き合わせテストで一致を保証する |
 
 ## 6. 現行設定との突き合わせ
@@ -234,7 +257,7 @@ manifest = "web/manifest.webmanifest"       # アプリの crate からの相対
 
 | パス（`gen/` 配下） | 内容 |
 |------|------|
-| `android/AndroidManifest.xml` | manifest merger 用の overlay（権限・feature・コンポーネント、MainActivity の宣言＝`exported`・`launchMode=singleTask`・`configChanges`・`android.app.lib_name`・MAIN/LAUNCHER と機能の intent-filter） |
+| `android/AndroidManifest.xml` | manifest merger 用の overlay（権限と `usesPermissionFlags`・feature・コンポーネント・`<application>` 直下の meta-data、MainActivity の宣言＝`exported`・`launchMode=singleTask`・`configChanges`・機能の許可済み属性・`android.app.lib_name`・MAIN/LAUNCHER と機能の intent-filter） |
 | `android/fandhe.gradle` | `apply from:` 用。常に出す。gen の `android/java` と機能 crate の `java`・`res` を srcDirs に足し、gen の Manifest を全 variant の overlay として登録し（`androidComponents`）、`gradle` の依存（基盤を含む）を `implementation` で足す |
 | `android/java/com/fandhe/platform/FandheLibrary.java` | `NAME` に cdylib 名（`[lib] name`）を持つ。殻は `System.loadLibrary(FandheLibrary.NAME)` と書き、ライブラリ名の正本を `[lib] name` 1 か所にする |
 | `ios/Info.plist` | 確定値の定型キー（上記）、説明文、`info-plist`。機能が無くても出す |
@@ -271,9 +294,9 @@ cargo fandhe verify-scope --catalog <全機能を含む Cargo.toml> \
 - 照合はトークン境界つきです。`android.hardware.camera` は `android.hardware.camera.autofocus` に、`group:artifact` は `group:artifact-ktx` に一致しません
 - 観測テキストが空なら失敗します（ツールの失敗の見逃し防止）。未選択の機能が 0 件なら検査対象なしで成功します
 - 対象は次の値です
-  - Android: 権限名、`uses-feature` 名、コンポーネント名、Gradle の `group:artifact`
+  - Android: 権限名、`uses-feature` 名、コンポーネント名（`activity-alias` を含む）、`application-meta-data` の名前、Gradle の `group:artifact`。`application-meta-data` の名前が、選んだ機能の依存 library の Manifest にも現れると誤検知しうる（実例が出たら `GENERIC_KEYS` と同じ除外で扱う）
   - iOS・macOS: entitlement キー（App Group は `com.apple.security.application-groups`）、framework 名、`*UsageDescription` キー、`info-plist` のキー、拡張（`<name>.appex`）
 - 観測ファイルの集め方は `scripts/audit/verify-capability-scope.sh` が担います（aapt2・codesign・otool・plutil。Gradle の依存ツリーは任意）
 - 判定ロジックは `cargo test -p cargo-fandhe` で守ります。実成果物への実行は CI の必須経路には載せていません
 
-範囲外: `main-activity-intent-filters`（他 library の manifest にも正当に現れるため。漏れは機能のコンポーネント名で検出します）、Windows の identity（#1208）、AAB の直接検査。
+範囲外: 権限の `flags`（権限名が対象で、フラグ名は他の権限にも正当に現れる）、`main-activity-attributes`、`main-activity-intent-filters`（他 library の manifest にも正当に現れるため。漏れは機能のコンポーネント名で検出します）、Windows の identity（#1208）、AAB の直接検査。
