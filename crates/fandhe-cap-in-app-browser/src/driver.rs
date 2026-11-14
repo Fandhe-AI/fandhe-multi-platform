@@ -41,7 +41,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use crate::contract::{
-    InAppBrowser, InAppBrowserFailure, InAppBrowserOutcome, OPEN_DEADLINE, validate_url,
+    BrowserUrl, InAppBrowser, InAppBrowserFailure, InAppBrowserOutcome, OPEN_DEADLINE, validate_url,
 };
 use fandhe_core::screens::in_app_browser_show::{
     CoreFailure, InAppBrowserShowState, Phase, finish_open, mark_running, take_request,
@@ -54,7 +54,8 @@ use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, SlotOwner, poll_a
 type Outcome = Result<InAppBrowserOutcome, InAppBrowserFailure>;
 
 /// 現在のプラットフォームに応じた `InAppBrowser` 実装を返す（dispatch の最終形）。
-pub fn platform_in_app_browser() -> Arc<dyn InAppBrowser> {
+/// 要求の登録・期限・結果の取得は行わない素の OS 実装。内部（drive・[`open_url`]）専用。
+fn os_implementation() -> Arc<dyn InAppBrowser> {
     #[cfg(target_os = "ios")]
     {
         crate::ios::implementation()
@@ -67,6 +68,31 @@ pub fn platform_in_app_browser() -> Arc<dyn InAppBrowser> {
     {
         Arc::new(crate::contract::UnsupportedInAppBrowser)
     }
+}
+
+/// 公開 platform 入口の実体。呼び出し側の `request_id` で bridge へ登録してから OS 実装へ渡す。
+/// iOS・Android の OS 層は `try_begin_present(request_id)` で bridge の登録を要るため、素の実装を
+/// 直接呼ぶと表示できない。結果は [`poll_open_result`]（同じ `request_id`）で取得する。
+struct Registered(Arc<dyn InAppBrowser>);
+
+impl InAppBrowser for Registered {
+    fn open(&self, request_id: u64, url: &BrowserUrl) -> Result<(), InAppBrowserFailure> {
+        let b = bridge();
+        if !b.begin_with_id(b.public, request_id) {
+            return Err(InAppBrowserFailure::Busy);
+        }
+        if let Err(f) = self.0.open(request_id, url) {
+            b.complete_from_os(request_id, Err(f));
+        }
+        Ok(())
+    }
+}
+
+/// 公開 platform 入口。`open(id, &validate_url(..)?)` の直接呼びだけで要求が bridge に登録され、
+/// 結果は [`poll_open_result`]`(id)` で取れる（`open` の `Ok` は受理のみ。失敗の結果も同じ経路）。
+/// 先行の要求が進行中・未取得なら置き換えず `Busy`。`request_id` は 1 以上。
+pub fn platform_in_app_browser() -> Arc<dyn InAppBrowser> {
+    Arc::new(Registered(os_implementation()))
 }
 
 /// 進行中の要求。
@@ -122,6 +148,26 @@ impl Bridge {
             presenting: false,
         });
         Some(request_id)
+    }
+
+    /// 呼び出し側が決めた `request_id` を `owner` の分として登録する（公開 platform 入口用）。
+    /// 進行中の要求も未取得の結果（画面・公開とも）も無いときだけ `true`。`request_id == 0` は不可。
+    fn begin_with_id(&self, owner: &SlotOwner, request_id: u64) -> bool {
+        let mut active = self.lock();
+        let taken = self.slot.snapshot().is_some_and(|(id, ready)| {
+            ready.is_none() || id == self.public.current() || id == self.screen.current()
+        });
+        if request_id == 0 || taken {
+            return false;
+        }
+        self.slot.begin_with(request_id);
+        owner.adopt(request_id);
+        *active = Some(Active {
+            request_id,
+            started: Instant::now(),
+            presenting: false,
+        });
+        true
     }
 
     #[allow(dead_code)] // 呼び出し元は OS 層（#702・#703）と単体テスト。
@@ -251,13 +297,8 @@ fn start_request(
 pub fn open_url(raw_url: &str) -> Result<u64, InAppBrowserFailure> {
     static IMPL: OnceLock<Arc<dyn InAppBrowser>> = OnceLock::new();
     let b = bridge();
-    start_request(
-        b,
-        &**IMPL.get_or_init(platform_in_app_browser),
-        b.public,
-        raw_url,
-    )
-    .ok_or(InAppBrowserFailure::Busy)
+    start_request(b, &**IMPL.get_or_init(os_implementation), b.public, raw_url)
+        .ok_or(InAppBrowserFailure::Busy)
 }
 
 /// [`open_url`] の結果の取得口。表示開始前に期限を過ぎていれば `TimedOut` を確定し、
@@ -328,18 +369,13 @@ pub fn in_app_browser_show_effect(
     sender: &CompletionSender<InAppBrowserShowState>,
 ) {
     static IMPL: OnceLock<Arc<dyn InAppBrowser>> = OnceLock::new();
-    drive(
-        state,
-        sender,
-        IMPL.get_or_init(platform_in_app_browser),
-        bridge(),
-    );
+    drive(state, sender, IMPL.get_or_init(os_implementation), bridge());
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contract::{BrowserUrl, UnsupportedInAppBrowser};
+    use crate::contract::UnsupportedInAppBrowser;
     use fandhe_core::screens::in_app_browser_show::request_open;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
@@ -476,18 +512,6 @@ mod tests {
     }
 
     #[test]
-    fn fallback_platform_is_unsupported_off_mobile() {
-        #[cfg(not(any(target_os = "ios", target_os = "android")))]
-        {
-            let u = validate_url("https://example.com/").unwrap();
-            assert_eq!(
-                platform_in_app_browser().open(1, &u),
-                Err(InAppBrowserFailure::Unsupported)
-            );
-        }
-    }
-
-    #[test]
     fn public_entry_registers_request_and_returns_result() {
         // 公開入口と同じ経路（登録 → OS 呼び出し → 結果取得）が画面状態なしで通る。
         let bridge = new_bridge(Duration::from_secs(30));
@@ -509,8 +533,28 @@ mod tests {
         );
     }
 
+    /// グローバル bridge を使うため 1 テストに直列化する（並列だと互いの未取得結果で `Busy` になる）。
     #[test]
-    fn public_open_url_unsupported_off_mobile() {
+    fn global_public_entries_register_and_report() {
+        let u = validate_url("https://example.com/").unwrap();
+        let imp = platform_in_app_browser();
+        // 公開 platform 入口の直接呼びだけで登録され、結果は poll_open_result で取れる。
+        assert_eq!(imp.open(7_000_001, &u), Ok(()));
+        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+        assert_eq!(
+            poll_open_result(7_000_001),
+            Some(Err(InAppBrowserFailure::Unsupported))
+        );
+        #[cfg(any(target_os = "ios", target_os = "android"))]
+        {
+            assert!(try_begin_present(7_000_001));
+            complete_from_os(7_000_001, Ok(InAppBrowserOutcome::Closed));
+            assert_eq!(
+                poll_open_result(7_000_001),
+                Some(Ok(InAppBrowserOutcome::Closed))
+            );
+        }
+        // 未取得が無くなれば open_url も通る。
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         {
             let id = open_url("https://example.com/").unwrap();
