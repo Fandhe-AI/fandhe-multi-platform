@@ -327,11 +327,83 @@ fn drive(
     }));
 }
 
-/// 入口。`BiometricAuth` trait 経由の実装を返す。macOS・iOS・Android・Windows は OS の認証 UI がコールバック型のため
-/// trait を通らず（pull 型 `bridge`、モジュール doc 参照）、画面の effect ドライバ（[`biometric_check_effect`]）が直接扱う。
-/// ここは `Unsupported` 固定の実装を返し、成功へは倒さない。
+/// 入口。現在の OS の [`crate::contract::BiometricAuth`] 実装を返す（画面の状態型に依存しないため、
+/// フレームワークの外のアプリも使える）。macOS・iOS・Android・Windows は OS の認証 UI がコールバック型のため、
+/// 実装は pull 型 `bridge` へ要求を出して結果が届くまで呼び出しスレッドで待つ（固定タイムアウトなし）。
+/// UI を駆動するスレッド（macOS・iOS のメインスレッド、Android の UI スレッド）から呼ばない（結果がそこへ届くため待ちが解けない）。
+/// 画面の effect ドライバ（[`biometric_check_effect`]）と同じ `bridge` を共有するため、同時には使わない
+/// （後から始めた要求が先の要求を置き換え、先の呼び出しは `Internal` で返る）。
+/// `available` は OS へ問い合わせる実装を持たないため `Unsupported`（成功へ倒さない）。Linux は `authenticate` も `Unsupported`。
 pub fn platform_biometric_auth() -> Box<dyn crate::contract::BiometricAuth> {
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "android",
+        target_os = "windows"
+    ))]
+    return Box::new(BridgeBiometricAuth);
+    #[cfg(not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "android",
+        target_os = "windows"
+    )))]
     Box::new(crate::contract::UnsupportedBiometricAuth)
+}
+
+/// `bridge` 経由で OS の認証 UI を出し、結果を同期で返す実装（[`platform_biometric_auth`] 参照）。
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "android",
+    target_os = "windows"
+))]
+struct BridgeBiometricAuth;
+
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "android",
+    target_os = "windows"
+))]
+impl crate::contract::BiometricAuth for BridgeBiometricAuth {
+    fn available(&self) -> Result<bool, BiometricAuthError> {
+        Err(BiometricAuthError::Unsupported)
+    }
+
+    fn authenticate(&self, reason: &str) -> Result<DeviceAuthOutcome, BiometricAuthError> {
+        let reason = validate_reason(reason)?;
+        let request_id = bridge::begin();
+        #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+        if !present(request_id, reason) {
+            bridge::SLOT.clear(request_id);
+            return Err(BiometricAuthError::Internal("biometric present"));
+        }
+        #[cfg(target_os = "windows")]
+        if let Err(e) = crate::windows::present(request_id, reason) {
+            bridge::SLOT.clear(request_id);
+            return Err(e);
+        }
+        loop {
+            if let Some(outcome) = bridge::SLOT.take_ready(request_id) {
+                return match outcome {
+                    Ok(CoreAuthOutcome::Authenticated) => Ok(DeviceAuthOutcome::Authenticated),
+                    Ok(CoreAuthOutcome::Cancelled) => Ok(DeviceAuthOutcome::Cancelled),
+                    Ok(CoreAuthOutcome::Unavailable) => Ok(DeviceAuthOutcome::Unavailable),
+                    Ok(CoreAuthOutcome::Failed) => Ok(DeviceAuthOutcome::Failed),
+                    Err(_) => Err(BiometricAuthError::Internal("biometric outcome")),
+                };
+            }
+            // 置き換え・`reset`（Activity 再生成）で要求が消えたら待たない。
+            if bridge::SLOT
+                .snapshot()
+                .is_none_or(|(id, _)| id != request_id)
+            {
+                return Err(BiometricAuthError::Internal("biometric superseded"));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
 }
 
 /// `registry.rs` の `effect` 区画から `biometric_check` 画面用に配線される effect

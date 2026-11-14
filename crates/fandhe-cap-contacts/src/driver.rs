@@ -173,10 +173,53 @@ fn drive(
     }));
 }
 
-/// 入口。連絡先選択の実装を返す。macOS・iOS・Android は OS コールバックの結果を pull 型 `bridge` で受けるため
-/// `ContactPicker` を通らず、画面の effect ドライバ（[`contact_pick_effect`]）が直接扱う。ここは `Unsupported` 固定の実装を返す。
+/// 入口。現在の OS の [`crate::contract::ContactPicker`] 実装を返す（画面の状態型に依存しないため、
+/// フレームワークの外のアプリも使える）。macOS・iOS・Android は OS のピッカーがコールバック型のため、
+/// 実装は pull 型 `bridge` へ要求を出して結果が届くまで呼び出しスレッドで待つ。
+/// UI を駆動するスレッド（メインスレッド・Android の UI スレッド）から呼ばない（結果がそこへ届くため待ちが解けない）。
+/// 画面の effect ドライバ（[`contact_pick_effect`]）と同じ `bridge` を共有するため、同時には使わない
+/// （後から始めた要求が先の要求を置き換え、先の呼び出しは `Internal` で返る）。それ以外の OS は `Unsupported` 固定。
 pub fn platform_contacts() -> Box<dyn crate::contract::ContactPicker> {
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+    return Box::new(BridgeContactPicker);
+    #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
     Box::new(crate::contract::UnsupportedContactPicker)
+}
+
+/// `bridge` 経由でピッカーを出し、結果を同期で返す実装（[`platform_contacts`] 参照）。
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+struct BridgeContactPicker;
+
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+impl crate::contract::ContactPicker for BridgeContactPicker {
+    fn pick(&self) -> Result<PickedContact, ContactsError> {
+        let request_id = bridge::begin();
+        if !present(request_id) {
+            bridge::SLOT.clear(request_id);
+            return Err(ContactsError::Internal("contact_picker present"));
+        }
+        loop {
+            if let Some(outcome) = bridge::SLOT.take_ready(request_id) {
+                return match outcome {
+                    ContactPickOutcome::Picked(display_name) => Ok(PickedContact { display_name }),
+                    ContactPickOutcome::Cancelled => Err(ContactsError::Cancelled),
+                    ContactPickOutcome::PermissionDenied => Err(ContactsError::PermissionDenied),
+                    ContactPickOutcome::Unsupported => Err(ContactsError::Unsupported),
+                    ContactPickOutcome::Failed(_) => {
+                        Err(ContactsError::Internal("contact_picker outcome"))
+                    }
+                };
+            }
+            // 置き換え・`reset`（Activity 再生成）で要求が消えたら待たない。
+            if bridge::SLOT
+                .snapshot()
+                .is_none_or(|(id, _)| id != request_id)
+            {
+                return Err(ContactsError::Internal("contact_picker superseded"));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
 }
 
 /// `registry.rs` の `effect` 区画から `contact_pick` 画面用に配線される effect ドライバ。

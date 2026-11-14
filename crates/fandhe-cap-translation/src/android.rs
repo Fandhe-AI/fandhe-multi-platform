@@ -26,6 +26,8 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "android")]
+use crate::contract::validate_request;
 use crate::contract::{EMPTY, LANGUAGE_UNSUPPORTED, NOT_INSTALLED, TIMEOUT, TextTranslator};
 use crate::error::TranslationError;
 
@@ -105,6 +107,8 @@ struct AndroidTextTranslator;
 #[cfg(target_os = "android")]
 impl TextTranslator for AndroidTextTranslator {
     fn translate(&self, text: &str, source: &str, target: &str, remaining: Duration) -> Outcome {
+        // 公開入口（`platform_translation`）から直接呼ばれても、JNI へ渡す前に入力を検査する。
+        validate_request(text, source, target)?;
         translate_with(
             &SLOT,
             remaining,
