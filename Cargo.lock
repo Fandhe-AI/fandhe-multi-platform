@@ -2258,6 +2258,7 @@ name = "fandhe-cap-tilt-motion"
 version = "0.2.0"
 dependencies = [
  "fandhe-core",
+ "fandhe-platform-android",
  "fandhe-platform-apple",
  "fandhe-runtime",
  "thiserror 2.0.20",

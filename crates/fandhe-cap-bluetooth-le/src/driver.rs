@@ -288,6 +288,12 @@ fn take_waiter(request_id: u64) -> Option<WaiterTx> {
 }
 
 /// 要求登録から OS への開始依頼までの直列化ロック（[`start_native_scan`]）。
+#[cfg(any(
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "android"
+))]
 static START: Mutex<()> = Mutex::new(());
 
 /// OS へスキャンの開始を依頼する（画面の effect と同期入口で共通）。依頼自体の失敗は [`finish`] へ流す。

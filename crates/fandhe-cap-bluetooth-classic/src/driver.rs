@@ -224,7 +224,7 @@ pub type DiscoverCallback =
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
 /// 要求の登録（採番・完了通知の置き換え・OS への開始依頼）を 1 本に直列化するロック。
 /// 並行する呼び出しで開始順が逆転し、古い開始依頼が新しい要求の観測を置き換えるのを防ぐ。
-/// OS 側コールバックはこのロックを取らない（同期失敗の [`finish`] は保持中に呼ばれるが取らない）。
+/// OS 側コールバックはこのロックを取らない。
 static START: Mutex<()> = Mutex::new(());
 
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
@@ -250,33 +250,45 @@ fn cancel_callback() {
     }
 }
 
+/// 画面側の要求の持ち主印（公開入口の要求と同じ [`bridge::SLOT`] を共有するため、自分の分だけを追う）。
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
+static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
+    fandhe_runtime::request_slot::SlotOwner::new();
+
 /// 要求を採番して OS へ検索の開始を依頼する（画面の effect と公開入口で共通。[`START`] で直列化）。
-/// 依頼自体の失敗は [`finish`] へ流す。
+/// `cb` が `None` なら画面側の要求として [`SCREEN_OWNER`] へ登録する。ユーザー完了通知（置き換えられた
+/// 古い通知の `Cancelled`、同期失敗の完了）は [`START`] を解放してから呼ぶ（通知内からの再試行で自己デッドロックしない）。
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
 fn begin_and_present(cb: Option<DiscoverCallback>) {
     use std::time::Duration;
-    let guard = START.lock().unwrap_or_else(|e| e.into_inner());
-    let request_id = bridge::begin();
-    let old = {
-        let mut g = CALLBACK.lock().unwrap_or_else(|e| e.into_inner());
-        std::mem::replace(&mut *g, cb.map(|cb| (request_id, cb)))
+    let screen = cb.is_none();
+    let (request_id, old, started) = {
+        let _guard = START.lock().unwrap_or_else(|e| e.into_inner());
+        let request_id = bridge::begin();
+        if screen {
+            SCREEN_OWNER.adopt(request_id);
+        }
+        let old = {
+            let mut g = CALLBACK.lock().unwrap_or_else(|e| e.into_inner());
+            std::mem::replace(&mut *g, cb.map(|cb| (request_id, cb)))
+        };
+        OBSERVED.begin(request_id);
+        let duration = Duration::from_millis(crate::contract::DISCOVERY_WINDOW_MS);
+        #[cfg(target_os = "macos")]
+        let started = crate::macos::present(request_id, duration);
+        #[cfg(target_os = "windows")]
+        let started = crate::windows::present(request_id, duration);
+        #[cfg(target_os = "android")]
+        let started = crate::android::present(request_id, duration);
+        (request_id, old, started)
     };
     if let Some((_, old)) = old {
         old(Err(BluetoothClassicError::Cancelled("bluetooth_classic")));
     }
-    OBSERVED.begin(request_id);
-    let duration = Duration::from_millis(crate::contract::DISCOVERY_WINDOW_MS);
-    #[cfg(target_os = "macos")]
-    let started = crate::macos::present(request_id, duration);
-    #[cfg(target_os = "windows")]
-    let started = crate::windows::present(request_id, duration);
-    #[cfg(target_os = "android")]
-    let started = crate::android::present(request_id, duration);
     if let Err(e) = started {
         // 依頼自体が同期的に失敗した（コールバックは二度と来ない）。
         finish(request_id, Err(e));
     }
-    drop(guard);
 }
 
 /// 画面を介さない検索の公開入口。検索を開始して即戻り、結果（窓が閉じたとき、または失敗）を `on_complete` へ
@@ -354,8 +366,9 @@ fn drive_discover_callback(
         return;
     }
     let generation = state.discover_generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &SCREEN_OWNER,
         sender,
         |_request_id| {},
         move |s: &mut BluetoothClassicShowState, outcome| {
@@ -366,6 +379,16 @@ fn drive_discover_callback(
                 true
             } else {
                 false
+            }
+        },
+        // 公開入口・Activity 再生成で自分の要求が置き換わった／失われた。処理中のまま止めない。
+        move |s: &mut BluetoothClassicShowState| {
+            if s.discover_phase != DiscoverPhase::Idle {
+                finish_discover(
+                    s,
+                    generation,
+                    Err(ClassicError::Other("bluetooth_classic cancelled".into())),
+                );
             }
         },
     );

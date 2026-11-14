@@ -23,6 +23,10 @@ fandhe-platform-apple = { path = "../fandhe-platform-apple" }
 # iOS の ObjC を build.rs でコンパイルする helper。通常のビルドには cc を持ち込まない。
 fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
 
+# TiltMotionLifecycle.java が FeatureLifecycleProvider（fandhe-platform-android の Java）を継承する。
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+
 # 機能宣言（capability-declaration.md）。権限・usage description・framework は手で足す（cargo fandhe check が検証する）。
 [package.metadata.fandhe]
 id = "tilt-motion"
