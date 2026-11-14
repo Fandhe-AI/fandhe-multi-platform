@@ -4,11 +4,13 @@ import android.app.Activity;
 import android.app.Application;
 import android.content.ContentProvider;
 import android.content.ContentValues;
+import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 
 import androidx.activity.ComponentActivity;
+import androidx.core.util.Consumer;
 
 import com.google.androidgamesdk.GameActivity;
 
@@ -28,6 +30,9 @@ import com.google.androidgamesdk.GameActivity;
 // 呼ばれる。`registerForActivityResult` を呼べるのは STARTED より前だけなので、ランチャーの登録はここで行う。
 // 登録キーは必ず明示する（`getActivityResultRegistry().register(key, owner, contract, cb)`）。連番キーだと
 // 生成順が変わるだけで再生成後の結果が別のランチャーへ届く。
+//
+// Intent の配送（Issue #1325）: 起動時の Intent と起動中の `onNewIntent` を機能が受けたいときは、
+// `onHostCreated` から `deliverIntents` を呼ぶ。利用者の `MainActivity` に配線を書かせない。
 //
 // provider としては何も公開しない（データを返さず、`exported=false`）。呼び出し元は OS だけ。
 // ponytail: 機能 1 つにつき provider 1 つ。機能が数十に増えて起動時間が問題になれば、
@@ -72,6 +77,32 @@ public abstract class FeatureLifecycleProvider extends ContentProvider
      * 既定は何もしない。
      */
     protected void onHostPaused(ComponentActivity activity) {}
+
+    /**
+     * 起動時の Intent と起動中の `onNewIntent` を `sink` へ配る。`onHostCreated` の中から呼ぶ（Issue #1325）。
+     *
+     * <ul>
+     *   <li>起動時: `savedInstanceState == null` かつ `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY` 無しのときだけ 1 回配る。
+     *       再生成と履歴（Recents）からの起動は元の Intent が再送されるため配らない（二重配送の防止）。</li>
+     *   <li>起動中: `ComponentActivity.addOnNewIntentListener` で受ける。`super.onNewIntent` の中で届き、
+     *       利用者の `onNewIntent` 本体より先。リスナーは Activity に付き、破棄で一緒に消える（再生成で重複しない）。</li>
+     *   <li>同じ Intent が登録した全機能へ届く。消費して後続を止める口は無い。各 `sink` が action・scheme・host で
+     *       自分の分だけ拾う（拾う条件は機能どうしで互いに素にする）。</li>
+     *   <li>Intent は他アプリが送れるので信頼しない。検査は `sink` と Rust 側で行い、内容はログへ出さない。
+     *       `setIntent` は呼ばない。</li>
+     * </ul>
+     *
+     * 起動中の分だけ要る機能は本メソッドを使わず `activity.addOnNewIntentListener` を直接使う。
+     */
+    protected static void deliverIntents(ComponentActivity activity, Bundle savedInstanceState,
+            Consumer<Intent> sink) {
+        activity.addOnNewIntentListener(sink);
+        Intent intent = activity.getIntent();
+        if (savedInstanceState == null
+                && (intent.getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0) {
+            sink.accept(intent);
+        }
+    }
 
     @Override
     public boolean onCreate() {

@@ -1,7 +1,7 @@
 //! macOS / iOS 向けカスタム URL scheme 受信（Issue #1215・#1217）。`device/url_scheme.rs::
 //! platform_url_scheme` の macOS・iOS 分岐から使われる。macOS は
 //! `macos/fandhe_macos_url_scheme.m` が登録する Apple Event `kAEGetURL` ハンドラ、iOS は
-//! `ios/fandhe_ios_url_scheme.m` が差し込む delegate の `application:openURL:options:`
+//! `ios/fandhe_ios_url_scheme.m` が scene 通知（旧経路は共通層の delegate の `application:openURL:options:` が合流）
 //! と、起動通知の `launchOptions`（コールドスタート）から
 //! [`fandhe_rust_url_scheme_received`] が呼ばれる（いずれも `build.rs` がコンパイルする）。
 //!

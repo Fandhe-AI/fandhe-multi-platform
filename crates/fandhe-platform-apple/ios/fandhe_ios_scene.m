@@ -12,8 +12,9 @@
 //   - 外部ディスプレイ ロールの scene: window を付けない（ミラーリング・拡張表示は OS の既定のまま）。
 //     scene が接続されることで `connectedScenes` から外部画面を列挙できる。
 //   - URL: scene 形態では `application:openURL:options:` が呼ばれず scene 側へ届くため、
-//     通知 `FandheSceneOpenURLNotification`（object = NSURL）へ流す。受信側は
-//     `fandhe_ios_url_scheme.m`（本ファイルは feature `device` に依存しない）。
+//     通知 `FandheSceneOpenURLNotification`（object = NSURL）へ流す。受信側は機能の `.m`
+//     （本ファイルは feature `device` に依存しない）。通知名と署名の正本は
+//     `include/fandhe_ios_app_events.h`（旧経路の URL は `ios/fandhe_ios_app_delegate.m` が同じ通知へ合流させる）。
 //   - ホーム画面のショートカット（Issue #425）: 未起動からの起動は `connectionOptions.shortcutItem`、
 //     起動中は `windowScene:performActionForShortcutItem:completionHandler:` で届く。type は
 //     Info.plist の固定 URL なので、そのまま URL として同じ通知へ流す（検査は Rust 側 `UrlInbox`）。
@@ -33,6 +34,8 @@
 // URL・画面情報はログへ出さない。
 
 #import <UIKit/UIKit.h>
+
+#import "fandhe_ios_app_events.h"
 
 NSString *const FandheSceneOpenURLNotification = @"FandheSceneOpenURLNotification";
 NSString *const FandheSceneContinueUserActivityNotification =
