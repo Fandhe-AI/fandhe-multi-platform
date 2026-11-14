@@ -360,11 +360,11 @@ dependencies {
     // 直接 import するため明示依存にする（バージョン選定根拠は versions.env の
     // ANDROIDX_ACTIVITY_VERSION コメント参照）。
     implementation("androidx.activity:activity:${androidVersion("ANDROIDX_ACTIVITY_VERSION")}")
-    // MainActivity の生体認証中継（`BiometricPrompt`/`BiometricManager`、Phase 11、
+    // fandhe-cap-biometric-auth の BiometricAuthHelper（`BiometricPrompt`/`BiometricManager`、Phase 11、
     // Issue #908）が androidx.biometric を直接 import するため明示依存にする
     // （バージョン選定根拠は versions.env の BIOMETRIC_VERSION コメント参照）。
     implementation("androidx.biometric:biometric:${androidVersion("BIOMETRIC_VERSION")}")
-    // MainActivity の資格情報中継（`EncryptedSharedPreferences`/`MasterKey`、Phase 11、
+    // fandhe-cap-secure-credential の SecureCredentialHelper（`EncryptedSharedPreferences`/`MasterKey`、Phase 11、
     // Issue #924）が androidx.security.crypto を直接 import するため明示依存にする
     // （バージョン選定根拠は versions.env の SECURITY_CRYPTO_VERSION コメント参照）。
     implementation("androidx.security:security-crypto:${androidVersion("SECURITY_CRYPTO_VERSION")}")

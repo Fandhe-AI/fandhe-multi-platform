@@ -18,7 +18,7 @@
 //! を返す非同期 API で、Windows Hello の認証ダイアログは別プロセスの UI のため
 //! `.get()` で同期待ちせず `SetCompleted` にハンドラを登録する
 //! （UI スレッドをブロックしない）。完了はスレッドプール側スレッドで届くため、結果は
-//! `biometric_auth::bridge::deliver`（`Mutex` 保護）へ置くだけにし、画面への反映は
+//! `crate::driver::bridge::deliver`（`Mutex` 保護）へ置くだけにし、画面への反映は
 //! `biometric_auth::drive_callback` の毎フレームポーリングに任せる
 //! （`device/share.rs` の `.m` 側コールバックと同じ構造）。
 //!
@@ -58,7 +58,7 @@ thread_local! {
 }
 
 /// `device/biometric_auth.rs` の Windows 経路から呼ばれる。`request_id` は
-/// `biometric_auth::bridge::begin` が払い出したプロセス内一意な ID
+/// `crate::driver::bridge::begin` が払い出したプロセス内一意な ID
 /// （`bridge::deliver` の照合キー）。同期的に失敗した場合は `Err` を返し、
 /// 呼び出し元が `bridge::deliver` する（完了ハンドラは二度と呼ばれないため）。
 #[allow(unsafe_code)]

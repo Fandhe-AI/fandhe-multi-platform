@@ -202,7 +202,7 @@ pub(crate) mod bridge {
     /// （`device::location::reset_retry_tracking` と同じ位置づけ）。[`SLOT`] は
     /// プロセス static のため Activity 再生成をまたいで残るが、画面状態
     /// （`BiometricCheckState`）は再生成のたびに `Default`（`Idle`）で作り直される。
-    /// 放置すると、再生成前に開始した認証が OS 側（`MainActivity::biometricPrompt`、
+    /// 放置すると、再生成前に開始した認証が OS 側（`BiometricAuthHelper` の `biometricPrompt`、
     /// `FragmentManager` 経由で再接続される契約）でその後完了しても、
     /// [`super::drive_callback`] は新しい `Idle` 状態を見て早期 return するため、
     /// 結果が画面へ一切反映されず黙って失われる
@@ -210,7 +210,7 @@ pub(crate) mod bridge {
     /// 完了を確定済みではなく実際に取りこぼす点が違う）。ここで [`SLOT`] を
     /// 丸ごと捨て、以後届く旧 `request_id` の [`deliver`] を `request_id` 不一致で
     /// 確実に無視させる。対になる後始末として Java 側
-    /// （`MainActivity::onCreate`）は保留中の `BiometricPrompt` を
+    /// （`BiometricAuthLifecycle.attach`）は保留中の `BiometricPrompt` を
     /// `cancelAuthentication()` で明示的に閉じる。両者の呼び出し順に依存しない
     /// （[`deliver`] の照合はどちらが先でも安全）。
     ///
@@ -371,7 +371,7 @@ pub fn reset_pending_tracking() {
     bridge::reset();
 }
 
-/// Android 側 `MainActivity` の結果コード（`nativeOnBiometricResult`）→
+/// Android 側 `BiometricAuthHelper` の結果コード（`nativeOnBiometricResult`）→
 /// [`crate::contract::AuthOutcome`] の写像（Java 側 `BiometricAuthHelper` の
 /// `BIOMETRIC_RESULT_*` 定数・`biometricErrorToResultCode` が SSOT、
 /// `BiometricAuthHelper.java` のコメント参照）。未知のコードは失敗側（`Internal`）に倒す

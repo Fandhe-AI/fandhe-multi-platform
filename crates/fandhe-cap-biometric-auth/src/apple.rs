@@ -7,7 +7,7 @@
 //! 契約を明記する（`apple_share.rs::present` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `.m` 側の reply コールバックから [`fandhe_rust_biometric_outcome`]（本モジュールが
-//! 公開する `extern "C"` 関数）が呼ばれ、`device/biometric_auth::bridge` へ結果を push
+//! 公開する `extern "C"` 関数）が呼ばれ、`crate::driver::bridge` へ結果を push
 //! する（pull 型、`apple_share.rs::fandhe_rust_share_outcome` と同じ橋渡し方式）。
 //! `LAError` の生コード → 結果の写像は `device/biometric_auth.rs::outcome_from_reply`
 //! （iOS/macOS 共通の SSOT）に一本化する。
@@ -27,7 +27,7 @@ unsafe extern "C" {
 
 /// `.m` 側の `fandhe_apple_biometric_authenticate` を呼び、生体認証 UI の提示を依頼する
 /// （`device/biometric_auth.rs` の macOS/iOS 経路から呼ばれる契約）。`request_id` は
-/// `device/biometric_auth::bridge::begin` が払い出したプロセス内一意な ID（画面の
+/// `crate::driver::bridge::begin` が払い出したプロセス内一意な ID（画面の
 /// `generation` ではない、`apple_share.rs::present` と同じ設計）。
 ///
 /// `reason` の `CString` 化が失敗する（内部 NUL 混入）ことは通常起きない
