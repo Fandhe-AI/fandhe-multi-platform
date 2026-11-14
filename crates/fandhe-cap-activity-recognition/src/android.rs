@@ -1,17 +1,17 @@
-//! Android 向け行動認識実装（Issue #1127、親 #124。骨格は #1126）。`device/activity_recognition.rs` の
-//! Android 経路から egui スレッドで呼ばれ、`MainActivity.activityRecognitionStart` /
-//! `activityRecognitionRead` / `activityRecognitionStop` を同期 JNI で呼んで最新値を pull する
+//! Android 向け行動認識実装（Issue #1127、親 #124。骨格は #1126）。`driver` の
+//! Android 経路から egui スレッドで呼ばれ、`ActivityRecognitionHelper.start(Activity)` /
+//! `read(Activity)` / `stop(Activity)`（static）を同期 JNI で呼んで最新値を pull する
 //! （継続配信の pull 型。要求 id・`RequestSlot` は使わない）。Java 側は `ActivityRecognitionHelper`
 //! （Play services `ActivityRecognitionClient`、結果は `ActivityRecognitionReceiver` 経由）。
 //!
 //! # 結果コード（SSOT は Java `ActivityRecognitionHelper`）
 //!
-//! - `activityRecognitionStart`: 0 = OK / 1 = 非対応（API 28 以下・GMS 不可）/ それ以外 = `Failed`
-//! - `activityRecognitionRead`: `long[]` で `[status, seq, type0, conf0, type1, conf1, ...]`。
+//! - `start`: 0 = OK / 1 = 非対応（API 28 以下・GMS 不可）/ それ以外 = `Failed`
+//! - `read`: `long[]` で `[status, seq, type0, conf0, type1, conf1, ...]`。
 //!   status 0 = 待機 / 1 = 値あり / 2 = 許可拒否 / 3 = 失敗 / 4 = 許可ダイアログ待ち / 負値 = 購読喪失
 //!   （Activity 再生成など。`Failed`）
 //!
-//! 種別・確度の整数コードの写像は `fandhe_device::activity_recognition::classify_detected` が正で、
+//! 種別・確度の整数コードの写像は `crate::contract::classify_detected` が正で、
 //! Java は生のコードを渡すだけ。範囲外・未知・空は捨てて待機にし、静止へ畳まない。
 //!
 //! # ライフサイクル
@@ -26,8 +26,8 @@
 
 use std::sync::Arc;
 
-use fandhe_device::activity_recognition::{
-    classify_detected, ActivityFailure, ActivityPoll, ActivityReading, ActivityRecognizer,
+use crate::contract::{
+    ActivityFailure, ActivityPoll, ActivityReading, ActivityRecognizer, classify_detected,
 };
 
 const START_OK: i32 = 0;
@@ -90,36 +90,37 @@ fn decode_reading(seq: i64, pairs: &[i64]) -> ActivityPoll {
 #[cfg(target_os = "android")]
 struct AndroidActivityRecognizer;
 
-/// `MainActivity` の同期メソッドを呼ぶ。Activity 未確立・JNI 失敗は `None`。
-/// 2 箇所の `unsafe` は `android_compass.rs::call_activity` と同一の根拠。
+/// `ActivityRecognitionHelper` の static メソッド（第 1 引数は Activity）を同期 JNI で呼ぶ。
+/// Activity 未確立・JNI 失敗は `None`。JavaVM と Activity の取得は
+/// `fandhe_platform_android::with_activity_class` に任せ、ここは `unsafe` を持たない。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
 fn call_activity<T>(
-    f: impl FnOnce(&mut jni::Env, &jni::objects::JObject) -> Result<T, super::android::JniCallFailed>,
+    f: impl FnOnce(
+        &mut jni::Env,
+        &jni::objects::JObject,
+        &jni::objects::JClass,
+    ) -> Result<T, fandhe_platform_android::JniCallFailed>,
 ) -> Option<T> {
-    let app = crate::android::android_app()?;
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        f(env, &activity)
-    })
+    use fandhe_platform_android::{android_app, with_activity_class};
+    let app = android_app()?;
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.ActivityRecognitionHelper"),
+        f,
+    )
     .ok()
 }
 
 #[cfg(target_os = "android")]
 impl ActivityRecognizer for AndroidActivityRecognizer {
     fn start(&self) -> Result<(), ActivityFailure> {
-        let code = call_activity(|env, a| {
+        let code = call_activity(|env, a, class| {
             Ok(env
-                .call_method(
-                    a,
-                    jni::jni_str!("activityRecognitionStart"),
-                    jni::jni_sig!(() -> int),
-                    &[],
+                .call_static_method(
+                    class,
+                    jni::jni_str!("start"),
+                    jni::jni_sig!((android.app.Activity) -> int),
+                    &[jni::objects::JValue::Object(a)],
                 )?
                 .i()?)
         })
@@ -128,13 +129,13 @@ impl ActivityRecognizer for AndroidActivityRecognizer {
     }
 
     fn read(&self) -> Result<ActivityPoll, ActivityFailure> {
-        let values = call_activity(|env, a| {
+        let values = call_activity(|env, a, class| {
             use jni::objects::JLongArray;
-            let ret = env.call_method(
-                a,
-                jni::jni_str!("activityRecognitionRead"),
-                jni::jni_sig!(() -> long[]),
-                &[],
+            let ret = env.call_static_method(
+                class,
+                jni::jni_str!("read"),
+                jni::jni_sig!((android.app.Activity) -> long[]),
+                &[jni::objects::JValue::Object(a)],
             )?;
             let arr = env.cast_local::<JLongArray>(ret.l()?)?;
             if arr.is_null() {
@@ -155,19 +156,19 @@ impl ActivityRecognizer for AndroidActivityRecognizer {
     }
 
     fn stop(&self) {
-        let _ = call_activity(|env, a| {
-            env.call_method(
-                a,
-                jni::jni_str!("activityRecognitionStop"),
-                jni::jni_sig!(() -> ()),
-                &[],
+        let _ = call_activity(|env, a, class| {
+            env.call_static_method(
+                class,
+                jni::jni_str!("stop"),
+                jni::jni_sig!((android.app.Activity) -> ()),
+                &[jni::objects::JValue::Object(a)],
             )?;
             Ok(())
         });
     }
 }
 
-/// Android の `ActivityRecognizer` 実装を返す（`device/activity_recognition.rs` の dispatch から呼ばれる）。
+/// Android の `ActivityRecognizer` 実装を返す（`driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn ActivityRecognizer> {
     Arc::new(AndroidActivityRecognizer)
@@ -177,7 +178,7 @@ pub(crate) fn implementation() -> Arc<dyn ActivityRecognizer> {
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 pub(crate) fn implementation() -> Arc<dyn ActivityRecognizer> {
-    Arc::new(fandhe_device::activity_recognition::UnsupportedActivityRecognizer)
+    Arc::new(crate::contract::UnsupportedActivityRecognizer)
 }
 
 /// 背景遷移の通知（Java `ActivityRecognitionHelper.onStop` から、Rust が start を呼んだ後だけ呼ばれる）。
@@ -188,12 +189,12 @@ pub(crate) fn implementation() -> Arc<dyn ActivityRecognizer> {
 /// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じる。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_ActivityRecognitionHelper_nativeOnBackgrounded(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
 ) {
-    super::activity_recognition::note_backgrounded();
+    crate::driver::note_backgrounded();
 }
 
 /// 前景復帰の通知（Java `ActivityRecognitionHelper.onStart`）。期限の起点を引き直し、次フレームを起こす。
@@ -202,19 +203,19 @@ extern "system" fn Java_com_fandhe_platform_ActivityRecognitionHelper_nativeOnBa
 /// [`Java_com_fandhe_platform_ActivityRecognitionHelper_nativeOnBackgrounded`] と同一の根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_ActivityRecognitionHelper_nativeOnResumed(
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
 ) {
-    super::activity_recognition::note_resumed();
-    crate::android::request_repaint();
+    crate::driver::note_resumed();
+    fandhe_runtime::request_repaint();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::activity_recognition::{ActivityKind, Confidence};
+    use crate::contract::{ActivityKind, Confidence};
 
     #[test]
     fn host_never_succeeds() {

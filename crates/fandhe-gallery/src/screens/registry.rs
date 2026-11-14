@@ -395,7 +395,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "activity_recognition_show" => fandhe_core::screens::activity_recognition_show::current_screen,
-    fandhe_egui_proxy::device::activity_recognition::activity_recognition_show_effect,
+    fandhe_cap_activity_recognition::activity_recognition_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ar_show" => fandhe_core::screens::ar_show::current_screen,

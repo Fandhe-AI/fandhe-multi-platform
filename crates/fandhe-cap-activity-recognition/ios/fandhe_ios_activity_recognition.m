@@ -1,7 +1,7 @@
 // 行動認識（歩行・乗車等）: iOS 実装（Issue #614、親 #124）。CoreMotion の
 // `CMMotionActivityManager` で現在の行動を購読し、最新値を static に保持する（pull 型）。
 //
-// `src/device/ios_activity_recognition.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
+// `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
 // feature `device` 有効時のみ `cc` コンパイルする（CoreMotion は motion 用にリンク済み）。
 //
 // 契約:

@@ -149,8 +149,6 @@ fn build() {
     compile_ios_environment_sensors();
     // `ios/fandhe_ios_motion_raw_sensors.m`（Issue #900）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_motion_raw_sensors();
-    // `ios/fandhe_ios_activity_recognition.m`（Issue #614）。iOS 分岐のみ（macOS は対応表で n-a）。
-    compile_ios_activity_recognition();
     // `ios/fandhe_ios_camera_preview_stream.m`（Issue #813）。iOS 分岐。macOS 分岐（`build_macos`）も同じ `.m` を共有する（Issue #1066）。
     compile_ios_camera_preview_stream();
     // `ios/fandhe_ios_pen_stylus.m`（Issue #356）。iOS 分岐のみ。
@@ -612,15 +610,6 @@ fn compile_ios_motion_raw_sensors() {
     compile_objc(
         "ios/fandhe_ios_motion_raw_sensors.m",
         &["CoreMotion", "UIKit"],
-    );
-}
-
-/// `ios/fandhe_ios_activity_recognition.m` を `cc` でコンパイルする（Issue #614）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_activity_recognition.rs` が使う）。
-fn compile_ios_activity_recognition() {
-    compile_objc(
-        "ios/fandhe_ios_activity_recognition.m",
-        &["CoreMotion", "Foundation", "UIKit"],
     );
 }
 

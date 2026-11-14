@@ -18,6 +18,7 @@ device = [
   "fandhe-egui-proxy/device",
   # BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
   "dep:fandhe-cap-accessibility-prefs",
+  "dep:fandhe-cap-activity-recognition",
   "dep:fandhe-cap-app-attest",
   "dep:fandhe-cap-app-badge",
   "dep:fandhe-cap-app-lifecycle",
@@ -161,6 +162,7 @@ egui = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
 fandhe-cap-accessibility-prefs = { path = "../fandhe-cap-accessibility-prefs", optional = true }
+fandhe-cap-activity-recognition = { path = "../fandhe-cap-activity-recognition", optional = true }
 fandhe-cap-app-attest = { path = "../fandhe-cap-app-attest", optional = true }
 fandhe-cap-app-badge = { path = "../fandhe-cap-app-badge", optional = true }
 fandhe-cap-app-lifecycle = { path = "../fandhe-cap-app-lifecycle", optional = true }

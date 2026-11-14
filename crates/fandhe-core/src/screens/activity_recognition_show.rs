@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod activity_recognition_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は
-//! `device/activity_recognition.rs` が行い、[`apply_poll`] / [`apply_failure`] で注入する。
+//! `fandhe-cap-activity-recognition` の `driver.rs` が行い、[`apply_poll`] / [`apply_failure`] で注入する。
 //! `fandhe_device::activity_recognition` の型は依存方向の都合でここへ写す。
 //!
 //! 嘘の行動を出さない: 初期・待機・許可待ち・失敗・非対応は種別を持たない（[`ActivityView::Live`]

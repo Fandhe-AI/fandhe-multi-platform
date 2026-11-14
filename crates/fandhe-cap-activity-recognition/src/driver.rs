@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #124、Issue #613）「行動認識（歩行・乗車等）」の effect ドライバ。
 //! `fandhe_core::screens::activity_recognition_show`（端末依存ゼロ）の `wanted` の立ち上がりで
-//! `fandhe_device::activity_recognition::ActivityRecognizer::start`、立ち下がりで `stop` を呼び、
+//! `crate::contract::ActivityRecognizer::start`、立ち下がりで `stop` を呼び、
 //! 購読中は [`READ_INTERVAL`] ごとに `read` して結果を注入する（`registry.rs` の `effect` 区画から
 //! 毎フレーム同期に呼ばれる。`compass.rs` と同型）。
 //!
@@ -12,45 +12,45 @@
 //! 期限は単調時計（`Instant`）由来のミリ秒だけで測り、期限の起点はこのドライバの
 //! [`FirstReadingDeadline`] だけが持つ（OS 側に別の期限を持たせない）。許可待ちは数えない。
 //!
-//! dispatch（[`implementation`]）は全対象 OS の最終形。Windows は `windows_activity_recognition.rs`、
-//! iOS は `ios_activity_recognition.rs`、Android は `android_activity_recognition.rs`
+//! dispatch（[`implementation`]）は全対象 OS の最終形。Windows は `windows.rs`、
+//! iOS は `ios.rs`、Android は `android.rs`
 //! （Issue #1127）、macOS・Linux は `UnsupportedActivityRecognizer`。
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use fandhe_core::screens::activity_recognition_show::{
-    apply_failure, apply_poll, ActivityFailureView, ActivityKindView, ActivityPollView,
-    ActivityReadingView, ActivityRecognitionShowState, ConfidenceView,
-};
 #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
-use fandhe_device::activity_recognition::UnsupportedActivityRecognizer;
-use fandhe_device::activity_recognition::{
+use crate::contract::UnsupportedActivityRecognizer;
+use crate::contract::{
     ActivityFailure, ActivityKind, ActivityPoll, ActivityRecognizer, Confidence,
     FirstReadingDeadline, PollKind, READ_INTERVAL,
 };
+use fandhe_core::screens::activity_recognition_show::{
+    ActivityFailureView, ActivityKindView, ActivityPollView, ActivityReadingView,
+    ActivityRecognitionShowState, ConfidenceView, apply_failure, apply_poll,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた実装を返す（プロセスで 1 個。購読を二重に作らないため
 /// `OnceLock` で保持する）。
-fn implementation() -> Arc<dyn ActivityRecognizer> {
+pub fn platform_activity_recognition() -> Arc<dyn ActivityRecognizer> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn ActivityRecognizer>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "windows")]
             {
-                super::windows_activity_recognition::implementation()
+                crate::windows::implementation()
             }
             #[cfg(target_os = "ios")]
             {
-                super::ios_activity_recognition::implementation()
+                crate::ios::implementation()
             }
             #[cfg(target_os = "android")]
             {
-                super::android_activity_recognition::implementation()
+                crate::android::implementation()
             }
             #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
             {
@@ -133,7 +133,7 @@ static RESUME_EPOCH: AtomicU64 = AtomicU64::new(0);
 /// 背景中か。背景中は期限を進めない。
 static BACKGROUND: AtomicBool = AtomicBool::new(false);
 
-/// 背景遷移を記録する。iOS の実装（#614）が `ios_activity_recognition.rs` の C ABI 受け口から呼ぶ。
+/// 背景遷移を記録する。iOS の実装（#614）が `ios.rs` の C ABI 受け口から呼ぶ。
 #[cfg(any(target_os = "ios", target_os = "android", test))]
 pub(crate) fn note_backgrounded() {
     BACKGROUND.store(true, Ordering::SeqCst);
@@ -263,7 +263,7 @@ pub fn activity_recognition_show_effect(
     drive(
         state,
         sender,
-        implementation().as_ref(),
+        platform_activity_recognition().as_ref(),
         Instant::now(),
         RESUME_EPOCH.load(Ordering::SeqCst),
         ds,
@@ -273,21 +273,28 @@ pub fn activity_recognition_show_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::{
+        ActivityReading, NO_READING_TIMEOUT_MS, UnsupportedActivityRecognizer as Unsupported,
+    };
     use fandhe_core::screens::activity_recognition_show::{
-        activity_text, start, stop, ActivityView,
+        ActivityView, activity_text, start, stop,
     };
-    use fandhe_device::activity_recognition::{
-        ActivityReading, UnsupportedActivityRecognizer as Unsupported, NO_READING_TIMEOUT_MS,
-    };
-    use std::sync::atomic::AtomicUsize;
     use std::sync::Mutex as StdMutex;
+    use std::sync::atomic::AtomicUsize;
     use std::time::Duration;
 
-    type Rx = std::sync::mpsc::Receiver<crate::app::Completion<ActivityRecognitionShowState>>;
+    type Rx = std::sync::mpsc::Receiver<fandhe_runtime::Completion<ActivityRecognitionShowState>>;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
 
     fn channel() -> (CompletionSender<ActivityRecognitionShowState>, Rx) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     fn apply_all(rx: &Rx, s: &mut ActivityRecognitionShowState) {

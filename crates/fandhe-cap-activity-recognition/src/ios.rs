@@ -1,8 +1,8 @@
 //! iOS 向け行動認識実装（Issue #614、親 #124）。`ios/fandhe_ios_activity_recognition.m`
 //! （CoreMotion `CMMotionActivityManager` の購読、`build.rs` が iOS ターゲットの feature `device` 有効時に
-//! コンパイルする）を `unsafe extern "C"` 3 関数で呼ぶ。`device/activity_recognition.rs` の iOS 経路が
+//! コンパイルする）を `unsafe extern "C"` 3 関数で呼ぶ。`driver` の iOS 経路が
 //! [`implementation`] を呼ぶ。dispatch・共通コア画面・ドライバ・trait 契約
-//! （`fandhe_device::activity_recognition`）は #613 の最終形のまま変えない。
+//! （`crate::contract`）は #613 の最終形のまま変えない。
 //!
 //! `.m` は OS の生値と状態コードを返すだけで、範囲検査と契約値への写像は [`start_result`] /
 //! [`read_result`] / [`kind_from_flags`] が行う（ホストでテストできるよう `cfg(any(ios, test))`）。
@@ -14,9 +14,9 @@
 //!   （`CMErrorNotAuthorized` / `CMErrorMotionActivityNotAuthorized`）は `PermissionDenied`、
 //!   許可ダイアログの応答待ちは `AwaitingPermission`（期限に数えない）
 //! - 分類フラグは `classify_flags` で種別にまとめる。判定なしを静止にしない
-//! - 背景遷移・前景復帰の通知で `device/activity_recognition.rs` の `note_backgrounded` /
+//! - 背景遷移・前景復帰の通知で `driver` の `note_backgrounded` /
 //!   `note_resumed` を呼ぶ。`.m` は背景で購読を解除し、復帰で張り直す
-//! - 値・失敗の確定直後に `crate::ios::request_repaint` で次フレームを起こす（契約表 4）
+//! - 値・失敗の確定直後に `fandhe_runtime::request_repaint` で次フレームを起こす（契約表 4）
 //!
 //! # 守る範囲・守らない範囲
 //!
@@ -29,8 +29,8 @@
 //! - シミュレータは `isActivityAvailable` が NO で常に `Unsupported`
 //! - 許可後 5 秒以内に最初の 1 件が届くかと拒否判定用 query の振る舞いは実機未確認（#603）
 
-use fandhe_device::activity_recognition::{
-    classify_flags, ActivityFailure, ActivityKind, ActivityPoll, ActivityReading, Confidence,
+use crate::contract::{
+    ActivityFailure, ActivityKind, ActivityPoll, ActivityReading, Confidence, classify_flags,
 };
 
 /// `.m` の start の戻り値を契約へ写す（0 成功 / 1 非対応 / 2 権限拒否 / 他 失敗）。
@@ -93,14 +93,14 @@ fn read_result(
 mod imp {
     use std::sync::Arc;
 
-    use fandhe_device::activity_recognition::{ActivityFailure, ActivityPoll, ActivityRecognizer};
+    use crate::contract::{ActivityFailure, ActivityPoll, ActivityRecognizer};
 
     use super::{read_result, start_result};
 
     // SAFETY: `ios/fandhe_ios_activity_recognition.m`（`build.rs` が iOS ターゲットの feature `device`
     // 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_ios_activity_recognition_start() -> i32;
         fn fandhe_ios_activity_recognition_read(
             flags: *mut u32,
@@ -136,7 +136,7 @@ mod imp {
         }
     }
 
-    /// iOS の `ActivityRecognizer` 実装を返す（`device/activity_recognition.rs` の iOS 経路から呼ばれる）。
+    /// iOS の `ActivityRecognizer` 実装を返す（`driver` の iOS 経路から呼ばれる）。
     pub(crate) fn implementation() -> Arc<dyn ActivityRecognizer> {
         Arc::new(IosActivityRecognizer)
     }
@@ -149,26 +149,26 @@ pub(crate) use imp::implementation;
 /// しない（契約表 11）。panic しない。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_activity_recognition_changed() {
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }
 
 /// 背景遷移の通知（`.m` の `DidEnterBackground` から）。背景中は `NoReading` の待機を止める。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_activity_recognition_backgrounded() {
-    super::activity_recognition::note_backgrounded();
+    crate::driver::note_backgrounded();
 }
 
 /// 前景復帰の通知（`.m` の `WillEnterForeground` から）。ドライバの待機起点を引き直させる。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_activity_recognition_resumed() {
-    super::activity_recognition::note_resumed();
-    crate::ios::request_repaint();
+    crate::driver::note_resumed();
+    fandhe_runtime::request_repaint();
 }
 
 #[cfg(test)]

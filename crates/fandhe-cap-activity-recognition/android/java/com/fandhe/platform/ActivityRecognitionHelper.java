@@ -1,6 +1,7 @@
 package com.fandhe.platform;
 
 import android.Manifest;
+import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
@@ -14,20 +15,28 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.location.ActivityRecognition;
 import com.google.android.gms.location.ActivityRecognitionResult;
 import com.google.android.gms.location.DetectedActivity;
 import com.google.android.gms.tasks.Task;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 
-// 行動認識（歩行・乗車等、Issue #1127、親 #124）の Android 実装ヘルパー。MainActivity から生成・委譲される
-// （Rust の `device/android_activity_recognition.rs` が egui スレッドから `MainActivity.activityRecognitionStart` /
-// `activityRecognitionRead` / `activityRecognitionStop` を同期 JNI で呼ぶ継続配信の pull 型。`RequestTracker` は使わない）。
+// 行動認識（歩行・乗車等、Issue #1127、親 #124）の Android 実装ヘルパー。利用者の `MainActivity` には何も書かせない
+// （Rust の `fandhe-cap-activity-recognition/src/android.rs` が egui スレッドから static の `start(Activity)` /
+// `read(Activity)` / `stop(Activity)` を同期 JNI で呼ぶ継続配信の pull 型。`RequestTracker` は使わない）。
+// Activity の生成・破棄・Started / Stopped は `ActivityRecognitionLifecycle`（非公開 ContentProvider、
+// `FeatureLifecycleProvider` 継承）が知らせる。Activity ごとの helper は `HELPERS` に持つ。helper が無い（生成前・破棄後）
+// start は START_FAILED、read は購読喪失（-1）で確定し、成功にも待ちにもしない。
 // Play services `ActivityRecognitionClient.requestActivityUpdates` の結果を `ActivityRecognitionReceiver`
 // （PendingIntent）経由で受け、生の (type, confidence) の組を保持するだけ。種別の写像は Rust `classify_detected` が正。
 //
-// 結果コードの SSOT はここで、Rust 側 `android_activity_recognition.rs` が同じ値で解釈する。
+// 結果コードの SSOT はここで、Rust 側 `android.rs` が同じ値で解釈する。
 //   activityRecognitionStart: 0=OK / 1=非対応（API 28 以下・GMS 不可）/ 2=失敗・破棄済み
 //   activityRecognitionRead : long[] {status, seq, type0, conf0, type1, conf1, ...}
 //     status 0=待機 / 1=値あり / 2=許可拒否 / 3=失敗 / 4=許可ダイアログ待ち / -1=購読が失われた
@@ -105,6 +114,10 @@ final class ActivityRecognitionHelper {
 
     private static final Snapshot WAITING = new Snapshot(new long[] {ST_WAITING, 0});
 
+    // Activity ごとの helper（上記クラス冒頭コメント参照）。
+    private static final Map<Activity, ActivityRecognitionHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     private final ComponentActivity activity;
     private final ActivityResultLauncher<String> permissionLauncher;
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -124,18 +137,73 @@ final class ActivityRecognitionHelper {
     private long latestSeq;
     private Task<Void> requestTask;     // 現在の要求。遅れて届いた別の要求の完了を区別する
 
-    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity のフィールド初期化子で生成する。
-    ActivityRecognitionHelper(ComponentActivity activity) {
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`ActivityRecognitionLifecycle.onHostCreated`
+    // （`Activity.onCreate` の中）から `attach` で生成する。
+    private ActivityRecognitionHelper(ComponentActivity activity) {
         this.activity = activity;
         this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:ActivityRecognitionHelper:1", activity,
                 new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
         current = this;
     }
 
+    // Activity の生成時（`ActivityRecognitionLifecycle` から、UI スレッド）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new ActivityRecognitionHelper(activity));
+    }
+
+    // Activity の破棄時（同上）。購読を解除する。
+    static void detach(Activity activity) {
+        ActivityRecognitionHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // Rust から呼ぶ入口（egui スレッド）。helper が無い要求は失敗・購読喪失で確定する。
+    static int start(Activity activity) {
+        ActivityRecognitionHelper helper = HELPERS.get(activity);
+        return helper == null ? START_FAILED : helper.start();
+    }
+
+    static long[] read(Activity activity) {
+        ActivityRecognitionHelper helper = HELPERS.get(activity);
+        return helper == null ? new long[] {ST_LOST, 0} : helper.read();
+    }
+
+    static void stop(Activity activity) {
+        ActivityRecognitionHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.stop();
+        }
+    }
+
+    // `ActivityRecognitionLifecycle` から（UI スレッド）。helper が無ければ何もしない。
+    static void started(Activity activity) {
+        ActivityRecognitionHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onStart();
+        }
+    }
+
+    static void stopped(Activity activity) {
+        ActivityRecognitionHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onStop();
+        }
+    }
+
+    // Google Play services が使えるか。SUCCESS だけを可とし、それ以外（無い・古い・無効）は非対応にする。
+    // 更新ダイアログは出さない。共通層へ置かない理由は、GMS を使わない機能を選んだ利用者に
+    // Play services の依存を乗せないため（document-scan の `DocumentScanHelper` と同じ）。
+    private static boolean isGmsAvailable(Context ctx) {
+        return GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(ctx)
+                == ConnectionResult.SUCCESS;
+    }
+
     // --- egui スレッド ---
 
-    int start() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || !GmsAvailability.isAvailable(activity)) {
+    private int start() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || !isGmsAvailable(activity)) {
             return START_UNSUPPORTED;
         }
         nativeReady = true;
@@ -154,12 +222,12 @@ final class ActivityRecognitionHelper {
         return START_OK;
     }
 
-    long[] read() {
+    private long[] read() {
         if (!started) return new long[] {(subscribed || destroyed) ? ST_LOST : ST_WAITING, 0};
         return snapshot.values;
     }
 
-    void stop() {
+    private void stop() {
         subscribed = false;
         started = false;
         snapshot = WAITING;
@@ -172,19 +240,19 @@ final class ActivityRecognitionHelper {
 
     // --- main thread ---
 
-    void onStart() {
+    private void onStart() {
         foreground = true;
         reconcile();
         if (nativeReady) nativeOnResumed();
     }
 
-    void onStop() {
+    private void onStop() {
         foreground = false;
         reconcile();
         if (nativeReady) nativeOnBackgrounded();
     }
 
-    void onDestroy() {
+    private void onDestroy() {
         destroyed = true;
         started = false;
         wanted = false;

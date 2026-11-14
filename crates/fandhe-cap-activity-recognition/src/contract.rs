@@ -1,11 +1,11 @@
 //! 行動認識（歩行・走行・乗り物など）の契約（Issue #613、親 #124）。端末が推定した現在の
-//! 行動種別と確度を画面に出すための橋渡しで、`fandhe-egui-proxy` の
-//! `device/activity_recognition.rs` が購読の開始・停止と間隔つきの [`ActivityRecognizer::read`] を行う
+//! 行動種別と確度を画面に出すための橋渡しで、本 crate の `driver` の
+//! `driver` が購読の開始・停止と間隔つきの [`ActivityRecognizer::read`] を行う
 //! （pull 型。OS 側が最新値を持ち、画面側が読む。`compass` と同型）。
 //!
 //! # 契約
 //!
-//! - 結果は [`ActivityPoll`] か [`ActivityFailure`]。`DeviceError` へ variant を足すと既存の網羅 match が
+//! - 結果は [`ActivityPoll`] か [`ActivityFailure`]。`fandhe_device::DeviceError` へ variant を足すと既存の網羅 match が
 //!   壊れるため機能固有の enum にする（`compass::CompassFailure` と同じ判断）
 //! - [`ActivityRecognizer::read`] の [`ActivityPoll::Waiting`] は「まだ値が無い / 停止後 / 無効なサンプルを
 //!   捨てた後」。直前の値や [`ActivityKind::Stationary`] で代用しない
@@ -32,7 +32,7 @@
 //!
 //! # Android
 //!
-//! 実装済み（#1127）。実体は `ActivityRecognitionHelper`（Java）と `android_activity_recognition.rs`。
+//! 実装済み（#1127）。実体は `ActivityRecognitionHelper`（Java）と `android.rs`。
 //!
 //! Play services の `ActivityRecognitionClient.requestActivityUpdates(interval, PendingIntent)` を使う
 //! （Transition API は確度が無く遷移時しか通知しないため採らない）。

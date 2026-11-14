@@ -17,18 +17,11 @@
 //! [`http_fetch`] / [`tilt`] サブモジュールに置く（カメラ撮影は機能 crate `fandhe-cap-camera-capture`、#1170）
 //! （`registry.rs` の `effect` 区画から配線される）。
 
-/// Issue #613（親 #124）: 行動認識（歩行・乗車等）の effect ドライバ（Windows 実装、iOS 実装、
-/// Android は b-android が埋めるスタブ、他 OS は `UnsupportedActivityRecognizer` 固定）。
-pub mod activity_recognition;
 /// Phase 11 の拡充ループ（親 #140、Issue #721）: アラーム・正確な時刻の予約の effect
 /// ドライバ（Windows 実装、iOS は AlarmKit、Android は #1078 が埋めるスタブ、他 OS は `Unsupported` 固定）。
 pub mod alarm;
 #[cfg(target_os = "android")]
 pub mod android;
-/// Issue #1126: Android 向け行動認識の骨格（実体は b-android）。`device/activity_recognition.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_activity_recognition;
 /// Issue #1076: Android 向けアラーム実装のスタブ（実装は #1078）。`device/alarm.rs` の Android 経路から呼ばれる。
 /// #1078 が cfg を変えずに済むよう `any(android, test)`。
 #[cfg(any(target_os = "android", test))]
@@ -404,10 +397,6 @@ pub mod health_data;
 pub mod image_recognition;
 #[cfg(target_os = "ios")]
 pub mod ios;
-/// Issue #613: iOS 向け行動認識実装。`device/activity_recognition.rs` の ios 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_activity_recognition;
 /// Issue #1077: iOS 向けアラーム実装（AlarmKit を呼ぶ Swift の C ABI ラッパー）。`device/alarm.rs` の iOS 経路から呼ばれる。
 /// ホストのテストでも戻りコード写像を検証できるよう `any(ios, test)`。
 #[cfg(any(target_os = "ios", test))]
@@ -721,10 +710,6 @@ pub mod web_auth_session;
 /// Phase 11 の拡充ループ（親 #127、Issue #636）: ウィンドウ管理（位置・サイズ・最前面）の effect ドライバ
 /// （macOS 実装、Windows は #637、他 OS は `UnsupportedWindowManager` 固定。Web は `fandhe-web-dom`）。
 pub mod window_management;
-/// Issue #613: Windows 向け行動認識実装（WinRT `ActivitySensor` の `ReadingChanged`）。`device/activity_recognition.rs` の windows 経路から呼ばれる。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_activity_recognition;
 /// Issue #721: Windows 向けアラーム実装（`ScheduledToastNotification` +
 /// `scenario="alarm"` のトースト）。`device/alarm.rs` の Windows 経路から呼ばれる。
 /// 時刻変換・検証・XML 定数等の純関数はホストの `cargo test` から検証できるよう

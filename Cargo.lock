@@ -1075,6 +1075,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-activity-recognition"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-core 0.61.2",
+ "windows-future",
+]
+
+[[package]]
 name = "fandhe-cap-app-attest"
 version = "0.2.0"
 dependencies = [
@@ -2240,6 +2255,7 @@ version = "0.1.0"
 dependencies = [
  "egui",
  "fandhe-cap-accessibility-prefs",
+ "fandhe-cap-activity-recognition",
  "fandhe-cap-app-attest",
  "fandhe-cap-app-badge",
  "fandhe-cap-app-lifecycle",

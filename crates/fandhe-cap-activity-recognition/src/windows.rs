@@ -1,4 +1,4 @@
-//! Windows 向け行動認識実装（Issue #613、親 #124）。`device/activity_recognition.rs` の Windows 経路から
+//! Windows 向け行動認識実装（Issue #613、親 #124）。`driver` の Windows 経路から
 //! UI スレッドで呼ばれ、WinRT `Windows.Devices.Sensors.ActivitySensor` の最新の行動を
 //! 共有状態経由で pull させる（`ActivityRecognizer` トレイトを実装）。
 //!
@@ -31,9 +31,7 @@
 //! - `Idle` / `Fidgeting` は `Stationary` にまとめる。範囲外の値はサンプルごと捨てる
 //! - ローカルに MSVC が無く、型検査は `x86_64-pc-windows-gnu` のみ
 
-use fandhe_device::activity_recognition::{
-    ActivityFailure, ActivityKind, ActivityPoll, ActivityReading, Confidence,
-};
+use crate::contract::{ActivityFailure, ActivityKind, ActivityPoll, ActivityReading, Confidence};
 
 /// `E_ACCESSDENIED`（0x80070005）。権限拒否の写像に使う。
 const E_ACCESSDENIED: i32 = 0x8007_0005_u32 as i32;
@@ -186,10 +184,10 @@ impl State {
 
     /// `read` の結果。失敗があれば `Err`、無ければ最新値か `Waiting`。許可待ちは返さない。
     fn poll(&self) -> Result<ActivityPoll, ActivityFailure> {
-        if let Some((e, f)) = self.failure {
-            if self.is_current(e) {
-                return Err(f);
-            }
+        if let Some((e, f)) = self.failure
+            && self.is_current(e)
+        {
+            return Err(f);
         }
         if !self.active {
             return Ok(ActivityPoll::Waiting);
@@ -214,7 +212,7 @@ mod imp {
     use windows_future::{AsyncOperationCompletedHandler, AsyncStatus};
 
     use super::*;
-    use fandhe_device::activity_recognition::{ActivityRecognizer, NO_READING_TIMEOUT_MS};
+    use crate::contract::{ActivityRecognizer, NO_READING_TIMEOUT_MS};
 
     static STATE: Mutex<State> = Mutex::new(State {
         epoch: 0,
