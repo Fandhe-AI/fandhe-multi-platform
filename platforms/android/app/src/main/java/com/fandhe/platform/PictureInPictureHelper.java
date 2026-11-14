@@ -303,7 +303,7 @@ final class PictureInPictureHelper {
         }
     }
 
-    // MainActivity.onPictureInPictureModeChanged（UI スレッド）から。
+    // MainActivity.onCreate で登録した `ComponentActivity` の PiP リスナー（UI スレッド、#1327）から。
     void onPictureInPictureModeChanged(boolean inPip) {
         synchronized (lock) {
             if (destroyed) {

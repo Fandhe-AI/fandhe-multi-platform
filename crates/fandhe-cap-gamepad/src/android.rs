@@ -8,12 +8,12 @@
 //! 扱ってしまうため、Rust 側だけではスティック・トリガの入力を受け取れない（#935
 //! 実装計画 §2.1）。そのため Java（`GamepadHelper` / `GamepadLifecycle`）で受けて
 //! JNI push する（傾き #831 と同型）。Activity の `dispatch*` override ではなく、
-//! `GamepadLifecycle` が `Window.Callback` を包んで観測する（#1303。利用者の
+//! `GamepadLifecycle` が共通層 `HostInput` へ観測者を登録して観測する（#1303・#1327。利用者の
 //! `MainActivity` に委譲コードを書かせないため）。
 //!
 //! # 「観測のみ・消費しない」で TV フォーカス（#280）を守る
 //!
-//! 包んだ `Window.Callback` の `dispatchKeyEvent`/`dispatchGenericMotionEvent` はイベントを
+//! `HostInput` が包んだ `Window.Callback` の `dispatchKeyEvent`/`dispatchGenericMotionEvent` はイベントを
 //! 一切消費せず（元の callback の戻り値をそのまま返す）、ゲームパッド由来なら
 //! 追加で本モジュールの JNI エクスポートへ通知するだけに留める。リモコンの
 //! `KEYCODE_DPAD_*` は従来どおり GameActivity → winit → `egui::Key::Arrow*` →

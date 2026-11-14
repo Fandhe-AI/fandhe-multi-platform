@@ -19,8 +19,9 @@
 //! Android のボタン・軸の入力は `DecorView` から `Window.getCallback()`（通常は Activity）の
 //! `dispatchKeyEvent` / `dispatchGenericMotionEvent` へ渡る。従来は利用者の `MainActivity` がこの 2 つを
 //! override してから JNI へ中継していたが、それでは「機能を選ぶだけで使える」にならない。
-//! `GamepadLifecycle`（`FeatureLifecycleProvider` の派生）が `onHostCreated` で Window の callback を
-//! 包み、通知してから元の callback の戻り値をそのまま返す。**イベントは消費しない**ため、TV フォーカス
+//! `GamepadLifecycle`（`FeatureLifecycleProvider` の派生）が `onHostCreated` で共通層 `HostInput`
+//! （`fandhe-platform-android`、#1327）へ観測者を登録する。`HostInput` が Window の callback を包み、
+//! 通知してから元の callback の戻り値をそのまま返す。**イベントは消費しない**ため、TV フォーカス
 //! （旧 #280）の十字キーの経路は変わらない。AppCompat も同じ方法で包んでおり、どちらが外側でも委譲は連なる。
 //! 接続状態の監視（`InputManager`）は `onHostResumed` / `onHostPaused` に対で結ぶ。
 //!

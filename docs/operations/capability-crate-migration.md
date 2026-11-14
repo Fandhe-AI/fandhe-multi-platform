@@ -170,9 +170,9 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | network-status | 未移行の `fandhe_apple_lan_discovery.m` が `fandhe_apple_network_status_read` を呼ぶ | lan-discovery と一緒に移す |
 | device-info | 未移行の `apple_quick_settings_tile.rs` が `macos_device_info::implementation()` を呼ぶ | quick-settings-tile の後 |
 | now-playing-controls | `media_playback`（egui-proxy・web-dom の両方）が `now_playing::sync*` を呼ぶ | media-playback と同じ PR で移す |
-| pen-stylus | Android が `MainActivity.dispatchTouchEvent` の上書きを要する。provider では置き換えられない | §12 の `Window.Callback` を包む型で移せる（`dispatchTouchEvent` の観測。共通層への引き上げはそのとき行う） |
-| picture-in-picture | Android が `onPictureInPictureModeChanged` の上書きと `<activity supportsPictureInPicture>` 属性を要する | 宣言の拡張が先 |
-| fullscreen-immersive | `FullscreenHelper.onInsets` が、`MainActivity` の唯一の decorView insets リスナー（safe-area と共用）から呼ばれる | insets を配る口を `fandhe-platform-android` に置く設計が先 |
+| pen-stylus | Android が `MainActivity.dispatchTouchEvent` の上書きを要する。provider では置き換えられない | 口は #1327 で入った（§18）。`HostInput.addTouchObserver` で移せる |
+| picture-in-picture | Android が `onPictureInPictureModeChanged` の上書きと `<activity supportsPictureInPicture>` 属性を要する | PiP の切り替わりの口は #1327 で入った（§18、`ComponentActivity` のリスナー）。`<activity supportsPictureInPicture>` の宣言の拡張（#1328）が先 |
+| fullscreen-immersive | `FullscreenHelper.onInsets` が、`MainActivity` の唯一の decorView insets リスナー（safe-area と共用）から呼ばれる | insets を配る口は #1327 で入った（§18、`HostInsets.addListener`）。移せる |
 | compose-mail-sms | 未移行の `windows_web_auth_session.rs` が `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を呼ぶ | `open_url` は #1192 で `fandhe-platform-windows` へ上げた（`windows_compose_mail_sms` は再公開だけを持つ）。web-auth-session と同時に移すか、その再公開を共通層への参照に付け替えて移す （第 8 束 #1193 で移した） |
 | print・print-screen | `print_screen_page_effect` が egui 固有の読み書き口（`EguiSenderExt` の `request_screenshot`・`tagged_screenshot`）を使う | `fandhe-runtime` に egui 非依存の口を足す設計が先（口は #1326 で入った。§17） |
 | in-app-purchase | 全 OS が未実装（`possible`）で `impl` が無い | 実装後 |
@@ -212,7 +212,7 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | music-library | Android が許可ランチャーと `onDestroy` を持つ（provider と JNI エクスポートが要る）。Windows の `windows_photo_library::known_folder` を `fandhe-platform-windows` へ上げる共通層の変更も要る | 共通層の先行変更とあわせて別の周で |
 | translation | Android がランチャーと `onDestroy`・`reset_pending_tracking` を持ち、Apple は Swift の薄層（`links` と `import_link_args`）が要る | 別の周で |
 | flashlight | Android の Helper が `onStart` / `onStop` / `onDestroy` に参加する。`FeatureLifecycleProvider` の Started / Stopped の口は #1192 で足した | 口が `main` に入った後に移せる（app-lifecycle と同じ形） |
-| safe-area-insets | egui-proxy の `android.rs` にある insets の static と JNI エクスポートを `fandhe-platform-android` へ上げる共通層の変更が先 | 共通層の先行変更とあわせて別の周で |
+| safe-area-insets | insets の static と JNI エクスポートは #1327 で `fandhe-platform-android` へ上がった（§18） | 移せる（`fandhe_platform_android::window_insets_px()` を読む） |
 | compass-heading | 第 3 束 #1301 の `FeatureLifecycleProvider.onHostResumed` / `onHostPaused` に依存する。`WaitTracker`・`NO_READING_TIMEOUT_MS` を ar と未移行の `environment_sensors` が使うため、`fandhe-device::compass` へ最小限を残す設計も要る | #1301 のマージ後 |
 
 ## 11. 第 5 束（#1190）で出た型と後回しの機能
@@ -262,7 +262,7 @@ Android のゲームパッド入力は利用者の `MainActivity` の `dispatchK
 
 | 型 | 扱い |
 |----|------|
-| Activity の入力の観測 | provider（`GamepadLifecycle`）が `onHostCreated` で `Window.Callback` を包み、通知してから元の戻り値をそのまま返す（消費しない）。`Window.Callback` の全メソッドを明示的に委譲し、API 24 以降の default メソッドも飛ばさない。`getDecorView()` は呼ばない。`gen` で `MainActivity` へ挿入する案と手順書で案内する案は採らない（`consumer-app-structure.md` §4） |
+| Activity の入力の観測 | provider（`GamepadLifecycle`）が `onHostCreated` で共通層 `HostInput`（#1327 で `ObservingCallback` をここへ引き上げた）へ観測者を登録する。`HostInput` が `Window.Callback` を包み、通知してから元の戻り値をそのまま返す（消費しない）。`Window.Callback` の全メソッドを明示的に委譲し、API 24 以降の default メソッドも飛ばさない。`getDecorView()` は呼ばない。`gen` で `MainActivity` へ挿入する案と手順書で案内する案は採らない（`consumer-app-structure.md` §4） |
 | 守らない範囲 | 起動後に `getWindow().setCallback()` で callback を差し替えると入力が届かなくなる。接続状態の監視（`InputManager`）は影響を受けない。`crate` doc と対応表の `note` に書く |
 | `MainActivity` 由来の JNI エクスポート名 | `Java_com_fandhe_platform_MainActivity_native…` を `Java_com_fandhe_platform_GamepadHelper_native…` に付け替え、Java の native 宣言（`GamepadHelper`）と署名を 2 か所で照合する。Rust から Java は呼ばないため `with_activity_class` は要らない |
 | feature 無効時の no-op スタブ | 旧 JNI 名のスタブを egui-proxy から消し、`fandhe-gallery` に新しい名前で置く（share-receive と同じ。provider は feature を知らず native を呼ぶため、実体が無いと `UnsatisfiedLinkError` になる） |
@@ -470,3 +470,42 @@ print・print-screen・window-management・screen-orientation・autofill-otp の
 | `Send + Sync` を要求する trait（`WindowManager`・`AutofillOtp`） | `&dyn HostView` ではなく `&CompletionSender<S>` を持ち、使うたびに `host_view()` を呼ぶ |
 | driver のテスト | `HostView` を実装した fake の起床口で `CompletionSender::new` する |
 | 入力欄のヒント | 機能 crate に C ABI を持ち込まず、`set_text_input_hint` だけを呼ぶ。エラーは `Unsupported` → `DeviceError::Unsupported`、`Failed` → `DeviceError::Internal` へ写す |
+
+## 18. insets・タッチ入力・PiP の口（#1327）
+
+`MainActivity` の唯一のリスナー・メソッド上書きに結びついていた 4 機能（fullscreen-immersive・safe-area-insets・pen-stylus・
+picture-in-picture）を、`FeatureLifecycleProvider` だけで移せるようにする口を `fandhe-platform-android` に足した。
+この周では口と旧構造の付け替えまで行い、4 機能の crate 移設は後続の束で行う。宣言（`[package.metadata.fandhe]`）は変えない。
+共通層に足したのは manifest 要素を持たない Java クラスと Rust の関数だけで、`verify-scope` の禁止集合（権限・コンポーネント・Gradle 依存）に影響しない。
+機能側の受け口（provider）は各機能 crate の `components` にあり、選ばなければ登録自体が起きない。
+
+### 口の設計
+
+| 対象 | 口 | 要点 |
+|------|----|------|
+| insets | `HostInsets.addListener(ComponentActivity, Consumer<WindowInsetsCompat>)` | decorView の `OnApplyWindowInsetsListener` は View につき 1 つのため、共通層が 1 つだけ付ける。`systemBars | displayCutout` の px を Rust の static へ送ってから登録済みの配り先へ `WindowInsetsCompat` を配り、insets は消費しない。static・JNI 入口（`Java_com_fandhe_platform_HostInsets_nativeOnWindowInsetsChanged`）・`window_insets_px()` は `fandhe-egui-proxy` から `fandhe-platform-android` へ移した |
+| タッチ・キー・汎用モーション | `HostInput.addTouchObserver` / `addKeyObserver` / `addGenericMotionObserver` | `Window.Callback` を 1 段だけ包み、観測者へ通知してから元の戻り値をそのまま返す。**消費の口は作らない**。観測リストは包みのインスタンスが持ち、Window と一緒に消える |
+| PiP の切り替わり | 新しい口は作らない。`ComponentActivity.addOnPictureInPictureModeChangedListener`（androidx.activity 1.8.0）を provider が直接使う | §4 の「Activity 内の他の経路は `ComponentActivity` のリスナーで足りる」と同じ判断 |
+
+### 守る範囲と守らない範囲
+
+- 守る: 登録の重複排除（同じインスタンスは 1 回だけ）、`ON_DESTROY` での insets の配り先の解除（Activity を static に残さない）、`HostInsets` の UI スレッド以外・破棄済み Activity からの登録の拒否、入力の非消費
+- 守らない: 破棄中の Window から届く insets の報告の抑止（受け手が自分の破棄フラグで捨てる）、Activity の再生成直後に前の値が 1 回残ること、起動後に `getWindow().setCallback()` で差し替えられた場合に入力が届かなくなること
+- 観測した入力はログへ出さず保存しない（キー入力には物理キーボードの打鍵が含まれる）
+- 機能を 1 つも登録しない利用者アプリでは `HostInsets` が取り付けられず、描画の余白用の insets が Rust へ届かない。`MainActivity` に配線を書かせない方針（#1257）の下で既に存在する制約で、旧構造の撤去（#1194）までに扱いを決める
+
+### 採らなかった案
+
+- insets・入力・PiP の hook を `FeatureLifecycleProvider` に足す案: 呼ぶ機能が 1 つでも全機能の provider が口を持つ。登録型なら使う機能だけが登録する
+- `gamepad` の `ObservingCallback` を残して pen-stylus 用に複製する案: `Window.Callback` の全委譲 130 行を 2 つ持つことになる
+
+### 移すときの使い方
+
+| 機能 | 使い方 |
+|------|--------|
+| fullscreen-immersive | provider の `onHostStarted` で `HostInsets.addListener(activity, <helper が持つ同一インスタンス>)`、`onHostDestroyed` で helper の破棄処理。`getDecorView()` を呼ぶため `onHostCreated` では呼ばない（§13） |
+| safe-area-insets | Rust は `fandhe_platform_android::window_insets_px()` を読む。取り付けは最初の `addListener` で起きるため、値だけ要る機能も provider から登録する |
+| pen-stylus | `onHostCreated` で `HostInput.addTouchObserver(activity, <helper が持つ同一インスタンス>)`、`onHostPaused`・`onHostDestroyed` で接触なしへ戻す |
+| picture-in-picture | `onHostCreated` で `activity.addOnPictureInPictureModeChangedListener(info -> helper.onPictureInPictureModeChanged(info.isInPictureInPictureMode()))`。`<activity supportsPictureInPicture>` の宣言は #1328 |
+
+観測者・配り先は `static final` などの同一インスタンスで渡す（メソッド参照を毎回書くと別インスタンスになり、再登録の重複排除が効かない）。

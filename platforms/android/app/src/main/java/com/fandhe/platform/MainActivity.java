@@ -9,7 +9,7 @@
 // 「Implement GameActivity in your game」節、取得日 2026-08-01。
 // 決定記録: docs/architecture/android-activity-method.md）。
 //
-// 本クラスの責務は「ライブラリロードの宣言」「window insets の JNI 中継」に加え、
+// 本クラスの責務は「ライブラリロードの宣言」に加え、
 // Phase 8（端末機能、Issue #750）のカメラ Intent 中継、Phase 10（Issue #831）の
 // 重力センサ中継、Phase 11（Issue #859）のクリップボード中継、Phase 11（Issue #866）の
 // 読み上げ（TTS）中継、Phase 11（Issue #874）のファイル選択（SAF）中継、
@@ -20,7 +20,7 @@
 // 機能 crate へ移した機能（カメラ撮影・書類スキャン・NFC カードエミュレーション・ホーム画面ウィジェット・
 // 共有テキスト受信・ゲームコントローラ）の JNI 入口と Activity への参加は、各 crate の Java（static 入口と非公開 provider）が持つ
 // ためここには無い（Issue #1257）。
-// window insets 中継の経緯（Issue #579: `AndroidApp::content_rect()` は GameActivity
+// window insets 中継（現在は共通層 `HostInsets` が持つ、#1327）の経緯（Issue #579: `AndroidApp::content_rect()` は GameActivity
 // 経路（android-activity 0.6.1、Pixel 10a / Android 16 実機）で insets を反映せず常に
 // 画面全体を返すことを logcat で実測確認した。`GameActivity_getWindowInsets` C API は
 // `GameActivity*` 構造体ポインタを要求するが、Rust 公開 API（`activity_as_ptr()` =
@@ -85,7 +85,6 @@ import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.view.DragAndDropPermissions;
 import android.view.DragEvent;
-import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
@@ -101,10 +100,7 @@ import androidx.core.app.NotificationChannelCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
-import androidx.core.graphics.Insets;
 import androidx.core.location.LocationManagerCompat;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
 import androidx.security.crypto.EncryptedSharedPreferences;
 import androidx.security.crypto.MasterKey;
 import androidx.work.ExistingWorkPolicy;
@@ -131,12 +127,6 @@ public class MainActivity extends GameActivity {
         // [lib] name と一致させること（3 箇所の SSOT はこのライブラリ名文字列）。
         System.loadLibrary("fandhe_gallery");
     }
-
-    // Rust 側（crates/fandhe-egui-proxy/src/android.rs）の JNI エクスポート関数。
-    // シンボル名はパッケージ名 com.fandhe.platform とクラス名 MainActivity に
-    // 固定で紐づく（JNI の命名規約。クラス移動・rename 時は Rust 側も追随が必要）。
-    private static native void nativeOnWindowInsetsChanged(
-            int left, int top, int right, int bottom);
 
     // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
     // （Issue #831、Phase 10 型サンプル「傾けると玉が転がる」の Android 実センサ経路に
@@ -765,13 +755,6 @@ public class MainActivity extends GameActivity {
 
     void pipShutdown() {
         pictureInPictureHelper.shutdown();
-    }
-
-    @Override
-    public void onPictureInPictureModeChanged(
-            boolean isInPictureInPictureMode, android.content.res.Configuration newConfig) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
-        pictureInPictureHelper.onPictureInPictureModeChanged(isInPictureInPictureMode);
     }
 
     // 通知チャンネル ID（`postNotification`/`onCreate` から参照）。
@@ -1698,18 +1681,20 @@ public class MainActivity extends GameActivity {
         // Bundle 経由の復元は不要。`pickDocument` が再生成後の新インスタンスへ届く
         // 実際の結果は、この static requestId との一致で正しく処理される。
 
-        // systemBars（ステータスバー・ナビゲーションバー）と displayCutout（ノッチ等）を
-        // 物理 px で取得し、native 側 static へ渡す。insets は消費せず（`insets` を
-        // そのまま返す）GameActivity 自身の insets 処理を妨げない。リスナーは
-        // ウィンドウ生成直後の初回発火に加え、回転・折りたたみ等の変化時にも
-        // 再発火する（View.OnApplyWindowInsetsListener の契約）。
-        ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (view, insets) -> {
-            Insets bars = insets.getInsets(
-                    WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
-            nativeOnWindowInsetsChanged(bars.left, bars.top, bars.right, bars.bottom);
-            fullscreenHelper.onInsets(insets);
-            return insets;
-        });
+        // window insets（systemBars | displayCutout）の native 送信と fullscreen への配信は共通層
+        // `HostInsets`（#1327）が持つ。リスナーは decorView に 1 つだけ付く。
+        HostInsets.addListener(this, fullscreenHelper::onInsets);
+
+        // ペン・筆圧の観測（Issue #357）。【契約】イベントは消費しない: 共通層 `HostInput` が
+        // `Window.Callback` を包み、通知してから元の戻り値をそのまま返すため、GameActivity → winit → egui の
+        // 既存のタッチ経路は変わらない。
+        HostInput.addTouchObserver(this, penStylusHelper::onTouch);
+
+        // ピクチャ・イン・ピクチャの切り替わり（Issue #366）。`ComponentActivity` のリスナーで受ける
+        // （`onPictureInPictureModeChanged` の上書きは持たない）。
+        addOnPictureInPictureModeChangedListener(
+                info -> pictureInPictureHelper.onPictureInPictureModeChanged(
+                        info.isInPictureInPictureMode()));
     }
 
     // BLE スキャン（Issue #1062、`device/bluetooth_le.rs` の Android 経路）。
@@ -2125,15 +2110,6 @@ public class MainActivity extends GameActivity {
         }
         // BLE スキャン（Issue #1062）: バックグラウンド遷移でスキャン中なら止めて中断で確定する。
         abortBleScanIfRunning();
-    }
-
-    // ペン・筆圧の観測（Issue #357）。【契約】イベントは消費しない:
-    // `super.dispatchTouchEvent` の戻り値をそのまま返し、GameActivity → winit → egui の
-    // 既存のタッチ経路を変えない。
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent event) {
-        penStylusHelper.onTouch(event);
-        return super.dispatchTouchEvent(event);
     }
 
     // Rust 側の TTS ワーカースレッド（`device/android.rs` の `AndroidTts`）から

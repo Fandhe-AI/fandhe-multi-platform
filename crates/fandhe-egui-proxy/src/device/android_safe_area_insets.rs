@@ -4,10 +4,10 @@
 //!
 //! # 値の出どころ
 //!
-//! `MainActivity` の `ViewCompat.setOnApplyWindowInsetsListener`（`systemBars | displayCutout` の
-//! 合計）→ JNI `nativeOnWindowInsetsChanged` → `android.rs` の static（物理 px、受信済みフラグつき）。
-//! 本モジュールはそれを pull で読み、`ctx.native_pixels_per_point()` で dp に換算する。
-//! JNI の署名・Java・dispatch は変えていない。
+//! 共通層 `HostInsets`（Java）の `ViewCompat.setOnApplyWindowInsetsListener`（`systemBars | displayCutout` の
+//! 合計）→ JNI `nativeOnWindowInsetsChanged` → `fandhe_platform_android` の static（物理 px、受信済みフラグつき）。
+//! 本モジュールは `fandhe_platform_android::window_insets_px` を pull で読み、
+//! `ctx.native_pixels_per_point()` で dp に換算する（#1327 で口を共通層へ移した。dispatch は変えていない）。
 //!
 //! # 結果
 //!
@@ -58,7 +58,7 @@ struct AndroidSafeArea {
 #[cfg(target_os = "android")]
 impl SafeAreaSource for AndroidSafeArea {
     fn read(&self) -> Result<Option<Insets>, DeviceError> {
-        insets_from_px(crate::android::window_insets_px(), self.native_ppp)
+        insets_from_px(fandhe_platform_android::window_insets_px(), self.native_ppp)
     }
 }
 
