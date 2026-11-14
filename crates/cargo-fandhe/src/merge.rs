@@ -50,6 +50,8 @@ pub struct AndroidMerged {
     pub main_activity_attributes: BTreeMap<String, String>,
     /// `<application>` 直下の meta-data（`name` → 宣言）。
     pub application_meta_data: BTreeMap<String, MetaData>,
+    /// `<queries>` の `<intent>` の action（重複は 1 件に統合）。
+    pub queries: BTreeSet<String>,
     /// feature 名 → `required`。
     pub features: BTreeMap<String, bool>,
     pub gradle: BTreeSet<String>,
@@ -340,6 +342,9 @@ pub fn merge(decls: &[(&str, &Declaration)]) -> Result<Merged, Vec<MergeError>> 
                     id,
                     &mut errs,
                 );
+            }
+            for q in &a.queries {
+                dst.queries.extend(q.actions.iter().cloned());
             }
             dst.java
                 .extend(a.java.iter().map(|p| (id.to_string(), p.clone())));

@@ -901,3 +901,24 @@ fn merge_new_android_fields() {
         "{f:?}"
     );
 }
+
+#[test]
+fn queries_validate_and_merge() {
+    let ok = |q: Value| android(json!({"queries": q}));
+    assert!(problems(ok(
+        json!([{"actions":["android.intent.action.TTS_SERVICE"]}])
+    ))
+    .is_empty());
+    assert_rejected(ok(json!([{"actions":[]}])), "queries[0].actions");
+    assert_rejected(ok(json!([{"actions":["bad name"]}])), "queries[0].actions");
+    assert_rejected(
+        ok(json!([{"actions":["a.b"],"categories":["c.d"]}])),
+        "categories",
+    );
+    assert_rejected(ok(json!([{"actions":["a.b"],"data":[]}])), "data");
+    // 重複は 1 件に統合する。
+    let a = decl(json!({"id":"a","android":{"queries":[{"actions":["x.Y","x.Z"]}]}}));
+    let b = decl(json!({"id":"b","android":{"queries":[{"actions":["x.Y"]}]}}));
+    let m = merge(&[("a", &a), ("b", &b)]).unwrap();
+    assert_eq!(m.android.queries.len(), 2);
+}
