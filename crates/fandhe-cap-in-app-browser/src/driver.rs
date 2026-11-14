@@ -37,6 +37,7 @@
 //!
 //! URL と OS のエラー文はスロットにも画面にもログにも出さない。結果は理由の種別だけを持つ。
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -78,9 +79,7 @@ struct Registered(Arc<dyn InAppBrowser>);
 impl InAppBrowser for Registered {
     fn open(&self, request_id: u64, url: &BrowserUrl) -> Result<(), InAppBrowserFailure> {
         let b = bridge();
-        if !b.begin_with_id(b.public, request_id) {
-            return Err(InAppBrowserFailure::Busy);
-        }
+        b.begin_with_id(b.public, request_id)?;
         if let Err(f) = self.0.open(request_id, url) {
             b.complete_from_os(request_id, Err(f));
         }
@@ -113,6 +112,8 @@ struct Bridge {
     /// 画面 effect が追う要求。公開入口はこの要求・未取得の結果を置き換えない。
     screen: &'static SlotOwner,
     active: Mutex<Option<Active>>,
+    /// これまでに登録した最大の要求 id。`active` のロック内で更新する。
+    high_water: AtomicU64,
     deadline: Duration,
 }
 
@@ -123,6 +124,7 @@ impl Bridge {
             public: Box::leak(Box::new(SlotOwner::new())),
             screen: Box::leak(Box::new(SlotOwner::new())),
             active: Mutex::new(None),
+            high_water: AtomicU64::new(0),
             deadline,
         }
     }
@@ -142,6 +144,7 @@ impl Bridge {
     fn begin(&self, owner: &SlotOwner) -> Option<u64> {
         let mut active = self.lock();
         let request_id = owner.begin_excluding(self.slot, &[self.public, self.screen])?;
+        self.high_water.fetch_max(request_id, Ordering::Relaxed);
         *active = Some(Active {
             request_id,
             started: Instant::now(),
@@ -151,15 +154,25 @@ impl Bridge {
     }
 
     /// 呼び出し側が決めた `request_id` を `owner` の分として登録する（公開 platform 入口用）。
-    /// 進行中の要求も未取得の結果（画面・公開とも）も無いときだけ `true`。`request_id == 0` は不可。
-    fn begin_with_id(&self, owner: &SlotOwner, request_id: u64) -> bool {
+    /// `request_id` は `1..=i64::MAX` かつ、これまでに登録したどの id よりも大きいこと（使用済み id の再利用を
+    /// 許すと、期限切れ要求の遅延した OS 呼び出しが新しい要求として受理されるため）。違反は `Internal`、
+    /// 進行中の要求も未取得の結果（画面・公開とも）も無いときだけ登録し、それ以外は `Busy`。
+    /// 失敗時は採番状態を変えない。
+    fn begin_with_id(&self, owner: &SlotOwner, request_id: u64) -> Result<(), InAppBrowserFailure> {
         let mut active = self.lock();
+        if request_id == 0
+            || request_id > i64::MAX as u64
+            || request_id <= self.high_water.load(Ordering::Relaxed)
+        {
+            return Err(InAppBrowserFailure::Internal);
+        }
         let taken = self.slot.snapshot().is_some_and(|(id, ready)| {
             ready.is_none() || id == self.public.current() || id == self.screen.current()
         });
-        if request_id == 0 || taken {
-            return false;
+        if taken {
+            return Err(InAppBrowserFailure::Busy);
         }
+        self.high_water.store(request_id, Ordering::Relaxed);
         self.slot.begin_with(request_id);
         owner.adopt(request_id);
         *active = Some(Active {
@@ -167,7 +180,7 @@ impl Bridge {
             started: Instant::now(),
             presenting: false,
         });
-        true
+        Ok(())
     }
 
     #[allow(dead_code)] // 呼び出し元は OS 層（#702・#703）と単体テスト。
@@ -771,5 +784,19 @@ mod tests {
             let t = fandhe_core::screens::in_app_browser_show::error_text(&s);
             assert!(!t.contains("example.com") && !t.contains("http"), "{t}");
         }
+    }
+
+    #[test]
+    fn begin_with_id_rejects_reused_and_out_of_range_ids() {
+        let b = new_bridge(Duration::from_secs(60));
+        assert!(b.begin_with_id(b.public, u64::MAX).is_err());
+        assert!(b.begin_with_id(b.public, 0).is_err());
+        assert!(b.begin_with_id(b.public, 1).is_ok());
+        b.complete_from_os(1, Err(InAppBrowserFailure::NoBrowser));
+        b.slot.take_ready(1);
+        b.public.release(1);
+        // 使用済み id の再利用は拒否し、採番は壊れない。
+        assert!(b.begin_with_id(b.public, 1).is_err());
+        assert!(b.begin(b.public).is_some_and(|id| id > 1));
     }
 }
