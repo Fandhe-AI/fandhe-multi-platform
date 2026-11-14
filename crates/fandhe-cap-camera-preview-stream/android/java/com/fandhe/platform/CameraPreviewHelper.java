@@ -1,6 +1,7 @@
 package com.fandhe.platform;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
@@ -31,11 +32,16 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 
-// カメラのライブ映像画面（Issue #814、親 #168）の Android 実装ヘルパー。MainActivity から生成・委譲される
-// （Rust の `device/android_camera_preview_stream.rs` が `MainActivity.cameraPreviewStart` /
-// `cameraPreviewStop` / `cameraPreviewZoomRange` / `cameraPreviewSetZoom` を JNI で呼び、結果を
-// `nativeOnCameraPreviewEvent` / `nativeOnCameraPreviewFrame` で受ける）。
+// カメラのライブ映像画面（Issue #814、親 #168）の Android 実装ヘルパー。利用者の `MainActivity` には何も書かせない
+// （Rust の `fandhe-cap-camera-preview-stream/src/android.rs` が static の `start(Activity, long)` /
+// `stop(Activity, long)` / `zoomRange(Activity, long)` / `setZoom(Activity, long, float)` を JNI で呼び、結果を
+// `nativeOnCameraPreviewEvent` / `nativeOnCameraPreviewFrame` で受ける）。Activity の生成・破棄・Resumed / Paused は
+// `CameraPreviewStreamLifecycle`（非公開 ContentProvider、`FeatureLifecycleProvider` 継承）が知らせる。Activity ごとの
+// helper は `HELPERS` に持つ。helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、start は START_FAILED、
+// ズームは失敗（zoomRange は null、setZoom は ZOOM_FAILED）で確定する。
 //
 // 方式: Camera2（`openCamera` → `createCaptureSession` → `setRepeatingRequest(TEMPLATE_PREVIEW)`）+
 // `ImageReader`（`YUV_420_888`、`acquireLatestImage`）。縮小は Rust の `downscale_yuv420` が行う。
@@ -50,7 +56,7 @@ import java.util.Collections;
 // 状態は `lock` で守り、native 通知は必ず `lock` の外で行う（Rust 側のロックとの取り合いを避ける）。
 //
 // 数値コード: `nativeOnCameraPreviewEvent` の code / detail の SSOT は Rust の
-// `fandhe_device::camera_preview_stream::event_from_code`。下の `EV_*` はその表と同じ値で並べる。
+// `fandhe-cap-camera-preview-stream` の `contract::event_from_code`。下の `EV_*` はその表と同じ値で並べる。
 //
 // ライフサイクル: `onPause` で映像を止める（EV_STOPPED_BACKGROUND）。許可ダイアログ待ちと、許可が
 // 非前景中に届いた保留（`startPendingResume`）は止めない（ダイアログ自体が `onPause` を起こすため。
@@ -121,6 +127,10 @@ final class CameraPreviewHelper {
         }
     }
 
+    // Activity ごとの helper。Rust のワーカーと UI スレッドの両方から触るので同期化し、Activity が GC されれば項目も消える。
+    private static final Map<Activity, CameraPreviewHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     private final ComponentActivity activity;
     private final RequestTracker request = new RequestTracker();
     private final Object lock = new Object();
@@ -140,26 +150,78 @@ final class CameraPreviewHelper {
     private boolean startPendingResume; // 許可が非前景中に届いたため次の onResume まで保留。
     private boolean resumed;
 
-    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity の
-    // フィールド初期化子から本クラスを生成してここで登録する。
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`CameraPreviewStreamLifecycle.onHostCreated`
+    // （`Activity.onCreate` の中）から `attach` で本クラスを生成してここで登録する。
     private final ActivityResultLauncher<String> permissionLauncher;
 
-    CameraPreviewHelper(ComponentActivity activity) {
+    private CameraPreviewHelper(ComponentActivity activity) {
         this.activity = activity;
         this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:CameraPreviewHelper:1", activity,
                 new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
     }
 
-    // ---- JNI スレッドから呼ばれる入口 ----
+    // Activity の生成時（`CameraPreviewStreamLifecycle` から、UI スレッド）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new CameraPreviewHelper(activity));
+    }
+
+    // Activity の破棄時（同上）。保留中・実行中の要求を EV_STOPPED_LEFT で確定して解放する。
+    static void detach(Activity activity) {
+        CameraPreviewHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // ---- Rust（JNI スレッド）から呼ばれる入口。helper が無い要求は失敗で確定する ----
+
+    static int start(Activity activity, long id) {
+        CameraPreviewHelper helper = HELPERS.get(activity);
+        return helper == null ? START_FAILED : helper.start(id);
+    }
+
+    static void stop(Activity activity, long id) {
+        CameraPreviewHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.stop(id);
+        }
+    }
+
+    static float[] zoomRange(Activity activity, long id) {
+        CameraPreviewHelper helper = HELPERS.get(activity);
+        return helper == null ? null : helper.zoomRange(id);
+    }
+
+    static int setZoom(Activity activity, long id, float ratio) {
+        CameraPreviewHelper helper = HELPERS.get(activity);
+        return helper == null ? ZOOM_FAILED : helper.setZoom(id, ratio);
+    }
+
+    // `CameraPreviewStreamLifecycle` から（UI スレッド）。helper が無ければ何もしない。
+    static void resumed(Activity activity) {
+        CameraPreviewHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onResume();
+        }
+    }
+
+    static void paused(Activity activity) {
+        CameraPreviewHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onPause();
+        }
+    }
+
+    // ---- 入口の実体 ----
 
     // 開くのは非同期。UI スレッドへ渡して受け付けたことだけ返す。
-    int start(long id) {
+    private int start(long id) {
         activity.runOnUiThread(() -> startOnUi(id));
         return START_OK;
     }
 
     // Rust 側の session drop から任意のスレッドで呼ばれる（冪等。利用者の停止なのでイベントは送らない）。
-    void stop(long id) {
+    private void stop(long id) {
         Session s = null;
         synchronized (lock) {
             cancelledId = Math.max(cancelledId, id);
@@ -177,7 +239,7 @@ final class CameraPreviewHelper {
     }
 
     // 現在の映像のズーム範囲。null = 失敗 / 長さ 0 = 非対応 / 長さ 2 = {min, max}。
-    float[] zoomRange(long id) {
+    private float[] zoomRange(long id) {
         synchronized (lock) {
             Session s = session;
             if (s == null || s.id != id || s.closed || !s.configured) {
@@ -191,7 +253,7 @@ final class CameraPreviewHelper {
     }
 
     // ズームを変える。受け付けたら 0。適用はカメラスレッドで非同期に行い、失敗は EV_ZOOM_FAILED で返す。
-    int setZoom(long id, float ratio) {
+    private int setZoom(long id, float ratio) {
         final Session s;
         synchronized (lock) {
             s = session;
@@ -212,9 +274,9 @@ final class CameraPreviewHelper {
         return ZOOM_OK;
     }
 
-    // ---- MainActivity のライフサイクルから UI スレッドで呼ばれる ----
+    // ---- ライフサイクル（`CameraPreviewStreamLifecycle` から UI スレッドで呼ばれる） ----
 
-    void onResume() {
+    private void onResume() {
         resumed = true;
         if (startPendingResume) {
             startPendingResume = false;
@@ -225,7 +287,7 @@ final class CameraPreviewHelper {
         }
     }
 
-    void onPause() {
+    private void onPause() {
         resumed = false;
         // 許可ダイアログ待ちと許可後の保留中は止めない（ダイアログ自体が onPause を起こす）。
         if (permissionId != RequestTracker.NONE || startPendingResume) {
@@ -236,7 +298,7 @@ final class CameraPreviewHelper {
 
     // カメラスレッドは止めない。openCamera の途中で止めると OS の onOpened が届かず、
     // 開いた CameraDevice を閉じる経路が無くなる（スレッドはプロセスで 1 本、CameraThread）。
-    void onDestroy() {
+    private void onDestroy() {
         finishRequest(EV_STOPPED_LEFT, 0);
         synchronized (lock) {
             destroyedHelper = true;

@@ -149,8 +149,6 @@ fn build() {
     compile_ios_environment_sensors();
     // `ios/fandhe_ios_motion_raw_sensors.m`（Issue #900）。iOS 分岐のみ（macOS は対応表で no）。
     compile_ios_motion_raw_sensors();
-    // `ios/fandhe_ios_camera_preview_stream.m`（Issue #813）。iOS 分岐。macOS 分岐（`build_macos`）も同じ `.m` を共有する（Issue #1066）。
-    compile_ios_camera_preview_stream();
     // `ios/fandhe_ios_pen_stylus.m`（Issue #356）。iOS 分岐のみ。
     compile_ios_pen_stylus();
     // `ios/fandhe_ios_alarm.swift`（Issue #1077）。iOS 分岐のみ。AlarmKit を弱リンクする。
@@ -613,25 +611,6 @@ fn compile_ios_motion_raw_sensors() {
     );
 }
 
-/// `ios/fandhe_ios_camera_preview_stream.m` を `cc` でコンパイルする（Issue #813、macOS は #1066）。
-/// **iOS・macOS 双方**の分岐から呼ばれる（`src/device/ios_camera_preview_stream.rs` が使う）。
-fn compile_ios_camera_preview_stream() {
-    compile_objc(
-        "ios/fandhe_ios_camera_preview_stream.m",
-        if target_is_ios() {
-            &[
-                "AVFoundation",
-                "CoreMedia",
-                "CoreVideo",
-                "Foundation",
-                "UIKit",
-            ]
-        } else {
-            &["AVFoundation", "CoreMedia", "CoreVideo", "Foundation"]
-        },
-    );
-}
-
 /// `ios/fandhe_ios_pen_stylus.m` を `cc` でコンパイルする（Issue #356）。
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_pen_stylus.rs` が使う）。
 fn compile_ios_pen_stylus() {
@@ -677,8 +656,6 @@ fn build_macos() {
     compile_apple_bluetooth_le();
     // `apple/fandhe_apple_ble_peripheral.m`（Issue #778）。macOS・iOS 両分岐から呼ぶ。
     compile_apple_ble_peripheral();
-    // `ios/fandhe_ios_camera_preview_stream.m`（Issue #1066）は iOS 分岐と共有する（`TARGET_OS_IPHONE` で分岐）。
-    compile_ios_camera_preview_stream();
     // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。Network をリンクする。
     compile_apple_lan_discovery();

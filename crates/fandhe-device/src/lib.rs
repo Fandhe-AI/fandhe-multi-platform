@@ -39,7 +39,9 @@ pub mod ble_peripheral;
 pub mod bluetooth_classic;
 /// Phase 11（端末機能の拡充ループ）: Bluetooth LE の周辺機器スキャン。
 pub mod bluetooth_le;
-/// Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得（ズーム操作を含む）。
+/// カメラのライブ映像の縮小の部品（`downscale_packed`・`downscale_yuv420`・`preview_size`）だけ。`fandhe-cap-ar` と
+/// `fandhe-web-dom` が共有する純関数で、機能の契約は `fandhe-cap-camera-preview-stream` が持つ（Issue #812 / #1329、
+/// consumer-app-structure.md §8）。
 pub mod camera_preview_stream;
 /// Phase 11（端末機能の拡充ループ、親 #152、Issue #1116）: 車載ディスプレイの 1 行テキスト。
 pub mod car_display;

@@ -57,11 +57,6 @@ pub mod android_ble_peripheral;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_bluetooth_classic;
-/// Issue #812: Android 向けカメラのライブ映像実装のスタブ（#814 が埋める）。
-/// `device/camera_preview_stream.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_camera_preview_stream;
 /// Issue #1117: Android 向け車載ディスプレイ（Car App Library の Service/Screen を JNI 経由で操作する）。
 /// `device/car_display.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -354,10 +349,6 @@ pub mod bluetooth_classic;
 /// Phase 11 の拡充ループ（親 #1059、Issue #1060）: BLE スキャンの effect ドライバ
 /// （iOS/macOS/Windows/Android 実装、他 OS は `UnsupportedBluetoothLe` 固定。Web は別経路 `fandhe-web-dom`（#1063））。
 pub mod bluetooth_le;
-/// Phase 11 の拡充ループ（親 #168、Issue #812）: カメラのライブ映像・フレーム取得の effect ドライバ
-/// （iOS #813・Android #814・macOS #1066 は実装済み、Windows #1102 も実装済みで、他 OS は `UnsupportedCameraPreview`
-/// 固定。Web は `fandhe-web-dom`、#815）。
-pub mod camera_preview_stream;
 /// Phase 11 の拡充ループ（親 #152、Issue #1116）: 車載ディスプレイの effect ドライバ。
 /// Android は Car App Library 実装（#1117）、他 OS は `UnsupportedCarDisplay` 固定。
 pub mod car_display;
@@ -435,11 +426,6 @@ pub mod ios_barcode_scan;
 /// `device/ble_peripheral.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_ble_peripheral;
-/// Issue #813・#1066: iOS・macOS 向けカメラのライブ映像実装（`ios/fandhe_ios_camera_preview_stream.m` を共有）。
-/// `device/camera_preview_stream.rs` の iOS・macOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos", test))]
-#[cfg_attr(not(any(target_os = "ios", target_os = "macos")), allow(dead_code))]
-pub mod ios_camera_preview_stream;
 /// Issue #1405: iOS 向け方位実装（`ios/fandhe_ios_compass.m` を呼ぶ C ABI ラッパー、CoreLocation の heading）。`device/compass.rs` の ios 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -755,10 +741,6 @@ pub mod windows_bluetooth_classic;
 /// ラッパー）。`device/bluetooth_le.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_bluetooth_le;
-/// Issue #1102: Windows 向けカメラのライブ映像実装（WinRT `MediaCapture` + `MediaFrameReader`）。
-/// `device/camera_preview_stream.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_camera_preview_stream;
 /// Issue #1404: Windows 向け方位実装（WinRT `Compass` の pull）。`device/compass.rs` の windows 経路から呼ばれる。
 /// 写像の純関数をホストでテストできるよう cfg は `any(windows, test)`。
 #[cfg(any(target_os = "windows", test))]
@@ -891,7 +873,6 @@ pub fn shutdown() {
     now_playing::shutdown();
     picture_in_picture::shutdown();
     web_auth_session::shutdown();
-    camera_preview_stream::shutdown();
 }
 
 fn to_note_storage_error(e: DeviceError) -> NoteStorageError {

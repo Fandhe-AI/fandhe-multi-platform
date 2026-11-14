@@ -1,8 +1,8 @@
 //! iOS・macOS 向けカメラのライブ映像実装（iOS: Issue #813、macOS: Issue #1066、親 #168）。`ios/fandhe_ios_camera_preview_stream.m`
 //! （`AVCaptureSession` + `AVCaptureVideoDataOutput`。`build.rs` が iOS ターゲットの feature `device` 有効時に
 //! コンパイルする）を `extern "C"` 3 関数で呼び、`.m` からの通知・フレームは `#[no_mangle]` の受け口 3 つで
-//! 受ける。`device/camera_preview_stream.rs` の iOS 経路（`platform_camera_preview`）が [`implementation`] を
-//! 呼ぶ。dispatch・共通コア画面・driver・trait 契約（`fandhe_device::camera_preview_stream`）は #812 の
+//! 受ける。`driver` の iOS 経路（`platform_camera_preview`）が [`implementation`] を
+//! 呼ぶ。dispatch・共通コア画面・driver・trait 契約（`crate::contract`）は #812 の
 //! 最終形のまま変えない。
 //!
 //! # 流れ
@@ -12,7 +12,7 @@
 //!    タイマーや `startRunning` 直後の状態読みで推測しない（開始・失敗の確定は通知に一本化）。受理されなければ `unregister` して `Err` を返す（登録を残さない）
 //! 2. `.m` の通知は `fandhe_rust_camera_preview_stream_event`（コードの表は `event_from_code`）、
 //!    フレームは `fandhe_rust_camera_preview_stream_frame` が受け、`deliver_event` / `deliver_frame` で届ける。
-//!    届いた先で driver が `QueueSink::wake` → `crate::ios::request_repaint` を呼ぶ
+//!    届いた先で driver が `QueueSink::wake` → `fandhe_runtime::request_repaint` を呼ぶ
 //! 3. ズームの範囲検証（`zoom_target`）は `fandhe_rust_camera_preview_stream_zoom_target` の 1 か所で行う。
 //!    `.m` は範囲を OS から読み、目標値を Rust に決めてもらってから `videoZoomFactor` へ設定する
 //! 4. 停止（session の drop）: `unregister` → `.m` の stop（OS 停止・delegate の終了待ち・解放を完了して戻る）
@@ -38,12 +38,12 @@
 //! - シミュレータにはカメラが無く、開始失敗（カメラなし）になる
 //! - macOS: 内蔵カメラで preset 640x480 と 32BGRA が通るか、他アプリと同時に使ったときの中断、素の実行体で TCC の許可が出るか
 
-use fandhe_device::camera_preview_stream::{
-    downscale_packed, zoom_target, PackedLayout, PreviewFrame, PreviewStartError, StartFailure,
-    ZoomFailure, ZoomStep,
-};
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-use fandhe_device::camera_preview_stream::{CameraPreview, PreviewSession};
+use crate::contract::{CameraPreview, PreviewSession};
+use crate::contract::{
+    PackedLayout, PreviewFrame, PreviewStartError, StartFailure, ZoomFailure, ZoomStep,
+    downscale_packed, zoom_target,
+};
 
 /// `.m` の start / set_zoom の受理コード。0 だけが受理。
 #[cfg_attr(not(any(target_os = "ios", target_os = "macos")), allow(dead_code))]
@@ -121,15 +121,15 @@ mod imp {
     #[cfg(target_os = "ios")]
     use super::zoom_accept_result;
     use super::{
-        start_result, CameraPreview, PreviewSession, PreviewStartError, ZoomFailure, ZoomStep,
+        CameraPreview, PreviewSession, PreviewStartError, ZoomFailure, ZoomStep, start_result,
     };
-    use crate::device::camera_preview_stream::{register, unregister};
-    use fandhe_device::camera_preview_stream::PreviewSink;
+    use crate::contract::PreviewSink;
+    use crate::driver::{register, unregister};
 
     // SAFETY: `ios/fandhe_ios_camera_preview_stream.m`（`build.rs` が iOS・macOS ターゲットの feature `device` 有効時に
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         #[cfg(target_os = "ios")]
         fn fandhe_ios_camera_preview_stream_set_zoom(id: u64, step: i32) -> i32;
         fn fandhe_ios_camera_preview_stream_start(id: u64) -> i32;
@@ -192,7 +192,7 @@ mod imp {
         }
     }
 
-    /// iOS・macOS の `CameraPreview` 実装を返す（`device/camera_preview_stream.rs` の iOS・macOS 経路から呼ばれる）。
+    /// iOS・macOS の `CameraPreview` 実装を返す（`driver` の iOS・macOS 経路から呼ばれる）。
     pub(crate) fn implementation() -> Arc<dyn CameraPreview> {
         Arc::new(IosCameraPreview)
     }
@@ -201,14 +201,14 @@ mod imp {
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub(crate) use imp::implementation;
 
-/// `.m` の通知を届ける受け口（コードの表は `fandhe_device::camera_preview_stream::event_from_code`）。
+/// `.m` の通知を届ける受け口（コードの表は `crate::contract::event_from_code`）。
 /// 任意のスレッドから呼ばれ、panic しない。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_camera_preview_stream_event(id: u64, code: i32, detail: i32) {
-    use fandhe_device::camera_preview_stream::event_from_code;
-    super::camera_preview_stream::deliver_event(id, event_from_code(code, detail));
+    use crate::contract::event_from_code;
+    crate::driver::deliver_event(id, event_from_code(code, detail));
 }
 
 /// `.m` のフレームを縮めて届ける受け口。`data` は `CVPixelBufferLockBaseAddress` 中の先頭で、
@@ -216,7 +216,7 @@ extern "C" fn fandhe_rust_camera_preview_stream_event(id: u64, code: i32, detail
 /// panic しない。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_camera_preview_stream_frame(
     id: u64,
     data: *const u8,
@@ -235,7 +235,7 @@ extern "C" fn fandhe_rust_camera_preview_stream_frame(
     let slice = unsafe { std::slice::from_raw_parts(data, len) };
     if let Some(frame) = frame_from_raw(slice, width, height, row_stride, has_zoom.then_some(zoom))
     {
-        super::camera_preview_stream::deliver_frame(id, frame);
+        crate::driver::deliver_frame(id, frame);
     }
 }
 
@@ -243,7 +243,7 @@ extern "C" fn fandhe_rust_camera_preview_stream_frame(
 /// 戻りは 0 成功（`out` に目標値）/ 1 非対応 / 2 失敗。`out` が NULL なら失敗。panic しない。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_camera_preview_stream_zoom_target(
     step: i32,
     min: f32,
@@ -264,8 +264,8 @@ extern "C" fn fandhe_rust_camera_preview_stream_zoom_target(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::camera_preview_stream::{
-        CameraPreview, PreviewEvent, PreviewSink, UnsupportedCameraPreview, MAX_SOURCE_SIDE,
+    use crate::contract::{
+        CameraPreview, MAX_SOURCE_SIDE, PreviewEvent, PreviewSink, UnsupportedCameraPreview,
     };
     use std::sync::Arc;
 

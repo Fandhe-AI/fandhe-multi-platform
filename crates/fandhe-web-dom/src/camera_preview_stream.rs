@@ -5,9 +5,9 @@
 //! 非表示の `<video>` に流して、`requestVideoFrameCallback` のたびに縮小キャンバスへ描いた画素を
 //! 画面へ書き戻す。呼び出し元は `demo.rs` の `mount_camera_preview_stream_show_screen`。
 //!
-//! Web は `fandhe-device` の `CameraPreview` トレイト（`fandhe-egui-proxy` の effect ドライバが
+//! Web は `fandhe-cap-camera-preview-stream` の `CameraPreview` トレイト（同 crate の effect ドライバが
 //! 使う）を通らない（`camera_capture.rs` と同じ理由）。寸法・縮小・検証の不変条件だけは
-//! `fandhe_device::camera_preview_stream` の純関数（`preview_size`・`downscale_packed`・
+//! `fandhe_cap_camera_preview_stream`（`fandhe-device` から再公開）の純関数（`preview_size`・`downscale_packed`・
 //! `MAX_SOURCE_SIDE`）を共用する。
 //!
 //! # OS（ブラウザ）を正にする
@@ -60,11 +60,11 @@
 //! `mount_with_effect` は `Screen` を固定するため、トグルボタンの文言は「映像を始める」のまま変わらず、
 //! ズームのボタンも出ない（`mic_record.rs`・`screen_capture.rs` と同じ）。
 
-use fandhe_core::screens::camera_preview_stream_show::{FailureView, FrameView, PreviewPhase};
-use fandhe_core::ui::RgbaPixels;
-use fandhe_device::camera_preview_stream::{
+use fandhe_cap_camera_preview_stream::{
     downscale_packed, preview_size, PackedLayout, MAX_SOURCE_SIDE,
 };
+use fandhe_core::screens::camera_preview_stream_show::{FailureView, FrameView, PreviewPhase};
+use fandhe_core::ui::RgbaPixels;
 
 /// 画面へ出すフレームの最小間隔（ミリ秒、単調時計）。実ブラウザで見直す仮置き値（#808）。
 pub const DISPLAY_MIN_INTERVAL_MS: f64 = 200.0;

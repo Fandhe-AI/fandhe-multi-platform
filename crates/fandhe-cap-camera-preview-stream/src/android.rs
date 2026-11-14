@@ -1,22 +1,22 @@
 //! Android 向けカメラのライブ映像実装（Issue #814、親 #168。共通コア・契約・effect ドライバは #812）。
-//! `device/camera_preview_stream.rs::platform_camera_preview` の android 経路から UI スレッドで呼ばれ、
+//! `driver::platform_camera_preview_stream` の android 経路から UI スレッドで呼ばれ、
 //! Java の `CameraPreviewHelper`（Camera2 + `ImageReader`）経由で背面カメラ（無ければ先頭）の映像を受け、
 //! 最新の 1 枚を `downscale_yuv420` で長辺 320 px 以下へ縮めてドライバの受け口へ渡す。契約は
-//! `fandhe_device::camera_preview_stream`。
+//! `crate::contract`。
 //!
 //! # 結果コード（数値表の SSOT は Rust の `event_from_code`、定数の並びは Java 側 `CameraPreviewHelper`）
 //!
-//! - `MainActivity.cameraPreviewStart(long)` の戻り値: 0 = 受け付けた（開くのは非同期）/ 他 = 失敗
-//! - `MainActivity.cameraPreviewZoomRange(long)` の戻り値: `null` = 失敗 / 長さ 0 = 非対応 /
+//! - `CameraPreviewHelper.start(Activity, long)` の戻り値: 0 = 受け付けた（開くのは非同期）/ 他 = 失敗
+//! - `CameraPreviewHelper.zoomRange(Activity, long)` の戻り値: `null` = 失敗 / 長さ 0 = 非対応 /
 //!   長さ 2 = `{min, max}`。それ以外の長さは失敗
-//! - `MainActivity.cameraPreviewSetZoom(long, float)` の戻り値: 0 = 受け付けた / 1 = 非対応 / 他 = 失敗。
+//! - `CameraPreviewHelper.setZoom(Activity, long, float)` の戻り値: 0 = 受け付けた / 1 = 非対応 / 他 = 失敗。
 //!   適用は Java のカメラスレッドで非同期に行い、適用の失敗はイベント 6 で返る
 //! - `nativeOnCameraPreviewEvent(id, code, detail)` は `event_from_code` の表のとおり
 //! - `nativeOnCameraPreviewFrame(...)` は `YUV_420_888` の 3 面と stride・OS から読んだズーム値を受ける
 //!
 //! # 方式: id 照合 + 解放の集約（契約表 1・2・3・9・11）
 //!
-//! ドライバは OS 実装へ id を渡さないため、本実装が [`register`](super::camera_preview_stream::register)
+//! ドライバは OS 実装へ id を渡さないため、本実装が [`register`](crate::driver::register)
 //! で自分用の id を取り、Java へ渡して数える。通知は id を添えて `deliver_*` へ流れ、登録表に無い id
 //! （停止後・Activity 再生成前の古い id）は捨てられる（id はプロセス内で単調増加）。
 //! 停止（`AndroidSession` の drop）は「登録解除 → Java の停止」の順で、Java の解放完了は待たない。
@@ -41,21 +41,19 @@
 //! 追従、OS が止めた後の自動再開、複数プロセス、OS 側の非同期確定との時間差による一時的な食い違い。
 //! id・画素・例外の内容・OS のエラー文言はログ・エラーに出さない。
 //!
-//! no-op スタブは置かない: Java の native は Rust の `cameraPreviewStart` を経た後でしか呼ばれず、
+//! no-op スタブは置かない: Java の native は Rust の `start` を経た後でしか呼ばれず、
 //! feature `device` が無効のビルドではその経路に届かない（sleep_lock_events と同じ根拠）。
 
 use std::sync::Arc;
 
-use fandhe_device::camera_preview_stream::CameraPreview;
+use crate::contract::CameraPreview;
 #[cfg(not(target_os = "android"))]
-use fandhe_device::camera_preview_stream::UnsupportedCameraPreview;
-use fandhe_device::camera_preview_stream::{
-    checked_zoom, downscale_yuv420, PreviewFrame, ZoomFailure,
-};
+use crate::contract::UnsupportedCameraPreview;
+use crate::contract::{PreviewFrame, ZoomFailure, checked_zoom, downscale_yuv420};
 #[cfg(target_os = "android")]
-use fandhe_device::camera_preview_stream::{
-    event_from_code, zoom_target, PreviewSession, PreviewSink, PreviewStartError, StartFailure,
-    ZoomStep,
+use crate::contract::{
+    PreviewSession, PreviewSink, PreviewStartError, StartFailure, ZoomStep, event_from_code,
+    zoom_target,
 };
 
 /// `cameraPreviewStart` の成功コード（SSOT は Java 側 `CameraPreviewHelper.START_OK`）。
@@ -135,7 +133,7 @@ struct AndroidSession {
 impl Drop for AndroidSession {
     fn drop(&mut self) {
         // 先に登録を外し、以後の遅れたフレーム・通知を捨てさせてから Java を止める。
-        super::camera_preview_stream::unregister(self.id);
+        crate::driver::unregister(self.id);
         // Java の onDestroy が先に片付けている場合や知らない id は何もしない（冪等）。失敗は無視してよい。
         let _ = call_activity(Call::Stop(self.id));
     }
@@ -166,12 +164,12 @@ impl CameraPreview for AndroidCameraPreview {
         &self,
         sink: Arc<dyn PreviewSink>,
     ) -> Result<Box<dyn PreviewSession>, PreviewStartError> {
-        let id = super::camera_preview_stream::register(sink);
+        let id = crate::driver::register(sink);
         match call_activity(Call::Start(id)) {
             Some(Ret::Int(code)) if decode_start(code) => Ok(Box::new(AndroidSession { id })),
             _ => {
                 // 失敗したら登録表にも Java 側にも何も残さない。
-                super::camera_preview_stream::unregister(id);
+                crate::driver::unregister(id);
                 let _ = call_activity(Call::Stop(id));
                 Err(PreviewStartError::Failed(StartFailure::Other))
             }
@@ -196,72 +194,82 @@ enum Ret {
     Floats(Option<Vec<f32>>),
 }
 
-/// `MainActivity.cameraPreviewStart(long)` / `cameraPreviewStop(long)` / `cameraPreviewZoomRange(long)` /
-/// `cameraPreviewSetZoom(long, float)` を JNI で呼ぶ。`None` は呼び出し失敗。
-/// `unsafe` 2 箇所は `fandhe_platform_android::with_activity` と同一の根拠。
+/// `CameraPreviewHelper.start(Activity, long)` / `stop(Activity, long)` / `zoomRange(Activity, long)` /
+/// `setZoom(Activity, long, float)`（いずれも static）を JNI で呼ぶ。`None` は呼び出し失敗。JavaVM と Activity の取得は
+/// `fandhe_platform_android::with_activity_class` に任せ、ここは `unsafe` を持たない。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
 fn call_activity(call: Call) -> Option<Ret> {
-    use super::android::JniCallFailed;
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
     use jni::objects::{JFloatArray, JValue};
-    let app = crate::android::android_app()?;
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| -> Result<Ret, JniCallFailed> {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        match call {
-            Call::Start(id) => Ok(Ret::Int(
-                env.call_method(
-                    &activity,
-                    jni::jni_str!("cameraPreviewStart"),
-                    jni::jni_sig!((long) -> int),
-                    &[JValue::Long(id as jni::sys::jlong)],
-                )?
-                .i()?,
-            )),
-            Call::Stop(id) => {
-                env.call_method(
-                    &activity,
-                    jni::jni_str!("cameraPreviewStop"),
-                    jni::jni_sig!((long) -> ()),
-                    &[JValue::Long(id as jni::sys::jlong)],
-                )?;
-                Ok(Ret::Int(0))
-            }
-            Call::ZoomRange(id) => {
-                let ret = env.call_method(
-                    &activity,
-                    jni::jni_str!("cameraPreviewZoomRange"),
-                    jni::jni_sig!((long) -> float[]),
-                    &[JValue::Long(id as jni::sys::jlong)],
-                )?;
-                let arr = env.cast_local::<JFloatArray>(ret.l()?)?;
-                if arr.is_null() {
-                    return Ok(Ret::Floats(None));
+    let app = android_app()?;
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.CameraPreviewHelper"),
+        |env, activity, class| -> Result<Ret, JniCallFailed> {
+            match call {
+                Call::Start(id) => Ok(Ret::Int(
+                    env.call_static_method(
+                        class,
+                        jni::jni_str!("start"),
+                        jni::jni_sig!((android.app.Activity, long) -> int),
+                        &[
+                            JValue::Object(activity),
+                            JValue::Long(id as jni::sys::jlong),
+                        ],
+                    )?
+                    .i()?,
+                )),
+                Call::Stop(id) => {
+                    env.call_static_method(
+                        class,
+                        jni::jni_str!("stop"),
+                        jni::jni_sig!((android.app.Activity, long) -> ()),
+                        &[
+                            JValue::Object(activity),
+                            JValue::Long(id as jni::sys::jlong),
+                        ],
+                    )?;
+                    Ok(Ret::Int(0))
                 }
-                // 長さを検証してから読む。0 と 2 以外は `decode_zoom_range` が失敗にする。
-                let len = arr.len(env)?;
-                if len > 2 {
-                    return Ok(Ret::Floats(Some(vec![0.0; 3])));
+                Call::ZoomRange(id) => {
+                    let ret = env.call_static_method(
+                        class,
+                        jni::jni_str!("zoomRange"),
+                        jni::jni_sig!((android.app.Activity, long) -> float[]),
+                        &[
+                            JValue::Object(activity),
+                            JValue::Long(id as jni::sys::jlong),
+                        ],
+                    )?;
+                    let arr = env.cast_local::<JFloatArray>(ret.l()?)?;
+                    if arr.is_null() {
+                        return Ok(Ret::Floats(None));
+                    }
+                    // 長さを検証してから読む。0 と 2 以外は `decode_zoom_range` が失敗にする。
+                    let len = arr.len(env)?;
+                    if len > 2 {
+                        return Ok(Ret::Floats(Some(vec![0.0; 3])));
+                    }
+                    let mut v = vec![0f32; len];
+                    arr.get_region(env, 0, &mut v)?;
+                    Ok(Ret::Floats(Some(v)))
                 }
-                let mut v = vec![0f32; len];
-                arr.get_region(env, 0, &mut v)?;
-                Ok(Ret::Floats(Some(v)))
+                Call::SetZoom(id, ratio) => Ok(Ret::Int(
+                    env.call_static_method(
+                        class,
+                        jni::jni_str!("setZoom"),
+                        jni::jni_sig!((android.app.Activity, long, float) -> int),
+                        &[
+                            JValue::Object(activity),
+                            JValue::Long(id as jni::sys::jlong),
+                            JValue::Float(ratio),
+                        ],
+                    )?
+                    .i()?,
+                )),
             }
-            Call::SetZoom(id, ratio) => Ok(Ret::Int(
-                env.call_method(
-                    &activity,
-                    jni::jni_str!("cameraPreviewSetZoom"),
-                    jni::jni_sig!((long, float) -> int),
-                    &[JValue::Long(id as jni::sys::jlong), JValue::Float(ratio)],
-                )?
-                .i()?,
-            )),
-        }
-    })
+        },
+    )
     .ok()
 }
 
@@ -274,7 +282,7 @@ fn call_activity(call: Call) -> Option<Ret> {
 /// 他シンボルと衝突しない（既存の JNI エクスポートと同じ根拠）。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_CameraPreviewHelper_nativeOnCameraPreviewEvent<
     'caller,
 >(
@@ -284,7 +292,7 @@ extern "system" fn Java_com_fandhe_platform_CameraPreviewHelper_nativeOnCameraPr
     code: jni::sys::jint,
     detail: jni::sys::jint,
 ) {
-    super::camera_preview_stream::deliver_event(id as u64, event_from_code(code, detail));
+    crate::driver::deliver_event(id as u64, event_from_code(code, detail));
 }
 
 /// `CameraPreviewHelper.nativeOnCameraPreviewFrame`（Java 側）から呼ばれる JNI エクスポート。
@@ -298,7 +306,7 @@ extern "system" fn Java_com_fandhe_platform_CameraPreviewHelper_nativeOnCameraPr
 /// JNI 命名規約上の固定シンボル名で、他の JNI エクスポートと同じ根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code, clippy::too_many_arguments)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_CameraPreviewHelper_nativeOnCameraPreviewFrame<
     'caller,
 >(
@@ -355,14 +363,14 @@ extern "system" fn Java_com_fandhe_platform_CameraPreviewHelper_nativeOnCameraPr
             )
         };
         if let Some(frame) = frame {
-            super::camera_preview_stream::deliver_frame(id as u64, frame);
+            crate::driver::deliver_frame(id as u64, frame);
         }
         Ok(())
     });
     let _ = outcome.into_outcome();
 }
 
-/// Android の `CameraPreview` 実装を返す（`device/camera_preview_stream.rs` の dispatch から呼ばれる）。
+/// Android の `CameraPreview` 実装を返す（`driver` の dispatch から呼ばれる）。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn CameraPreview> {
     Arc::new(AndroidCameraPreview)
@@ -379,7 +387,7 @@ pub(crate) fn implementation() -> Arc<dyn CameraPreview> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::camera_preview_stream::{PreviewEvent, PreviewSink, PreviewStartError};
+    use crate::contract::{PreviewEvent, PreviewSink, PreviewStartError};
 
     struct NopSink;
     impl PreviewSink for NopSink {

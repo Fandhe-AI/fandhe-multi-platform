@@ -258,6 +258,9 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // クリップボードの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない）（`fandhe_cap_clipboard::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_clipboard::reset_pending_tracking();
+    // カメラのライブ映像も同様。画面状態が generation 0 に戻るため、動いたままのセッションを止めて `ACTIVE` を解放する（`fandhe_cap_camera_preview_stream::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_camera_preview_stream::reset_pending_tracking();
     // アプリ内ブラウザの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない。`fandhe_cap_in_app_browser::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_in_app_browser::reset_pending_tracking();
@@ -298,6 +301,7 @@ fn shutdown() {
     fandhe_cap_serial_port::shutdown();
     fandhe_cap_audio_session::shutdown();
     fandhe_cap_memory_pressure::shutdown();
+    fandhe_cap_camera_preview_stream::shutdown();
 }
 
 /// Web のエントリポイント。wasm-bindgen の glue が読み込み時に呼ぶ。実処理は egui-proxy の

@@ -1215,6 +1215,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-camera-preview-stream"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
 name = "fandhe-cap-capture-protection"
 version = "0.2.0"
 dependencies = [
@@ -2266,6 +2282,7 @@ dependencies = [
  "fandhe-cap-calendar",
  "fandhe-cap-call-ui",
  "fandhe-cap-camera-capture",
+ "fandhe-cap-camera-preview-stream",
  "fandhe-cap-capture-protection",
  "fandhe-cap-clipboard",
  "fandhe-cap-color-picker",
@@ -2443,6 +2460,7 @@ dependencies = [
  "fandhe-cap-app-lifecycle",
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
+ "fandhe-cap-camera-preview-stream",
  "fandhe-cap-color-picker",
  "fandhe-cap-compose-mail-sms",
  "fandhe-cap-digital-credentials",

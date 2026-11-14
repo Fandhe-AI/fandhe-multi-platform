@@ -1,7 +1,7 @@
-//! Windows 向けカメラのライブ映像実装（Issue #1102）。`device/camera_preview_stream.rs` の
+//! Windows 向けカメラのライブ映像実装（Issue #1102）。`driver` の
 //! `platform_camera_preview`（Windows 経路）から呼ばれ、WinRT `MediaCapture` + `MediaFrameReader`
 //! で Bgra8 のフレームを受け、縮小して `deliver_frame` で渡す。契約と守る範囲は
-//! `fandhe_device::camera_preview_stream` のモジュール doc（「Windows の違い」）、状態の写像
+//! `crate::contract` のモジュール doc（「Windows の違い」）、状態の写像
 //! （HRESULT・開始 status・`CameraStreamState`）はそこの純関数が SSOT。
 //!
 //! # 流れ（専用ワーカーの待たない状態機械）
@@ -47,7 +47,6 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, OnceLock};
 
 use fandhe_platform_windows::winrt_async::{spawn, spawn_action};
-use windows::core::{IInspectable, Ref, HRESULT, HSTRING};
 use windows::Devices::Enumeration::{
     DeviceClass, DeviceInformation, DeviceInformationCollection, Panel,
 };
@@ -65,16 +64,17 @@ use windows::Media::Capture::{
 use windows::Media::Devices::{ZoomControl, ZoomSettings, ZoomTransitionMode};
 use windows::Media::MediaProperties::MediaEncodingSubtypes;
 use windows::Storage::Streams::{Buffer, DataReader};
+use windows::core::{HRESULT, HSTRING, IInspectable, Ref};
 use windows_future::IAsyncInfo;
 
-use fandhe_device::camera_preview_stream::{
-    checked_zoom, downscale_packed, event_from_windows_stream_state,
-    start_failure_from_windows_hresult, start_failure_from_windows_reader_status, windows_bgra_len,
-    zoom_target, CameraPreview, PackedLayout, PreviewEvent, PreviewFrame, PreviewSession,
-    PreviewSink, PreviewStartError, StartFailure, ZoomFailure, ZoomStep,
+use crate::contract::{
+    CameraPreview, PackedLayout, PreviewEvent, PreviewFrame, PreviewSession, PreviewSink,
+    PreviewStartError, StartFailure, ZoomFailure, ZoomStep, checked_zoom, downscale_packed,
+    event_from_windows_stream_state, start_failure_from_windows_hresult,
+    start_failure_from_windows_reader_status, windows_bgra_len, zoom_target,
 };
 
-use super::camera_preview_stream::{deliver_event, deliver_frame, register, unregister};
+use crate::driver::{deliver_event, deliver_frame, register, unregister};
 
 /// ワーカーへの命令。開始・停止・ズーム・各段の完了・OS の通知はすべてここを順に通る。
 enum Cmd {
@@ -233,7 +233,7 @@ impl Drop for WindowsSession {
     }
 }
 
-/// `device/camera_preview_stream.rs` から呼ばれる、プロセスに 1 つの実装。
+/// `driver` から呼ばれる、プロセスに 1 つの実装。
 pub(crate) fn implementation() -> Arc<dyn CameraPreview> {
     Arc::new(WindowsCameraPreview)
 }
@@ -368,11 +368,11 @@ impl Worker {
     }
 
     fn step(&mut self, cmd: Cmd) {
-        if let Some(id) = completion_id(&cmd) {
-            if self.closing.as_ref().is_some_and(|s| s.id == id) {
-                self.closing_done(cmd);
-                return;
-            }
+        if let Some(id) = completion_id(&cmd)
+            && self.closing.as_ref().is_some_and(|s| s.id == id)
+        {
+            self.closing_done(cmd);
+            return;
         }
         match cmd {
             Cmd::Start(id) => self.start(id),

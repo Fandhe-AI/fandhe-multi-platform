@@ -7,9 +7,9 @@
 // `AVCaptureSession` + `AVCaptureVideoDataOutput`（32BGRA）で背面カメラ（無ければ既定のカメラ）の
 // フレームを受け、`videoZoomFactor` でズームする。
 //
-// `src/device/ios_camera_preview_stream.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS・macOS 分岐の
+// `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS・macOS 分岐の
 // feature `device` 有効時のみ `cc` コンパイルする（AVFoundation / CoreMedia / CoreVideo をリンク）。
-// 契約の SSOT は `fandhe_device::camera_preview_stream`。
+// 契約の SSOT は `crate::contract`。
 //
 // 契約（Rust → .m）:
 //   fandhe_ios_camera_preview_stream_start(uint64_t id) -> int32_t
@@ -20,7 +20,7 @@
 //     他 = 現在の `id` と一致しない。step は 1 = 1 倍 / 2 = 2 倍。
 //   fandhe_ios_camera_preview_stream_stop(uint64_t id)
 //     停止・解放・実行中 delegate の終了待ちを完了してから戻る。`id` 不一致は何もしない。
-// 契約（.m → Rust。`ios_camera_preview_stream.rs` の `#[no_mangle]`）:
+// 契約（.m → Rust。`ios.rs` の `#[no_mangle]`）:
 //   fandhe_rust_camera_preview_stream_event(id, code, detail)
 //     コードの表は `event_from_code`: 0 Running / 1 Interrupted / 2 Stopped(背景) / 3 Stopped(画面を離れた) /
 //     4 StartFailed(detail 0 権限 / 1 カメラなし / 2 使用中 / 他 その他) / 5 RuntimeFailed /

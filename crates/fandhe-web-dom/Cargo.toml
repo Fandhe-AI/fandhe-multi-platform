@@ -40,6 +40,8 @@ fandhe-cap-share-sheet = { path = "../fandhe-cap-share-sheet" }
 fandhe-cap-flashlight = { path = "../fandhe-cap-flashlight" }
 # foldable-posture の契約（`READ_INTERVAL`・`reading_from_raw`・`FoldablePostureError`）。Web 実装本体は本クレートに残る。
 fandhe-cap-foldable-posture = { path = "../fandhe-cap-foldable-posture" }
+# camera-preview-stream の契約（縮小の部品 `downscale_packed`・`preview_size` の再公開）。Web 実装本体は本クレートに残る。
+fandhe-cap-camera-preview-stream = { path = "../fandhe-cap-camera-preview-stream" }
 # display-refresh-hdr の契約（`require_any`・`DisplayCapabilities`）。Web 実装本体は本クレートに残る。
 # memory-pressure の契約（`PressureEvent`・`EventLog`・`ALL_EVENTS`）。Web 実装本体は本クレートに残る。
 fandhe-cap-memory-pressure = { path = "../fandhe-cap-memory-pressure" }

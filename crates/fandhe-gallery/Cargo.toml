@@ -29,6 +29,7 @@ device = [
   "dep:fandhe-cap-calendar",
   "dep:fandhe-cap-call-ui",
   "dep:fandhe-cap-camera-capture",
+  "dep:fandhe-cap-camera-preview-stream",
   "dep:fandhe-cap-capture-protection",
   "dep:fandhe-cap-clipboard",
   "dep:fandhe-cap-color-picker",
@@ -173,6 +174,7 @@ fandhe-cap-audio-session = { path = "../fandhe-cap-audio-session", optional = tr
 fandhe-cap-calendar = { path = "../fandhe-cap-calendar", optional = true }
 fandhe-cap-call-ui = { path = "../fandhe-cap-call-ui", optional = true }
 fandhe-cap-camera-capture = { path = "../fandhe-cap-camera-capture", optional = true }
+fandhe-cap-camera-preview-stream = { path = "../fandhe-cap-camera-preview-stream", optional = true }
 fandhe-cap-capture-protection = { path = "../fandhe-cap-capture-protection", optional = true }
 fandhe-cap-clipboard = { path = "../fandhe-cap-clipboard", optional = true }
 fandhe-cap-color-picker = { path = "../fandhe-cap-color-picker", optional = true }

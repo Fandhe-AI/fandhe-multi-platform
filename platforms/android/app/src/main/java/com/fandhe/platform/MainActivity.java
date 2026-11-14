@@ -453,26 +453,6 @@ public class MainActivity extends GameActivity {
         return SpotlightIndexHelper.removeAll(getApplicationContext(), domain, remainingMs);
     }
 
-    // カメラのライブ映像（Issue #814）。実装は `CameraPreviewHelper`（許可ランチャーを STARTED 前に登録）。
-    // Rust の `android_camera_preview_stream.rs` が JNI で呼ぶ。
-    private final CameraPreviewHelper cameraPreviewHelper = new CameraPreviewHelper(this);
-
-    int cameraPreviewStart(long id) {
-        return cameraPreviewHelper.start(id);
-    }
-
-    void cameraPreviewStop(long id) {
-        cameraPreviewHelper.stop(id);
-    }
-
-    float[] cameraPreviewZoomRange(long id) {
-        return cameraPreviewHelper.zoomRange(id);
-    }
-
-    int cameraPreviewSetZoom(long id, float ratio) {
-        return cameraPreviewHelper.setZoom(id, ratio);
-    }
-
     // OAuth 用 Web 認証セッション（Issue #534）。実装は `WebAuthSessionHelper`。
     // Rust の `android_web_auth_session.rs` が JNI で呼ぶ。
     private final WebAuthSessionHelper webAuthSessionHelper = new WebAuthSessionHelper(this);
@@ -1912,7 +1892,6 @@ public class MainActivity extends GameActivity {
         bluetoothClassicHelper.onResume();
         mediaPlaybackHelper.onResume();
         nowPlayingHelper.onResume();
-        cameraPreviewHelper.onResume();
         if (sensorManager != null && motionSensor != null) {
             sensorManager.registerListener(
                     motionListener, motionSensor, SensorManager.SENSOR_DELAY_GAME);
@@ -2003,7 +1982,6 @@ public class MainActivity extends GameActivity {
         motionRawSensorsHelper.onPause();
         mediaPlaybackHelper.onPause();
         nowPlayingHelper.onPause();
-        cameraPreviewHelper.onPause();
         if (sensorManager != null) {
             sensorManager.unregisterListener(motionListener);
         }
@@ -3737,7 +3715,6 @@ public class MainActivity extends GameActivity {
         motionRawSensorsHelper.onDestroy();
         mediaPlaybackHelper.onDestroy();
         pictureInPictureHelper.onDestroy();
-        cameraPreviewHelper.onDestroy();
         printHelper.onDestroy();
         screenOrientationHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため

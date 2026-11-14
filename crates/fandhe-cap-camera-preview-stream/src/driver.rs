@@ -1,16 +1,16 @@
 //! Phase 11 の拡充ループ（親 #168、Issue #812）型サンプル「カメラのライブ映像」の effect ドライバ。
 //! `fandhe_core::screens::camera_preview_stream_show`（端末依存ゼロ）の要求を `take_start` /
-//! `take_zoom` で観測し、`fandhe_device::camera_preview_stream::CameraPreview` を呼んで、結果を
+//! `take_zoom` で観測し、`crate::contract::CameraPreview` を呼んで、結果を
 //! `CompletionSender` 経由で注入する（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は
-//! `fandhe_device::camera_preview_stream`。
+//! `crate::contract`。
 //!
 //! # OS 別実装の差し込み口
 //!
-//! [`platform_camera_preview`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
-//! モジュールだけを埋める（iOS: `ios_camera_preview_stream`（#813）、Android:
-//! `android_camera_preview_stream`（#814）、macOS: iOS と同じ `ios_camera_preview_stream`（#1066）、
-//! Windows: `windows_camera_preview_stream`（#1102）。Linux 等は
+//! [`platform_camera_preview_stream`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
+//! モジュールだけを埋める（iOS: `crate::ios`（#813）、Android:
+//! `crate::android`（#814）、macOS: iOS と同じ `crate::ios`（#1066）、
+//! Windows: `crate::windows`（#1102）。Linux 等は
 //! `UnsupportedCameraPreview` 固定（ダミーの成功実装へは倒さない）。Web は本ドライバを通らない
 //! （#815 の `fandhe-web-dom`）。OS のコールバックは [`register`] で得た `id` を持ち、
 //! [`deliver_frame`] / [`deliver_event`] を呼ぶ。
@@ -33,26 +33,26 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use fandhe_core::screens::camera_preview_stream_show::{
-    apply_frame, apply_interrupted, apply_running, apply_runtime_failed, apply_start_failed,
-    apply_stopped, apply_unsupported, apply_zoom_failed, finish_zoom, take_start, take_zoom,
-    CameraPreviewStreamShowState, FailureView, FrameView, PreviewPhase, StopView, ZoomFailureView,
-    ZoomStepView,
-};
-use fandhe_core::RgbaPixels;
 #[cfg(not(any(
     target_os = "ios",
     target_os = "android",
     target_os = "macos",
     target_os = "windows"
 )))]
-use fandhe_device::camera_preview_stream::UnsupportedCameraPreview;
-use fandhe_device::camera_preview_stream::{
-    checked_zoom, CameraPreview, PreviewEvent, PreviewFrame, PreviewSession, PreviewSink,
-    PreviewStartError, StartFailure, StopReason, ZoomFailure, ZoomStep, PREVIEW_MAX_SIDE,
+use crate::contract::UnsupportedCameraPreview;
+use crate::contract::{
+    CameraPreview, PREVIEW_MAX_SIDE, PreviewEvent, PreviewFrame, PreviewSession, PreviewSink,
+    PreviewStartError, StartFailure, StopReason, ZoomFailure, ZoomStep, checked_zoom,
+};
+use fandhe_core::RgbaPixels;
+use fandhe_core::screens::camera_preview_stream_show::{
+    CameraPreviewStreamShowState, FailureView, FrameView, PreviewPhase, StopView, ZoomFailureView,
+    ZoomStepView, apply_frame, apply_interrupted, apply_running, apply_runtime_failed,
+    apply_start_failed, apply_stopped, apply_unsupported, apply_zoom_failed, finish_zoom,
+    take_start, take_zoom,
 };
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 type Sender = CompletionSender<CameraPreviewStreamShowState>;
 
@@ -61,18 +61,18 @@ type Sender = CompletionSender<CameraPreviewStreamShowState>;
 const MAX_PENDING_EVENTS: usize = 32;
 
 /// 現在のプラットフォームに応じた `CameraPreview` 実装を返す（状態を持たないため呼び出しごとに構築）。
-fn platform_camera_preview() -> Arc<dyn CameraPreview> {
+pub fn platform_camera_preview_stream() -> Arc<dyn CameraPreview> {
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     {
-        super::ios_camera_preview_stream::implementation()
+        crate::ios::implementation()
     }
     #[cfg(target_os = "android")]
     {
-        super::android_camera_preview_stream::implementation()
+        crate::android::implementation()
     }
     #[cfg(target_os = "windows")]
     {
-        super::windows_camera_preview_stream::implementation()
+        crate::windows::implementation()
     }
     #[cfg(not(any(
         target_os = "ios",
@@ -175,9 +175,9 @@ impl QueueSink {
                 .send(Box::new(|_: &mut CameraPreviewStreamShowState| {}));
             // iOS・Android は入力が無いと egui が描画しないため、次フレームを起こす（契約表 4）。
             #[cfg(target_os = "ios")]
-            crate::ios::request_repaint();
+            fandhe_runtime::request_repaint();
             #[cfg(target_os = "android")]
-            crate::android::request_repaint();
+            fandhe_runtime::request_repaint();
         }
     }
 }
@@ -258,9 +258,9 @@ impl Drop for Active {
 
 static ACTIVE: Mutex<Option<Active>> = Mutex::new(None);
 
-/// プロセス終了時の解放（`device::shutdown` から）。デスクトップやモバイルでは「画面を離れる」と
+/// プロセス終了時の解放（最終成果物 `fandhe-gallery` の `shutdown` から）。デスクトップやモバイルでは「画面を離れる」と
 /// プロセスが終わるため、ここが解放の経路になる。停止の待ちはロックの外で行う。
-pub(crate) fn shutdown() {
+pub fn shutdown() {
     let a = lock(&ACTIVE).take();
     drop(a);
 }
@@ -268,8 +268,7 @@ pub(crate) fn shutdown() {
 /// Activity 再生成時（`android_main` の再実行）に、実行中の映像を止めて破棄する。画面状態は再生成で
 /// `default()` に戻るため、残すと旧セッションが動いたまま新しい UI スレッドと [`ACTIVE`] を取り合う。
 /// 他の長時間ドライバの `reset_pending_tracking` と同じ位置づけで、停止の待ちはロックの外で行う。
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     shutdown();
 }
 
@@ -337,45 +336,41 @@ fn drive(
                     PreviewPhase::Starting | PreviewPhase::Live | PreviewPhase::Interrupted
                 )
         });
-        if keep {
-            None
-        } else {
-            g.take()
-        }
+        if keep { None } else { g.take() }
     };
     drop(stale);
 
     // 2. 開始（二重に起こさない）。許可待ち・open の途中でも session はすぐ返り、drop で取り消せる。
-    if let Some(generation) = take_start(state) {
-        if lock(active).is_none() {
-            let shared = Arc::new(Shared::default());
-            let sink = Arc::new(QueueSink {
-                shared: shared.clone(),
-                sender: sender.clone(),
-            });
-            let id = register(sink.clone());
-            match preview.start(sink) {
-                Ok(session) => {
-                    *lock(active) = Some(Active {
-                        generation,
-                        id,
-                        shared,
-                        last_zoom_seq: 0,
-                        session,
-                    });
-                }
-                Err(e) => {
-                    unregister(id);
-                    shared.closed.store(true, Ordering::SeqCst);
-                    let _ = sender.send(Box::new(
-                        move |s: &mut CameraPreviewStreamShowState| match e {
-                            PreviewStartError::Unsupported => apply_unsupported(s, generation),
-                            PreviewStartError::Failed(f) => {
-                                apply_start_failed(s, generation, to_failure_view(f))
-                            }
-                        },
-                    ));
-                }
+    if let Some(generation) = take_start(state)
+        && lock(active).is_none()
+    {
+        let shared = Arc::new(Shared::default());
+        let sink = Arc::new(QueueSink {
+            shared: shared.clone(),
+            sender: sender.clone(),
+        });
+        let id = register(sink.clone());
+        match preview.start(sink) {
+            Ok(session) => {
+                *lock(active) = Some(Active {
+                    generation,
+                    id,
+                    shared,
+                    last_zoom_seq: 0,
+                    session,
+                });
+            }
+            Err(e) => {
+                unregister(id);
+                shared.closed.store(true, Ordering::SeqCst);
+                let _ = sender.send(Box::new(
+                    move |s: &mut CameraPreviewStreamShowState| match e {
+                        PreviewStartError::Unsupported => apply_unsupported(s, generation),
+                        PreviewStartError::Failed(f) => {
+                            apply_start_failed(s, generation, to_failure_view(f))
+                        }
+                    },
+                ));
             }
         }
     }
@@ -444,16 +439,21 @@ fn drive(
 
 /// `registry.rs` の `effect` 区画から `camera_preview_stream_show` 画面用に配線される effect ドライバ。
 pub fn camera_preview_stream_show_effect(state: &CameraPreviewStreamShowState, sender: &Sender) {
-    drive(state, sender, &ACTIVE, platform_camera_preview().as_ref());
+    drive(
+        state,
+        sender,
+        &ACTIVE,
+        platform_camera_preview_stream().as_ref(),
+    );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::{ScaledFrame, UnsupportedCameraPreview};
     use fandhe_core::screens::camera_preview_stream_show::{
-        start, status_text, stop, zoom_two, ZoomView, FAILED_PREFIX, PERMISSION_DENIED_REASON,
+        FAILED_PREFIX, PERMISSION_DENIED_REASON, ZoomView, start, status_text, stop, zoom_two,
     };
-    use fandhe_device::camera_preview_stream::{ScaledFrame, UnsupportedCameraPreview};
     use std::sync::atomic::AtomicUsize;
     use std::sync::mpsc;
 
@@ -522,12 +522,19 @@ mod tests {
         fn event(&self, _: PreviewEvent) {}
     }
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     struct Env {
         active: Mutex<Option<Active>>,
         fake: Fake,
         state: CameraPreviewStreamShowState,
         sender: Sender,
-        rx: mpsc::Receiver<crate::app::Completion<CameraPreviewStreamShowState>>,
+        rx: mpsc::Receiver<fandhe_runtime::Completion<CameraPreviewStreamShowState>>,
     }
     impl Env {
         fn new(fake: Fake) -> Self {
@@ -536,7 +543,7 @@ mod tests {
                 active: Mutex::new(None),
                 fake,
                 state: CameraPreviewStreamShowState::default(),
-                sender: crate::app::egui_sender(tx, egui::Context::default()),
+                sender: CompletionSender::new(tx, Arc::new(NoopWaker)),
                 rx,
             }
         }
@@ -630,7 +637,7 @@ mod tests {
             target_os = "windows"
         )))]
         assert!(matches!(
-            platform_camera_preview().start(Arc::new(NopSink)),
+            platform_camera_preview_stream().start(Arc::new(NopSink)),
             Err(PreviewStartError::Unsupported)
         ));
     }

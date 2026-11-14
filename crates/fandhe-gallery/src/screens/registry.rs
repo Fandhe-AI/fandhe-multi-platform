@@ -311,7 +311,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "camera_preview_stream_show" => fandhe_core::screens::camera_preview_stream_show::current_screen,
-    fandhe_egui_proxy::device::camera_preview_stream::camera_preview_stream_show_effect,
+    fandhe_cap_camera_preview_stream::camera_preview_stream_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_provider_show" => fandhe_core::screens::file_provider_show::current_screen,
