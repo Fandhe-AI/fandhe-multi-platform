@@ -6,7 +6,7 @@
 //! 本モジュールはテキストの照合だけを行う（ネットワーク・外部コマンドは `cargo metadata` のみ）。
 //! 到達した宣言と値が重なるもの（複数機能が同じ権限を宣言する等）は、正当に現れるため禁止にしない。
 //! 宣言から禁止集合を作るので、機能が増えても検査側の修正は要らない。
-//! 呼び出し元は `main.rs` と統合テスト。範囲外: main-activity の intent-filter（他 library の
+//! 呼び出し元は `main.rs` と統合テスト。範囲外: 権限のフラグ（権限名が対象で、フラグ名は他の権限にも正当に現れる）、main-activity の属性・intent-filter（他 library の
 //! manifest にも正当に現れるため。漏れは機能のコンポーネント名で検出できる）、Windows、AAB。
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -68,6 +68,11 @@ fn tokens(d: &Declaration, os: &str) -> Vec<(&'static str, String)> {
             if let Some(a) = &d.android {
                 out.extend(a.permissions.iter().map(|p| ("権限", p.name.clone())));
                 out.extend(a.features.iter().map(|f| ("uses-feature", f.name.clone())));
+                out.extend(
+                    a.application_meta_data
+                        .iter()
+                        .map(|m| ("application の meta-data", m.name.clone())),
+                );
                 out.extend(
                     a.components
                         .iter()

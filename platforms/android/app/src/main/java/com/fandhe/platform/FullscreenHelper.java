@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 // 全画面表示（システムバー非表示、Issue #1314、親 #1133）の Android 実装ヘルパー。
 // MainActivity から生成・委譲される。Rust の `device/android_fullscreen_immersive.rs` が
 // egui スレッドから `MainActivity.fullscreenSet` を JNI で同期呼び出しし、現在の表示状態は
-// 既存の insets リスナー経由の `onInsets` が native へ push する（Rust は atomic を読むだけ）。
+// 共通層 `HostInsets` 経由の `onInsets` が native へ push する（Rust は atomic を読むだけ）。
 //
 // `WindowInsetsControllerCompat.hide/show` は UI スレッドで呼ぶため、`set` は `runOnUiThread`
 // へ渡して最長 APPLY_TIMEOUT_MS だけ待つ。期限は GameActivity が `onPause` 等で UI スレッドを
@@ -141,7 +141,7 @@ final class FullscreenHelper {
         }
     }
 
-    // MainActivity の既存 insets リスナー（UI スレッド）から呼ぶ。変化したときだけ native へ送る。
+    // 共通層 `HostInsets` の配信（UI スレッド。登録は MainActivity.onCreate、#1327）から呼ぶ。変化したときだけ native へ送る。
     // API 30+ は statusBars / navigationBars を個別に見る（`systemBars()` は全種が見えるときだけ true）。
     // API 30 未満は decor の systemUiVisibility フラグで判定する。
     void onInsets(WindowInsetsCompat insets) {

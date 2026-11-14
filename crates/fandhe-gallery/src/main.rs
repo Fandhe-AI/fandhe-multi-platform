@@ -283,9 +283,17 @@ fn main() -> Result<(), fandhe_render_egui::LaunchError> {
 
     // Issue #1217: カスタム URL scheme の observer も `UIApplicationMain` より前に登録する。
     // `UIApplicationDidFinishLaunchingNotification` に間に合わないと、コールドスタートの
-    // URL と delegate の差し込みを取り逃がす（`ios/fandhe_ios_url_scheme.m` 参照）。
+    // URL の取り逃がしを防ぐ（`ios/fandhe_ios_url_scheme.m` 参照）。
     #[cfg(feature = "device")]
     fandhe_egui_proxy::device::apple_url_scheme::register();
+
+    // Issue #1325: 背景転送の完了通知（`handleEventsForBackgroundURLSession`）の受け手を共通層へ登録する。
+    // relaunch の完了通知は起動と同じターンで届くため、`UIApplicationMain` より前でないと間に合わない
+    // （`fandhe-platform-apple` の `ios/fandhe_ios_app_delegate.m` 参照）。
+    #[cfg(feature = "device")]
+    fandhe_egui_proxy::device::ios_background_upload::register();
+    #[cfg(feature = "device")]
+    fandhe_egui_proxy::device::ios_background_download::register();
 
     // Issue #417: ファイルの関連付けも同じ位置で登録する（コールドスタートの通知に間に合わせる）。
     #[cfg(feature = "device")]

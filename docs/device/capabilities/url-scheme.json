@@ -11,13 +11,13 @@
       "api": "UIKit（`UIApplicationDelegate` の `application:openURL:options:` / `UISceneDelegate` の `scene:openURLContexts:`）、起動側は `UIApplication openURL:`",
       "perm": "Info.plist の `CFBundleURLTypes` 登録。起動側で他アプリの scheme を問い合わせる場合のみ `LSApplicationQueriesSchemes`",
       "url": "https://developer.apple.com/documentation/xcode/defining-a-custom-url-scheme-for-your-app",
-      "note": "実装済み（Issue 旧#1217）。winit 0.30.13 は delegate を nil で起動するため、didFinishLaunching 通知で `application:openURL:options:` だけを持つ delegate を差し込む（既に delegate がある場合は差し込まず、ウォーム経路はつながらない）。コールドスタート時の URL は通知の `launchOptions` から取り、二重転送を防ぐ。scheme・長さ・制御文字を検査し、弾いたものは件数だけ数える。実機確認は #8 で済み",
+      "note": "実装済み（Issue 旧#1217）。winit 0.30.13 は delegate を nil で起動するため、共通層（`fandhe-platform-apple`、#1325）が didFinishLaunching 通知で `application:openURL:options:` を持つ delegate を差し込み、scene 通知と同じ経路へ合流させる（既に delegate がある場合は差し込まず、ウォーム経路はつながらない）。コールドスタート時の URL は通知の `launchOptions` から取り、二重転送を防ぐ。scheme・長さ・制御文字を検査し、弾いたものは件数だけ数える。実機確認は #8 で済み",
       "sourceName": [
         "カスタム URL scheme"
       ],
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_url_scheme.m + crates/fandhe-egui-proxy/src/device/apple_url_scheme.rs + crates/fandhe-egui-proxy/src/device/url_scheme.rs + crates/fandhe-device/src/url_scheme.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue 旧#1217",
+      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_url_scheme.m + crates/fandhe-platform-apple/ios/fandhe_ios_app_delegate.m + crates/fandhe-egui-proxy/src/device/apple_url_scheme.rs + crates/fandhe-egui-proxy/src/device/url_scheme.rs + crates/fandhe-device/src/url_scheme.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue 旧#1217",
       "verified": true
     },
     "android": {

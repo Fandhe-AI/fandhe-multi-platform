@@ -72,9 +72,9 @@ fn topmost_from_exstyle(value: i32, last_error: u32) -> Option<bool> {
 
 #[cfg(target_os = "windows")]
 mod native {
-    use std::sync::Arc;
-
+    use fandhe_core::screens::window_management_show::WindowManagementState;
     use fandhe_device::window_management::{WindowFrame, WindowManager};
+    use fandhe_runtime::WindowState;
     use windows::Win32::Foundation::{GetLastError, SetLastError, WIN32_ERROR};
     use windows::Win32::Graphics::Gdi::{
         GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
@@ -83,6 +83,7 @@ mod native {
 
     use super::super::window_management::{NativeReads, ViewportWindowManager};
     use super::{topmost_from_exstyle, work_area_from_rect};
+    use crate::app::CompletionSender;
 
     /// [`NativeReads`] の Windows 実装。状態を持たない。
     pub(crate) struct WindowsReads;
@@ -103,7 +104,7 @@ mod native {
         }
 
         #[allow(unsafe_code)]
-        fn work_area(&self, ctx: &egui::Context) -> Option<WindowFrame> {
+        fn work_area(&self, window: &WindowState) -> Option<WindowFrame> {
             let hwnd = fandhe_platform_windows::window()?;
             // SAFETY: `hwnd` は有効なウィンドウハンドル（`always_on_top` と同じ根拠）。
             // 戻りのモニタハンドルは保持しない。
@@ -121,14 +122,16 @@ mod native {
                 return None;
             }
             let r = info.rcWork;
-            work_area_from_rect(r.left, r.top, r.right, r.bottom, ctx.pixels_per_point())
+            work_area_from_rect(r.left, r.top, r.right, r.bottom, window.pixels_per_point?)
         }
     }
 
     /// Windows の `WindowManager` を返す。
-    pub(crate) fn implementation(ctx: egui::Context) -> Arc<dyn WindowManager> {
-        Arc::new(ViewportWindowManager {
-            ctx,
+    pub(crate) fn implementation(
+        sender: &CompletionSender<WindowManagementState>,
+    ) -> Box<dyn WindowManager + '_> {
+        Box::new(ViewportWindowManager {
+            sender,
             reads: WindowsReads,
         })
     }

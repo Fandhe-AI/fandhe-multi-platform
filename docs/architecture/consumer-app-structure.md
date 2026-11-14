@@ -34,7 +34,7 @@ crates.io では、公開する crate の通常依存も公開が要るためで
 | `#[fandhe::main]` 用の proc-macro crate（`fandhe-macros`、名前は仮） | 各 OS の入口を生成。proc-macro は別 crate が必須 | する | #1200 |
 | `cargo-fandhe` | Rust 製 CLI（`gen`・`run`・`build`） | する | #1176・#1201 |
 | `fandhe-core` | UI DSL・状態管理 | する | 既存 |
-| `fandhe-runtime` | 起床・完了通知・要求追跡（`RequestSlot`）・画素の受け渡し枠（`image_store`）・`Renderer` trait・描画層の観測値と操作（`HostView`、`Renderer` には載せず `RepaintWaker::host_view` で届ける）。egui 非依存 | する | #1162・#1163・#1302 |
+| `fandhe-runtime` | 起床・完了通知・要求追跡（`RequestSlot`）・画素の受け渡し枠（`image_store`）・`Renderer` trait・描画層の観測値と操作（フォーカス・ファイルのドラッグ・拡大率・画面の読み戻し・ウィンドウ操作・入力欄のヒントの `HostView`。`Renderer` には載せず `RepaintWaker::host_view` で届ける）。egui 非依存 | する | #1162・#1163・#1302・#1326 |
 | `fandhe-render-egui` | egui 実装。公開 API に eframe の型を出さない | する | #1164 |
 | `fandhe-fonts` | `fandhe-render-egui` の依存 | する | 既存 |
 | `fandhe-platform-android` / `-apple` / `-windows` / `-web` | 機能をまたいで共有する OS 層。`-windows` は HWND の保持と COM 初期化ガードだけを持ち、`windows` crate の feature は共通層が最小限（`Win32_Foundation`・`Win32_System_Com`）、各機能 crate が自分の分を宣言する | する | #1166・#1168・#1184・#1185 |
@@ -95,11 +95,16 @@ graph TD
     行います。provider は OS がプロセス開始時に生成し、`ActivityLifecycleCallbacks` で `GameActivity` の生成・状態保存・見える／見えなくなる・前面への復帰・前面離脱・破棄だけを
     機能の helper へ流します。provider は宣言の `android.components`（`kind = "provider"`、`authorities` は
     `${applicationId}.fandhe.<id>`）で出ます。`registerForActivityResult` は登録キーを明示し、生成順への依存を残しません
-  - Activity の入力（`dispatchKeyEvent`・`dispatchGenericMotionEvent` 等）の観測は、provider が `onHostCreated` で
-    `Window.Callback` を包んで行います（#1303、ゲームパッド）。包んだ callback は Activity より前に呼ばれ、従来の override と
+  - Activity の入力（`dispatchKeyEvent`・`dispatchGenericMotionEvent`・`dispatchTouchEvent`）の観測は、provider が `onHostCreated` で
+    共通層の `HostInput` へ観測者を登録して行います（#1303 ゲームパッド、#1327 で包む処理を共通層へ引き上げ）。`HostInput` が `Window.Callback` を包みます。包んだ callback は Activity より前に呼ばれ、従来の override と
     同じイベントを受けます。通知してから元の戻り値をそのまま返し、イベントは消費しません。AppCompat も同じ方法で
     包んでおり、どちらが外側でも委譲は連なります。守らない範囲は、起動後に `getWindow().setCallback()` で callback を
     差し替えた場合に入力が届かなくなることです。`Activity` 内の他の経路（`onNewIntent` など）は `ComponentActivity` のリスナーで足りるため、この方法は入力の観測に限ります
+  - 起動時の Intent と起動中の `onNewIntent` は、provider が `onHostCreated` から `deliverIntents` を呼んで受けます（#1325）。
+    同じ Intent が登録した全機能へ届き、消費の口は無いため、各機能が action・scheme・host で自分の分だけ拾います。
+    iOS は共通層（`fandhe-platform-apple`）が application delegate を 1 つだけ持ち、URL・activity の通知と
+    背景 URLSession の完了（identifier での登録）を機能の `.m` へ配ります
+  - window insets の変化は、共通層の `HostInsets.addListener` へ登録して受けます（#1327）。decorView のリスナーは View につき 1 つのため共通層が 1 つだけ付け、Rust の static への送信と登録済みの機能への配信をそこで行います。PiP の切り替わりは `ComponentActivity.addOnPictureInPictureModeChangedListener` で足ります。手順は `docs/operations/capability-crate-migration.md` §18
   - 利用者の `MainActivity` に要るのは `GameActivity` の継承と、`static` 初期化子での `System.loadLibrary` だけです
   - 採らなかった案: `gen` が委譲コードを生成する（出力と宣言の欄が増える。`gen` は現状 `MainActivity` を出さず、`--eject` も未実装）、利用者の手順書で委譲を案内する（「機能を選ぶだけ」が崩れる）、共通の基底 Activity に集める（機能の一覧を知る手段が別に要る）、
     単一 provider に meta-data を集める（同名コンポーネントの異なる定義を拒否する現行の統合規則に欄の追加が要る）

@@ -76,7 +76,7 @@ android {
             @Suppress("DEPRECATION")
             jniLibs.srcDirs("../../../target/android/jniLibs")
 
-            // 共通層 fandhe-platform-android の Java（RequestTracker・FeatureLifecycleProvider）。機能 crate の
+            // 共通層 fandhe-platform-android の Java（RequestTracker・FeatureLifecycleProvider・HostInsets・HostInput）。機能 crate の
             // helper が同じパッケージから使う。複製せず crate の置き場を直接読む。
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-platform-android/android/java")

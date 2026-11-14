@@ -9,7 +9,9 @@
 //! - [`with_activity`]: JavaVM への attach と Activity 取得の定型（`unsafe` はここに閉じる）
 //! - [`with_activity_class`]: 上に加え、機能の Java クラスを解決して static メソッドを呼ぶ定型
 //!
-//! Java 側の共有クラス（`RequestTracker`・`FeatureLifecycleProvider`、`android/java`）も本 crate が持つ。
+//! - [`window_insets_px`]: `HostInsets`（Java）が decorView の insets リスナーから送る物理 px の読み出し（#1327）
+//!
+//! Java 側の共有クラス（`RequestTracker`・`FeatureLifecycleProvider`・`HostInsets`・`HostInput`、`android/java`）も本 crate が持つ。
 //! 機能 crate の宣言ではなくこの crate の宣言（`[package.metadata.fandhe]`）が srcDirs に載せる。
 //!
 //! Android 以外では空（`cfg` で全体を除外）。
@@ -18,6 +20,7 @@
 #![deny(unsafe_code)]
 
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 pub use android_activity::AndroidApp;
 
@@ -137,4 +140,59 @@ pub fn read_bounded_string(
         return None;
     }
     value.try_to_string(env).ok()
+}
+
+/// `HostInsets`（Java）が JNI 経由で書き込む window insets（物理 px、systemBars | displayCutout）。
+///
+/// `AndroidApp::content_rect()` は GameActivity 経路（android-activity 0.6.1）で insets を反映せず
+/// 常に画面全体を返すため（Issue #579 の実機確認）、Java 側リスナー → JNI で受ける。呼び出し元は
+/// `fandhe-egui-proxy`（描画の余白）と safe-area-insets の機能（#1327 で旧 `MainActivity` 経路から移した）。
+/// 4 本を個別に読み書きするため組としての原子性は無い。UI スレッドの書き込み中に描画スレッドが読むと
+/// 新旧混在になり得るが、ずれは最大 1 フレームで次の読み出しで自己修正される（見た目のみ）。
+static INSET_LEFT: AtomicI32 = AtomicI32::new(0);
+static INSET_TOP: AtomicI32 = AtomicI32::new(0);
+static INSET_RIGHT: AtomicI32 = AtomicI32::new(0);
+static INSET_BOTTOM: AtomicI32 = AtomicI32::new(0);
+/// insets を 1 回でも受け取ったか。初期値 0 と「本当に 0」を区別する印（Issue #446）。
+static INSET_RECEIVED: AtomicBool = AtomicBool::new(false);
+
+/// 受信済みなら insets を物理 px の `[top, right, bottom, left]` で返し、未受信なら `None`。
+// ponytail: 4 本の atomic を別々に読むため組は 1 回混ざり得る。組が要るなら `Mutex<Option<[i32; 4]>>` へ。
+pub fn window_insets_px() -> Option<[i32; 4]> {
+    if !INSET_RECEIVED.load(Ordering::Acquire) {
+        return None;
+    }
+    Some([
+        INSET_TOP.load(Ordering::Relaxed),
+        INSET_RIGHT.load(Ordering::Relaxed),
+        INSET_BOTTOM.load(Ordering::Relaxed),
+        INSET_LEFT.load(Ordering::Relaxed),
+    ])
+}
+
+/// `HostInsets.nativeOnWindowInsetsChanged`（Java 側）から呼ばれる JNI エクスポート関数。
+/// シンボル名はパッケージ `com.fandhe.platform` とクラス `HostInsets` に固定で紐づく
+/// （Java 宣言の署名 `(int, int, int, int) -> void` と 2 か所で一致させる）。
+///
+/// `JNIEnv`/`jclass` は使わず受けた値を static へ store するだけで、関数本体に `unsafe` 操作は無い。
+/// `#[unsafe(no_mangle)]` はこの 1 関数に閉じる（`.claude/rules/coding-rust.md` の FFI 例外規定準拠）。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[unsafe(no_mangle)]` は JNI 命名規約上の固定
+/// シンボル名で、本クレートは 1 つの Android 実行単位にのみリンクされるため他シンボルと衝突しない。
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+extern "system" fn Java_com_fandhe_platform_HostInsets_nativeOnWindowInsetsChanged(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    left: i32,
+    top: i32,
+    right: i32,
+    bottom: i32,
+) {
+    INSET_LEFT.store(left, Ordering::Relaxed);
+    INSET_TOP.store(top, Ordering::Relaxed);
+    INSET_RIGHT.store(right, Ordering::Relaxed);
+    INSET_BOTTOM.store(bottom, Ordering::Relaxed);
+    INSET_RECEIVED.store(true, Ordering::Release);
 }

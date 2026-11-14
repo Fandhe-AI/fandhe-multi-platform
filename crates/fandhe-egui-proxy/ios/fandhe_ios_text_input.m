@@ -28,7 +28,7 @@
 //     `sendActions:for:` 明示呼び出し以外ではこのイベントは飛ばない）ため、
 //     `fandhe_ios_text_input_changed` は呼ばれない。
 //   - `int32_t fandhe_ios_text_input_set_one_time_code_hint(int32_t on)`（Issue #586、
-//     autofill-otp。呼び出し元は `src/device/ios_autofill_otp.rs`）: `on != 0` で入力欄に
+//     autofill-otp。呼び出し元は `src/ios_text_input.rs`）: `on != 0` で入力欄に
 //     `textContentType = oneTimeCode` と数字キーボードを設定し、`on == 0` で `nil` と
 //     `UIKeyboardTypeDefault`（生成直後の既定値）へ戻す。希望状態はファイル static に保持し、
 //     入力欄の生成時にも反映する（未生成でも成功）。first responder なら `reloadInputViews` で

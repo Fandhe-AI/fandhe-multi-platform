@@ -11,8 +11,8 @@
 //!
 //! # 実装
 //!
-//! 書き込みは eframe の `ViewportCommand`（`OuterPosition`・`InnerSize`・`WindowLevel`）で行う
-//! （[`ViewportWindowManager`]）。egui の viewport 情報に無い「最前面の読み戻し」と「今いる画面の
+//! 書き込みと viewport 情報の読み戻しは描画層の口（`HostView::request_window` / `window_state`、
+//! Issue #1326）で行う（[`ViewportWindowManager`]）。その口に無い「最前面の読み戻し」と「今いる画面の
 //! 作業領域」だけを OS 別の [`NativeReads`] が読む（macOS は `macos_window_management.rs`、
 //! Windows は `windows_window_management.rs`）。
 //! [`implementation`] は全 OS の最終形で、後続の子は触らない。iOS・Android は対応表で `n-a` のため
@@ -25,7 +25,7 @@
 //! 外部変化（ドラッグ・外部からの最前面変更）を拾うため 1 秒後の読み直しだけを予約し、
 //! 再描画ループは作らない。座標・画面の大きさはログへ出さない。
 
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use fandhe_core::screens::window_management_show::{
@@ -41,6 +41,8 @@ use fandhe_device::window_management::{
     reached, WindowManager, WindowOp, WindowSnapshot, WindowSupport,
 };
 use fandhe_device::DeviceError;
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
+use fandhe_runtime::{WindowCommand, WindowRect, WindowState};
 
 use super::request_slot;
 use crate::app::CompletionSender;
@@ -55,30 +57,32 @@ pub(crate) trait NativeReads: Send + Sync {
     /// ウィンドウが最前面か。読めなければ `None`。
     fn always_on_top(&self) -> Option<bool>;
     /// 今いる画面の作業領域（左上原点・egui point）。読めなければ `None`。
-    fn work_area(&self, ctx: &egui::Context) -> Option<WindowFrame>;
+    fn work_area(&self, window: &WindowState) -> Option<WindowFrame>;
 }
 
-/// eframe の viewport コマンドで変更し、viewport 情報と [`NativeReads`] で読み戻す実装。
+/// 描画層の口（`HostView`）で変更し、`window_state` と [`NativeReads`] で読み戻す実装。
+/// `WindowManager` は `Send + Sync` を要求するため `&dyn HostView` ではなく `CompletionSender` を持ち、
+/// 呼ぶたびに `host_view()` を引く。
 #[cfg(any(target_os = "macos", target_os = "windows", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub(crate) struct ViewportWindowManager<R: NativeReads> {
-    pub(crate) ctx: egui::Context,
+pub(crate) struct ViewportWindowManager<'a, R: NativeReads> {
+    pub(crate) sender: &'a CompletionSender<WindowManagementState>,
     pub(crate) reads: R,
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn frame_from_rect(r: egui::Rect) -> WindowFrame {
+fn frame_from_rect(r: WindowRect) -> WindowFrame {
     WindowFrame {
-        x: f64::from(r.min.x),
-        y: f64::from(r.min.y),
-        width: f64::from(r.width()),
-        height: f64::from(r.height()),
+        x: f64::from(r.x),
+        y: f64::from(r.y),
+        width: f64::from(r.width),
+        height: f64::from(r.height),
     }
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows", test))]
-impl<R: NativeReads> WindowManager for ViewportWindowManager<R> {
+impl<R: NativeReads> WindowManager for ViewportWindowManager<'_, R> {
     fn support(&self) -> WindowSupport {
         WindowSupport {
             move_resize: true,
@@ -87,46 +91,44 @@ impl<R: NativeReads> WindowManager for ViewportWindowManager<R> {
     }
 
     fn snapshot(&self) -> WindowSnapshot {
-        let (outer, inner, fullscreen, minimized) = self.ctx.input(|i| {
-            let v = i.viewport();
-            (v.outer_rect, v.inner_rect, v.fullscreen, v.minimized)
-        });
+        let w = self.sender.host_view().window_state();
         // 最小化中は位置・大きさが実際と食い違うため読めない扱いにする。
-        let readable = minimized != Some(true);
+        let readable = w.minimized != Some(true);
         WindowSnapshot {
-            outer: outer.filter(|_| readable).map(frame_from_rect),
-            inner: inner.filter(|_| readable).map(frame_from_rect),
+            outer: w.outer.filter(|_| readable).map(frame_from_rect),
+            inner: w.inner.filter(|_| readable).map(frame_from_rect),
             always_on_top: self.reads.always_on_top(),
-            fullscreen,
+            fullscreen: w.fullscreen,
         }
     }
 
     fn target(&self) -> Result<WindowFrame, DeviceError> {
         self.reads
-            .work_area(&self.ctx)
+            .work_area(&self.sender.host_view().window_state())
             .ok_or(DeviceError::Internal("window-management work area"))
     }
 
     fn request(&self, op: WindowOp) -> Result<(), DeviceError> {
-        use egui::viewport::WindowLevel;
         // OS へ渡す前に有限性と正の大きさを検査する（A03）。
         let cmd = match op {
             WindowOp::MoveTo { x, y } if x.is_finite() && y.is_finite() => {
-                egui::ViewportCommand::OuterPosition(egui::pos2(x as f32, y as f32))
+                WindowCommand::OuterPosition {
+                    x: x as f32,
+                    y: y as f32,
+                }
             }
             WindowOp::ResizeInner { width, height }
                 if width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0 =>
             {
-                egui::ViewportCommand::InnerSize(egui::vec2(width as f32, height as f32))
+                WindowCommand::InnerSize {
+                    width: width as f32,
+                    height: height as f32,
+                }
             }
-            WindowOp::SetAlwaysOnTop(on) => egui::ViewportCommand::WindowLevel(if on {
-                WindowLevel::AlwaysOnTop
-            } else {
-                WindowLevel::Normal
-            }),
+            WindowOp::SetAlwaysOnTop(on) => WindowCommand::AlwaysOnTop(on),
             _ => return Err(DeviceError::Internal("window-management input")),
         };
-        self.ctx.send_viewport_cmd(cmd);
+        self.sender.host_view().request_window(cmd);
         Ok(())
     }
 }
@@ -137,20 +139,18 @@ impl<R: NativeReads> WindowManager for ViewportWindowManager<R> {
     not(any(target_os = "macos", target_os = "windows")),
     allow(unused_variables)
 )]
-fn implementation<S>(sender: &CompletionSender<S>) -> Arc<dyn WindowManager> {
+fn implementation(sender: &CompletionSender<WindowManagementState>) -> Box<dyn WindowManager + '_> {
     #[cfg(target_os = "macos")]
     {
-        use crate::app::EguiSenderExt as _;
-        super::macos_window_management::implementation(sender.egui_context())
+        super::macos_window_management::implementation(sender)
     }
     #[cfg(target_os = "windows")]
     {
-        use crate::app::EguiSenderExt as _;
-        super::windows_window_management::implementation(sender.egui_context())
+        super::windows_window_management::implementation(sender)
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        Arc::new(UnsupportedWindowManager)
+        Box::new(UnsupportedWindowManager)
     }
 }
 
@@ -719,7 +719,7 @@ mod tests {
         fn always_on_top(&self) -> Option<bool> {
             None
         }
-        fn work_area(&self, _ctx: &egui::Context) -> Option<WindowFrame> {
+        fn work_area(&self, _window: &WindowState) -> Option<WindowFrame> {
             None
         }
     }
@@ -727,8 +727,9 @@ mod tests {
     #[test]
     fn viewport_manager_without_viewport_info_does_not_succeed() {
         let _g = guard();
+        let (sender, _rx) = sender_with_channel();
         let mgr = ViewportWindowManager {
-            ctx: egui::Context::default(),
+            sender: &sender,
             reads: NoReads,
         };
         let mut state = WindowManagementState::default();
@@ -739,8 +740,9 @@ mod tests {
 
     #[test]
     fn viewport_manager_rejects_invalid_input() {
+        let (sender, _rx) = sender_with_channel();
         let mgr = ViewportWindowManager {
-            ctx: egui::Context::default(),
+            sender: &sender,
             reads: NoReads,
         };
         for op in [
