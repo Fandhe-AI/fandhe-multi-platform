@@ -1,0 +1,51 @@
+[package]
+name = "fandhe-cap-quick-settings-tile"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の quick-settings-tile の機能 crate（契約・OS 別実装・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知の送り口（CompletionSender）・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+jni = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# App Group のコンテナパスの組み立てと Team ID 検証（home-widget と共有）。
+fandhe-platform-apple = { path = "../fandhe-platform-apple" }
+# macOS 26 以降かの判定に OS の版を読む（他機能の OS 機能を実際に使うため機能 crate 同士の依存、consumer-app-structure.md §8）。
+fandhe-cap-device-info = { path = "../fandhe-cap-device-info" }
+
+[dev-dependencies]
+# 回数ファイル名の照合テストが `FsStorage` の符号化と突き合わせる。
+fandhe-device = { path = "../fandhe-device" }
+
+# 機能宣言（capability-declaration.md）。権限・usage description・framework は手で足す（cargo fandhe check が検証する）。
+[package.metadata.fandhe]
+id = "quick-settings-tile"
+
+[package.metadata.fandhe.android]
+java = ["android/java"]
+res = ["android/res"]
+
+# クイック設定タイル。intent-filter を持つため exported=true だが、BIND_QUICK_SETTINGS_TILE（システムだけが持つ権限）を
+# 要求するので bind できるのはシステムだけ（security.md A05）。ACTIVE_TILE は付けない（非アクティブモード）。
+# Manifest の同じ要素と完全に一致させる（cargo-fandhe の突き合わせテストが確かめる）。
+[[package.metadata.fandhe.android.components]]
+kind = "service"
+name = "com.fandhe.platform.QuickSettingsTileService"
+exported = true
+attributes = { icon = "@drawable/ic_quick_settings_tile", label = "@string/quick_settings_tile_label", permission = "android.permission.BIND_QUICK_SETTINGS_TILE" }
+intent-filters = [{ actions = ["android.service.quicksettings.action.QS_TILE"] }]
+
+[lints]
+workspace = true

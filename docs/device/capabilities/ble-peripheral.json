@@ -20,7 +20,7 @@
       "note": "実装済み（#779）。命令は state が poweredOn になってから出す（公式）。poweredOn より下ではアドバタイズが止まり接続が切れ、poweredOff ではサービスの登録も消える（公式）。アドバタイズに載せられるのはローカル名とサービス UUID の 2 キーだけ（公式）。`stopAdvertising` には完了の通知が無い。周辺機器側に接続・切断の通知は無く、観測できるのは読み取り要求と購読だけ。背景モード無しで背景へ移るとアドバタイズが無効になり、動的な値の読み取りはエラーになる（公式）が、その切り替わりの通知は無いため、背景遷移（`DidEnterBackground`）で自分から止めて「背景で停止」として確定する（自動では再開しない）。許可ダイアログ後の公開、中心役アプリからの読み取り、背景遷移での中断、Bluetooth オフでの確定は実機確認で確かめる（#776。問題があれば done を取り下げる）",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#776）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_ble_peripheral.m + crates/fandhe-egui-proxy/src/device/ios_ble_peripheral.rs + crates/fandhe-egui-proxy/src/device/apple_ble_peripheral.rs + crates/fandhe-egui-proxy/src/device/ble_peripheral.rs + crates/fandhe-core/src/screens/ble_peripheral.rs + crates/fandhe-device/src/ble_peripheral.rs、Issue #779"
+      "impl": "crates/fandhe-cap-ble-peripheral/apple/fandhe_apple_ble_peripheral.m + crates/fandhe-cap-ble-peripheral/src/ios.rs + crates/fandhe-cap-ble-peripheral/src/apple.rs + crates/fandhe-cap-ble-peripheral/src/driver.rs + crates/fandhe-core/src/screens/ble_peripheral.rs + crates/fandhe-cap-ble-peripheral/src/contract.rs、Issue #779"
     },
     "android": {
       "status": "done",
@@ -34,7 +34,7 @@
       "note": "実装済み（#1123）。`startAdvertising` はすぐ戻り、結果は `onStartSuccess` / `onStartFailure`（`DATA_TOO_LARGE`・`TOO_MANY_ADVERTISERS`・`ALREADY_STARTED`・`INTERNAL_ERROR`・`FEATURE_UNSUPPORTED`）で届く。「公開中」は `onStartSuccess` のときだけ出し、`FEATURE_UNSUPPORTED` は非対応、ほかの errorCode は失敗に写す。`BLUETOOTH_ADVERTISE` は常に検査される（AOSP のソース）。`getBluetoothLeAdvertiser()` は Bluetooth オフ・アドバタイズ非対応で null（AOSP のソース）で、読み直した state がオフならオフ、そうでなければ非対応にする。ローカル名は指定できず、アドバタイズ本体はサービス UUID だけを載せ、端末名は scan response に OS が載せる（画面には「OS が決める」と出す）。許可は毎回要求する（許可済みならダイアログは出ない）。`onStop` で資源を解放して中断にし、自動では再開しない（許可ダイアログは `onPause` しか起こさないため `onPause` は見ない）。Bluetooth の state が TURNING_OFF / OFF になったら解放してオフで確定する。読み取りは offset 0 で `sendResponse` が true を返した応答だけを数える（範囲外の offset は `GATT_INVALID_OFFSET` で返し数えない）。端末名が長く scan response が `DATA_TOO_LARGE` になると失敗になる（守らない範囲）。許可ダイアログ後の公開、中心役アプリからの読み取り、`onStop` での中断、Bluetooth オフでの確定は実機確認で確かめる（#776。問題があれば done を取り下げる）",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#776）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_ble_peripheral.rs + platforms/android/app/src/main/java/com/fandhe/platform/BlePeripheralHelper.java + crates/fandhe-egui-proxy/src/device/ble_peripheral.rs + crates/fandhe-core/src/screens/ble_peripheral.rs + crates/fandhe-device/src/ble_peripheral.rs、Issue #1123"
+      "impl": "crates/fandhe-cap-ble-peripheral/src/android.rs + crates/fandhe-cap-ble-peripheral/android/java/com/fandhe/platform/BlePeripheralHelper.java + crates/fandhe-cap-ble-peripheral/android/java/com/fandhe/platform/BlePeripheralLifecycle.java + crates/fandhe-cap-ble-peripheral/src/driver.rs + crates/fandhe-core/src/screens/ble_peripheral.rs + crates/fandhe-cap-ble-peripheral/src/contract.rs、Issue #1123"
     },
     "macos": {
       "status": "done",
@@ -47,7 +47,7 @@
       "note": "実装済み（#778）。iOS と同じ注意（poweredOn まで命令しない・poweredOff で登録が消える・`stopAdvertising` に完了の通知が無い・接続の通知が無い）。背景遷移の扱いは iOS だけ。TCC の判定がターミナルへ帰属しないよう、確認は `.app` にまとめて `open` で起動する（bluetooth-le と同じ）。許可ダイアログ後の公開、中心役アプリからの読み取り、Bluetooth オフでの確定は Mac 目視で確かめる（#776）",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#776）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_ble_peripheral.m + crates/fandhe-egui-proxy/src/device/apple_ble_peripheral.rs + crates/fandhe-egui-proxy/src/device/ble_peripheral.rs + crates/fandhe-core/src/screens/ble_peripheral.rs + crates/fandhe-device/src/ble_peripheral.rs、Issue #778"
+      "impl": "crates/fandhe-cap-ble-peripheral/apple/fandhe_apple_ble_peripheral.m + crates/fandhe-cap-ble-peripheral/src/apple.rs + crates/fandhe-cap-ble-peripheral/src/driver.rs + crates/fandhe-core/src/screens/ble_peripheral.rs + crates/fandhe-cap-ble-peripheral/src/contract.rs、Issue #778"
     },
     "windows": {
       "status": "done",
@@ -62,7 +62,7 @@
       "note": "実装済み（#1101）。ローカル名は指定できず、`IsDiscoverable` により OS が端末名を載せる（画面には「OS が決める」と出す）。サービス UUID が載るのは discoverable と connectable を両方 true にしたときだけ（公式）。StartedWithoutAllAdvertisementData も公開中に含める（OS が載せる中身を削っただけ）。読み取りは `ReadRequested` で応答し、成功した応答だけを数える（範囲外の offset は InvalidOffset で返し数えない）。Aborted・Stopped は `BluetoothError` で区分し、Success のままなら失敗にする。背景遷移による中断は無い。unpackaged で GATT サーバーが使えるかと、Bluetooth オフでの確定は実機確認で確かめる（#776。問題があれば done を取り下げる）",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#776）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_ble_peripheral.rs + crates/fandhe-egui-proxy/src/device/ble_peripheral.rs + crates/fandhe-core/src/screens/ble_peripheral.rs + crates/fandhe-device/src/ble_peripheral.rs、Issue #1101"
+      "impl": "crates/fandhe-cap-ble-peripheral/src/windows.rs + crates/fandhe-cap-ble-peripheral/src/driver.rs + crates/fandhe-core/src/screens/ble_peripheral.rs + crates/fandhe-cap-ble-peripheral/src/contract.rs、Issue #1101"
     },
     "web": {
       "status": "no",

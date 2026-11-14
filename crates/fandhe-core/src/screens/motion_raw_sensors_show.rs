@@ -43,7 +43,7 @@ pub const PERMISSION_DENIED_TEXT: &str = "利用が許可されませんでし�
 /// それ以外の失敗。
 pub const FAILED_TEXT: &str = "取得できません";
 
-/// センサーの種類（`fandhe_device::motion_raw_sensors::RawKind` の写し）。
+/// センサーの種類（`fandhe_cap_motion_raw_sensors::RawKind` の写し）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RawKindView {
     /// 角速度。

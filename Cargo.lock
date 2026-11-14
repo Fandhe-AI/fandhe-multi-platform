@@ -1090,6 +1090,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-alarm"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-notification",
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-app-attest"
 version = "0.2.0"
 dependencies = [
@@ -1176,6 +1191,46 @@ dependencies = [
  "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-ble-peripheral"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
+name = "fandhe-cap-bluetooth-classic"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-bluetooth-le"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -1281,6 +1336,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-compass-heading"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-compose-mail-sms"
 version = "0.2.0"
 dependencies = [
@@ -1304,6 +1373,20 @@ dependencies = [
  "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-device-info"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -1366,6 +1449,22 @@ dependencies = [
  "jni 0.22.4",
  "thiserror 2.0.20",
  "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-environment-sensors"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
 ]
 
 [[package]]
@@ -1657,6 +1756,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-media-playback"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-core 0.61.2",
+]
+
+[[package]]
 name = "fandhe-cap-media-transcode"
 version = "0.2.0"
 dependencies = [
@@ -1713,6 +1828,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-motion-raw-sensors"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-tilt-motion",
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-multi-display"
 version = "0.2.0"
 dependencies = [
@@ -1754,6 +1884,35 @@ dependencies = [
  "fandhe-core",
  "fandhe-platform-android",
  "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-notification"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-now-playing-controls"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-media-playback",
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
  "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
@@ -1860,6 +2019,20 @@ dependencies = [
  "jni 0.22.4",
  "thiserror 2.0.20",
  "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-quick-settings-tile"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-device-info",
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -2081,6 +2254,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-tilt-motion"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-usb-device"
 version = "0.2.0"
 dependencies = [
@@ -2272,6 +2456,7 @@ dependencies = [
  "egui",
  "fandhe-cap-accessibility-prefs",
  "fandhe-cap-activity-recognition",
+ "fandhe-cap-alarm",
  "fandhe-cap-app-attest",
  "fandhe-cap-app-badge",
  "fandhe-cap-app-lifecycle",
@@ -2279,6 +2464,9 @@ dependencies = [
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
  "fandhe-cap-audio-session",
+ "fandhe-cap-ble-peripheral",
+ "fandhe-cap-bluetooth-classic",
+ "fandhe-cap-bluetooth-le",
  "fandhe-cap-calendar",
  "fandhe-cap-call-ui",
  "fandhe-cap-camera-capture",
@@ -2287,13 +2475,16 @@ dependencies = [
  "fandhe-cap-clipboard",
  "fandhe-cap-color-picker",
  "fandhe-cap-companion-device",
+ "fandhe-cap-compass-heading",
  "fandhe-cap-compose-mail-sms",
  "fandhe-cap-device-identifier",
+ "fandhe-cap-device-info",
  "fandhe-cap-digital-credentials",
  "fandhe-cap-display-refresh-hdr",
  "fandhe-cap-document-scan",
  "fandhe-cap-drag-drop",
  "fandhe-cap-dynamic-type",
+ "fandhe-cap-environment-sensors",
  "fandhe-cap-external-app-launch",
  "fandhe-cap-eye-dropper",
  "fandhe-cap-file-preview",
@@ -2317,14 +2508,18 @@ dependencies = [
  "fandhe-cap-local-fonts",
  "fandhe-cap-managed-app-config",
  "fandhe-cap-media-cast",
+ "fandhe-cap-media-playback",
  "fandhe-cap-media-transcode",
  "fandhe-cap-memory-pressure",
  "fandhe-cap-midi",
  "fandhe-cap-ml-inference",
+ "fandhe-cap-motion-raw-sensors",
  "fandhe-cap-multi-display",
  "fandhe-cap-nfc",
  "fandhe-cap-nfc-card-emulation",
  "fandhe-cap-nlp",
+ "fandhe-cap-notification",
+ "fandhe-cap-now-playing-controls",
  "fandhe-cap-on-device-llm",
  "fandhe-cap-open-in-shell",
  "fandhe-cap-open-system-settings",
@@ -2333,6 +2528,7 @@ dependencies = [
  "fandhe-cap-pedometer",
  "fandhe-cap-per-app-language",
  "fandhe-cap-power-state",
+ "fandhe-cap-quick-settings-tile",
  "fandhe-cap-radio-control",
  "fandhe-cap-recent-documents",
  "fandhe-cap-removable-storage",
@@ -2350,6 +2546,7 @@ dependencies = [
  "fandhe-cap-system-accent-color",
  "fandhe-cap-system-sound",
  "fandhe-cap-system-tray",
+ "fandhe-cap-tilt-motion",
  "fandhe-cap-usb-device",
  "fandhe-cap-user-idle",
  "fandhe-cap-uwb-ranging",
@@ -2365,6 +2562,7 @@ dependencies = [
  "fandhe-platform-apple",
  "fandhe-platform-windows",
  "fandhe-render-egui",
+ "fandhe-runtime",
  "wasm-bindgen",
 ]
 
@@ -2460,8 +2658,10 @@ dependencies = [
  "fandhe-cap-app-lifecycle",
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
+ "fandhe-cap-bluetooth-le",
  "fandhe-cap-camera-preview-stream",
  "fandhe-cap-color-picker",
+ "fandhe-cap-compass-heading",
  "fandhe-cap-compose-mail-sms",
  "fandhe-cap-digital-credentials",
  "fandhe-cap-display-refresh-hdr",
@@ -2474,12 +2674,16 @@ dependencies = [
  "fandhe-cap-http-get",
  "fandhe-cap-local-fonts",
  "fandhe-cap-media-cast",
+ "fandhe-cap-media-playback",
  "fandhe-cap-media-transcode",
  "fandhe-cap-memory-pressure",
  "fandhe-cap-midi",
+ "fandhe-cap-motion-raw-sensors",
  "fandhe-cap-multi-display",
  "fandhe-cap-nfc",
  "fandhe-cap-nlp",
+ "fandhe-cap-notification",
+ "fandhe-cap-now-playing-controls",
  "fandhe-cap-on-device-llm",
  "fandhe-cap-passkey-signin",
  "fandhe-cap-power-state",

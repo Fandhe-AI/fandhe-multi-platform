@@ -34,13 +34,6 @@ package com.fandhe.platform;
 
 import android.Manifest;
 import android.app.PendingIntent;
-import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothManager;
-import android.bluetooth.le.BluetoothLeScanner;
-import android.bluetooth.le.ScanCallback;
-import android.bluetooth.le.ScanRecord;
-import android.bluetooth.le.ScanResult;
-import android.bluetooth.le.ScanSettings;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -52,10 +45,6 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
 import android.icu.text.BreakIterator;
 import android.location.Location;
 import android.location.LocationListener;
@@ -96,9 +85,6 @@ import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.biometric.BiometricManager;
 import androidx.biometric.BiometricPrompt;
-import androidx.core.app.NotificationChannelCompat;
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.location.LocationManagerCompat;
 import androidx.security.crypto.EncryptedSharedPreferences;
@@ -127,15 +113,6 @@ public class MainActivity extends GameActivity {
         // [lib] name と一致させること（3 箇所の SSOT はこのライブラリ名文字列）。
         System.loadLibrary("fandhe_gallery");
     }
-
-    // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
-    // （Issue #831、Phase 10 型サンプル「傾けると玉が転がる」の Android 実センサ経路に
-    // 限り追加。Phase 8 の feature `device` 切り離し時に削除する。docs/architecture/
-    // device-feature-removal.md 参照）。
-    // x, y: 重力センサ（TYPE_GRAVITY、無ければ TYPE_ACCELEROMETER）の生値
-    // （SensorEvent#values[0]/[1]、m/s^2）。rotation: 呼び出し時点の画面回転
-    // （Surface.ROTATION_*）。Rust 側 `gravity_to_tilt` が画面座標の傾きへ写像する。
-    private static native void nativeOnMotionChanged(float x, float y, int rotation);
 
     // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
     // （Issue #866、Phase 11 型サンプル「読み上げ」の Android 経路に限り追加。
@@ -309,30 +286,6 @@ public class MainActivity extends GameActivity {
     // 追加の同期は不要。
     private static final RequestTracker biometricRequest = new RequestTracker();
 
-    // ローカル通知（Issue #1006、Phase 11 型サンプル「通知」の Android 経路）。Rust 側
-    // `device/notification.rs::bridge` と pull 型で橋渡しする（`biometricRequest`/
-    // `requestBiometric` と同型）。Rust 側は `MainActivity.requestNotification(long,
-    // String, String)`（提示依頼）を呼び、結果は `nativeOnNotificationResult` で
-    // 非同期に返す。code の意味（本ファイルが SSOT、Rust 側 `notification::
-    // outcome_from_code` の doc と対）: 0=送信した（`NotificationManagerCompat.notify`
-    // が例外無しで完了）／1=キャンセル（Android では出ない。`outcome_from_code` の
-    // doc 参照）／2=権限拒否（実行時許可の拒否・通知オフ・チャンネルブロックを
-    // 区別せず畳む、`ActivityResultContracts.RequestPermission` が拒否とダイアログを
-    // 閉じただけを区別できないのと同じ制約）／3=内部エラー（権限確認自体の失敗）／
-    // 4=内部エラー（`notify()` 呼び出し自体の失敗）。
-    private static native void nativeOnNotificationResult(long requestId, int code);
-
-    // 上記 code 定数（`requestNotificationPermission`/`requestNotification`/
-    // `postNotification` からも参照するため）。
-    private static final int NOTIFICATION_RESULT_SUBMITTED = 0;
-    // Android では発生しない（`ActivityResultContracts.RequestPermission` が「拒否」と
-    // 「ダイアログを閉じただけ」を区別できないため）。Rust 側 `outcome_from_code` の
-    // 写像表との対応を示すためだけに宣言する。
-    private static final int NOTIFICATION_RESULT_CANCELLED = 1;
-    private static final int NOTIFICATION_RESULT_PERMISSION_DENIED = 2;
-    private static final int NOTIFICATION_RESULT_AUTH_ERROR = 3;
-    private static final int NOTIFICATION_RESULT_POST_ERROR = 4;
-
     // ヘルスデータ（今日の歩数、Issue #1100）。実装は `HealthDataHelper`（フィールド初期化子で
     // 生成し、STARTED 前に許可ランチャーを登録する）。Rust の `android_health_data.rs` が JNI で呼ぶ。
     private final HealthDataHelper healthDataHelper = new HealthDataHelper(this);
@@ -366,72 +319,6 @@ public class MainActivity extends GameActivity {
 
     void cancelMusicLibraryList(long requestId) {
         musicLibraryHelper.cancel(requestId);
-    }
-
-    // 方位（Issue #1406）。実装は `CompassHelper`。Rust の `android_compass.rs` が同期 JNI で呼ぶ。
-    private final CompassHelper compassHelper = new CompassHelper(this);
-
-    int compassStart() {
-        return compassHelper.start();
-    }
-
-    long compassRead() {
-        return compassHelper.read();
-    }
-
-    void compassStop() {
-        compassHelper.stop();
-    }
-
-    // 気圧・照度・近接（Issue #611）。実装は `EnvironmentSensorsHelper`。Rust の
-    // `android_environment_sensors.rs` が同期 JNI で呼ぶ。
-    private final EnvironmentSensorsHelper environmentSensorsHelper = new EnvironmentSensorsHelper(this);
-
-    int environmentSensorsStart(int kind) {
-        return environmentSensorsHelper.start(kind);
-    }
-
-    long[] environmentSensorsRead(int kind) {
-        return environmentSensorsHelper.read(kind);
-    }
-
-    void environmentSensorsStop(int kind) {
-        environmentSensorsHelper.stop(kind);
-    }
-
-    // ジャイロ・磁気・線形加速度の生値（Issue #901）。実装は `MotionRawSensorsHelper`。Rust の
-    // `android_motion_raw_sensors.rs` が同期 JNI で呼ぶ。
-    private final MotionRawSensorsHelper motionRawSensorsHelper = new MotionRawSensorsHelper(this);
-
-    int motionRawSensorsStart(int kind) {
-        return motionRawSensorsHelper.start(kind);
-    }
-
-    long[] motionRawSensorsRead(int kind) {
-        return motionRawSensorsHelper.read(kind);
-    }
-
-    void motionRawSensorsStop(int kind) {
-        motionRawSensorsHelper.stop(kind);
-    }
-
-    // 音声再生（Issue #270）。実装は `MediaPlaybackHelper`。Rust の `android_media_playback.rs` が同期 JNI で呼ぶ。
-    private final MediaPlaybackHelper mediaPlaybackHelper = new MediaPlaybackHelper();
-
-    int mediaPlaybackLoad(long generation, byte[] wav) {
-        return mediaPlaybackHelper.load(generation, wav);
-    }
-
-    int mediaPlaybackControl(long generation, int op) {
-        return mediaPlaybackHelper.control(generation, op);
-    }
-
-    long[] mediaPlaybackSnapshot() {
-        return mediaPlaybackHelper.snapshot();
-    }
-
-    void mediaPlaybackShutdown() {
-        mediaPlaybackHelper.shutdown();
     }
 
     // OS の検索への登録（Issue #562）。実装は `SpotlightIndexHelper`。Rust の `android_spotlight_index.rs` がワーカースレッドから同期 JNI で呼ぶ。
@@ -468,16 +355,6 @@ public class MainActivity extends GameActivity {
 
     void requestPayment(long requestId, boolean pay, String isReadyToPayJson, String paymentDataRequestJson) {
         paymentRequestHelper.request(requestId, pay, isReadyToPayJson, paymentDataRequestJson);
-    }
-
-    // クイック設定タイル（Issue #720）。実装は `QuickSettingsTileStore`。Rust の
-    // `android_quick_settings_tile.rs` が JNI（署名 `()Ljava/lang/String;` と `()J`）で呼ぶ。
-    String quickSettingsTileCountRaw() {
-        return QuickSettingsTileStore.readRaw(getApplicationContext());
-    }
-
-    long quickSettingsTileFailedPresses() {
-        return QuickSettingsTileStore.failedPresses();
     }
 
     // 車載ディスプレイ（Issue #1117）。実装は `CarDisplayScreen`。Rust の
@@ -520,54 +397,12 @@ public class MainActivity extends GameActivity {
         super.onStart();
     }
 
-    @Override
-    protected void onStop() {
-        blePeripheralHelper.onStop();
-        super.onStop();
-    }
-
-    // ロック画面・OS のメディア操作（Issue #383）。実装は `NowPlayingHelper`。Rust の
-    // `android_now_playing.rs` が egui スレッドから同期で JNI 呼び出しする。
-    private final NowPlayingHelper nowPlayingHelper = new NowPlayingHelper(this);
-
-    long nowPlayingPublish(String title, boolean playing, long positionMs, long durationMs) {
-        return nowPlayingHelper.publish(title, playing, positionMs, durationMs);
-    }
-
-    void nowPlayingClear() {
-        nowPlayingHelper.clear();
-    }
 
     // LAN のサービス探索（Issue #489）。実装は `LanDiscoveryHelper`。Rust の `android_lan_discovery.rs` が JNI で呼ぶ。
     private final LanDiscoveryHelper lanDiscoveryHelper = new LanDiscoveryHelper(this);
 
     void requestLanDiscovery(long requestId, int durationMs) {
         lanDiscoveryHelper.request(requestId, durationMs);
-    }
-
-    // Bluetooth Classic（Issue #661）。実装は `BluetoothClassicHelper`（許可ランチャーを STARTED 前に登録）。
-    // Rust の `android_bluetooth_classic.rs` が JNI で呼ぶ。
-    private final BluetoothClassicHelper bluetoothClassicHelper = new BluetoothClassicHelper(this);
-
-    void requestBluetoothClassic(long requestId, int durationMs) {
-        bluetoothClassicHelper.request(requestId, durationMs);
-    }
-
-    // ペアリング済み一覧（シグネチャ `()Ljava/lang/String;`）。詰め方は `BluetoothClassicHelper.paired` 冒頭を参照。
-    private String bluetoothClassicPaired() {
-        return BluetoothClassicHelper.paired(getApplicationContext());
-    }
-
-    // BLE の周辺機器役（Issue #1123）。実装は `BlePeripheralHelper`（許可ランチャーを STARTED 前に登録）。
-    // Rust の `android_ble_peripheral.rs` が JNI で呼ぶ。戻り値の意味は `BlePeripheralHelper.start` / `stop` を参照。
-    private final BlePeripheralHelper blePeripheralHelper = new BlePeripheralHelper(this);
-
-    int blePeripheralStart(long token, String serviceUuid, String characteristicUuid, String value) {
-        return blePeripheralHelper.start(token, serviceUuid, characteristicUuid, value);
-    }
-
-    int blePeripheralStop() {
-        return blePeripheralHelper.stop();
     }
 
     // 近くの端末との直接通信（Issue #513）。実装は `LocalPeerHelper`（許可ランチャーを STARTED 前に登録）。
@@ -648,42 +483,6 @@ public class MainActivity extends GameActivity {
     void pipShutdown() {
         pictureInPictureHelper.shutdown();
     }
-
-    // 通知チャンネル ID（`postNotification`/`onCreate` から参照）。
-    private static final String NOTIFICATION_CHANNEL_ID = "fandhe_default";
-
-    // コールバック時に requestId を思い出すためだけの唯一の static（`biometricRequest`
-    // と同じ理由）。UI スレッドのみで読み書きするため追加の同期は不要。
-    private static final RequestTracker notificationRequest = new RequestTracker();
-
-    // 権限ダイアログ表示中に `requestNotificationPermission` コールバックが読む
-    // タイトル・本文（`micRequestedMaxDurationMs` と同じ理由で退避する）。UI スレッド
-    // のみで読み書きする。
-    private String pendingNotificationTitle;
-    private String pendingNotificationBody;
-
-    // 通知の実行時許可要求（`requestMicPermission` と同型）。許可が下りたら
-    // `postNotification` を呼ぶ。ダイアログ自体が Activity を pause させるため、
-    // `requestMicPermission` と異なり `activityResumed` はここでは見ない: 通知の
-    // 投稿は背景でも正当な操作であり、`micStartPendingResume` のような保留は不要
-    // （実装計画 §4 参照）。
-    private final ActivityResultLauncher<String> requestNotificationPermission =
-            getActivityResultRegistry().register("fandhe:MainActivity:1", this, new ActivityResultContracts.RequestPermission(), granted -> {
-                long id = notificationRequest.take();
-                if (id == RequestTracker.NONE) {
-                    // 既に破棄済み（Activity 再生成等）。
-                    return;
-                }
-                String title = pendingNotificationTitle;
-                String body = pendingNotificationBody;
-                pendingNotificationTitle = null;
-                pendingNotificationBody = null;
-                if (!granted) {
-                    nativeOnNotificationResult(id, NOTIFICATION_RESULT_PERMISSION_DENIED);
-                    return;
-                }
-                postNotification(id, title, body);
-            });
 
     // マイク録音（Issue #957、Phase 11 型サンプル「マイク録音」の Android 経路）。
     // `MicRecorder` trait は通らない（`device/mic_record.rs` モジュール doc の
@@ -1175,32 +974,6 @@ public class MainActivity extends GameActivity {
         }
     };
 
-    // 傾きセンサの取得元と最新値の Rust 側への中継（Issue #831）。`registerListener`/
-    // `unregisterListener` は onResume/onPause で対にする（Android の推奨作法。
-    // バックグラウンド中の無駄なセンサ計測・バッテリ消費を避ける）。
-    private SensorManager sensorManager;
-    private Sensor motionSensor;
-
-    // 重力センサ（TYPE_GRAVITY）が無い端末向けの fallback。加速度センサは
-    // ユーザー操作由来の線形加速度成分を含むため傾き検出にノイズが乗り得るが、
-    // 実装は追加しない（気になる場合はローパスフィルタを足す、#831 実装計画 §8）。
-    private final SensorEventListener motionListener = new SensorEventListener() {
-        @Override
-        public void onSensorChanged(SensorEvent event) {
-            // 呼び出しごとに取得する（ponytail: 回転変化のたびに読み直すだけの
-            // 軽量呼び出し。負荷が問題になったら onConfigurationChanged でキャッシュ化、
-            // #831 実装計画 §5 ステップ 3）。
-            @SuppressWarnings("deprecation") // minSdk 24 のため Activity#getDisplay()（API 30+）は使えない
-            int rotation = getWindowManager().getDefaultDisplay().getRotation();
-            nativeOnMotionChanged(event.values[0], event.values[1], rotation);
-        }
-
-        @Override
-        public void onAccuracyChanged(Sensor sensor, int accuracy) {
-            // 精度変化の通知は使わない。
-        }
-    };
-
     // 読み上げ（TTS、Issue #866）。`TextToSpeech` は最初の要求で遅延生成し（`onCreate`
     // では作らない。読み上げを 1 度も使わない画面ではエンジン起動コストを払わない）、
     // `OnInitListener` による非同期初期化の完了まで要求を 1 件だけ保留する
@@ -1524,15 +1297,6 @@ public class MainActivity extends GameActivity {
             biometricPrompt.cancelAuthentication();
         }
 
-        // ローカル通知（Issue #1006）: `notificationRequest` は static のため Activity
-        // 再生成をまたいで残るが、権限ダイアログ待ち中に破棄された要求の宛先は失われる。
-        // 保留中の要求をここで捨て、Rust 側 `android_main` の `notification::
-        // reset_pending_tracking()` と対で「宛先を失った」要求を残さない
-        // （`biometricRequest`/`micRecordRequest` と同じ位置づけ、順序非依存）。
-        notificationRequest.take();
-        pendingNotificationTitle = null;
-        pendingNotificationBody = null;
-
         // マイク録音（Issue #957）: `micRecordRequest` は static のため Activity 再生成を
         // またいで残るが、`MediaRecorder`（`micRecorder`）はインスタンスフィールドで
         // 旧 Activity インスタンスとともに失われている（新インスタンスでは常に
@@ -1555,14 +1319,6 @@ public class MainActivity extends GameActivity {
         // 新インスタンスへ届き得るが、id が NONE なので捨てられる。`contactPickerOpen` は
         // その結果が届くまで true のまま残し、新しい起動を断る。
         contactPickRequest.take();
-
-        sensorManager = getSystemService(SensorManager.class);
-        if (sensorManager != null) {
-            motionSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY);
-            if (motionSensor == null) {
-                motionSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-            }
-        }
 
         locationManager = getSystemService(LocationManager.class);
 
@@ -1588,281 +1344,6 @@ public class MainActivity extends GameActivity {
                         info.isInPictureInPictureMode()));
     }
 
-    // BLE スキャン（Issue #1062、`device/bluetooth_le.rs` の Android 経路）。
-    // Rust の `request_ble_scan` が `requestBleScan(long, int)` を呼び、広告ごとに
-    // `nativeOnBleScanResult`、終了時に 1 回だけ `nativeOnBleScanFinished` で通知する
-    // （macOS / Windows と共通の `OBSERVED` / `bridge` へ pull 型で橋渡し）。
-    // 同一 id の統合・RSSI 降順・上限は Rust 側 `normalize_scan` に任せ、ここでは並べ替えも
-    // 重複除去もしない。完了コード → 契約のエラーの写像は Rust 側
-    // `bluetooth_le::error_from_android_code` が SSOT（ここでは分岐しない）。
-    //
-    // 並行性（device-bridge-contracts.md 2・11 節）: 状態を触る経路は UI スレッド 1 本に
-    // 集約する。`requestBleScan` は `runOnUiThread`、`ScanCallback` は main looper へ届く
-    // （Handler 未指定の既定）、期限 `Handler` も main looper、ライフサイクルも UI
-    // スレッドのため、ロックは持たない。通知は `bleScanRequest.complete(id)` が true の
-    // ときだけ行い（first-wins）、二重完了と古い世代の通知を防ぐ。
-    //
-    // 期限: Rust の `SCAN_DURATION_MS` を `durationMs` で受けてそのまま使う（複製しない）。
-    // `startScan` 成功時点から数え、権限ダイアログの回答待ちには掛けない（macOS と同じ
-    // 既知の天井）。周辺機器の名前・アドレスはログへ出さない（security.md A09）。
-    //
-    // 結果コード（Rust 側 `error_from_android_code` と一致させる）: 0=成功／1=Bluetooth オフ／
-    // 2=権限拒否／3=非搭載・LE 非対応／4=内部エラー／5=中断（`onPause`/`onDestroy`/非前景での
-    // 開始）／6=位置情報サービスがオフ（API 30 以下。オフのままだと 0 件になり「0 台の成功」に
-    // 化けるため失敗にする）。
-    private static final int BLE_RESULT_OK = 0;
-    private static final int BLE_RESULT_DISABLED = 1;
-    private static final int BLE_RESULT_PERMISSION_DENIED = 2;
-    private static final int BLE_RESULT_UNSUPPORTED = 3;
-    private static final int BLE_RESULT_INTERNAL_ERROR = 4;
-    private static final int BLE_RESULT_INTERRUPTED = 5;
-    private static final int BLE_RESULT_LOCATION_OFF = 6;
-
-    // `address` は識別子、`name` は広告名（無ければ null）、`rssi` は `ScanResult.getRssi()`
-    // の生値（取得不能の番兵 127 も Rust 側が `None` へ写す）。
-    private static native void nativeOnBleScanResult(
-            long requestId, String address, String name, int rssi);
-
-    private static native void nativeOnBleScanFinished(long requestId, int code);
-
-    private final RequestTracker bleScanRequest = new RequestTracker();
-    private final Handler bleHandler = new Handler(Looper.getMainLooper());
-    private BluetoothLeScanner bleScanner;
-    private ScanCallback bleScanCallback;
-    private Runnable bleScanTimeout;
-    private int bleScanDurationMs;
-    // 権限ダイアログの回答待ち。表示中に来た再要求は新しい id を追跡し直すだけで、
-    // 結果は「その時点の現在 id」へ適用する（要求する権限は同一のため）。
-    private boolean blePermissionPending;
-    // 許可結果が非前景中に届いたため `startBleScan` を次の `onResume` へ保留している
-    // （正常な許可を中断扱いにせず、背景での開始も避ける、契約表 1 節）。
-    private boolean bleStartPendingResume;
-
-    // API 31 以上は `BLUETOOTH_SCAN` + `BLUETOOTH_CONNECT`、30 以下は `ACCESS_FINE_LOCATION`
-    // （Manifest 参照。API 31 以上のみ CONNECT を要求するため minSdk 未満の分岐は不要）。
-    private static String[] blePermissions() {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-                ? new String[] {
-                    Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT
-                }
-                : new String[] {Manifest.permission.ACCESS_FINE_LOCATION};
-    }
-
-    private boolean bleGranted() {
-        for (String p : blePermissions()) {
-            if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private final ActivityResultLauncher<String[]> requestBlePermission =
-            getActivityResultRegistry().register("fandhe:MainActivity:9", this, new ActivityResultContracts.RequestMultiplePermissions(), result -> {
-                boolean granted = true;
-                for (String p : blePermissions()) {
-                    granted &= Boolean.TRUE.equals(result.get(p));
-                }
-                this.blePermissionPending = false;
-                long id = this.bleScanRequest.current();
-                if (id == RequestTracker.NONE) {
-                    return;
-                }
-                if (!granted) {
-                    finishBle(id, BLE_RESULT_PERMISSION_DENIED);
-                    return;
-                }
-                if (isFinishing() || isDestroyed()) {
-                    finishBle(id, BLE_RESULT_INTERRUPTED);
-                    return;
-                }
-                if (!this.activityResumed) {
-                    this.bleStartPendingResume = true;
-                    return;
-                }
-                startBleScan(id);
-            });
-
-    // 要求を 1 回だけ確定して通知する（追跡中の id と一致したときのみ）。
-    private void finishBle(long id, int code) {
-        if (id != RequestTracker.NONE && bleScanRequest.complete(id)) {
-            nativeOnBleScanFinished(id, code);
-        }
-    }
-
-    // タイマー解除 → `stopScan` → 参照解放を全終了経路（期限・失敗・置き換え・
-    // `onPause`・`onDestroy`）で必ず通す。Bluetooth オフ時の `stopScan` が投げる
-    // 例外は握る（契約表 9 節: 失敗経路でも資源を残さない）。
-    private void stopBleScanQuietly() {
-        if (bleScanTimeout != null) {
-            bleHandler.removeCallbacks(bleScanTimeout);
-            bleScanTimeout = null;
-        }
-        if (bleScanner != null && bleScanCallback != null) {
-            try {
-                bleScanner.stopScan(bleScanCallback);
-            } catch (RuntimeException ignored) {
-                // SecurityException / IllegalStateException（Bluetooth オフ）。
-            }
-        }
-        bleScanner = null;
-        bleScanCallback = null;
-    }
-
-    // Rust から呼ばれる開始依頼（Rust スレッド → UI スレッドへ集約）。
-    public void requestBleScan(final long requestId, final int durationMs) {
-        runOnUiThread(() -> {
-            // 置き換え: 進行中のスキャンは止め、旧 id は通知せず破棄する（Rust 側は既に新世代）。
-            stopBleScanQuietly();
-            bleScanRequest.track(requestId);
-            bleScanDurationMs = durationMs;
-            if (blePermissionPending || bleStartPendingResume) {
-                return;
-            }
-            if (isFinishing() || isDestroyed() || !activityResumed) {
-                finishBle(requestId, BLE_RESULT_INTERRUPTED);
-                return;
-            }
-            // 非搭載の判定を権限より先に行い、非対応端末で権限ダイアログを出さない。
-            if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)
-                    || bleAdapter() == null) {
-                finishBle(requestId, BLE_RESULT_UNSUPPORTED);
-                return;
-            }
-            if (!bleGranted()) {
-                blePermissionPending = true;
-                try {
-                    requestBlePermission.launch(blePermissions());
-                } catch (RuntimeException e) {
-                    blePermissionPending = false;
-                    finishBle(requestId, BLE_RESULT_INTERNAL_ERROR);
-                }
-                return;
-            }
-            startBleScan(requestId);
-        });
-    }
-
-    private BluetoothAdapter bleAdapter() {
-        BluetoothManager manager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
-        return manager == null ? null : manager.getAdapter();
-    }
-
-    private static int bleFailureCode(int scanErrorCode) {
-        return scanErrorCode == ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED
-                ? BLE_RESULT_UNSUPPORTED
-                : BLE_RESULT_INTERNAL_ERROR;
-    }
-
-    private void startBleScan(final long id) {
-        final BluetoothAdapter adapter = bleAdapter();
-        if (adapter == null) {
-            finishBle(id, BLE_RESULT_UNSUPPORTED);
-            return;
-        }
-        // API 31+ の `isEnabled()` / `BluetoothDevice.getAddress()` は `BLUETOOTH_CONNECT` を
-        // 要しうるため、実行時許可に含めている。それでも SecurityException が出たら落とさず権限拒否で確定する。
-        final BluetoothLeScanner scanner;
-        try {
-            scanner = adapter.isEnabled() ? adapter.getBluetoothLeScanner() : null;
-        } catch (SecurityException e) {
-            finishBle(id, BLE_RESULT_PERMISSION_DENIED);
-            return;
-        }
-        if (scanner == null) {
-            finishBle(id, BLE_RESULT_DISABLED);
-            return;
-        }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-            // サービスが取れない端末は位置 OFF と同じ扱い（null を渡すと NPE になる）。
-            LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-            if (lm == null || !LocationManagerCompat.isLocationEnabled(lm)) {
-                finishBle(id, BLE_RESULT_LOCATION_OFF);
-                return;
-            }
-        }
-        ScanCallback callback = new ScanCallback() {
-            @Override
-            public void onScanResult(int callbackType, ScanResult result) {
-                if (bleScanRequest.current() != id || result.getDevice() == null) {
-                    return;
-                }
-                // `BluetoothDevice.getName()` は API 31+ で BLUETOOTH_CONNECT を要するため
-                // 使わず、広告の ScanRecord から名前を取る。
-                ScanRecord record = result.getScanRecord();
-                final String address;
-                try {
-                    address = result.getDevice().getAddress();
-                } catch (SecurityException e) {
-                    // スキャン中に権限が取り消された（API 31+）。止めて権限拒否で確定する。
-                    stopBleScanQuietly();
-                    finishBle(id, BLE_RESULT_PERMISSION_DENIED);
-                    return;
-                }
-                nativeOnBleScanResult(
-                        id, address, record == null ? null : record.getDeviceName(), result.getRssi());
-            }
-
-            @Override
-            public void onScanFailed(int errorCode) {
-                if (bleScanRequest.current() != id) {
-                    return;
-                }
-                stopBleScanQuietly();
-                finishBle(id, bleFailureCode(errorCode));
-            }
-        };
-        ScanSettings settings =
-                new ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build();
-        try {
-            scanner.startScan(null, settings, callback);
-        } catch (SecurityException e) {
-            finishBle(id, BLE_RESULT_PERMISSION_DENIED);
-            return;
-        } catch (RuntimeException e) {
-            finishBle(id, BLE_RESULT_INTERNAL_ERROR);
-            return;
-        }
-        bleScanner = scanner;
-        bleScanCallback = callback;
-        bleScanTimeout = () -> {
-            bleScanTimeout = null;
-            if (bleScanRequest.current() != id) {
-                return;
-            }
-            // 途中で Bluetooth がオフになった場合は失敗にする（部分結果は Rust 側で捨てる）。
-            boolean stillOn;
-            try {
-                stillOn = adapter.isEnabled();
-            } catch (SecurityException e) {
-                stillOn = false;
-            }
-            // API 30 以下は途中で位置情報サービスが OFF になると広告が届かず 0 台の偽の成功になる。
-            boolean locationOff = false;
-            if (stillOn && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-                LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-                locationOff = lm == null || !LocationManagerCompat.isLocationEnabled(lm);
-            }
-            stopBleScanQuietly();
-            finishBle(
-                    id,
-                    !stillOn
-                            ? BLE_RESULT_DISABLED
-                            : locationOff ? BLE_RESULT_LOCATION_OFF : BLE_RESULT_OK);
-        };
-        bleHandler.postDelayed(bleScanTimeout, bleScanDurationMs);
-    }
-
-    // `onPause`/`onDestroy` 共通: スキャン中なら止めて中断で確定する。権限ダイアログ待ち
-    // （`bleScanCallback == null`）は破棄しない（ダイアログ自体が `onPause` を起こすため）。
-    private void abortBleScanIfRunning() {
-        if (bleScanCallback != null) {
-            long id = bleScanRequest.current();
-            stopBleScanQuietly();
-            finishBle(id, BLE_RESULT_INTERRUPTED);
-        }
-    }
-
     // 傾きセンサのリスナー登録（Issue #831）。バックグラウンド中は登録しない
     // （onPause で解除する）ため、フォアグラウンド復帰のたびに再登録が必要。
     @Override
@@ -1870,17 +1351,7 @@ public class MainActivity extends GameActivity {
         super.onResume();
         activityResumed = true;
         webAuthSessionHelper.onResume();
-        compassHelper.onResume();
-        environmentSensorsHelper.onResume();
-        motionRawSensorsHelper.onResume();
         localPeerHelper.onResume();
-        bluetoothClassicHelper.onResume();
-        mediaPlaybackHelper.onResume();
-        nowPlayingHelper.onResume();
-        if (sensorManager != null && motionSensor != null) {
-            sensorManager.registerListener(
-                    motionListener, motionSensor, SensorManager.SENSOR_DELAY_GAME);
-        }
         // 測位継続の意思（Issue #890）があり、かつ権限が既にあるなら再登録する
         // （`onPause` で解除済みのため、フォアグラウンド復帰のたびに要る。傾き（#831）
         // の motionListener と同型の対）。権限が無ければここでは要求しない
@@ -1938,14 +1409,6 @@ public class MainActivity extends GameActivity {
                 }
             }
         }
-        // BLE スキャン（Issue #1062）: 許可結果が非前景中に届き開始を保留していた要求を再開する。
-        if (bleStartPendingResume) {
-            bleStartPendingResume = false;
-            long id = bleScanRequest.current();
-            if (id != RequestTracker.NONE && bleScanCallback == null) {
-                startBleScan(id);
-            }
-        }
     }
 
     // バックグラウンド中のセンサ計測・バッテリ消費を避けるための解除（Issue #831）。
@@ -1961,15 +1424,6 @@ public class MainActivity extends GameActivity {
         webAuthSessionHelper.onPause();
         lanDiscoveryHelper.onPause();
         localPeerHelper.onPause();
-        bluetoothClassicHelper.onPause();
-        compassHelper.onPause();
-        environmentSensorsHelper.onPause();
-        motionRawSensorsHelper.onPause();
-        mediaPlaybackHelper.onPause();
-        nowPlayingHelper.onPause();
-        if (sensorManager != null) {
-            sensorManager.unregisterListener(motionListener);
-        }
         // 「使用中のみ」の権限のため、バックグラウンドでは測位しない（Issue #890）。
         if (locationManager != null) {
             locationManager.removeUpdates(locationListener);
@@ -1995,8 +1449,6 @@ public class MainActivity extends GameActivity {
                 abortSpeech(SPEECH_RESULT_INTERRUPTED);
             }
         }
-        // BLE スキャン（Issue #1062）: バックグラウンド遷移でスキャン中なら止めて中断で確定する。
-        abortBleScanIfRunning();
     }
 
     // Rust 側の TTS ワーカースレッド（`device/android.rs` の `AndroidTts`）から
@@ -2702,91 +2154,6 @@ public class MainActivity extends GameActivity {
         PhotoSaveHelper.save(getApplicationContext().getContentResolver(), requestId, png);
     }
 
-    // Rust 側 bridge モジュール（`device/notification.rs`）の `present`（Android 分岐）から
-    // JNI 経由で呼ばれる（Issue #1006）。`requestBiometric` と同じ「即時 return・結果は
-    // 非同期通知」の形。`title`/`body` は Rust 側 `NotificationRequest::new`（空・NUL・
-    // 長さ検証）を通した文字列の契約。表示にのみ使い、ログへ出さない
-    // （security.md A03/A09）。
-    private void requestNotification(long requestId, String title, String body) {
-        runOnUiThread(() -> {
-            if (Build.VERSION.SDK_INT < 33
-                    || ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                            == PackageManager.PERMISSION_GRANTED) {
-                // API 33 未満は実行時許可自体が存在しないため要求しない
-                // （device-bridge-contracts.md「対応表・権限」節）。
-                postNotification(requestId, title, body);
-                return;
-            }
-            if (isFinishing() || isDestroyed() || !activityResumed) {
-                // 非前景でダイアログを出さない（`requestBiometric`/`requestMicRecordStart`
-                // と同じ非前景ガード）。
-                nativeOnNotificationResult(requestId, NOTIFICATION_RESULT_AUTH_ERROR);
-                return;
-            }
-            notificationRequest.track(requestId);
-            pendingNotificationTitle = title;
-            pendingNotificationBody = body;
-            try {
-                requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS);
-            } catch (RuntimeException e) {
-                // `launch()` 自体が例外を送出した場合（`requestMicRecordStart` と同じ
-                // 理由）。コールバックは二度と来ないため、ここで直接失敗を通知する。
-                notificationRequest.take();
-                pendingNotificationTitle = null;
-                pendingNotificationBody = null;
-                nativeOnNotificationResult(requestId, NOTIFICATION_RESULT_AUTH_ERROR);
-            }
-        });
-    }
-
-    // 権限確認後（`requestNotification`/`requestNotificationPermission` 許可コールバック
-    // のいずれか）に呼ぶ。常に UI スレッドから呼ばれる契約（`requestNotification` の
-    // `runOnUiThread`、`requestNotificationPermission` の `ActivityResultLauncher`
-    // コールバックはいずれも UI スレッド）。
-    private void postNotification(long requestId, String title, String body) {
-        NotificationManagerCompat manager = NotificationManagerCompat.from(this);
-        NotificationChannelCompat channel = new NotificationChannelCompat.Builder(
-                        NOTIFICATION_CHANNEL_ID, NotificationManagerCompat.IMPORTANCE_DEFAULT)
-                .setName(getString(R.string.notification_channel_name))
-                .build();
-        try {
-            // `areNotificationsEnabled`/`createNotificationChannel`/`getNotificationChannelCompat`
-            // は通知サービスとの IPC を伴い、サービス側の異常で `RuntimeException` を送出し得る
-            // （Codex 指摘、PR #1010）。ここを try の外に置くと UI スレッドの未捕捉例外で
-            // アプリが終了し、`nativeOnNotificationResult` へ失敗を返せなくなる。
-            if (!manager.areNotificationsEnabled()) {
-                // API 33 未満で利用者が設定から通知を切った場合を含む（嘘の成功を出さない、
-                // device-bridge-contracts.md「嘘の成功」節）。
-                nativeOnNotificationResult(requestId, NOTIFICATION_RESULT_PERMISSION_DENIED);
-                return;
-            }
-            manager.createNotificationChannel(channel);
-            NotificationChannelCompat created = manager.getNotificationChannelCompat(NOTIFICATION_CHANNEL_ID);
-            if (created != null && created.getImportance() == NotificationManagerCompat.IMPORTANCE_NONE) {
-                // チャンネル単位でブロックされている（設定アプリからチャンネルを個別に
-                // オフにした場合）。
-                nativeOnNotificationResult(requestId, NOTIFICATION_RESULT_PERMISSION_DENIED);
-                return;
-            }
-        } catch (RuntimeException e) {
-            nativeOnNotificationResult(requestId, NOTIFICATION_RESULT_POST_ERROR);
-            return;
-        }
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.sym_def_app_icon)
-                .setContentTitle(title)
-                .setContentText(body)
-                .setAutoCancel(true);
-        try {
-            manager.notify((int) requestId, builder.build());
-            nativeOnNotificationResult(requestId, NOTIFICATION_RESULT_SUBMITTED);
-        } catch (SecurityException e) {
-            nativeOnNotificationResult(requestId, NOTIFICATION_RESULT_PERMISSION_DENIED);
-        } catch (RuntimeException e) {
-            nativeOnNotificationResult(requestId, NOTIFICATION_RESULT_POST_ERROR);
-        }
-    }
-
     // Rust 側（`device/mic_record.rs` の「停止」ボタンハンドラ）から JNI 経由で呼ばれる
     // （Issue #957）。`requestId` が現在の要求と一致しない場合は no-op（旧要求の遅延
     // 到着、`apple_mic_record.rs::request_stop` の Android 版）。
@@ -3447,27 +2814,6 @@ public class MainActivity extends GameActivity {
         }
     }
 
-    // Rust 側（`device/android_device_info.rs`、Issue #1306）から JNI 経由で egui スレッドが
-    // ボタン押下ごとに呼ぶ同期メソッド（シグネチャ `()Ljava/lang/String;`）。詰め方は
-    // `DeviceInfoHelper` 冒頭を参照。失敗は null。
-    private String deviceInfoRead() {
-        return DeviceInfoHelper.read(getApplicationContext());
-    }
-
-    // Rust 側（`device/android_alarm.rs`、Issue #1078）から JNI 経由でワーカースレッドが同期で呼ぶ
-    // 3 本。シグネチャは `(J)I` / `()I` / `()J`。結果コードは `AlarmHelper` 冒頭を参照。
-    private int alarmSchedule(long fireAtMs) {
-        return AlarmHelper.schedule(this, fireAtMs);
-    }
-
-    private int alarmCancel() {
-        return AlarmHelper.cancel(getApplicationContext());
-    }
-
-    private long alarmState() {
-        return AlarmHelper.state(getApplicationContext());
-    }
-
     // 資格情報保存（Issue #924）の op 定数。Rust 側 `device/android.rs::
     // AndroidSecureCredential::request` の同名定数と対で決める契約。
     private static final int SECURE_CREDENTIAL_OP_STORE = 0;
@@ -3676,20 +3022,13 @@ public class MainActivity extends GameActivity {
         fullscreenHelper.onDestroy();
         penStylusHelper.onDestroy();
         // UI キューを待つネイティブ終了処理（clear）が super.onDestroy() の後ろで詰まらないよう先に解放する。
-        nowPlayingHelper.onDestroy();
         super.onDestroy();
         paymentRequestHelper.onDestroy();
         healthDataHelper.onDestroy();
         translationHelper.onDestroy();
         lanDiscoveryHelper.onDestroy();
         localPeerHelper.onDestroy();
-        bluetoothClassicHelper.onDestroy();
-        blePeripheralHelper.onDestroy();
         musicLibraryHelper.onDestroy();
-        compassHelper.onDestroy();
-        environmentSensorsHelper.onDestroy();
-        motionRawSensorsHelper.onDestroy();
-        mediaPlaybackHelper.onDestroy();
         pictureInPictureHelper.onDestroy();
         printHelper.onDestroy();
         screenOrientationHelper.onDestroy();
@@ -3709,12 +3048,6 @@ public class MainActivity extends GameActivity {
                 abortSpeech(SPEECH_RESULT_INTERRUPTED);
             }
         }
-        // BLE スキャン（Issue #1062）: スキャン中・権限ダイアログ待ちを問わず止めて、追跡中の
-        // 要求があれば中断で確定する（破棄後に結果を届ける先は無いが Rust 側を畳む）。
-        stopBleScanQuietly();
-        blePermissionPending = false;
-        bleStartPendingResume = false;
-        finishBle(bleScanRequest.current(), BLE_RESULT_INTERRUPTED);
         // ファイル選択（Issue #874、案 B）は Activity 破棄時に明示的な決着を送らない。
         // `Picking` のまま残る（OS がコールバックしないケースと同じ既知の天井、
         // 仕様書「固定タイムアウトを掛けない」節参照）。`filePickRequest` は static

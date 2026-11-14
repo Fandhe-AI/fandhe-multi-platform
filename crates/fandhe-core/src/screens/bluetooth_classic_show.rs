@@ -66,7 +66,7 @@ pub const FOUND_PREFIX: &str = "検索: ";
 /// 画面の注記（範囲）。
 pub const NOTE: &str = "一覧と検索のみ。接続・ペアリングはしない、アドレスは出さない";
 
-/// 機器の種別（`fandhe_device::bluetooth_classic::DeviceKind` に対応する画面用の型。
+/// 機器の種別（`fandhe_cap_bluetooth_classic::DeviceKind` に対応する画面用の型。
 /// ラベル文言は core に置く）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClassicKind {

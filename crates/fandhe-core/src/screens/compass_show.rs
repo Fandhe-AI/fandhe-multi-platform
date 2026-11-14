@@ -35,7 +35,7 @@ pub const FAILED_TEXT: &str = "取得できません";
 /// 注記（基準）。
 pub const NOTE_TEXT: &str = "端末を水平に持った縦向きの方位（磁北）";
 
-/// 精度（`fandhe_device::compass::Accuracy` の写し）。
+/// 精度（`fandhe_cap_compass_heading::Accuracy` の写し）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AccuracyView {
     /// 不明。
@@ -48,7 +48,7 @@ pub enum AccuracyView {
     High,
 }
 
-/// 方位（`fandhe_device::compass::Heading` の写し）。
+/// 方位（`fandhe_cap_compass_heading::Heading` の写し）。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HeadingView {
     /// 磁北から時計回りの度。`[0.0, 360.0)`。
@@ -128,12 +128,12 @@ pub fn apply_failure(s: &mut CompassShowState, session: u64, f: CompassFailureVi
     s.view = CompassView::Failed(f);
 }
 
-/// 表示用の整数度（`fandhe_device::compass::display_degrees` の写し）。359.6 は 0。
+/// 表示用の整数度（`fandhe_cap_compass_heading::display_degrees` の写し）。359.6 は 0。
 pub fn display_degrees(degrees: f64) -> u16 {
     (degrees.round() as i64).rem_euclid(360) as u16
 }
 
-/// 8 方位の日本語表記（`fandhe_device::compass::compass_point` の写し）。
+/// 8 方位の日本語表記（`fandhe_cap_compass_heading::compass_point` の写し）。
 pub fn point_label(degrees: f64) -> &'static str {
     const ALL: [&str; 8] = ["北", "北東", "東", "南東", "南", "南西", "西", "北西"];
     ALL[(((degrees + 22.5) / 45.0).floor() as i64).rem_euclid(8) as usize]

@@ -19,6 +19,7 @@ device = [
   # BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
   "dep:fandhe-cap-accessibility-prefs",
   "dep:fandhe-cap-activity-recognition",
+  "dep:fandhe-cap-alarm",
   "dep:fandhe-cap-app-attest",
   "dep:fandhe-cap-app-badge",
   "dep:fandhe-cap-app-lifecycle",
@@ -26,6 +27,9 @@ device = [
   "dep:fandhe-cap-ar",
   "dep:fandhe-cap-audio-devices",
   "dep:fandhe-cap-audio-session",
+  "dep:fandhe-cap-ble-peripheral",
+  "dep:fandhe-cap-bluetooth-classic",
+  "dep:fandhe-cap-bluetooth-le",
   "dep:fandhe-cap-calendar",
   "dep:fandhe-cap-call-ui",
   "dep:fandhe-cap-camera-capture",
@@ -34,13 +38,16 @@ device = [
   "dep:fandhe-cap-clipboard",
   "dep:fandhe-cap-color-picker",
   "dep:fandhe-cap-companion-device",
+  "dep:fandhe-cap-compass-heading",
   "dep:fandhe-cap-compose-mail-sms",
   "dep:fandhe-cap-device-identifier",
+  "dep:fandhe-cap-device-info",
   "dep:fandhe-cap-digital-credentials",
   "dep:fandhe-cap-display-refresh-hdr",
   "dep:fandhe-cap-document-scan",
   "dep:fandhe-cap-drag-drop",
   "dep:fandhe-cap-dynamic-type",
+  "dep:fandhe-cap-environment-sensors",
   "dep:fandhe-cap-external-app-launch",
   "dep:fandhe-cap-eye-dropper",
   "dep:fandhe-cap-file-preview",
@@ -64,14 +71,18 @@ device = [
   "dep:fandhe-cap-local-fonts",
   "dep:fandhe-cap-managed-app-config",
   "dep:fandhe-cap-media-cast",
+  "dep:fandhe-cap-media-playback",
   "dep:fandhe-cap-media-transcode",
   "dep:fandhe-cap-memory-pressure",
   "dep:fandhe-cap-midi",
   "dep:fandhe-cap-ml-inference",
+  "dep:fandhe-cap-motion-raw-sensors",
   "dep:fandhe-cap-multi-display",
   "dep:fandhe-cap-nfc",
   "dep:fandhe-cap-nfc-card-emulation",
   "dep:fandhe-cap-nlp",
+  "dep:fandhe-cap-notification",
+  "dep:fandhe-cap-now-playing-controls",
   "dep:fandhe-cap-on-device-llm",
   "dep:fandhe-cap-open-in-shell",
   "dep:fandhe-cap-open-system-settings",
@@ -80,6 +91,7 @@ device = [
   "dep:fandhe-cap-pedometer",
   "dep:fandhe-cap-per-app-language",
   "dep:fandhe-cap-power-state",
+  "dep:fandhe-cap-quick-settings-tile",
   "dep:fandhe-cap-radio-control",
   "dep:fandhe-cap-recent-documents",
   "dep:fandhe-cap-removable-storage",
@@ -97,6 +109,7 @@ device = [
   "dep:fandhe-cap-system-accent-color",
   "dep:fandhe-cap-system-sound",
   "dep:fandhe-cap-system-tray",
+  "dep:fandhe-cap-tilt-motion",
   "dep:fandhe-cap-usb-device",
   "dep:fandhe-cap-user-idle",
   "dep:fandhe-cap-uwb-ranging",
@@ -141,12 +154,15 @@ NSLocalNetworkUsageDescription = "型サンプル「LAN のサービス探索」
 NSNearbyInteractionUsageDescription = "型サンプル「UWB による距離」で、近くの端末までの距離を測るために使います"
 NSHomeKitUsageDescription = "型サンプル「スマートホーム操作」の動作確認に使います"
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」「音声認識」「動画の撮影」の動作確認に使います"
+NSAlarmKitUsageDescription = "型サンプル「アラーム」の動作確認に使います"
+NSBluetoothAlwaysUsageDescription = "型サンプル「BLE スキャン」「BLE の周辺機器役」の動作確認に使います"
 
 [package.metadata.fandhe-app.macos.usage-descriptions]
 NSLocationUsageDescription = "型サンプル「Wi-Fi 情報」「Wi-Fi への接続」で、接続先の Wi-Fi 名を読むために使います"
 NSCalendarsWriteOnlyAccessUsageDescription = "型サンプル「予定の追加」の動作確認に使います"
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」の動作確認に使います"
 NSCameraUsageDescription = "型サンプル「カメラのライブ映像」「動画の撮影」の動作確認に使います"
+NSBluetoothAlwaysUsageDescription = "型サンプル「BLE スキャン」「Bluetooth Classic」「BLE の周辺機器役」「無線の状態と切り替え」の動作確認に使います"
 
 [build-dependencies]
 # Apple のリンク指定（弱リンク・rpath・Info.plist 埋め込み）を `fandhe-egui-proxy` から受け取って出し直す。
@@ -156,6 +172,8 @@ fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"
 fandhe-core = { path = "../fandhe-core" }
 fandhe-egui-proxy = { path = "../fandhe-egui-proxy", default-features = false }
 fandhe-render-egui = { path = "../fandhe-render-egui" }
+# `audio_play` の effect の合成（media-playback → now-playing-controls、registry.rs）が `CompletionSender` を受ける。
+fandhe-runtime = { path = "../fandhe-runtime" }
 egui = { workspace = true }
 
 # 機能 crate（1 機能 1 crate、docs/architecture/consumer-app-structure.md §5）。feature `device` のときだけ
@@ -164,6 +182,7 @@ egui = { workspace = true }
 # BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
 fandhe-cap-accessibility-prefs = { path = "../fandhe-cap-accessibility-prefs", optional = true }
 fandhe-cap-activity-recognition = { path = "../fandhe-cap-activity-recognition", optional = true }
+fandhe-cap-alarm = { path = "../fandhe-cap-alarm", optional = true }
 fandhe-cap-app-attest = { path = "../fandhe-cap-app-attest", optional = true }
 fandhe-cap-app-badge = { path = "../fandhe-cap-app-badge", optional = true }
 fandhe-cap-app-lifecycle = { path = "../fandhe-cap-app-lifecycle", optional = true }
@@ -171,6 +190,9 @@ fandhe-cap-app-progress-attention = { path = "../fandhe-cap-app-progress-attenti
 fandhe-cap-ar = { path = "../fandhe-cap-ar", optional = true }
 fandhe-cap-audio-devices = { path = "../fandhe-cap-audio-devices", optional = true }
 fandhe-cap-audio-session = { path = "../fandhe-cap-audio-session", optional = true }
+fandhe-cap-ble-peripheral = { path = "../fandhe-cap-ble-peripheral", optional = true }
+fandhe-cap-bluetooth-classic = { path = "../fandhe-cap-bluetooth-classic", optional = true }
+fandhe-cap-bluetooth-le = { path = "../fandhe-cap-bluetooth-le", optional = true }
 fandhe-cap-calendar = { path = "../fandhe-cap-calendar", optional = true }
 fandhe-cap-call-ui = { path = "../fandhe-cap-call-ui", optional = true }
 fandhe-cap-camera-capture = { path = "../fandhe-cap-camera-capture", optional = true }
@@ -179,13 +201,16 @@ fandhe-cap-capture-protection = { path = "../fandhe-cap-capture-protection", opt
 fandhe-cap-clipboard = { path = "../fandhe-cap-clipboard", optional = true }
 fandhe-cap-color-picker = { path = "../fandhe-cap-color-picker", optional = true }
 fandhe-cap-companion-device = { path = "../fandhe-cap-companion-device", optional = true }
+fandhe-cap-compass-heading = { path = "../fandhe-cap-compass-heading", optional = true }
 fandhe-cap-compose-mail-sms = { path = "../fandhe-cap-compose-mail-sms", optional = true }
 fandhe-cap-device-identifier = { path = "../fandhe-cap-device-identifier", optional = true }
+fandhe-cap-device-info = { path = "../fandhe-cap-device-info", optional = true }
 fandhe-cap-digital-credentials = { path = "../fandhe-cap-digital-credentials", optional = true }
 fandhe-cap-display-refresh-hdr = { path = "../fandhe-cap-display-refresh-hdr", optional = true }
 fandhe-cap-document-scan = { path = "../fandhe-cap-document-scan", optional = true }
 fandhe-cap-drag-drop = { path = "../fandhe-cap-drag-drop", optional = true }
 fandhe-cap-dynamic-type = { path = "../fandhe-cap-dynamic-type", optional = true }
+fandhe-cap-environment-sensors = { path = "../fandhe-cap-environment-sensors", optional = true }
 fandhe-cap-external-app-launch = { path = "../fandhe-cap-external-app-launch", optional = true }
 fandhe-cap-eye-dropper = { path = "../fandhe-cap-eye-dropper", optional = true }
 fandhe-cap-file-preview = { path = "../fandhe-cap-file-preview", optional = true }
@@ -209,14 +234,18 @@ fandhe-cap-live-activity = { path = "../fandhe-cap-live-activity", optional = tr
 fandhe-cap-local-fonts = { path = "../fandhe-cap-local-fonts", optional = true }
 fandhe-cap-managed-app-config = { path = "../fandhe-cap-managed-app-config", optional = true }
 fandhe-cap-media-cast = { path = "../fandhe-cap-media-cast", optional = true }
+fandhe-cap-media-playback = { path = "../fandhe-cap-media-playback", optional = true }
 fandhe-cap-media-transcode = { path = "../fandhe-cap-media-transcode", optional = true }
 fandhe-cap-memory-pressure = { path = "../fandhe-cap-memory-pressure", optional = true }
 fandhe-cap-midi = { path = "../fandhe-cap-midi", optional = true }
 fandhe-cap-ml-inference = { path = "../fandhe-cap-ml-inference", optional = true }
+fandhe-cap-motion-raw-sensors = { path = "../fandhe-cap-motion-raw-sensors", optional = true }
 fandhe-cap-multi-display = { path = "../fandhe-cap-multi-display", optional = true }
 fandhe-cap-nfc = { path = "../fandhe-cap-nfc", optional = true }
 fandhe-cap-nfc-card-emulation = { path = "../fandhe-cap-nfc-card-emulation", optional = true }
 fandhe-cap-nlp = { path = "../fandhe-cap-nlp", optional = true }
+fandhe-cap-notification = { path = "../fandhe-cap-notification", optional = true }
+fandhe-cap-now-playing-controls = { path = "../fandhe-cap-now-playing-controls", optional = true }
 fandhe-cap-on-device-llm = { path = "../fandhe-cap-on-device-llm", optional = true }
 fandhe-cap-open-in-shell = { path = "../fandhe-cap-open-in-shell", optional = true }
 fandhe-cap-open-system-settings = { path = "../fandhe-cap-open-system-settings", optional = true }
@@ -225,6 +254,7 @@ fandhe-cap-pdf-viewer = { path = "../fandhe-cap-pdf-viewer", optional = true }
 fandhe-cap-pedometer = { path = "../fandhe-cap-pedometer", optional = true }
 fandhe-cap-per-app-language = { path = "../fandhe-cap-per-app-language", optional = true }
 fandhe-cap-power-state = { path = "../fandhe-cap-power-state", optional = true }
+fandhe-cap-quick-settings-tile = { path = "../fandhe-cap-quick-settings-tile", optional = true }
 fandhe-cap-radio-control = { path = "../fandhe-cap-radio-control", optional = true }
 fandhe-cap-recent-documents = { path = "../fandhe-cap-recent-documents", optional = true }
 fandhe-cap-removable-storage = { path = "../fandhe-cap-removable-storage", optional = true }
@@ -242,6 +272,7 @@ fandhe-cap-spell-check = { path = "../fandhe-cap-spell-check", optional = true }
 fandhe-cap-system-accent-color = { path = "../fandhe-cap-system-accent-color", optional = true }
 fandhe-cap-system-sound = { path = "../fandhe-cap-system-sound", optional = true }
 fandhe-cap-system-tray = { path = "../fandhe-cap-system-tray", optional = true }
+fandhe-cap-tilt-motion = { path = "../fandhe-cap-tilt-motion", optional = true }
 fandhe-cap-usb-device = { path = "../fandhe-cap-usb-device", optional = true }
 fandhe-cap-user-idle = { path = "../fandhe-cap-user-idle", optional = true }
 fandhe-cap-uwb-ranging = { path = "../fandhe-cap-uwb-ranging", optional = true }

@@ -2,7 +2,7 @@
 //!
 //! `fandhe_core::screens::compass_show`（端末依存ゼロ）の画面を [`super::mount::mount_with_effect`]
 //! の effect として駆動する。`fandhe-egui-proxy` の wasm canvas 経路は対象外
-//! （`UnsupportedCompass` のまま）。`fandhe_device::compass` から `READ_INTERVAL`・
+//! （`UnsupportedCompass` のまま）。`fandhe-cap-compass-heading` から `READ_INTERVAL`・
 //! `normalize_heading`・`WaitTracker` を共用し、`Compass` trait（`Send + Sync`）は
 //! JS の Closure を持てないため通さず、core の `apply_reading` / `apply_failure` へ直接流す。
 //!
@@ -30,11 +30,11 @@
 //!
 //! 方位・精度・例外の message は DOM・ログへ出さない（security.md A09）。
 
-use fandhe_core::screens::compass_show::{AccuracyView, CompassFailureView, HeadingView};
-use fandhe_device::compass::{
+use fandhe_cap_compass_heading::{
     compass_point, display_degrees, normalize_heading, Accuracy, CompassFailure, CompassPoint,
     Heading, WaitTracker,
 };
+use fandhe_core::screens::compass_show::{AccuracyView, CompassFailureView, HeadingView};
 
 /// Chromium / Firefox: `alpha`（反時計回り）を時計回りの方位へ。`absolute` が偽・null・範囲外は値なし。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -191,11 +191,11 @@ mod web {
     use std::collections::HashMap;
     use std::rc::Rc;
 
+    use fandhe_cap_compass_heading::{
+        Accuracy, CompassFailure, CompassPoint, Heading, WaitTracker, READ_INTERVAL,
+    };
     use fandhe_core::screens::compass_show::{
         apply_failure, apply_reading, CompassFailureView, CompassShowState,
-    };
-    use fandhe_device::compass::{
-        Accuracy, CompassFailure, CompassPoint, Heading, WaitTracker, READ_INTERVAL,
     };
     use js_sys::{Function, Promise, Reflect};
     use wasm_bindgen::prelude::*;

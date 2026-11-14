@@ -168,8 +168,8 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | 機能 | 理由 | 解消の見込み |
 |------|------|--------------|
 | network-status | 未移行の `fandhe_apple_lan_discovery.m` が `fandhe_apple_network_status_read` を呼ぶ | lan-discovery と一緒に移す |
-| device-info | 未移行の `apple_quick_settings_tile.rs` が `macos_device_info::implementation()` を呼ぶ | quick-settings-tile の後 |
-| now-playing-controls | `media_playback`（egui-proxy・web-dom の両方）が `now_playing::sync*` を呼ぶ | media-playback と同じ PR で移す |
+| device-info | 未移行の `apple_quick_settings_tile.rs` が `macos_device_info::implementation()` を呼ぶ | quick-settings-tile の後 （第 11 束 #1331 で移した、§20） |
+| now-playing-controls | `media_playback`（egui-proxy・web-dom の両方）が `now_playing::sync*` を呼ぶ | media-playback と同じ PR で移す （第 11 束 #1331 で移した、§20） |
 | pen-stylus | Android が `MainActivity.dispatchTouchEvent` の上書きを要する。provider では置き換えられない | 口は #1327 で入った（§18）。`HostInput.addTouchObserver` で移せる |
 | picture-in-picture | Android が `onPictureInPictureModeChanged` の上書きと `<activity supportsPictureInPicture>` 属性を要する | PiP の切り替わりの口は #1327 で入った（§18、`ComponentActivity` のリスナー）。`<activity supportsPictureInPicture>` の宣言の拡張（#1328）が先 |
 | fullscreen-immersive | `FullscreenHelper.onInsets` が、`MainActivity` の唯一の decorView insets リスナー（safe-area と共用）から呼ばれる | insets を配る口は #1327 で入った（§18、`HostInsets.addListener`）。移せる |
@@ -213,7 +213,7 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | translation | Android がランチャーと `onDestroy`・`reset_pending_tracking` を持ち、Apple は Swift の薄層（`links` と `import_link_args`）が要る | 別の周で |
 | flashlight | Android の Helper が `onStart` / `onStop` / `onDestroy` に参加する。`FeatureLifecycleProvider` の Started / Stopped の口は #1192 で足した | 口が `main` に入った後に移せる（app-lifecycle と同じ形）（第 9 束 #1329 で移した） |
 | safe-area-insets | insets の static と JNI エクスポートは #1327 で `fandhe-platform-android` へ上がった（§18） | 移せる（`fandhe_platform_android::window_insets_px()` を読む） |
-| compass-heading | 第 3 束 #1301 の `FeatureLifecycleProvider.onHostResumed` / `onHostPaused` に依存する。`WaitTracker`・`NO_READING_TIMEOUT_MS` を ar と未移行の `environment_sensors` が使うため、`fandhe-device::compass` へ最小限を残す設計も要る | #1301 のマージ後 |
+| compass-heading | 第 3 束 #1301 の `FeatureLifecycleProvider.onHostResumed` / `onHostPaused` に依存する。`WaitTracker`・`NO_READING_TIMEOUT_MS` を ar と未移行の `environment_sensors` が使うため、`fandhe-device::compass` へ最小限を残す設計も要る | #1301 のマージ後 （第 11 束 #1331 で移した、§20） |
 
 ## 11. 第 5 束（#1190）で出た型と後回しの機能
 
@@ -244,10 +244,10 @@ per-app-language・screen-brightness・spell-check・geocoding-search の 9 機�
 | 機能 | 理由 | 解消の見込み |
 |------|------|--------------|
 | in-app-browser | Android の Helper が `onResume` / `onPause` / `onDestroy` に参加する。`FeatureLifecycleProvider` に Resumed / Paused の口が無い（#1301 で足す） | #1301 のマージ後（第 9 束 #1329 で移した） |
-| environment-sensors | Android が `onResume` / `onPause` / `onDestroy` に参加する（同上）。egui-proxy の `android.rs` にある feature 無効時の no-op スタブも消す必要がある | #1301 のマージ後 |
+| environment-sensors | Android が `onResume` / `onPause` / `onDestroy` に参加する（同上）。egui-proxy の `android.rs` にある feature 無効時の no-op スタブも消す必要がある | #1301 のマージ後 （第 11 束 #1331 で移した、§20） |
 | capture-protection | Android の Helper が `onStart` / `onStop` に参加する。`FeatureLifecycleProvider` の Started / Stopped の口は #1192 で足した | 口が `main` に入った後に移せる（第 9 束 #1329 で移した） |
 | activity-recognition | Android が `onStart` / `onStop` に参加し、`ActivityRecognitionReceiver` も持つ（口は #1192 で足した） | 口が `main` に入った後に移せる（第 9 束 #1329 で移した） |
-| bluetooth-classic | Android が `onResume` / `onPause` と許可ランチャーを持つ。共有ファイル `device/android.rs` の `read_ble_string` を使う | `read_ble_string` を共通層へ上げてから（bluetooth-le と同時が自然） |
+| bluetooth-classic | Android が `onResume` / `onPause` と許可ランチャーを持つ。共有ファイル `device/android.rs` の `read_ble_string` を使う | `read_ble_string` を共通層へ上げてから（bluetooth-le と同時が自然） （第 11 束 #1331 で移した、§20） |
 | window-management | driver と OS 実装が `egui::Context`・`ViewportCommand` を直接使う（§1 の egui 固有の口） | `fandhe-runtime` にウィンドウ操作の egui 非依存の口を設計してから（口は #1326 で入った。§17） |
 | screen-orientation | driver が `EguiSenderExt::viewport_size` を使う | 同上（口は #1326 で入った。§17） |
 | launch-at-login | Windows 実装が未移行の `windows_compose_mail_sms::open_url` を使う（`open_url` は #1192 で `fandhe-platform-windows` へ上げた） | 再公開を共通層への参照に付け替えて移せる （第 8 束 #1193 で障害が解消。次の周で移せる）（第 9 束 #1329 で移した） |
@@ -332,7 +332,7 @@ device-identifier は第 1 束で移行済みで、本束では確かめただ�
 |------|------|--------------|
 | age-range | 全 OS が `possible` で実装も `impl` も無く、移すものが無い（game-center と同じ扱い） | 実装するときに最初から crate で作る |
 | background-upload | 未移行の iOS AppDelegate（`ios/fandhe_ios_url_scheme.m` の `handleEventsForBackgroundURLSession`）が転送先として `fandhe_apple_background_upload.m` に結びついている（background-download と同じ止まり方） | AppDelegate のイベントを配る口を設計した後、または url-scheme・background-download と同時に移す。口は #1325 で入った（§16） |
-| motion-raw-sensors | (1) Windows 実装が未移行の `windows_environment_sensors::ensure_minimize_watcher` を使い、ウォッチャー側も `windows_motion_raw_sensors::note_minimized` / `note_restored` を呼び返していて、双方向に結びついている。(2) iOS の `ios/fandhe_ios_motion_raw_sensors.m` が、未移行の tilt-motion の `ios/fandhe_ios_motion.m` が定義する共有の `CMMotionManager`（`fandhe_ios_shared_motion_manager` など）を extern で使う | (1) environment-sensors と同じ PR で移す。または最小化の通知を配る口を `fandhe-platform-windows` に置いてから。(2) tilt-motion・environment-sensors と同じ PR で移す。manager を `fandhe-platform-apple` へ上げると CoreMotion が全アプリにリンクされ、未選択機能の混入検査（#1178）の趣旨に反するため上げない |
+| motion-raw-sensors | (1) Windows 実装が未移行の `windows_environment_sensors::ensure_minimize_watcher` を使い、ウォッチャー側も `windows_motion_raw_sensors::note_minimized` / `note_restored` を呼び返していて、双方向に結びついている。(2) iOS の `ios/fandhe_ios_motion_raw_sensors.m` が、未移行の tilt-motion の `ios/fandhe_ios_motion.m` が定義する共有の `CMMotionManager`（`fandhe_ios_shared_motion_manager` など）を extern で使う | (1) environment-sensors と同じ PR で移す。または最小化の通知を配る口を `fandhe-platform-windows` に置いてから。(2) tilt-motion・environment-sensors と同じ PR で移す。manager を `fandhe-platform-apple` へ上げると CoreMotion が全アプリにリンクされ、未選択機能の混入検査（#1178）の趣旨に反するため上げない （第 11 束 #1331 で移した、§20） |
 ## 14. 第 6 束（#1191）で出た型と後回しの機能
 
 第 6 束（20 機能）のうち、sound-classification・companion-device・smart-home・eye-dropper・global-hotkey・
@@ -361,10 +361,10 @@ wifi-connect・volume-control・sleep-lock-events の 8 機能を移した。残
 | 機能 | 理由 | 解消の見込み |
 |------|------|--------------|
 | wallet-pass・cloud-kv-sync・cloud-db-sync | 全 OS が `possible` で実装も `impl` も無く、移すものが無い | 実装時に最初から crate で作る |
-| quick-settings-tile | macOS 実装が未移行の `macos_device_info::implementation()` で OS の版を読む。device-info は §9 で「quick-settings-tile の後」とされており、互いに待っている | device-info と同じ PR で 2 機能を移す（または OS の版の読み取りを `fandhe-platform-apple` へ上げる） |
-| alarm | Windows 実装が未移行の `windows_notification::{ensure_app_aumid, setting_result_for, APP_AUMID}` を使う | notification と同時に移すか、AUMID の登録を `fandhe-platform-windows` へ上げてから |
+| quick-settings-tile | macOS 実装が未移行の `macos_device_info::implementation()` で OS の版を読む。device-info は §9 で「quick-settings-tile の後」とされており、互いに待っている | device-info と同じ PR で 2 機能を移す（または OS の版の読み取りを `fandhe-platform-apple` へ上げる） （第 11 束 #1331 で移した、§20） |
+| alarm | Windows 実装が未移行の `windows_notification::{ensure_app_aumid, setting_result_for, APP_AUMID}` を使う | notification と同時に移すか、AUMID の登録を `fandhe-platform-windows` へ上げてから （第 11 束 #1331 で移した、§20） |
 | foldable-posture | Android の Helper が `onStart` / `onStop` に参加する。`FeatureLifecycleProvider` に Started / Stopped の口が無い | flashlight・capture-protection と同じ共通層の変更の後（第 9 束 #1329 で移した） |
-| ble-peripheral | Android の Helper が `onStop` に参加する（同上）。`reset_pending_tracking` と `device::shutdown` もある | Started / Stopped の口の後 |
+| ble-peripheral | Android の Helper が `onStop` に参加する（同上）。`reset_pending_tracking` と `device::shutdown` もある | Started / Stopped の口の後 （第 11 束 #1331 で移した、§20） |
 | health-data | `HealthPermissionsRationaleActivity` を指す `<activity-alias>` を、宣言の `ComponentKind`（activity / service / receiver / provider）で表せない | 宣言に activity-alias を足してから |
 | car-display | `<application>` 直下の `meta-data` 2 件を宣言で表せない（payment-request と同じ） | 宣言に application の meta-data を足してから |
 | deep-link | Android の振り分けが `MainActivity.deliverUrlIntent`（url-scheme の受け口）に埋まっている。`url_scheme::UrlInbox` も使う | url-scheme と同時に移す（Intent を配る口の設計が先）。口は #1325 で入った（§16） |
@@ -529,3 +529,27 @@ launch-at-login・camera-preview-stream）で、後回しにしていた障害�
 | iOS と macOS が同じ `.m` を共有する機能（camera-preview-stream） | `scaffold` の出力（`src/ios.rs`・`ios/*.m`）の名前のまま、mod の cfg は元の `any(target_os = "ios", target_os = "macos", test)`。`build.rs` は iOS と macOS で framework の組を分け、crate ルートの `deny(unsafe_code)` に macOS を足す。宣言は `ios` と `macos` の両方に書く |
 | `DeviceError` を使わない機能（in-app-browser・activity-recognition・camera-preview-stream） | `scaffold` が出した `error.rs` を消し、`lib.rs` の `mod error` と `pub use` も消す。使うバリアントが `Disabled` などだけ未写像になる機能（wifi-info）は、`error.rs` へ手で足して文言を固定するテストにも足す |
 | `scaffold` が出す edition 2024 の let チェーン警告 | `cargo clippy --fix --allow-dirty -p fandhe-cap-<id> --all-targets` が直す（Windows 実装は `--target x86_64-pc-windows-gnu` でも 1 度通す） |
+
+## 20. 第 11 束（#1331）で出た型
+
+第 11 束（tilt-motion・motion-raw-sensors・environment-sensors・compass-heading・bluetooth-le・bluetooth-classic・ble-peripheral・
+notification・alarm・device-info・quick-settings-tile・media-playback・now-playing-controls）で、互いの OS 実装を参照していて 1 機能ずつでは
+移せなかった 5 組・13 機能を移した。組ごとに結びつきを解いた。はじめて出た型と、その扱いは次のとおり。
+
+| 型 | 扱い |
+|----|------|
+| 双方向の結びつき（Windows の最小化ウォッチャー） | `fandhe-platform-windows::minimize` に「最小化の切り替わりを配る口」を新設した（`watch_minimize(listener)`）。ウォッチャーはプロセスに 1 本、受け口は登録順に呼び、一覧はロックの外へ写してから呼ぶ。登録した時点で最小化中なら `Minimized` を 1 回届ける。復元では受け口の後に `InvalidateRect` で 1 フレーム起こす。environment-sensors と motion-raw-sensors がそれぞれ自分の受け口を登録する（機能 crate 同士は依存しない） |
+| `.m` 同士の記号参照（tilt-motion → motion-raw-sensors、media-playback → now-playing-controls） | 参照される側の `.m` を持つ crate を、参照する側が iOS・macOS の target 依存で使う（他 OS へ宣言は入らない）。参照する側の Rust で依存先の公開関数を `const _: fn() = …` で実際に参照し、リンク対象から外れないようにする。`.m` の extern 宣言のコメントには依存先の crate 名を書く |
+| 他機能の OS 機能を使う Windows・macOS の依存（alarm → notification、quick-settings-tile → device-info） | `[target.'cfg(target_os = "windows")'.dependencies]` のように、使う OS だけに機能 crate 同士の依存を置く。依存先の crate が公開する入口（`ensure_app_aumid`・`platform_device_info()`）を使い、失敗は `From<…Error>` で種別ごと 1:1 に写す（表示文言と識別子は変えない）。`cargo fandhe` の到達判定は OS ごとに辺を採るため、他 OS へ依存先の宣言は入らない |
+| 2 つの機能 crate を組み合わせる effect（audio_play） | 2 crate は driver で依存させない。最終成果物（`fandhe-gallery` の `screens/registry.rs`）が `media_playback` → `now_playing` の順に呼ぶ関数を置く。media-playback だけを選ぶアプリに通知・MediaSession を持ち込まない |
+| 契約の一部だけが他機能の共有部品（compass・device-info・media-playback） | OS に触れない部品だけを `fandhe-device` の同名モジュールに最小限残し（compass は `WaitTracker`・`NO_READING_TIMEOUT_MS`、device-info は `clean_text`、media-playback は `demo_wav`・`demo_pcm`・`wav_bytes`・`SAMPLE_RATE`・`CLIP_SECONDS`）、機能 crate の `contract` から `pub use` で再公開する。残した部品のテストも一緒に残す |
+| 共有ファイルに埋まった Android 実装（bluetooth-le・notification・tilt-motion） | `MainActivity` のフィールド・リスナー・ランチャー・ラッパーと `device/android.rs` の JNI を、Helper（private コンストラクタ・`HELPERS`・static の入口）と `src/android.rs` へ切り出す。許可ランチャーの登録キーは従来の文字列のまま。非前景の判定は Lifecycle の `onHostResumed` / `onHostPaused` で持つ `foreground` で行う。JNI のエクスポート名は Helper のクラス名へ変わる |
+| `FeatureLifecycleProvider` の Resumed / Paused / Stopped と `super` の前後 | どれも `Activity.onXxx()` の中、つまり `super.onXxx()` の中で届く。従来の `MainActivity` は `super` に対する前後の別の位置で helper を呼んでいたため、前後だけが違う。Lifecycle クラスのコメントに書き、helper の状態が同じ経路（UI スレッド・`lock`）で冪等に決まることを確かめる |
+| feature `device` 無効ビルド向けの JNI no-op スタブ | `nativeOnMotionChanged`・`nativeOnForegroundChanged` のスタブを `fandhe-egui-proxy` の `android.rs` から `fandhe-gallery` の `lib.rs` へ移し、シンボル名を Helper のクラス名へ変える（cfg は `device` 無効のときだけ） |
+| 画面ゲート（tilt-motion の `ACTIVE_SCREEN_USES_TILT`） | `set_screen_active(bool)` として機能 crate が持ち、`fandhe-gallery` の `android_main` が起動画面の決定直後に設定する |
+| Swift の薄層と usage description（alarm・bluetooth 系） | alarm は `links = "fandhe_cap_alarm"` と `export_link_args()`、最終成果物の `build.rs` に `import_link_args("fandhe_cap_alarm")`。`NSAlarmKitUsageDescription`・`NSBluetoothAlwaysUsageDescription` は機能の宣言にキーだけを書き、文言は `fandhe-gallery` の `fandhe-app.<os>.usage-descriptions` に現行の Info.plist と同じ文を置く |
+| `ACCESS_FINE_LOCATION`（bluetooth-le・bluetooth-classic） | 現行 Manifest は属性なしの 1 行（ジオフェンス・Wi-Fi 情報が全 API レベルで使う）。`tests/gen.rs` が現行 Manifest との一致を求めるため、location の機能 crate が `main` に入るまでは属性なしで宣言する。実態は API 30 以下だけなので、`max-sdk = 30` への狭めは location の crate が入った後 |
+| `DeviceError` の写像（Disabled） | scaffold が拾わない `Disabled(&'static str)` を、使う機能 crate の失敗型へ手で足す（bluetooth-le・bluetooth-classic・notification・alarm）。表示文言は「端末側で機能が無効化されています: …」で固定し、テストにも足す |
+| `OsascriptNotifier`（notification） | 契約の trait と検証から OS 実装を分け、`src/macos.rs` へ移す。ホストの `cargo test` で純関数・子プロセスの挙動を検証できるよう、cfg は `any(target_os = "macos", test)` のまま |
+| `AlarmHelper` の起動 Intent | `MainActivity.class` を直接参照せず、`getLaunchIntentForPackage` を使う。取れなければ予約を作らず失敗にする |
+| 後回しの解消 | §9・§10・§11・§14 の後回し表のうち、device-info・now-playing-controls・compass-heading・environment-sensors・bluetooth-classic・motion-raw-sensors・quick-settings-tile・alarm・ble-peripheral を本束で移した。残りの notification・bluetooth-le・media-playback・tilt-motion は後回し表に載っていなかった機能 |

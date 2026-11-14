@@ -56,9 +56,6 @@ fn build() {
         return;
     }
 
-    // `ios/fandhe_ios_motion.m`（Issue #832、実センサ傾き）。
-    compile_objc("ios/fandhe_ios_motion.m", &["CoreMotion", "UIKit"]);
-
     // `ios/fandhe_ios_tts.m`（Issue #866、`AVSpeechSynthesizer` による読み上げ）。
     compile_objc("ios/fandhe_ios_tts.m", &["AVFoundation"]);
 
@@ -73,9 +70,6 @@ fn build() {
         "ios/fandhe_ios_photo_picker.m",
         &["ImageIO", "PhotosUI", "UIKit", "UniformTypeIdentifiers"],
     );
-
-    // `ios/fandhe_ios_notification.m`（通知）。
-    compile_objc("ios/fandhe_ios_notification.m", &["UserNotifications"]);
 
     compile_apple_location();
 
@@ -101,11 +95,6 @@ fn build() {
     // macOS 分岐と共用する。
     compile_apple_speech_recognition();
 
-    // `apple/fandhe_apple_bluetooth_le.m`（Issue #1060 macOS + #1061 iOS）も macOS 分岐と
-    // 共用する。
-    compile_apple_bluetooth_le();
-    // `apple/fandhe_apple_ble_peripheral.m`（Issue #778）。macOS・iOS 両分岐から呼ぶ。
-    compile_apple_ble_peripheral();
     // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。Network をリンクする。
     compile_apple_lan_discovery();
@@ -135,30 +124,18 @@ fn build() {
     compile_ios_screen_orientation();
     // `ios/fandhe_ios_print.m`（Issue #327）。iOS 分岐のみ。
     compile_ios_print();
-    // `ios/fandhe_ios_device_info.m`（Issue #1305）。iOS 分岐のみ。
-    compile_ios_device_info();
     // `ios/fandhe_ios_safe_area_insets.m`（Issue #445）。iOS 分岐のみ。
     compile_ios_safe_area_insets();
     // `ios/fandhe_ios_music_library.m`（Issue #484）。iOS 分岐のみ。
     compile_ios_music_library();
     // `ios/fandhe_ios_health_data.m`（Issue #1090）。iOS 分岐のみ（macOS は対応表で n-a）。
     compile_ios_health_data();
-    // `ios/fandhe_ios_compass.m`（Issue #1405）。iOS 分岐のみ（macOS は対応表で no）。
-    compile_ios_compass();
-    // `ios/fandhe_ios_environment_sensors.m`（Issue #610）。iOS 分岐のみ（macOS は対応表で no）。
-    compile_ios_environment_sensors();
-    // `ios/fandhe_ios_motion_raw_sensors.m`（Issue #900）。iOS 分岐のみ（macOS は対応表で no）。
-    compile_ios_motion_raw_sensors();
     // `ios/fandhe_ios_pen_stylus.m`（Issue #356）。iOS 分岐のみ。
     compile_ios_pen_stylus();
-    // `ios/fandhe_ios_alarm.swift`（Issue #1077）。iOS 分岐のみ。AlarmKit を弱リンクする。
-    compile_ios_alarm();
     // `ios/fandhe_ios_web_auth_session.m`（Issue #532）。iOS 分岐のみ。
     compile_ios_web_auth_session();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
     compile_apple_network_status();
-    // `apple/fandhe_apple_media_playback.m`（Issue #267）。macOS と iOS（親 #86 の b-ios）で共用する。
-    compile_apple_media_playback();
     // `apple/fandhe_apple_picture_in_picture.m`（Issue #365）。macOS 分岐と共用する。AVKit を使う。
     compile_apple_picture_in_picture();
     // `apple/fandhe_apple_background_download.m`（Issue #390）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
@@ -167,8 +144,6 @@ fn build() {
     compile_apple_background_upload();
     // `apple/fandhe_apple_file_association.m`（Issue #416）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
     compile_apple_file_association();
-    // `apple/fandhe_apple_now_playing.m`（Issue #381 macOS + #382 iOS）。macOS 分岐と共用する。MediaPlayer を使う。
-    compile_apple_now_playing();
 }
 
 /// `apple/fandhe_apple_location.m` を `cc` でコンパイルし CoreLocation をリンクする
@@ -294,47 +269,11 @@ fn compile_apple_translation() {
     });
 }
 
-/// アラーム・正確な時刻の予約の Swift 薄層 `ios/fandhe_ios_alarm.swift`（Issue #1077）。
-/// AlarmKit（iOS 26 以降）を弱リンクする。iOS 分岐のみから呼ぶ（`src/device/ios_alarm.rs` が使う）。
-fn compile_ios_alarm() {
-    compile_swift(&SwiftLib {
-        srcs: &["ios/fandhe_ios_alarm.swift"],
-        lib: "fandhe_ios_alarm",
-        module: "FandheIosAlarmBridge",
-        framework: "AlarmKit",
-        weak: true,
-        require_env: "FANDHE_REQUIRE_ALARM",
-        tag: "alarm",
-    });
-}
-
 /// （Issue #1282 macOS、#1283 iOS 共用）。
 fn compile_apple_network_status() {
     compile_objc(
         "apple/fandhe_apple_network_status.m",
         &["Foundation", "Network"],
-    );
-}
-
-/// `apple/fandhe_apple_ble_peripheral.m` を `cc` でコンパイルし CoreBluetooth をリンクする
-/// （Issue #778 macOS。iOS は #779 で委譲済み）。iOS・macOS 双方の feature `device` 分岐から呼ぶ。
-fn compile_apple_ble_peripheral() {
-    compile_objc(
-        "apple/fandhe_apple_ble_peripheral.m",
-        if target_is_ios() {
-            &["CoreBluetooth", "Foundation", "UIKit"]
-        } else {
-            &["CoreBluetooth", "Foundation"]
-        },
-    );
-}
-
-/// `apple/fandhe_apple_bluetooth_le.m` を `cc` でコンパイルし CoreBluetooth をリンクする
-/// （Issue #1060 macOS + #1061 iOS）。iOS・macOS 双方の feature `device` 分岐から呼ぶ。
-fn compile_apple_bluetooth_le() {
-    compile_objc(
-        "apple/fandhe_apple_bluetooth_le.m",
-        &["CoreBluetooth", "Foundation"],
     );
 }
 
@@ -423,19 +362,6 @@ fn compile_apple_file_association() {
     );
 }
 
-/// `apple/fandhe_apple_media_playback.m` を `cc` でコンパイルする（Issue #267）。
-/// iOS・macOS 双方の分岐から呼ばれる（`src/device/apple_media_playback.rs` が使う。iOS は親 #86 の b-ios）。
-fn compile_apple_media_playback() {
-    compile_objc(
-        "apple/fandhe_apple_media_playback.m",
-        if target_is_ios() {
-            &["AVFoundation", "Foundation", "UIKit"]
-        } else {
-            &["AVFoundation", "Foundation"]
-        },
-    );
-}
-
 /// `apple/fandhe_apple_picture_in_picture.m` を `cc` でコンパイルし AVKit・CoreMedia・CoreVideo・QuartzCore をリンクする（Issue #364 macOS + #365 iOS）。
 /// iOS・macOS 双方の分岐から呼ばれる（`src/device/apple_picture_in_picture.rs` が使う）。
 /// macOS 12.0+ / iOS 15.0+ の API は `.m` 側の `@available` で守る。
@@ -451,19 +377,6 @@ fn compile_apple_picture_in_picture() {
             "Foundation",
             "QuartzCore",
         ],
-    );
-}
-
-/// `apple/fandhe_apple_now_playing.m` を `cc` でコンパイルし MediaPlayer をリンクする（Issue #381 macOS）。
-/// macOS・iOS 双方の分岐から呼ばれる（`src/device/apple_now_playing.rs` が使う）。iOS（#382）も同じ `.m` を使う。
-fn compile_apple_now_playing() {
-    compile_objc(
-        "apple/fandhe_apple_now_playing.m",
-        if target_is_ios() {
-            &["Foundation", "MediaPlayer", "UIKit"]
-        } else {
-            &["Foundation", "MediaPlayer"]
-        },
     );
 }
 
@@ -485,25 +398,10 @@ fn compile_macos_web_auth_session() {
     );
 }
 
-/// `macos/fandhe_macos_bluetooth_classic.m` を `cc` でコンパイルし IOBluetooth・CoreBluetooth をリンクする
-/// （Issue #659）。**macOS 分岐のみ**から呼ばれる（`src/device/macos_bluetooth_classic.rs` が使う）。
-fn compile_macos_bluetooth_classic() {
-    compile_objc(
-        "macos/fandhe_macos_bluetooth_classic.m",
-        &["CoreBluetooth", "Foundation", "IOBluetooth"],
-    );
-}
-
 /// `macos/fandhe_macos_print.m` を `cc` でコンパイルする（Issue #325）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_print.rs` が使う）。
 fn compile_macos_print() {
     compile_objc("macos/fandhe_macos_print.m", &["AppKit"]);
-}
-
-/// `macos/fandhe_macos_device_info.m` を `cc` でコンパイルする（Issue #1304）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_device_info.rs` が使う）。
-fn compile_macos_device_info() {
-    compile_objc("macos/fandhe_macos_device_info.m", &["Foundation"]);
 }
 
 /// `macos/fandhe_macos_window_management.m` を `cc` でコンパイルする（Issue #636）。
@@ -572,43 +470,10 @@ fn compile_ios_print() {
     compile_objc("ios/fandhe_ios_print.m", &["UIKit"]);
 }
 
-/// `ios/fandhe_ios_device_info.m` を `cc` でコンパイルする（Issue #1305）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_device_info.rs` が使う）。
-fn compile_ios_device_info() {
-    compile_objc("ios/fandhe_ios_device_info.m", &["Foundation"]);
-}
-
 /// `ios/fandhe_ios_safe_area_insets.m` を `cc` でコンパイルする（Issue #445）。
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_safe_area_insets.rs` が使う）。
 fn compile_ios_safe_area_insets() {
     compile_objc("ios/fandhe_ios_safe_area_insets.m", &["UIKit"]);
-}
-
-/// `ios/fandhe_ios_compass.m` を `cc` でコンパイルする（Issue #1405）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_compass.rs` が使う）。
-fn compile_ios_compass() {
-    compile_objc(
-        "ios/fandhe_ios_compass.m",
-        &["CoreLocation", "Foundation", "UIKit"],
-    );
-}
-
-/// `ios/fandhe_ios_environment_sensors.m` を `cc` でコンパイルする（Issue #610）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_environment_sensors.rs` が使う）。
-fn compile_ios_environment_sensors() {
-    compile_objc(
-        "ios/fandhe_ios_environment_sensors.m",
-        &["CoreMotion", "Foundation", "UIKit"],
-    );
-}
-
-/// `ios/fandhe_ios_motion_raw_sensors.m` を `cc` でコンパイルする（Issue #900）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_motion_raw_sensors.rs` が使う）。
-fn compile_ios_motion_raw_sensors() {
-    compile_objc(
-        "ios/fandhe_ios_motion_raw_sensors.m",
-        &["CoreMotion", "UIKit"],
-    );
 }
 
 /// `ios/fandhe_ios_pen_stylus.m` を `cc` でコンパイルする（Issue #356）。
@@ -652,10 +517,6 @@ fn build_macos() {
     // iOS 分岐と共用する。
     compile_apple_speech_recognition();
 
-    // `apple/fandhe_apple_bluetooth_le.m`（Issue #1060 macOS + #1061 iOS）も共用する。
-    compile_apple_bluetooth_le();
-    // `apple/fandhe_apple_ble_peripheral.m`（Issue #778）。macOS・iOS 両分岐から呼ぶ。
-    compile_apple_ble_peripheral();
     // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。Network をリンクする。
     compile_apple_lan_discovery();
@@ -677,16 +538,12 @@ fn build_macos() {
     compile_macos_url_scheme();
     // `macos/fandhe_macos_app_shortcuts.m`（Issue #424）も macOS 専用。
     compile_macos_app_shortcuts();
-    // `macos/fandhe_macos_device_info.m`（Issue #1304）も macOS 専用。
-    compile_macos_device_info();
     // `macos/fandhe_macos_safe_area_insets.m`（Issue #444）も macOS 専用。
     compile_macos_safe_area_insets();
     // `macos/fandhe_macos_window_management.m`（Issue #636）も macOS 専用。
     compile_macos_window_management();
     // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。
     compile_macos_print();
-    // `apple/fandhe_apple_media_playback.m`（Issue #267）。iOS 分岐と共用する。
-    compile_apple_media_playback();
     // `apple/fandhe_apple_picture_in_picture.m`（Issue #364 macOS + #365 iOS）。iOS 分岐と共用する。AVKit を使う。
     compile_apple_picture_in_picture();
     // `apple/fandhe_apple_background_download.m`（Issue #390）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
@@ -695,14 +552,10 @@ fn build_macos() {
     compile_apple_background_upload();
     // `apple/fandhe_apple_file_association.m`（Issue #416）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
     compile_apple_file_association();
-    // `apple/fandhe_apple_now_playing.m`（Issue #381）。iOS 分岐と共用する。MediaPlayer を使う。
-    compile_apple_now_playing();
     // `macos/fandhe_macos_music_library.m`（Issue #482）も macOS 専用。iTunesLibrary を使う。
     compile_macos_music_library();
     // `macos/fandhe_macos_web_auth_session.m`（Issue #530）も macOS 専用。AuthenticationServices を使う。
     compile_macos_web_auth_session();
-    // `macos/fandhe_macos_bluetooth_classic.m`（Issue #659）も macOS 専用。IOBluetooth を使う。
-    compile_macos_bluetooth_classic();
     compile_macos_pen_stylus();
 
     // 素の実行体（`fandhe-gallery` の bin）へ `macos/Info.plist`

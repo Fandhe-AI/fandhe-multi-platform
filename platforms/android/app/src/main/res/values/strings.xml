@@ -3,13 +3,6 @@
      AndroidManifest.xml の android:label が参照する。 -->
 <resources>
     <string name="app_name">Fandhe</string>
-    <!-- ローカル通知（Issue #1006）の通知チャンネル表示名（システム設定 > アプリ >
-         通知 に出る名前）。切り離し時に削除する。 -->
-    <string name="notification_channel_name">通知</string>
-    <string name="now_playing_channel_name">再生中</string>
-    <!-- クイック設定タイル（Issue #720）の表示名。fandhe_core の
-         `screens::quick_settings_tile_show::TILE_LABEL` と一致させる。切り離し時に削除する。 -->
-    <string name="quick_settings_tile_label">Fandhe カウント</string>
     <!-- 管理アプリ設定（Issue #946）の制限スキーマの表示名。`res/xml/app_restrictions.xml` から参照する。
          キーは `fandhe_cap_managed_app_config` の固定 3 キーと一致させる。切り離し時に削除する。 -->
     <string name="restriction_sample_bool">サンプル（真偽）</string>
@@ -18,10 +11,6 @@
     <!-- ファイル画面に出る保存先の表示名（Issue #1020）。`fandhe_core::screens::file_provider_show::ROOT_TITLE`
          と一致させる。切り離し時に削除する。 -->
     <string name="file_provider_root_title">Fandhe（この端末内のみ）</string>
-    <!-- アラーム（Issue #1078）の通知チャンネル名と通知文。切り離し時に削除する。 -->
-    <string name="alarm_channel_name">アラーム</string>
-    <string name="alarm_notification_title">Fandhe のアラーム</string>
-    <string name="alarm_notification_text">予約した時刻になりました</string>
     <!-- 車載ディスプレイ（Issue #1117）の固定文言。見出し・行の title・未設定時の表示。切り離し時に削除する。 -->
     <string name="car_display_title">Fandhe</string>
     <string name="car_display_row_title">メッセージ</string>

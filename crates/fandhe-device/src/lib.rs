@@ -17,8 +17,6 @@
 //! #745 の API が確定してから #747〜#749 側で行う。
 #![forbid(unsafe_code)]
 
-/// Phase 11（端末機能の拡充ループ、親 #140、Issue #721）: アラーム・正確な時刻の予約（Windows 実装、他 OS は `Unsupported` 固定）。
-pub mod alarm;
 /// Phase 11（端末機能の拡充ループ、親 #101、Issue #424）: アプリショートカット（長押し・ジャンプリスト・Dock メニュー）の登録。
 pub mod app_shortcuts;
 /// Phase 11（端末機能の拡充ループ、親 #121、Issue #585）: ワンタイムコード（OTP）の自動入力のヒント。
@@ -33,12 +31,6 @@ pub mod background_upload;
 pub mod barcode_scan;
 /// Phase 11（端末機能の拡充ループ、親 #905、Issue #906）: 生体認証。
 pub mod biometric_auth;
-/// Phase 11（端末機能の拡充ループ、親 #164、Issue #778）: BLE の周辺機器役（アドバタイズ・読み取り専用の GATT サーバー）。
-pub mod ble_peripheral;
-/// Phase 11（端末機能の拡充ループ、親 #130、Issue #659）: Bluetooth Classic の機器一覧と検索。
-pub mod bluetooth_classic;
-/// Phase 11（端末機能の拡充ループ）: Bluetooth LE の周辺機器スキャン。
-pub mod bluetooth_le;
 /// カメラのライブ映像の縮小の部品（`downscale_packed`・`downscale_yuv420`・`preview_size`）だけ。`fandhe-cap-ar` と
 /// `fandhe-web-dom` が共有する純関数で、機能の契約は `fandhe-cap-camera-preview-stream` が持つ（Issue #812 / #1329、
 /// consumer-app-structure.md §8）。
@@ -55,8 +47,6 @@ pub mod deep_link;
 pub mod device_info;
 /// Phase 11（端末機能の拡充ループ、親 #1013、Issue #1014）: ドラッグ & ドロップ受け取り。
 pub mod drag_drop;
-/// Phase 11（端末機能の拡充ループ、親 #123、Issue #609）: 気圧・照度・近接センサー。
-pub mod environment_sensors;
 /// Phase 11（端末機能の拡充ループ、親 #148、Issue #762）: 画面のスポイト（画面上の 1 点の色を `#rrggbb` で返す）。
 pub mod eye_dropper;
 /// Phase 11（端末機能の拡充ループ、親 #102、Issue #416）: ファイルの関連付け（OS から渡されたファイルを開く）。
@@ -86,17 +76,10 @@ pub mod media_playback;
 pub mod media_transcode;
 /// Phase 11（端末機能の拡充ループ、親 #953、Issue #954）: マイク録音。
 pub mod mic_record;
-pub mod motion;
-/// Phase 11（端末機能の拡充ループ、親 #180、Issue #898）: ジャイロ・磁気・線形加速度の生値。
-pub mod motion_raw_sensors;
 /// Phase 11（端末機能の拡充ループ、親 #108、Issue #482）: 音楽ライブラリ（曲のタイトルとアーティストの先頭 20 件）。
 pub mod music_library;
 /// Phase 11（端末機能の拡充ループ、親 #1130、Issue #1282）: ネットワーク接続状態（有無・種別・従量制）。
 pub mod network_status;
-/// Phase 11（端末機能の拡充ループ、親 #1003、Issue #1004）: ローカル通知。
-pub mod notification;
-/// Phase 11（端末機能の拡充ループ、親 #98、Issue #381）: ロック画面・OS のメディア操作（再生中の表示と再生・一時停止の受け取り）。
-pub mod now_playing;
 /// Issue #1188: base64url の共有部品（パスキー本体は機能 crate `fandhe-cap-passkey-signin`）。
 pub mod passkey;
 /// Phase 11（端末機能の拡充ループ、親 #114、Issue #541）: 物・サービスの決済シート（Google Pay TEST 環境、課金なし）。
@@ -111,8 +94,6 @@ pub mod photo_picker;
 pub mod picture_in_picture;
 /// Phase 11（端末機能の拡充ループ、親 #94、Issue #325）: 印刷ダイアログを開く。
 pub mod print;
-/// Phase 11（端末機能の拡充ループ、親 #139、Issue #719）: クイック設定タイル・コントロール（押された回数の読み出し）。
-pub mod quick_settings_tile;
 /// Phase 11（端末機能の拡充ループ、親 #105、Issue #444）: セーフエリア・ディスプレイ切り欠き。
 pub mod safe_area_insets;
 /// Phase 11（端末機能の拡充ループ、親 #128、Issue #655）: 画面向きの取得・固定。

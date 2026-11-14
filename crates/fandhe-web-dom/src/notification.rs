@@ -6,7 +6,7 @@
 //!
 //! Web は `fandhe-device` の `Notifier` トレイトを通らない（`share.rs`/`tts.rs` と同じ
 //! 理由。`fandhe-egui-proxy` の feature `device` は wasm32 に依存を持ち込まない設計）。
-//! 入力検証だけは [`fandhe_device::notification::NotificationRequest::new`] を共有する
+//! 入力検証だけは [`fandhe_cap_notification::NotificationRequest::new`] を共有する
 //! （`share.rs::ShareRequest::new` と同じ検証の SSOT 方針）。
 //!
 //! # 権限状態ごとの流れ（対応表 `docs/device/capabilities/notification.json` の web 欄と対）
@@ -47,8 +47,8 @@
 //! タイトル・本文・例外の `message` は console にも画面にも出さない
 //! （security.md A09。エラーは例外の `name` のみを見て固定文言へ畳む）。
 
+use fandhe_cap_notification::NotificationError;
 use fandhe_core::screens::notification_send::NotifyOutcome;
-use fandhe_device::DeviceError;
 
 /// 非対応ブラウザ・secure context 外・`Notification` 未定義時の案内。
 /// native ビルドでは `mod web`（唯一の呼び出し元）が存在しないため未使用警告が出る
@@ -67,11 +67,11 @@ pub(crate) fn outcome_from_permission(value: &str) -> Option<Result<NotifyOutcom
     match value {
         "granted" => None,
         "denied" => Some(Err(
-            DeviceError::PermissionDenied("notification").to_string()
+            NotificationError::PermissionDenied("notification").to_string()
         )),
         "default" => Some(Ok(NotifyOutcome::Cancelled)),
         _ => Some(Err(
-            DeviceError::Internal("notification permission").to_string()
+            NotificationError::Internal("notification permission").to_string()
         )),
     }
 }
@@ -87,17 +87,17 @@ pub(crate) fn error_from_construct_name(name: Option<&str>) -> String {
         // Chrome Android 等、対応していない環境での `new Notification` は
         // `TypeError: Illegal constructor` を投げる。
         Some("TypeError") => UNAVAILABLE.to_string(),
-        _ => DeviceError::Internal("notification show").to_string(),
+        _ => NotificationError::Internal("notification show").to_string(),
     }
 }
 
 #[cfg(target_arch = "wasm32")]
 mod web {
+    use fandhe_cap_notification::NotificationError;
+    use fandhe_cap_notification::NotificationRequest;
     use fandhe_core::screens::notification_send::{
         finish_notify, mark_sending, take_request, NotificationSendState, NotifyOutcome,
     };
-    use fandhe_device::notification::NotificationRequest;
-    use fandhe_device::DeviceError;
     use js_sys::Reflect;
     use wasm_bindgen::JsValue;
     use wasm_bindgen_futures::JsFuture;
@@ -160,7 +160,7 @@ mod web {
         applier.apply(mark_sending);
         let generation = request.generation;
 
-        // 入力検証は `fandhe_device::notification::NotificationRequest` の SSOT に
+        // 入力検証は `fandhe_cap_notification::NotificationRequest` の SSOT に
         // 一本化する（モジュール doc参照）。
         let parsed = match NotificationRequest::new(&request.title, &request.body) {
             Ok(parsed) => parsed,
@@ -193,7 +193,7 @@ mod web {
             }
             "denied" => {
                 // 拒否済みは再ダイアログを出せない（ブラウザ仕様）。
-                let result = Err(DeviceError::PermissionDenied("notification").to_string());
+                let result = Err(NotificationError::PermissionDenied("notification").to_string());
                 applier.apply(move |s| finish_notify(s, generation, result));
             }
             _ => {
@@ -207,7 +207,8 @@ mod web {
                             finish_notify(
                                 s,
                                 generation,
-                                Err(DeviceError::Internal("notification permission").to_string()),
+                                Err(NotificationError::Internal("notification permission")
+                                    .to_string()),
                             )
                         });
                         return;
@@ -233,7 +234,9 @@ mod web {
                                 Some(result) => result,
                             }
                         }
-                        Err(_) => Err(DeviceError::Internal("notification permission").to_string()),
+                        Err(_) => {
+                            Err(NotificationError::Internal("notification permission").to_string())
+                        }
                     };
                     applier.apply(move |s| finish_notify(s, generation, result));
                 });
@@ -260,7 +263,7 @@ mod tests {
         assert_eq!(
             outcome,
             Some(Err(
-                DeviceError::PermissionDenied("notification").to_string()
+                NotificationError::PermissionDenied("notification").to_string()
             ))
         );
     }
@@ -278,7 +281,7 @@ mod tests {
         assert_eq!(
             outcome_from_permission("prompt"),
             Some(Err(
-                DeviceError::Internal("notification permission").to_string()
+                NotificationError::Internal("notification permission").to_string()
             ))
         );
     }
@@ -292,11 +295,11 @@ mod tests {
     fn unknown_or_missing_name_on_show_is_generic_failure() {
         assert_eq!(
             error_from_construct_name(None),
-            DeviceError::Internal("notification show").to_string()
+            NotificationError::Internal("notification show").to_string()
         );
         assert_eq!(
             error_from_construct_name(Some("SomethingElse")),
-            DeviceError::Internal("notification show").to_string()
+            NotificationError::Internal("notification show").to_string()
         );
     }
 }

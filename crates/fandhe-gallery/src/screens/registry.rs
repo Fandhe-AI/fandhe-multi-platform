@@ -16,6 +16,19 @@
 //! `generated_screens!` doc 参照、Issue #747）を使う。状態駆動 + 端末 I/O 起動を伴う
 //! 画面（HTTP 取得・カメラ撮影等）は `effect` 区画（同 doc 参照、Issue #748/#749）を使う。
 
+/// `audio_play` 画面の effect。再生（`fandhe-cap-media-playback`）の後で OS のメディア操作
+/// （`fandhe-cap-now-playing-controls`）へ曲名と状態を渡し、OS から来た操作を画面へ返す。
+/// 2 機能の crate は互いに依存させない（media-playback だけを選ぶアプリに通知・MediaSession を持ち込まないため）。
+/// 合成は最終成果物の責務で、ここに置く。
+#[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+fn audio_play_effect(
+    state: &fandhe_core::screens::audio_play::AudioPlayState,
+    sender: &fandhe_runtime::CompletionSender<fandhe_core::screens::audio_play::AudioPlayState>,
+) {
+    fandhe_cap_media_playback::audio_play_effect(state, sender);
+    fandhe_cap_now_playing_controls::sync_audio_play(state, sender);
+}
+
 generated_screens! {
     "schema_example" => fandhe_core::screens::schema_example_fixture::todo_screen,
     "form" => fandhe_core::screens::form::form_screen,
@@ -39,7 +52,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "tilt_ball" => fandhe_core::screens::tilt_ball::current_screen,
-    fandhe_egui_proxy::device::tilt::tilt_ball_effect,
+    fandhe_cap_tilt_motion::tilt_ball_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "clipboard_text" => fandhe_core::screens::clipboard_text::current_screen,
@@ -91,7 +104,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "alarm_show" => fandhe_core::screens::alarm_show::current_screen,
-    fandhe_egui_proxy::device::alarm::alarm_show_effect,
+    fandhe_cap_alarm::alarm_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "launch_at_login_show" => fandhe_core::screens::launch_at_login_show::current_screen,
@@ -119,7 +132,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ble_peripheral" => fandhe_core::screens::ble_peripheral::current_screen,
-    fandhe_egui_proxy::device::ble_peripheral::ble_peripheral_effect,
+    fandhe_cap_ble_peripheral::ble_peripheral_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "global_hotkey" => fandhe_core::screens::global_hotkey::current_screen,
@@ -203,7 +216,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "notification_send" => fandhe_core::screens::notification_send::current_screen,
-    fandhe_egui_proxy::device::notification::notification_send_effect,
+    fandhe_cap_notification::notification_send_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "drag_drop" => fandhe_core::screens::drag_drop::current_screen,
@@ -235,11 +248,11 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ble_scan" => fandhe_core::screens::ble_scan::current_screen,
-    fandhe_egui_proxy::device::bluetooth_le::ble_scan_effect,
+    fandhe_cap_bluetooth_le::ble_scan_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "bluetooth_classic_show" => fandhe_core::screens::bluetooth_classic_show::current_screen,
-    fandhe_egui_proxy::device::bluetooth_classic::bluetooth_classic_show_effect,
+    fandhe_cap_bluetooth_classic::bluetooth_classic_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "lan_discover" => fandhe_core::screens::lan_discover::current_screen,
@@ -271,7 +284,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "audio_play" => fandhe_core::screens::audio_play::current_screen,
-    fandhe_egui_proxy::device::media_playback::audio_play_effect,
+    audio_play_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "background_download" => fandhe_core::screens::background_download::current_screen,
@@ -339,7 +352,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "device_info_show" => fandhe_core::screens::device_info_show::current_screen,
-    fandhe_egui_proxy::device::device_info::device_info_show_effect,
+    fandhe_cap_device_info::device_info_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "device_identifier_show" => fandhe_core::screens::device_identifier_show::current_screen,
@@ -383,15 +396,15 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "compass_show" => fandhe_core::screens::compass_show::current_screen,
-    fandhe_egui_proxy::device::compass::compass_show_effect,
+    fandhe_cap_compass_heading::compass_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "environment_sensors_show" => fandhe_core::screens::environment_sensors_show::current_screen,
-    fandhe_egui_proxy::device::environment_sensors::environment_sensors_show_effect,
+    fandhe_cap_environment_sensors::environment_sensors_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "motion_raw_sensors_show" => fandhe_core::screens::motion_raw_sensors_show::current_screen,
-    fandhe_egui_proxy::device::motion_raw_sensors::motion_raw_sensors_show_effect,
+    fandhe_cap_motion_raw_sensors::motion_raw_sensors_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "activity_recognition_show" => fandhe_core::screens::activity_recognition_show::current_screen,
@@ -559,7 +572,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "quick_settings_tile_show" => fandhe_core::screens::quick_settings_tile_show::current_screen,
-    fandhe_egui_proxy::device::quick_settings_tile::quick_settings_tile_show_effect,
+    fandhe_cap_quick_settings_tile::quick_settings_tile_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "share_receive_show" => fandhe_core::screens::share_receive_show::current_screen,

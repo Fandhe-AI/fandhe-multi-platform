@@ -138,6 +138,44 @@ extern "system" fn Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadKey(
 ) {
 }
 
+/// `device` feature 無効ビルド向けの `nativeOnMotionChanged` no-op フォールバック（Issue #831）。
+/// `TiltMotionLifecycle`（#1331）は feature を知らず、`TiltMotionHelper` は feature 構成に関わらず常にセンサを登録して
+/// `nativeOnMotionChanged` を呼ぶため、実体を持つ `fandhe-cap-tilt-motion`（`device` 有効時のみ依存）が無いと初回センサ通知時に
+/// `UnsatisfiedLinkError` でクラッシュする。値を捨てるだけの no-op にして落ちないようにする。実体との二重定義を避けるため
+/// cfg は `device` 無効のときだけ。署名は Java 宣言・実体と一致（`(float, float, int) -> void`）。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、シンボル名は JNI 命名規約上の固定名。
+#[cfg(all(target_os = "android", not(feature = "device")))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_TiltMotionHelper_nativeOnMotionChanged(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _x: f32,
+    _y: f32,
+    _rotation: i32,
+) {
+}
+
+/// `device` feature 無効ビルド向けの `nativeOnForegroundChanged` no-op フォールバック（Issue #611）。
+/// `EnvironmentSensorsLifecycle`（#1331）は feature を知らず、`EnvironmentSensorsHelper.onPause` / `onResume` は
+/// 背景遷移を無条件に通知するため、実体を持つ `fandhe-cap-environment-sensors`（`device` 有効時のみ依存）が無いと
+/// `UnsatisfiedLinkError` になる。実体との二重定義を避けるため cfg は `device` 無効のときだけ。署名は Java 宣言・実体と一致
+/// （`(boolean) -> void`、`(Z)V`）。引数は `jni::sys::jboolean`（= `u8`）と ABI が同じ `u8` で受ける。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、シンボル名は JNI 命名規約上の固定名。
+#[cfg(all(target_os = "android", not(feature = "device")))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_EnvironmentSensorsHelper_nativeOnForegroundChanged(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _foreground: u8,
+) {
+}
+
 /// Android アプリのエントリポイント（計測専用ビルド）。
 ///
 /// `android-activity`（GameActivity 方式）がライブラリロード後にこのシンボル名を検索して呼ぶ
@@ -261,6 +299,27 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // カメラのライブ映像も同様。画面状態が generation 0 に戻るため、動いたままのセッションを止めて `ACTIVE` を解放する（`fandhe_cap_camera_preview_stream::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_camera_preview_stream::reset_pending_tracking();
+    // ローカル通知の保留中の要求も破棄する。`bridge::SLOT` はプロセス static のため再生成をまたいで残り、画面状態は `Idle` で
+    // 作り直されるため、再生成前に開始した権限確認が後から完了しても黙って失われる（`fandhe_cap_notification::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_notification::reset_pending_tracking();
+    // BLE スキャンの保留中の要求と観測バッファも同様に破棄する（`fandhe_cap_bluetooth_le::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_bluetooth_le::reset_pending_tracking();
+    // Android の BLE 周辺機器役の通知先も破棄する（`fandhe_cap_ble_peripheral::reset_pending_tracking` の doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_ble_peripheral::reset_pending_tracking();
+    // Bluetooth Classic の保留中の要求と観測バッファも同様に破棄する（`fandhe_cap_bluetooth_classic::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_bluetooth_classic::reset_pending_tracking();
+    // 音声再生も同様。画面状態が generation 0 に戻るため、処理済み世代を捨て再生を止める
+    // （`fandhe_cap_media_playback::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_media_playback::reset_pending_tracking();
+    // ロック画面・OS のメディア操作も同様。受付を止めて表示を取り下げ、記録を捨てる
+    // （`fandhe_cap_now_playing_controls::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_now_playing_controls::reset_pending_tracking();
     // アプリ内ブラウザの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない。`fandhe_cap_in_app_browser::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_in_app_browser::reset_pending_tracking();
@@ -274,6 +333,7 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     {
         let name = fandhe_egui_proxy::android::requested_app_name();
         fandhe_cap_gamepad::set_screen_active(name == "gamepad_show");
+        fandhe_cap_tilt_motion::set_screen_active(name == "tilt_ball");
         fandhe_cap_drag_drop::set_screen_active(name == "drag_drop");
     }
     // 終了時の解放処理を描画層へ登録する（再生成で再実行されても 2 回目以降は無視される）。
@@ -294,6 +354,15 @@ pub fn register_teardown_hooks() {
 #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
 fn shutdown() {
     fandhe_egui_proxy::device::shutdown();
+    // 再生（media-playback）→ OS のメディア操作（now-playing-controls）の順に止め、どちらも audio_session より前に置く。
+    fandhe_cap_media_playback::shutdown();
+    fandhe_cap_now_playing_controls::shutdown();
+    fandhe_cap_bluetooth_le::stop_shared_scan();
+    // 公開の停止は `.m` の専用キューへの短い同期呼び出し。Rust 側のロックは握らない。
+    fandhe_cap_ble_peripheral::shutdown();
+    // macOS の停止は main queue へ同期ディスパッチする。`shutdown` は eframe の `on_exit`（main thread）からロックを握らずに呼ばれるため、
+    // main 上なら直接停止し、デッドロックしない。
+    fandhe_cap_bluetooth_classic::stop_shared_discovery();
     fandhe_cap_system_tray::stop_shared_system_tray();
     fandhe_cap_global_hotkey::shutdown();
     fandhe_cap_midi::shutdown();

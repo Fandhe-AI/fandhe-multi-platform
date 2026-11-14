@@ -28,27 +28,6 @@ pub use winit::platform::android::activity::AndroidApp;
 /// （Issue #1166）。呼び出し側のパス `crate::android::android_app` を保つ再公開。
 pub(crate) use fandhe_platform_android::{android_app, set_android_app};
 
-/// 現在表示中の画面が傾き（`tilt_ball`）を使うかどうか（codex-review 指摘 P2、Issue #831）。
-/// `Java` 側の `motionListener` は画面に関わらず常にセンサを登録して通知するため、
-/// 素直に毎回 `request_repaint` すると傾きを使わない画面でも `SENSOR_DELAY_GAME` の
-/// 頻度で再描画要求が発生し不要な電力消費になる。`android_main` の起動時（`FANDHE_PROXY_APP`
-/// で決まる画面は `Activity` 生存中は変わらない、`screens.rs` の `selected_app_name` 契約）
-/// に 1 度だけ設定し、[`crate::device::android`] のセンサ JNI エクスポートが
-/// `request_repaint` 呼び出し前にここを見て要否を判定する。
-static ACTIVE_SCREEN_USES_TILT: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
-
-/// [`ACTIVE_SCREEN_USES_TILT`] を差し替える。`android_main` が起動画面を決定した直後に呼ぶ。
-pub(crate) fn set_active_screen_uses_tilt(uses_tilt: bool) {
-    ACTIVE_SCREEN_USES_TILT.store(uses_tilt, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// [`ACTIVE_SCREEN_USES_TILT`] を読む。傾き画面以外ではセンサ通知のたびの
-/// `request_repaint` を省略するためのゲートとして使う。
-pub(crate) fn active_screen_uses_tilt() -> bool {
-    ACTIVE_SCREEN_USES_TILT.load(std::sync::atomic::Ordering::Relaxed)
-}
-
 /// `android_main` が組み立てる `eframe::App` の `egui::Context` を `EguiWaker` として
 /// 起床口に登録する（Issue #831 codex-review 指摘 PRRT_kwDOTl73E86hCOSM）。`device/android.rs` の
 /// `nativeOnMotionChanged` は UI スレッド外（Java 側センサコールバック）から
@@ -135,18 +114,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // 同じ理由）。
     #[cfg(feature = "device")]
     crate::device::speech_recognition::reset_pending_tracking();
-    // Issue #1062: `bluetooth_le::bridge::SLOT` / `OBSERVED` も同じ理由でプロセス static の
-    // ため Activity 再生成をまたいで残る。新しい画面（`Idle`）を構築する前にここで捨てる
-    // （`device::bluetooth_le::reset_pending_tracking` doc 参照）。Java 側に対になる no-op
-    // スタブは置かない: Rust の `request_ble_scan` を経ないと Java が `nativeOnBleScan*`
-    // を呼ぶ経路自体が無く、`feature = "device"` 無効ビルドでは到達しないため
-    // （`speech_recognition`/`notification` と同じ理由）。
-    #[cfg(feature = "device")]
-    crate::device::bluetooth_le::reset_pending_tracking();
-    // Issue #659: `bluetooth_classic::bridge::SLOT` / `OBSERVED` も同じ理由でプロセス static のため、
-    // Activity 再生成をまたいで残る旧要求の保留をここで捨てる。
-    #[cfg(feature = "device")]
-    crate::device::bluetooth_classic::reset_pending_tracking();
     // Issue #486: `lan_discovery::bridge::SLOT` / `OBSERVED` も同じ理由でプロセス static のため、
     // Activity 再生成をまたいで残る旧要求の保留をここで捨てる。
     #[cfg(feature = "device")]
@@ -154,17 +121,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // Issue #511: `local_peer::bridge::SLOT` / `PENDING` も同じ理由でプロセス static のため捨てる。
     #[cfg(feature = "device")]
     crate::device::local_peer::reset_pending_tracking();
-    // Issue #1006: `notification::bridge::SLOT` も同じ理由でプロセス static のため
-    // Activity 再生成をまたいで残る。新しい画面 `NotificationSendState::default()`
-    // （`Idle`）を構築する前にここで捨て、再生成前に開始した権限確認が後から完了
-    // しても黙って失われず、以後確実に「未接続」（次の操作からやり直し）として
-    // 扱われるようにする。Java 側（`MainActivity.onCreate`）に対になる no-op
-    // スタブは置かない: Rust の `request_notification` を経ないと Java が
-    // `nativeOnNotificationResult` を呼ぶ経路自体が無く、`feature = "device"`
-    // 無効ビルドでは到達しないため（`location`/`mic_record` と同じ理由）
-    // （`device::notification::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::notification::reset_pending_tracking();
     // Issue #1104: `photo_pick::bridge::SLOT` もプロセス static のため再生成をまたいで残る。
     // 写真選択の契約は「保留中の要求は復元せず破棄」（`fandhe_device::photo_picker` モジュール
     // doc）なので、新しい `Idle` の画面状態を作る前に捨て、旧要求の遅延完了を id 不一致で
@@ -186,14 +142,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // （`fandhe_device::contact_picker` モジュール doc）なので、旧要求の遅延完了を id 不一致で無視させる。
     #[cfg(feature = "device")]
     crate::device::contact_pick::reset_pending_tracking();
-    // Issue #267: 音声再生も同様。画面状態が generation 0 に戻るため、処理済み世代を捨て再生を止める
-    // （`device::media_playback::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::media_playback::reset_pending_tracking();
-    // Issue #381: ロック画面・OS のメディア操作も同様。受付を止めて表示を取り下げ、記録を捨てる
-    // （`device::now_playing::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::now_playing::reset_pending_tracking();
     // Issue #364: ピクチャ・イン・ピクチャも同様。処理済み世代を捨て、小窓を止める
     // （`device::picture_in_picture::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
@@ -206,9 +154,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // `device::spotlight_index::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::spotlight_index::reset_pending_tracking();
-    // Issue #1123: Android の BLE 周辺機器役の通知先も破棄する（`android_ble_peripheral` の doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::android_ble_peripheral::reset_pending_tracking();
     // Issue #1130: 決済シートの保留中の要求を破棄し、旧 request_id の完了を不一致で捨てさせる。
     #[cfg(feature = "device")]
     crate::device::payment_request::reset_pending_tracking();
@@ -231,8 +176,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     let requested_name = requested_app_name();
     let use_tv_focus = requested_name == "tv-focus";
     // codex-review 指摘 P2（Issue #831）: 傾き画面以外でのセンサ再描画を抑えるため、
-    // 起動画面決定と同時にゲートを設定する（`ACTIVE_SCREEN_USES_TILT` doc 参照）。
-    set_active_screen_uses_tilt(requested_name == "tilt_ball");
 
     // バックエンドは Vulkan 固定（REQ-1）。`run_android` が持つ。
     if let Err(err) = fandhe_render_egui::launch::run_android(app, "fandhe-egui-proxy", move |lc| {
@@ -453,33 +396,6 @@ fn read_debug_proxy_app_property() -> String {
     String::new()
 }
 
-/// `device` feature 無効ビルド（`--no-default-features` 等）向けの
-/// `nativeOnMotionChanged` no-op フォールバック（codex-review 指摘、Issue #831）。
-///
-/// `MainActivity.java` の `motionListener` は feature 構成に関わらず常にセンサを
-/// 登録して `nativeOnMotionChanged` を呼ぶ（Java 側はビルド feature を知らない）。
-/// 本来の実装（`crate::device::android::Java_..._nativeOnMotionChanged`）は
-/// `device` feature 内にしかないため、feature 無効ビルドではこのシンボルが
-/// 未定義のままリンクされ、初回センサ通知時に `UnsatisfiedLinkError` で
-/// クラッシュする。ここで同名シンボルを feature 無効時のみ定義し、値を捨てるだけの
-/// no-op にして落ちないようにする（feature 有効時は `device/android.rs` 側の定義と
-/// 重複しないよう `cfg(not(feature = "device"))` で排他にする）。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
-/// シンボル名は JNI 命名規約上の固定名（`nativeOnWindowInsetsChanged` と同じ根拠）。
-#[cfg(not(feature = "device"))]
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnMotionChanged(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    _x: f32,
-    _y: f32,
-    _rotation: i32,
-) {
-}
-
 /// `device` feature 無効ビルド向けの `nativeOnUrlSchemeReceived` no-op フォールバック
 /// （Issue #1218）。`MainActivity.java` は feature を知らず `onCreate` / `onNewIntent` から
 /// 必ず呼ぶため、スタブが無いと feature 無効ビルドで `UnsatisfiedLinkError` になる。
@@ -514,26 +430,6 @@ extern "system" fn Java_com_fandhe_platform_DeepLinkHelper_nativeOnDeepLinkRecei
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     _url: *mut core::ffi::c_void,
-) {
-}
-
-/// `device` feature 無効ビルド向けの `nativeOnForegroundChanged` no-op フォールバック
-/// （Issue #611）。`EnvironmentSensorsHelper.onPause` / `onResume` は feature を知らず
-/// `MainActivity` のライフサイクルから無条件に呼ぶため、スタブが無いと feature 無効ビルドで
-/// `UnsatisfiedLinkError` になる。署名は Java 宣言・`device/android_environment_sensors.rs` の
-/// 実体と 3 か所で一致させる（`(boolean) -> void`、`(Z)V`）。引数は `jni::sys::jboolean`（= `u8`）と
-/// ABI が同じ `u8` で受ける。`jni` は feature `device` の optional 依存なので、この無効時の関数からは参照できない。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
-/// シンボル名は JNI 命名規約上の固定名（`nativeOnUrlSchemeReceived` と同じ根拠）。
-#[cfg(not(feature = "device"))]
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_EnvironmentSensorsHelper_nativeOnForegroundChanged(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    _foreground: u8,
 ) {
 }
 

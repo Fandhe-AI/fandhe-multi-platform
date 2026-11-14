@@ -1,0 +1,61 @@
+[package]
+name = "fandhe-cap-bluetooth-classic"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の bluetooth-classic の機能 crate（契約・OS 別実装・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知の送り口（CompletionSender）・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+jni = { workspace = true }
+
+# 機器の列挙（`BluetoothFindFirstDevice`・`BluetoothFindNextDevice`、windows.rs）。
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { workspace = true, features = ["std", "Devices_Bluetooth", "Devices_Radios", "Win32_Devices_Bluetooth", "Win32_Foundation"] }
+
+[build-dependencies]
+# iOS・macOS の ObjC を build.rs でコンパイルする helper。通常のビルドには cc を持ち込まない。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+# 機能宣言（capability-declaration.md）。権限・usage description・framework は手で足す（cargo fandhe check が検証する）。
+[package.metadata.fandhe]
+id = "bluetooth-classic"
+
+[package.metadata.fandhe.macos]
+frameworks = ["CoreBluetooth", "IOBluetooth"]
+usage-descriptions = ["NSBluetoothAlwaysUsageDescription"]
+
+[package.metadata.fandhe.android]
+java = ["android/java"]
+# API 31 以上は `BLUETOOTH_SCAN`（位置推定には使わないため `neverForLocation`）と `BLUETOOTH_CONNECT`。API 30 以下は
+# `BLUETOOTH`・`BLUETOOTH_ADMIN`（maxSdkVersion=30。最小権限）と `ACCESS_FINE_LOCATION`（位置情報・Wi-Fi 情報と共有、統合で 1 つになる）。
+permissions = [
+  { name = "android.permission.BLUETOOTH_SCAN", flags = ["neverForLocation"] },
+  { name = "android.permission.BLUETOOTH_CONNECT" },
+  { name = "android.permission.BLUETOOTH", max-sdk = 30 },
+  { name = "android.permission.BLUETOOTH_ADMIN", max-sdk = 30 },
+  { name = "android.permission.ACCESS_FINE_LOCATION" },
+]
+# Bluetooth 非搭載端末をストアの自動フィルタから除外しない。
+features = [{ name = "android.hardware.bluetooth", required = false }]
+
+# Activity のライフサイクルへ参加する非公開 provider（FeatureLifecycleProvider、fandhe-platform-android）。
+# Manifest の同じ要素と完全に一致させる（cargo-fandhe の突き合わせテストが確かめる）。
+[[package.metadata.fandhe.android.components]]
+kind = "provider"
+name = "com.fandhe.platform.BluetoothClassicLifecycle"
+exported = false
+attributes = { authorities = "${applicationId}.fandhe.bluetooth-classic" }
+
+[lints]
+workspace = true
