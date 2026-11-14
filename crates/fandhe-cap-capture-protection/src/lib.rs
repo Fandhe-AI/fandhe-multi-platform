@@ -1,6 +1,6 @@
 //! capture-protection（画面キャプチャの防止・検知）の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。
 //! Windows は `SetWindowDisplayAffinity`、Android は `FLAG_SECURE`（防止）と API 34+ / 35+ の検知コールバック、
-//! iOS は `UIScreen.isCaptured` と撮影通知（検知のみ）。macOS・Web は対象外で `Unsupported`。
+//! iOS は `UITraitCollection.sceneCaptureState`（iOS 17+）と撮影通知（検知のみ）。macOS・Web は対象外で `Unsupported`。
 //! `fandhe-gallery` の画面登録から effect `capture_protection_show_effect` が呼ばれ、要求の直後と 1 秒間隔で OS から読み戻す。
 //!
 //! 守る範囲: 1 プロセス内の順序、失敗を成功と見せないこと、期限後に適用しないこと、検知登録と解除の対応。
