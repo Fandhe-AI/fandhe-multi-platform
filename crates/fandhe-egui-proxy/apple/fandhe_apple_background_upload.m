@@ -32,9 +32,13 @@
 //   int32_t fandhe_apple_bgul_cancel(void);   // 0 / 1
 //   int32_t fandhe_apple_bgul_list(FandheBgulTask *out, size_t cap, size_t *out_len);
 //     // 0 / 1。`cap` 件までしか書かない。`out_len` は書いた件数
+//   void fandhe_apple_bgul_register_events(void);   // iOS のみ、main thread から `UIApplicationMain` より前に
+//     // 共通層（`fandhe-platform-apple` の `fandhe_ios_register_background_session`、Issue #1325）へ、upload の
+//     // session identifier の完了を受ける登録をする。冪等
 //   bool fandhe_apple_bgul_handle_events(NSString *identifier, void (^handler)(void));   // iOS のみ、main thread から
-//     // identifier が upload の session なら true（handler を保持し、`URLSessionDidFinishEventsForBackgroundURLSession:`
-//     // で main thread から 1 回だけ呼ぶ）。違えば false（handler には触らない。呼び出し側が download へ渡す）
+//     // 共通層が identifier の一致で呼ぶ。identifier が upload の session なら true（handler を保持し、
+//     // `URLSessionDidFinishEventsForBackgroundURLSession:` で main thread から 1 回だけ呼ぶ）。違えば false
+//     // （handler には触らない）
 //   delegate → Rust の終了コード: 0 = エラーなし / 1 = 取り消し / 2 = その他の NSURLErrorDomain / 4 = その他
 #import <Foundation/Foundation.h>
 #import <stdbool.h>
@@ -262,6 +266,8 @@ int32_t fandhe_apple_bgul_list(FandheBgulTask *out, size_t cap, size_t *out_len)
 }
 
 #if TARGET_OS_IOS
+#import "fandhe_ios_app_events.h"
+
 bool fandhe_apple_bgul_handle_events(NSString *identifier, void (^handler)(void)) {
     @autoreleasepool {
         if (handler == nil || ![identifier isEqualToString:kSessionId]) {
@@ -283,5 +289,11 @@ bool fandhe_apple_bgul_handle_events(NSString *identifier, void (^handler)(void)
         }
         return true;
     }
+}
+
+void fandhe_apple_bgul_register_events(void) {
+    fandhe_ios_register_background_session(kSessionId, ^(void (^completionHandler)(void)) {
+        fandhe_apple_bgul_handle_events(kSessionId, completionHandler);
+    });
 }
 #endif

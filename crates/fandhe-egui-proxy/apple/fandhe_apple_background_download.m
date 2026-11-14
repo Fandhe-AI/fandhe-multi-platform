@@ -27,9 +27,12 @@
 //     // 0 = 成功（保存先が無いのも成功）/ 3 = 保存先を消せない / 4 = deadline_ms 内に OS task への取り消しを
 //     // 終えられなかった。世代 1 以上 upto_gen 以下の task だけ取り消す。task の列挙 completion が
 //     // `[task cancel]` を呼び終えるまで待ってから戻る（戻った時点で取り消し依頼が OS に渡っている）
+//   void fandhe_apple_bgdl_register_events(void);   // iOS のみ、main thread から `UIApplicationMain` より前に
+//     // 共通層（`fandhe-platform-apple` の `fandhe_ios_register_background_session`、Issue #1325）へ、download の
+//     // session identifier の完了を受ける登録をする。冪等
 //   void fandhe_apple_bgdl_handle_events(NSString *identifier, void (^handler)(void));   // iOS のみ
-//     // main thread から呼ぶ（`ios/fandhe_ios_url_scheme.m` の application delegate が
-//     // `application:handleEventsForBackgroundURLSession:completionHandler:` から転送する）。identifier が
+//     // main thread から呼ぶ（共通層の application delegate が
+//     // `application:handleEventsForBackgroundURLSession:completionHandler:` を identifier の一致で転送する）。identifier が
 //     // 違えば handler を即呼ぶ。一致すれば session を作り直し（冪等）、OS が保留中のイベントを配り終えた
 //     // `URLSessionDidFinishEventsForBackgroundURLSession:` で handler を main thread から 1 回だけ呼ぶ
 //     // （前の handler が残っていれば先にそれを呼ぶ）
@@ -294,6 +297,8 @@ int32_t fandhe_apple_bgdl_cancel(uint64_t upto_gen, uint64_t deadline_ms) {
 }
 
 #if TARGET_OS_IOS
+#import "fandhe_ios_app_events.h"
+
 void fandhe_apple_bgdl_handle_events(NSString *identifier, void (^handler)(void)) {
     @autoreleasepool {
         if (handler == nil) {
@@ -318,5 +323,11 @@ void fandhe_apple_bgdl_handle_events(NSString *identifier, void (^handler)(void)
             }
         }
     }
+}
+
+void fandhe_apple_bgdl_register_events(void) {
+    fandhe_ios_register_background_session(kSessionId, ^(void (^completionHandler)(void)) {
+        fandhe_apple_bgdl_handle_events(kSessionId, completionHandler);
+    });
 }
 #endif

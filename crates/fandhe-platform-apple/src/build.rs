@@ -170,7 +170,7 @@ pub fn compile_objc(src: &str, frameworks: &[&str]) {
         .to_string();
     let include = concat!(env!("CARGO_MANIFEST_DIR"), "/include");
     println!("cargo:rerun-if-changed={src}");
-    println!("cargo:rerun-if-changed={include}/fandhe_ios_common.h");
+    println!("cargo:rerun-if-changed={include}");
     cc::Build::new()
         .file(src)
         .include(include)
