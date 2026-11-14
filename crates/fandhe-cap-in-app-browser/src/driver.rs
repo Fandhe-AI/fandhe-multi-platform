@@ -112,6 +112,9 @@ struct Bridge {
     /// 画面 effect が追う要求。公開入口はこの要求・未取得の結果を置き換えない。
     screen: &'static SlotOwner,
     active: Mutex<Option<Active>>,
+    /// Activity 再生成（[`Bridge::reset`]）で失われた公開入口の要求 id と、呼び出し元へ届ける結果。
+    /// 取り出されるまで保持し、新しい要求（画面・公開とも）は `Busy`。`active` のロックの内側でだけ触る。
+    lost_public: Mutex<Option<(u64, Outcome)>>,
     /// これまでに登録した最大の要求 id。`active` のロック内で更新する。
     high_water: AtomicU64,
     deadline: Duration,
@@ -124,6 +127,7 @@ impl Bridge {
             public: Box::leak(Box::new(SlotOwner::new())),
             screen: Box::leak(Box::new(SlotOwner::new())),
             active: Mutex::new(None),
+            lost_public: Mutex::new(None),
             high_water: AtomicU64::new(0),
             deadline,
         }
@@ -131,6 +135,11 @@ impl Bridge {
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Option<Active>> {
         self.active.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// `active` のロックを持つ側から呼ぶ。`lost_public` を触る唯一の入口。
+    fn lost(&self) -> std::sync::MutexGuard<'_, Option<(u64, Outcome)>> {
+        self.lost_public.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     /// 画面側の要求が発送済み（OS 呼び出し中、または結果が画面へ未反映）か。
@@ -143,6 +152,9 @@ impl Bridge {
     /// 先行を置き換えず `None`。OS へ渡す前に呼び、即時の完了も照合できるようにする。
     fn begin(&self, owner: &SlotOwner) -> Option<u64> {
         let mut active = self.lock();
+        if self.lost().is_some() {
+            return None;
+        }
         let request_id = owner.begin_excluding(self.slot, &[self.public, self.screen])?;
         self.high_water.fetch_max(request_id, Ordering::Relaxed);
         *active = Some(Active {
@@ -166,9 +178,10 @@ impl Bridge {
         {
             return Err(InAppBrowserFailure::Internal);
         }
-        let taken = self.slot.snapshot().is_some_and(|(id, ready)| {
-            ready.is_none() || id == self.public.current() || id == self.screen.current()
-        });
+        let taken = self.lost().is_some()
+            || self.slot.snapshot().is_some_and(|(id, ready)| {
+                ready.is_none() || id == self.public.current() || id == self.screen.current()
+            });
         if taken {
             return Err(InAppBrowserFailure::Busy);
         }
@@ -231,8 +244,19 @@ impl Bridge {
         }
     }
 
+    /// Activity 再生成での破棄。公開入口の要求が未取得なら、その id の結果を `lost_public` へ残す。
+    /// reset の前に結果が載っていればそれ（成功を含む）を、無ければ `Interrupted` を残す
+    /// （OS が実際に開いた結果を書き換えず、成功していないものを成功にしない）。
     fn reset(&self) {
         let mut active = self.lock();
+        let owned = self.public.current();
+        if owned != 0 {
+            let result = match self.slot.snapshot() {
+                Some((id, Some(r))) if id == owned => r,
+                _ => Err(InAppBrowserFailure::Interrupted),
+            };
+            *self.lost() = Some((owned, result));
+        }
         *active = None;
         self.slot.reset();
         self.public.adopt(0);
@@ -315,13 +339,27 @@ pub fn open_url(raw_url: &str) -> Result<u64, InAppBrowserFailure> {
 }
 
 /// [`open_url`] の結果の取得口。表示開始前に期限を過ぎていれば `TimedOut` を確定し、
-/// 結果が届いていれば 1 度だけ返す（未着・古い id は `None`）。
+/// 結果が届いていれば 1 度だけ返す（未着・古い id は `None`）。Activity 再生成で要求が失われた場合も、
+/// 結果が載っていればそれを、無ければ `Err(Interrupted)` を 1 度だけ返す。
 pub fn poll_open_result(
     request_id: u64,
 ) -> Option<Result<InAppBrowserOutcome, InAppBrowserFailure>> {
-    let b = bridge();
+    poll_open(bridge(), request_id)
+}
+
+fn poll_open(b: &Bridge, request_id: u64) -> Option<Outcome> {
+    if request_id == 0 {
+        return None;
+    }
+    {
+        let _active = b.lock();
+        let mut lost = b.lost();
+        if lost.as_ref().is_some_and(|(id, _)| *id == request_id) {
+            return lost.take().map(|(_, r)| r);
+        }
+    }
     // 画面側の要求の結果は取らない。
-    if request_id == 0 || request_id != b.public.current() {
+    if request_id != b.public.current() {
         return None;
     }
     b.expire_if_due();
@@ -719,6 +757,9 @@ mod tests {
         // 表示開始は 1 回だけ。
         let id2 = {
             bridge.reset();
+            // 失われた公開入口の結果を取り出すまで次の要求は始められない。
+            assert!(bridge.begin(bridge.public).is_none());
+            assert_eq!(poll_open(bridge, id), Some(Ok(InAppBrowserOutcome::Closed)));
             bridge.begin(bridge.public).unwrap()
         };
         assert!(bridge.try_begin_present(id2));
@@ -771,6 +812,77 @@ mod tests {
         while rx.try_recv().is_ok() {}
         drive(&fresh, &sender, &imp, bridge);
         assert_eq!(f.calls.load(Ordering::SeqCst), 2);
+    }
+
+    fn assert_next_requests_allowed(b: &Bridge) {
+        let id = b.begin(b.public).expect("公開入口の次の要求");
+        b.complete_from_os(id, Err(InAppBrowserFailure::NoBrowser));
+        assert_eq!(poll_open(b, id), Some(Err(InAppBrowserFailure::NoBrowser)));
+        assert!(b.begin(b.screen).is_some(), "画面の次の要求");
+    }
+
+    #[test]
+    fn reset_before_result_delivers_interrupted_once() {
+        let b = new_bridge(Duration::from_secs(30));
+        b.begin_with_id(b.public, 10).unwrap();
+        b.reset();
+        assert_eq!(
+            poll_open(b, 10),
+            Some(Err(InAppBrowserFailure::Interrupted))
+        );
+        assert_eq!(poll_open(b, 10), None);
+        assert_next_requests_allowed(b);
+    }
+
+    #[test]
+    fn reset_after_interrupted_result_delivers_it_once() {
+        let b = new_bridge(Duration::from_secs(30));
+        b.begin_with_id(b.public, 10).unwrap();
+        b.complete_from_os(10, Err(InAppBrowserFailure::Interrupted));
+        b.reset();
+        assert_eq!(
+            poll_open(b, 10),
+            Some(Err(InAppBrowserFailure::Interrupted))
+        );
+        assert_eq!(poll_open(b, 10), None);
+        assert_next_requests_allowed(b);
+    }
+
+    #[test]
+    fn reset_after_closed_result_keeps_the_real_outcome() {
+        let b = new_bridge(Duration::from_secs(30));
+        b.begin_with_id(b.public, 10).unwrap();
+        assert!(b.try_begin_present(10));
+        b.complete_from_os(10, Ok(InAppBrowserOutcome::Closed));
+        b.reset();
+        assert_eq!(poll_open(b, 10), Some(Ok(InAppBrowserOutcome::Closed)));
+        assert_eq!(poll_open(b, 10), None);
+    }
+
+    #[test]
+    fn late_completion_of_old_id_after_reset_does_not_leak_into_next_request() {
+        let b = new_bridge(Duration::from_secs(30));
+        b.begin_with_id(b.public, 10).unwrap();
+        b.reset();
+        // 古い id の遅延完了は残した結果を上書きしない。
+        b.complete_from_os(10, Ok(InAppBrowserOutcome::Closed));
+        assert_eq!(
+            poll_open(b, 10),
+            Some(Err(InAppBrowserFailure::Interrupted))
+        );
+        let next = b.begin(b.public).unwrap();
+        b.complete_from_os(10, Err(InAppBrowserFailure::NoBrowser));
+        assert_eq!(poll_open(b, next), None);
+        assert_eq!(b.slot.snapshot(), Some((next, None)));
+    }
+
+    #[test]
+    fn reset_without_public_request_leaves_nothing_to_poll() {
+        let b = new_bridge(Duration::from_secs(30));
+        let id = b.begin(b.screen).unwrap();
+        b.reset();
+        assert_eq!(poll_open(b, id), None);
+        assert_next_requests_allowed(b);
     }
 
     #[test]

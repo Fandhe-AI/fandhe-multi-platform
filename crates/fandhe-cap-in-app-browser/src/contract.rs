@@ -161,6 +161,16 @@ pub fn validate_url(raw: &str) -> Result<BrowserUrl, InAppBrowserFailure> {
 pub trait InAppBrowser: Send + Sync {
     /// `request_id` の要求として `url` の表示を OS へ依頼する。
     /// 表示の直前に bridge の `try_begin_present` を呼び、`false` なら表示しない。
+    ///
+    /// 公開入口（`platform_in_app_browser()`）経由で呼ぶ場合の契約:
+    ///
+    /// - `Ok(())` は受理のみ。結果は `poll_open_result(request_id)` で 1 度だけ取り出す。取り出すまで
+    ///   画面・公開入口の次の要求は `Busy` で失敗し、期限での自動回収はしない（結果を取り出さない
+    ///   呼び出し元は以降の要求を塞ぐ）
+    /// - Activity の再生成で要求が失われても、結果が載っていればそれを、無ければ
+    ///   `Err(Interrupted)` を `poll_open_result` が 1 度だけ返す（取り出すまで同様に `Busy`）
+    /// - `request_id` は 1 以上 `i64::MAX` 以下で、このプロセスでそれまでに使われたどの id
+    ///   （画面の経路が内部で振った id を含む）よりも大きい値でなければ拒否される（`Internal`）
     fn open(&self, request_id: u64, url: &BrowserUrl) -> Result<(), InAppBrowserFailure>;
 }
 
