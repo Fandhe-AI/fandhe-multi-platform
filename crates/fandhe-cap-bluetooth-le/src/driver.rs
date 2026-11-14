@@ -287,6 +287,9 @@ fn take_waiter(request_id: u64) -> Option<WaiterTx> {
     }
 }
 
+/// 要求登録から OS への開始依頼までの直列化ロック（[`start_native_scan`]）。
+static START: Mutex<()> = Mutex::new(());
+
 /// OS へスキャンの開始を依頼する（画面の effect と同期入口で共通）。依頼自体の失敗は [`finish`] へ流す。
 #[cfg(any(
     target_os = "ios",
@@ -294,8 +297,15 @@ fn take_waiter(request_id: u64) -> Option<WaiterTx> {
     target_os = "windows",
     target_os = "android"
 ))]
-fn start_native_scan(request_id: u64) {
+fn start_native_scan(waiter: Option<WaiterTx>) {
     use std::time::Duration;
+    // 採番・待ち手の登録・OS への開始依頼を 1 本に直列化する（並行呼び出しで開始順が逆転し、
+    // 古い開始依頼が新しい要求の観測を置き換えるのを防ぐ。OS コールバックはこのロックを取らない）。
+    let _guard = START.lock().unwrap_or_else(|e| e.into_inner());
+    let request_id = bridge::begin();
+    if let Some(tx) = waiter {
+        *WAITER.lock().unwrap_or_else(|e| e.into_inner()) = Some((request_id, tx));
+    }
     OBSERVED.begin(request_id);
     let duration = Duration::from_millis(crate::contract::SCAN_DURATION_MS);
     #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -340,9 +350,7 @@ pub struct NativeBluetoothLe;
 impl BluetoothLe for NativeBluetoothLe {
     fn scan(&self) -> Result<Vec<BleDevice>, BluetoothLeError> {
         let (tx, rx) = std::sync::mpsc::channel();
-        let request_id = bridge::begin();
-        *WAITER.lock().unwrap_or_else(|e| e.into_inner()) = Some((request_id, tx));
-        start_native_scan(request_id);
+        start_native_scan(Some(tx));
         // 期限は掛けない（権限ダイアログの回答待ちを含め、OS が完了を必ず返す契約。契約の「呼び出し側で別の期限を持たない」）。
         // 置き換え・再生成・終了で待ち手が捨てられたら `Sender` の drop で `Err` が返り、`Cancelled` で戻る。
         rx.recv()
@@ -399,7 +407,7 @@ fn drive_callback(state: &BleScanState, sender: &CompletionSender<BleScanState>)
     if take_request(state).is_some() {
         let _ = sender.send(Box::new(mark_scanning));
 
-        start_native_scan(bridge::begin());
+        start_native_scan(None);
         return;
     }
 

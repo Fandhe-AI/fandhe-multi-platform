@@ -209,6 +209,10 @@ pub(crate) mod bridge {
     static WAITER: std::sync::Mutex<Option<(u64, std::sync::mpsc::Sender<Raw>)>> =
         std::sync::Mutex::new(None);
 
+    /// 採番から OS への提示依頼までの直列化ロック。並行呼び出しで開始順が逆転し、
+    /// 古い依頼が新しい要求の追跡を置き換えるのを防ぐ（OS コールバックはこのロックを取らない）。
+    pub(crate) static START: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     pub(crate) fn set_waiter(request_id: u64, tx: std::sync::mpsc::Sender<Raw>) {
         *WAITER.lock().unwrap_or_else(|e| e.into_inner()) = Some((request_id, tx));
     }
@@ -298,13 +302,16 @@ impl Notifier for NativeNotifier {
         request: &crate::contract::NotificationRequest,
     ) -> Result<NotifyOutcome, NotificationError> {
         let (tx, rx) = std::sync::mpsc::channel();
-        let request_id = bridge::begin();
-        bridge::set_waiter(request_id, tx);
-        if !present(request_id, request.title(), request.body()) {
-            bridge::deliver(
-                request_id,
-                Err(NotificationError::Internal("notification present")),
-            );
+        {
+            let _guard = bridge::START.lock().unwrap_or_else(|e| e.into_inner());
+            let request_id = bridge::begin();
+            bridge::set_waiter(request_id, tx);
+            if !present(request_id, request.title(), request.body()) {
+                bridge::deliver(
+                    request_id,
+                    Err(NotificationError::Internal("notification present")),
+                );
+            }
         }
         rx.recv().unwrap_or(Ok(NotifyOutcome::Cancelled))
     }
@@ -319,6 +326,7 @@ fn drive_callback(state: &NotificationSendState, sender: &CompletionSender<Notif
     if let Some(request) = take_request(state) {
         let _ = sender.send(Box::new(mark_sending));
 
+        let _guard = bridge::START.lock().unwrap_or_else(|e| e.into_inner());
         let request_id = bridge::begin();
         match DeviceRequest::new(&request.title, &request.body) {
             Ok(validated) => {

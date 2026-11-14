@@ -207,8 +207,87 @@ pub(crate) static OBSERVED: Observer = Observer::new();
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
 pub(crate) fn finish(request_id: u64, result: Result<(), BluetoothClassicError>) {
     if let Some(r) = OBSERVED.finish(request_id, result) {
-        bridge::deliver(request_id, r);
+        // 画面を介さない公開入口（[`start_discovery`]）の完了通知があれば、生の結果をそちらへ渡す。
+        if let Some(cb) = take_callback(request_id) {
+            bridge::SLOT.clear(request_id);
+            cb(r);
+        } else {
+            bridge::deliver(request_id, r);
+        }
     }
+}
+
+/// 検索結果の受け取り先（[`start_discovery`] が渡す完了通知）。
+pub type DiscoverCallback =
+    Box<dyn FnOnce(Result<Vec<ClassicDevice>, BluetoothClassicError>) + Send + 'static>;
+
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
+/// 要求の登録（採番・完了通知の置き換え・OS への開始依頼）を 1 本に直列化するロック。
+/// 並行する呼び出しで開始順が逆転し、古い開始依頼が新しい要求の観測を置き換えるのを防ぐ。
+/// OS 側コールバックはこのロックを取らない（同期失敗の [`finish`] は保持中に呼ばれるが取らない）。
+static START: Mutex<()> = Mutex::new(());
+
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
+/// 公開入口の完了通知（要求は 1 本だけ。新しい要求は古い通知を `Cancelled` で完了させて置き換える）。
+static CALLBACK: Mutex<Option<(u64, DiscoverCallback)>> = Mutex::new(None);
+
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
+fn take_callback(request_id: u64) -> Option<DiscoverCallback> {
+    let mut g = CALLBACK.lock().unwrap_or_else(|e| e.into_inner());
+    if g.as_ref().is_some_and(|(id, _)| *id == request_id) {
+        g.take().map(|(_, cb)| cb)
+    } else {
+        None
+    }
+}
+
+/// 保留中の完了通知を `Cancelled` で完了させる（ロックの外で呼ぶ）。
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
+fn cancel_callback() {
+    let old = CALLBACK.lock().unwrap_or_else(|e| e.into_inner()).take();
+    if let Some((_, cb)) = old {
+        cb(Err(BluetoothClassicError::Cancelled("bluetooth_classic")));
+    }
+}
+
+/// 要求を採番して OS へ検索の開始を依頼する（画面の effect と公開入口で共通。[`START`] で直列化）。
+/// 依頼自体の失敗は [`finish`] へ流す。
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
+fn begin_and_present(cb: Option<DiscoverCallback>) {
+    use std::time::Duration;
+    let guard = START.lock().unwrap_or_else(|e| e.into_inner());
+    let request_id = bridge::begin();
+    let old = {
+        let mut g = CALLBACK.lock().unwrap_or_else(|e| e.into_inner());
+        std::mem::replace(&mut *g, cb.map(|cb| (request_id, cb)))
+    };
+    if let Some((_, old)) = old {
+        old(Err(BluetoothClassicError::Cancelled("bluetooth_classic")));
+    }
+    OBSERVED.begin(request_id);
+    let duration = Duration::from_millis(crate::contract::DISCOVERY_WINDOW_MS);
+    #[cfg(target_os = "macos")]
+    let started = crate::macos::present(request_id, duration);
+    #[cfg(target_os = "windows")]
+    let started = crate::windows::present(request_id, duration);
+    #[cfg(target_os = "android")]
+    let started = crate::android::present(request_id, duration);
+    if let Err(e) = started {
+        // 依頼自体が同期的に失敗した（コールバックは二度と来ない）。
+        finish(request_id, Err(e));
+    }
+    drop(guard);
+}
+
+/// 画面を介さない検索の公開入口。検索を開始して即戻り、結果（窓が閉じたとき、または失敗）を `on_complete` へ
+/// 1 回だけ渡す。`on_complete` は OS 側のスレッドから呼ばれうるため、重い処理や長い待ちを入れない。
+/// 新しい要求（画面側を含む）・[`stop_shared_discovery`]・Activity 再生成で置き換わった要求は `Cancelled` で完了する。
+/// 非対応 OS は即座に `Unsupported` で完了する。
+pub fn start_discovery(on_complete: DiscoverCallback) {
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
+    begin_and_present(Some(on_complete));
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
+    on_complete(Err(BluetoothClassicError::Unsupported("bluetooth_classic")));
 }
 
 /// OS からのコールバックとの橋渡し（pull 型、`RequestSlot` の facade）。
@@ -263,24 +342,11 @@ fn drive_discover_callback(
     sender: &CompletionSender<BluetoothClassicShowState>,
 ) {
     use fandhe_core::screens::bluetooth_classic_show::DiscoverPhase;
-    use std::time::Duration;
 
     if take_discover_request(state).is_some() {
         let _ = sender.send(Box::new(mark_discovering));
 
-        let request_id = bridge::begin();
-        OBSERVED.begin(request_id);
-        let duration = Duration::from_millis(crate::contract::DISCOVERY_WINDOW_MS);
-        #[cfg(target_os = "macos")]
-        let started = crate::macos::present(request_id, duration);
-        #[cfg(target_os = "windows")]
-        let started = crate::windows::present(request_id, duration);
-        #[cfg(target_os = "android")]
-        let started = crate::android::present(request_id, duration);
-        if let Err(e) = started {
-            // 依頼自体が同期的に失敗した（コールバックは二度と来ない）。
-            finish(request_id, Err(e));
-        }
+        begin_and_present(None);
         return;
     }
 
@@ -340,6 +406,7 @@ pub fn bluetooth_classic_show_effect(
 /// Java 側の追跡は Activity インスタンスのフィールドで、再生成で一緒に消える）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
+    cancel_callback();
     bridge::SLOT.reset();
     OBSERVED.clear();
 }
@@ -349,6 +416,8 @@ pub fn reset_pending_tracking() {
 /// main 側のコールバックが同じロックを取るため、`device-bridge-contracts.md` 11 節）。
 /// `OBSERVED.clear()` はロックを解放してから OS 側を止める。
 pub fn stop_shared_discovery() {
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
+    cancel_callback();
     OBSERVED.clear();
     #[cfg(target_os = "macos")]
     crate::macos::stop();
