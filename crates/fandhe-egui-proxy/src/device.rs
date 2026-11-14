@@ -103,11 +103,6 @@ pub mod android_environment_sensors;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_file_association;
-/// Issue #461: Android 向けライト（トーチ）実装（`FlashlightHelper` との JNI 橋渡し）。
-/// `device/flashlight.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_flashlight;
 /// Issue #1098: Android 向け折りたたみ姿勢の実装（`FoldablePostureHelper` との JNI 橋渡し）。
 /// `device/foldable_posture.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -417,10 +412,6 @@ pub mod environment_sensors;
 /// （macOS・iOS・Windows 実装、Android は未実装のスタブ、他 OS は `Unsupported` 固定）。
 pub mod file_association;
 pub mod file_pick;
-/// Phase 11 の拡充ループ（親 #106、Issue #458）: ライト（トーチ）の effect ドライバ
-/// （iOS・Android・Windows 実装、他 OS は `UnsupportedFlashlight`
-/// 固定。Web は `fandhe-web-dom`）。
-pub mod flashlight;
 /// Phase 11 の拡充ループ（親 #141、Issue #723）: 折りたたみの姿勢の effect ドライバ
 /// （Android は OS 別モジュール（#1098 が埋めるスタブ）、他ネイティブ OS は
 /// `UnsupportedFoldablePosture` 固定。Web は `fandhe-web-dom`）。
@@ -515,11 +506,6 @@ pub mod ios_environment_sensors;
 /// `device/file_association.rs::platform` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_file_association;
-/// Issue #460: iOS 向けライト（トーチ）実装（`ios/fandhe_ios_flashlight.m` を呼ぶ C ABI ラッパー）。
-/// `device/flashlight.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_flashlight;
 /// Issue #1313: iOS 向け全画面表示実装（`ios/fandhe_ios_fullscreen_immersive.m` を呼ぶ
 /// C ABI ラッパー）。
 /// `device/fullscreen_immersive.rs` の iOS 経路から呼ばれる。
@@ -864,11 +850,6 @@ pub mod windows_environment_sensors;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_file_association;
-/// Issue #459: Windows 向けライト（トーチ）実装（`Lamp`）。
-/// `device/flashlight.rs` の Windows 経路から呼ばれる。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_flashlight;
 /// Issue #1250: Windows 向け文字認識の骨格（#1251 が WinRT `OcrEngine` 実装に置き換える）。
 /// `device/image_recognition.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

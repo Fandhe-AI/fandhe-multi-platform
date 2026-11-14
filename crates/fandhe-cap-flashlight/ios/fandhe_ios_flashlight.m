@@ -1,8 +1,8 @@
 // ライト（トーチ）: iOS 実装（Issue #460、親 #106）。`AVCaptureDevice` の torch を点け消しする。
 //
-// `src/device/ios_flashlight.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
+// `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
 // feature `device` 有効時のみ `cc` コンパイルする（AVFoundation / UIKit はリンク済み）。
-// コードの意味は `fandhe_device::flashlight` の SSOT（`decode_set` / `decode_read`）に従う。
+// コードの意味は `crate::contract` の SSOT（`decode_set` / `decode_read`）に従う。
 //
 // 契約:
 //   fandhe_ios_flashlight_set(int32_t on) -> int32_t
@@ -30,7 +30,7 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 
-// Rust 側（`ios_flashlight.rs`）の再描画受け口。
+// Rust 側（`ios.rs`）の再描画受け口。
 extern void fandhe_rust_flashlight_changed(void);
 
 static id fandhe_flashlight_observer = nil;

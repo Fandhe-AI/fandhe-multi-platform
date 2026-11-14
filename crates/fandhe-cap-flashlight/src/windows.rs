@@ -1,6 +1,6 @@
-//! Windows 向けライト（トーチ）実装（Issue #459、親 #106）。`device/flashlight.rs` の dispatch
+//! Windows 向けライト（トーチ）実装（Issue #459、親 #106）。`driver` の dispatch
 //! （Windows 経路）から呼ばれ、WinRT `Windows.Devices.Lights.Lamp` で点灯 / 消灯する
-//! （契約は `fandhe_device::flashlight`）。最小化での消灯は `device/flashlight.rs` 側が
+//! （契約は `crate::contract`）。最小化での消灯は `driver` 側が
 //! 通常の `set_on(false)` 経路に載せる。
 //!
 //! # 流れ
@@ -31,17 +31,28 @@
 //! - ローカルに MSVC が無く、型検査は `x86_64-pc-windows-gnu` のみ
 
 #[cfg(any(target_os = "windows", test))]
-use fandhe_device::DeviceError;
+use crate::error::FlashlightError;
 
 /// `GetDefaultAsync` の失敗 HRESULT を契約のエラーへ写す。0（S_OK + null）は搭載ライト無し。
 /// HRESULT 自体は返さない。
 #[cfg(any(target_os = "windows", test))]
-fn default_failure(code: i32) -> DeviceError {
+fn default_failure(code: i32) -> FlashlightError {
     if code == 0 {
-        DeviceError::Unsupported("flashlight")
+        FlashlightError::Unsupported
     } else {
-        DeviceError::Internal("flashlight")
+        FlashlightError::Internal("flashlight")
     }
+}
+
+/// メインウィンドウが最小化中か。ウィンドウ未取得なら `None`（`unsafe` を本ファイルに閉じるための薄い関数）。
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
+pub(crate) fn main_window_minimized() -> Option<bool> {
+    use windows::Win32::UI::WindowsAndMessaging::IsIconic;
+    let hwnd = fandhe_platform_windows::window()?;
+    // SAFETY: `hwnd` は `remember_window` が控えたメインウィンドウで、プロセス生存中は有効。
+    // `IsIconic` は無効な HWND でも FALSE を返すだけで副作用がない。
+    Some(unsafe { IsIconic(hwnd) }.as_bool())
 }
 
 #[cfg(target_os = "windows")]
@@ -52,8 +63,8 @@ mod imp {
     use windows::Devices::Lights::Lamp;
 
     use super::default_failure;
-    use fandhe_device::flashlight::Flashlight;
-    use fandhe_device::DeviceError;
+    use crate::contract::Flashlight;
+    use crate::error::FlashlightError;
 
     /// 点灯中だけ保持する `Lamp`（プロセスで 1 個）と、搭載無し確定の印。
     #[derive(Default)]
@@ -70,12 +81,12 @@ mod imp {
         m.lock().unwrap_or_else(|p| p.into_inner())
     }
 
-    fn internal() -> DeviceError {
-        DeviceError::Internal("flashlight")
+    fn internal() -> FlashlightError {
+        FlashlightError::Internal("flashlight")
     }
 
     impl Flashlight for WindowsFlashlight {
-        fn set_on(&self, on: bool) -> Result<(), DeviceError> {
+        fn set_on(&self, on: bool) -> Result<(), FlashlightError> {
             if on {
                 // 保持済みなら冪等に点けるだけ（ロックは API 呼び出しの間だけ持つ）。
                 if let Some(lamp) = lock(&self.lamp).as_ref() {
@@ -86,7 +97,7 @@ mod imp {
                     .and_then(|op| op.get())
                     .map_err(|e| {
                         let err = default_failure(e.code().0);
-                        if matches!(err, DeviceError::Unsupported(_)) {
+                        if matches!(err, FlashlightError::Unsupported) {
                             self.unsupported.store(true, Ordering::Relaxed);
                         }
                         err
@@ -113,9 +124,9 @@ mod imp {
             }
         }
 
-        fn is_on(&self) -> Result<Option<bool>, DeviceError> {
+        fn is_on(&self) -> Result<Option<bool>, FlashlightError> {
             if self.unsupported.load(Ordering::Relaxed) {
-                return Err(DeviceError::Unsupported("flashlight"));
+                return Err(FlashlightError::Unsupported);
             }
             match lock(&self.lamp).as_ref() {
                 Some(lamp) => lamp.IsEnabled().map(Some).map_err(|_| internal()),
@@ -134,9 +145,12 @@ mod tests {
 
     #[test]
     fn default_failure_maps_null_to_unsupported_and_others_to_internal() {
-        assert!(matches!(default_failure(0), DeviceError::Unsupported(_)));
+        assert!(matches!(default_failure(0), FlashlightError::Unsupported));
         for code in [-1, 0x8007_0005_u32 as i32, 0x8000_4005_u32 as i32] {
-            assert!(matches!(default_failure(code), DeviceError::Internal(_)));
+            assert!(matches!(
+                default_failure(code),
+                FlashlightError::Internal(_)
+            ));
         }
     }
 }

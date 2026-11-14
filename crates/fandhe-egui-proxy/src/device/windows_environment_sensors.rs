@@ -30,7 +30,7 @@
 //! # 背景遷移（最小化）
 //!
 //! eframe は最小化中に `update` を呼ばないため、フレームからは最小化を観測できない。
-//! `flashlight.rs` と同型のウォッチャー（プロセスに 1 本）が HWND の `IsIconic` を 200 ms 間隔で見て、
+//! `fandhe-cap-flashlight` の `driver.rs` と同型のウォッチャー（プロセスに 1 本）が HWND の `IsIconic` を 200 ms 間隔で見て、
 //! 最小化で気圧の受信記録を捨てて `note_backgrounded`、復元で `note_resumed` を呼び、
 //! `InvalidateRect` で 1 フレーム起こす（背景のまま走るフレームが再描画を予約せず、ポーリングが
 //! 止まるのを防ぐ。契約表 4）。背景中に OS 側の購読は止めない。

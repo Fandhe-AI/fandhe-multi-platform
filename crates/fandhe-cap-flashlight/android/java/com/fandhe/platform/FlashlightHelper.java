@@ -1,17 +1,23 @@
 package com.fandhe.platform;
 
+import android.app.Activity;
 import android.content.Context;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
 import android.os.Handler;
 import android.os.Looper;
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 
-// ライト（トーチ）（Issue #461、親 #106）の Android 実装ヘルパー。MainActivity から生成・委譲され、
-// Rust の `device/android_flashlight.rs` が egui スレッドから `MainActivity.flashlightSet` /
-// `flashlightRead` を JNI で同期呼び出しする。
+// ライト（トーチ）（Issue #461、親 #106）の Android 実装ヘルパー。利用者の Activity には何も書かせない
+// （Rust の `fandhe-cap-flashlight/src/android.rs` が egui スレッドから static の `set(Activity, boolean)` /
+// `read(Activity)` を JNI で同期呼び出しする）。Activity の生成・破棄・Started / Stopped は `FlashlightLifecycle`
+// （非公開 ContentProvider、`FeatureLifecycleProvider` 継承）が知らせる。Activity ごとの helper は `HELPERS` に持つ。
+// helper が無い（生成前・破棄後）要求は成功にも待ちにもせず、失敗（SET_FAILED / READ_FAILED）で確定する。
 //
-// 結果コードの SSOT は Rust の `fandhe_device::flashlight`（SET_* / READ_*）で、ここはその写し。
+// 結果コードの SSOT は Rust の `fandhe-cap-flashlight` の `contract`（SET_* / READ_*）で、ここはその写し。
 // SET_FAILED / READ_FAILED は Rust 側で未知値として `Internal` になる。
 //
 // `setTorchMode` は呼び出しスレッドを問わないため UI スレッドへは post しない
@@ -36,6 +42,10 @@ final class FlashlightHelper {
     static final int READ_UNKNOWN = -2;
     static final int READ_FAILED = 2;
 
+    // Activity ごとの helper。Rust のワーカーと UI スレッドの両方から触るので同期化し、Activity が GC されれば項目も消える。
+    private static final Map<Activity, FlashlightHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     private final Context context;
     private final Object lock = new Object();
     private CameraManager manager;
@@ -47,8 +57,47 @@ final class FlashlightHelper {
     private boolean destroyed;
     private CameraManager.TorchCallback callback;
 
-    FlashlightHelper(Context context) {
-        this.context = context;
+    private FlashlightHelper(Activity activity) {
+        this.context = activity.getApplicationContext();
+    }
+
+    // Activity の生成時（`FlashlightLifecycle` から、UI スレッド）。
+    static void attach(Activity activity) {
+        HELPERS.put(activity, new FlashlightHelper(activity));
+    }
+
+    // Activity の破棄時（同上）。消灯とコールバック解除を済ませ、以後の要求を拒否する。
+    static void detach(Activity activity) {
+        FlashlightHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // Rust から呼ぶ入口（egui スレッド）。helper が無い要求は失敗で確定する。
+    static int set(Activity activity, boolean on) {
+        FlashlightHelper helper = HELPERS.get(activity);
+        return helper == null ? SET_FAILED : helper.set(on);
+    }
+
+    static int read(Activity activity) {
+        FlashlightHelper helper = HELPERS.get(activity);
+        return helper == null ? READ_FAILED : helper.read();
+    }
+
+    // `FlashlightLifecycle` から（UI スレッド）。helper が無ければ何もしない。
+    static void started(Activity activity) {
+        FlashlightHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onStart();
+        }
+    }
+
+    static void stopped(Activity activity) {
+        FlashlightHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onStop();
+        }
     }
 
     // `lock` を保持して呼ぶ。初回だけ搭載確認とコールバック登録を行う。失敗時は false（再試行可）。
@@ -113,7 +162,7 @@ final class FlashlightHelper {
     }
 
     // egui スレッドから呼ぶ。
-    int set(boolean on) {
+    private int set(boolean on) {
         synchronized (lock) {
             if (destroyed || (on && stopped)) {
                 return SET_FAILED;
@@ -136,7 +185,7 @@ final class FlashlightHelper {
     }
 
     // egui スレッドから呼ぶ。失敗時に前回の値を返し続けない。
-    int read() {
+    private int read() {
         synchronized (lock) {
             if (destroyed || !ensureInit()) {
                 return READ_FAILED;
@@ -145,23 +194,23 @@ final class FlashlightHelper {
         }
     }
 
-    // `MainActivity.onStart`（UI スレッド）から呼ぶ。点け直しはしない。
-    void onStart() {
+    // `FlashlightLifecycle.onHostStarted`（UI スレッド）から呼ぶ。点け直しはしない。
+    private void onStart() {
         synchronized (lock) {
             stopped = false;
         }
     }
 
-    // `MainActivity.onStop`（UI スレッド）から呼ぶ。自分が点けた分だけ消す。
-    void onStop() {
+    // `FlashlightLifecycle.onHostStopped`（UI スレッド）から呼ぶ。自分が点けた分だけ消す。
+    private void onStop() {
         synchronized (lock) {
             stopped = true;
             turnOffIfOwned();
         }
     }
 
-    // `MainActivity.onDestroy`（UI スレッド）から呼ぶ。
-    void onDestroy() {
+    // `FlashlightLifecycle.onHostDestroyed`（UI スレッド）から呼ぶ。
+    private void onDestroy() {
         synchronized (lock) {
             destroyed = true;
             turnOffIfOwned();

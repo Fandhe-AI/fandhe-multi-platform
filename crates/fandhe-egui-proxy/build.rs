@@ -153,8 +153,6 @@ fn build() {
     compile_ios_activity_recognition();
     // `ios/fandhe_ios_camera_preview_stream.m`（Issue #813）。iOS 分岐。macOS 分岐（`build_macos`）も同じ `.m` を共有する（Issue #1066）。
     compile_ios_camera_preview_stream();
-    // `ios/fandhe_ios_flashlight.m`（Issue #460）。iOS 分岐のみ（macOS は対応表で n-a）。
-    compile_ios_flashlight();
     // `ios/fandhe_ios_pen_stylus.m`（Issue #356）。iOS 分岐のみ。
     compile_ios_pen_stylus();
     // `ios/fandhe_ios_alarm.swift`（Issue #1077）。iOS 分岐のみ。AlarmKit を弱リンクする。
@@ -673,15 +671,6 @@ fn compile_ios_camera_preview_stream() {
         } else {
             &["AVFoundation", "CoreMedia", "CoreVideo", "Foundation"]
         },
-    );
-}
-
-/// `ios/fandhe_ios_flashlight.m` を `cc` でコンパイルする（Issue #460）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_flashlight.rs` が使う）。
-fn compile_ios_flashlight() {
-    compile_objc(
-        "ios/fandhe_ios_flashlight.m",
-        &["AVFoundation", "Foundation", "UIKit"],
     );
 }
 

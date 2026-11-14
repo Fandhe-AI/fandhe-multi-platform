@@ -613,22 +613,9 @@ public class MainActivity extends GameActivity {
         return foldablePostureHelper.read();
     }
 
-    // ライト（トーチ）（Issue #461）。実装は `FlashlightHelper`。Rust の `android_flashlight.rs` が
-    // egui スレッドから同期で JNI 呼び出しする。
-    private final FlashlightHelper flashlightHelper = new FlashlightHelper(this);
-
-    int flashlightSet(boolean on) {
-        return flashlightHelper.set(on);
-    }
-
-    int flashlightRead() {
-        return flashlightHelper.read();
-    }
-
     @Override
     protected void onStart() {
         super.onStart();
-        flashlightHelper.onStart();
         captureProtectionHelper.onStart();
         foldablePostureHelper.onStart();
         activityRecognitionHelper.onStart();
@@ -636,7 +623,6 @@ public class MainActivity extends GameActivity {
 
     @Override
     protected void onStop() {
-        flashlightHelper.onStop();
         captureProtectionHelper.onStop();
         foldablePostureHelper.onStop();
         blePeripheralHelper.onStop();
@@ -3836,7 +3822,6 @@ public class MainActivity extends GameActivity {
         screenOrientationHelper.onDestroy();
         captureProtectionHelper.onDestroy();
         foldablePostureHelper.onDestroy();
-        flashlightHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため
         // `micRecorder == null` で no-op（`onPause` doc 参照）。`onPause` を経由せず
         // 直接 `onDestroy` へ来るケース（Android の契約上は稀）に備えて同じ処理を置く。

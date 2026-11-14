@@ -43,6 +43,7 @@ device = [
   "dep:fandhe-cap-file-preview",
   "dep:fandhe-cap-file-provider",
   "dep:fandhe-cap-file-watch",
+  "dep:fandhe-cap-flashlight",
   "dep:fandhe-cap-focus-mode-status",
   "dep:fandhe-cap-gamepad",
   "dep:fandhe-cap-geocoding-search",
@@ -181,6 +182,7 @@ fandhe-cap-eye-dropper = { path = "../fandhe-cap-eye-dropper", optional = true }
 fandhe-cap-file-preview = { path = "../fandhe-cap-file-preview", optional = true }
 fandhe-cap-file-provider = { path = "../fandhe-cap-file-provider", optional = true }
 fandhe-cap-file-watch = { path = "../fandhe-cap-file-watch", optional = true }
+fandhe-cap-flashlight = { path = "../fandhe-cap-flashlight", optional = true }
 fandhe-cap-focus-mode-status = { path = "../fandhe-cap-focus-mode-status", optional = true }
 fandhe-cap-gamepad = { path = "../fandhe-cap-gamepad", optional = true }
 fandhe-cap-geocoding-search = { path = "../fandhe-cap-geocoding-search", optional = true }

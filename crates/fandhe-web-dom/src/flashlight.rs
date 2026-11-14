@@ -47,7 +47,7 @@ const HIDDEN_REASON: &str = "点灯を中断しました";
 
 /// 反映の確認を待つ上限（ミリ秒）。契約の `CONFIRM_TIMEOUT` と同じ値。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-const CONFIRM_TIMEOUT_MS: f64 = fandhe_device::flashlight::CONFIRM_TIMEOUT.as_millis() as f64;
+const CONFIRM_TIMEOUT_MS: f64 = fandhe_cap_flashlight::CONFIRM_TIMEOUT.as_millis() as f64;
 
 /// カメラ画面と共通の失敗種別を、ライト画面の失敗種別へ写す。例外の `message` は受け取らない。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -149,11 +149,11 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    use fandhe_cap_flashlight::{CONFIRM_POLL, READ_INTERVAL};
     use fandhe_core::screens::flashlight_toggle::{
         apply_read, finish, mark_applying, mark_confirming, take_request, FlashlightFailure,
         FlashlightToggleState,
     };
-    use fandhe_device::flashlight::{CONFIRM_POLL, READ_INTERVAL};
     use js_sys::{Array, Function, Object, Promise, Reflect};
     use wasm_bindgen::prelude::*;
     use wasm_bindgen_futures::JsFuture;

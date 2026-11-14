@@ -1387,6 +1387,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-flashlight"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-focus-mode-status"
 version = "0.2.0"
 dependencies = [
@@ -2199,6 +2213,7 @@ dependencies = [
  "fandhe-cap-file-preview",
  "fandhe-cap-file-provider",
  "fandhe-cap-file-watch",
+ "fandhe-cap-flashlight",
  "fandhe-cap-focus-mode-status",
  "fandhe-cap-gamepad",
  "fandhe-cap-geocoding-search",
@@ -2363,6 +2378,7 @@ dependencies = [
  "fandhe-cap-dynamic-type",
  "fandhe-cap-external-app-launch",
  "fandhe-cap-file-watch",
+ "fandhe-cap-flashlight",
  "fandhe-cap-gamepad",
  "fandhe-cap-http-get",
  "fandhe-cap-local-fonts",

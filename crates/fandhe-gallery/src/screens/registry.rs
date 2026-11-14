@@ -443,7 +443,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "flashlight_toggle" => fandhe_core::screens::flashlight_toggle::current_screen,
-    fandhe_egui_proxy::device::flashlight::flashlight_toggle_effect,
+    fandhe_cap_flashlight::flashlight_toggle_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "nlp_segment" => fandhe_core::screens::nlp_segment::current_screen,

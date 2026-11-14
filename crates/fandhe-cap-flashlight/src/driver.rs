@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #106、Issue #458）「ライト（トーチ）」の effect ドライバ。
 //! `fandhe_core::screens::flashlight_toggle`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::flashlight::Flashlight` で OS へ点灯 / 消灯を要求して結果を注入する
+//! `crate::contract::Flashlight` で OS へ点灯 / 消灯を要求して結果を注入する
 //! （`registry.rs` の `effect` 区画から毎フレーム同期に呼ばれる）。
 //!
 //! # 流れ
@@ -14,7 +14,7 @@
 //! 3. `Idle`: `READ_INTERVAL` ごとに `is_on` を pull して反映（外部の点け消しへの追従）。
 //!    送信を省く分岐でも次回の再描画を必ず予約する（契約表 4）
 //!
-//! dispatch（[`implementation`]）は全対象 OS の最終形。iOS は AVFoundation の torch 実装（#460）、Android は #461、Windows は
+//! dispatch（[`platform_flashlight`]）は全対象 OS の最終形。iOS は AVFoundation の torch 実装（#460）、Android は #461、Windows は
 //! #459（本実装）。それ以外は `UnsupportedFlashlight` 固定。Web は
 //! `fandhe-web-dom` 側（#462）。
 //!
@@ -31,32 +31,32 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use fandhe_core::screens::flashlight_toggle::{
-    apply_read, confirm_target, finish, mark_applying, mark_confirming, take_request,
-    FlashlightFailure, FlashlightPhase, FlashlightToggleState,
-};
 #[cfg(not(any(target_os = "ios", target_os = "android", target_os = "windows")))]
-use fandhe_device::flashlight::UnsupportedFlashlight;
-use fandhe_device::flashlight::{Flashlight, CONFIRM_POLL, CONFIRM_TIMEOUT, READ_INTERVAL};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedFlashlight;
+use crate::contract::{CONFIRM_POLL, CONFIRM_TIMEOUT, Flashlight, READ_INTERVAL};
+use crate::error::FlashlightError;
+use fandhe_core::screens::flashlight_toggle::{
+    FlashlightFailure, FlashlightPhase, FlashlightToggleState, apply_read, confirm_target, finish,
+    mark_applying, mark_confirming, take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた実装を返す（プロセス全体で 1 個）。
-fn implementation() -> Arc<dyn Flashlight> {
+pub fn platform_flashlight() -> Arc<dyn Flashlight> {
     static IMPL: OnceLock<Arc<dyn Flashlight>> = OnceLock::new();
     IMPL.get_or_init(|| {
         #[cfg(target_os = "ios")]
         {
-            super::ios_flashlight::implementation()
+            crate::ios::implementation()
         }
         #[cfg(target_os = "android")]
         {
-            super::android_flashlight::implementation()
+            crate::android::implementation()
         }
         #[cfg(target_os = "windows")]
         {
-            super::windows_flashlight::implementation()
+            crate::windows::implementation()
         }
         #[cfg(not(any(target_os = "ios", target_os = "android", target_os = "windows")))]
         {
@@ -66,11 +66,11 @@ fn implementation() -> Arc<dyn Flashlight> {
     .clone()
 }
 
-/// `DeviceError` を画面の失敗種別へ写す。`Display` は機能名だけで OS のコードを含まない
+/// `FlashlightError` を画面の失敗種別へ写す。`Display` は機能名だけで OS のコードを含まない
 /// （security.md A09）。
-fn to_failure(e: DeviceError) -> FlashlightFailure {
+fn to_failure(e: FlashlightError) -> FlashlightFailure {
     match e {
-        DeviceError::Unsupported(_) => FlashlightFailure::Unsupported,
+        FlashlightError::Unsupported => FlashlightFailure::Unsupported,
         other => FlashlightFailure::Failed(other.to_string()),
     }
 }
@@ -280,7 +280,7 @@ fn drive(
             if spawned.is_err() {
                 win_lock().active = false;
                 let failure = FlashlightFailure::Failed(
-                    DeviceError::Internal("flashlight worker").to_string(),
+                    FlashlightError::Internal("flashlight worker").to_string(),
                 );
                 let generation = req.generation;
                 let _ = sender.send(Box::new(move |s: &mut FlashlightToggleState| {
@@ -404,7 +404,13 @@ pub fn flashlight_toggle_effect(
         LATEST_GEN.store(state.generation, Ordering::Release);
         CONFIRMED_OFF.store(!should_turn_off_on_minimize(state, true), Ordering::Release);
     }
-    drive(state, sender, implementation(), Instant::now(), &mut timing);
+    drive(
+        state,
+        sender,
+        platform_flashlight(),
+        Instant::now(),
+        &mut timing,
+    );
     #[cfg(target_os = "windows")]
     start_minimize_watcher(sender);
 }
@@ -425,7 +431,7 @@ fn request_minimize_off(sender: &CompletionSender<FlashlightToggleState>) -> boo
     w.active = true;
     drop(w);
     let worker_sender = sender.clone();
-    let light = implementation();
+    let light = platform_flashlight();
     let spawned = std::thread::Builder::new()
         .name("flashlight-minimize-off".to_string())
         .spawn(move || minimize_off(light.as_ref(), &worker_sender));
@@ -451,9 +457,7 @@ static CONFIRMED_OFF: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicB
 /// [`request_minimize_off`] を呼ぶ（以降の再試行は消灯ワーカー自身が `MINIMIZED` を見て行う）。
 /// ウィンドウ未取得なら何もせず、次フレームで再度試みる。
 #[cfg(target_os = "windows")]
-#[allow(unsafe_code)]
 fn start_minimize_watcher(sender: &CompletionSender<FlashlightToggleState>) {
-    use windows::Win32::UI::WindowsAndMessaging::IsIconic;
     static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     if fandhe_platform_windows::window().is_none() || STARTED.swap(true, Ordering::AcqRel) {
         return;
@@ -464,10 +468,7 @@ fn start_minimize_watcher(sender: &CompletionSender<FlashlightToggleState>) {
         .spawn(move || {
             let mut was_minimized = false;
             loop {
-                if let Some(hwnd) = fandhe_platform_windows::window() {
-                    // SAFETY: `hwnd` は `remember_window` が控えたメインウィンドウで、プロセス生存中は有効。
-                    // `IsIconic` は無効な HWND でも FALSE を返すだけで副作用がない。
-                    let minimized = unsafe { IsIconic(hwnd) }.as_bool();
+                if let Some(minimized) = crate::windows::main_window_minimized() {
                     MINIMIZED.store(minimized, Ordering::Release);
                     if minimized && !was_minimized && !CONFIRMED_OFF.load(Ordering::Acquire) {
                         // 起動に失敗したら立ち上がりを消費せず、次の周期で再試行する。
@@ -487,14 +488,14 @@ fn start_minimize_watcher(sender: &CompletionSender<FlashlightToggleState>) {
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests {
     use super::*;
+    use crate::contract::UnsupportedFlashlight as Unsupported;
     use fandhe_core::screens::flashlight_toggle::{
-        error_text, status_text, turn_off, turn_on, FlashlightPhase, FAILED_PREFIX,
-        NOT_CONFIRMED_REASON, ON_STATUS, UNSUPPORTED_STATUS,
+        FAILED_PREFIX, FlashlightPhase, NOT_CONFIRMED_REASON, ON_STATUS, UNSUPPORTED_STATUS,
+        error_text, status_text, turn_off, turn_on,
     };
-    use fandhe_device::flashlight::UnsupportedFlashlight as Unsupported;
     use std::collections::VecDeque;
 
-    type Rx = std::sync::mpsc::Receiver<crate::app::Completion<FlashlightToggleState>>;
+    type Rx = std::sync::mpsc::Receiver<fandhe_runtime::Completion<FlashlightToggleState>>;
 
     #[derive(Clone, Copy)]
     enum Rd {
@@ -505,13 +506,13 @@ mod tests {
 
     /// `set` の結果を差し込み、`is_on` は列を順に返して最後の要素を繰り返す。
     struct Fake {
-        set: fn(bool) -> Result<(), DeviceError>,
+        set: fn(bool) -> Result<(), FlashlightError>,
         reads: Mutex<VecDeque<Rd>>,
         read_count: Mutex<usize>,
     }
 
     impl Fake {
-        fn new(set: fn(bool) -> Result<(), DeviceError>, reads: &[Rd]) -> Arc<Self> {
+        fn new(set: fn(bool) -> Result<(), FlashlightError>, reads: &[Rd]) -> Arc<Self> {
             Arc::new(Self {
                 set,
                 reads: Mutex::new(reads.iter().copied().collect()),
@@ -524,10 +525,10 @@ mod tests {
     }
 
     impl Flashlight for Fake {
-        fn set_on(&self, on: bool) -> Result<(), DeviceError> {
+        fn set_on(&self, on: bool) -> Result<(), FlashlightError> {
             (self.set)(on)
         }
-        fn is_on(&self) -> Result<Option<bool>, DeviceError> {
+        fn is_on(&self) -> Result<Option<bool>, FlashlightError> {
             *self.read_count.lock().unwrap() += 1;
             let mut q = self.reads.lock().unwrap();
             let r = if q.len() > 1 {
@@ -537,14 +538,21 @@ mod tests {
             };
             match r {
                 Rd::Val(v) => Ok(v),
-                Rd::Fail => Err(DeviceError::Internal("flashlight")),
-                Rd::Unsupported => Err(DeviceError::Unsupported("flashlight")),
+                Rd::Fail => Err(FlashlightError::Internal("flashlight")),
+                Rd::Unsupported => Err(FlashlightError::Unsupported),
             }
         }
     }
 
-    fn ok(_: bool) -> Result<(), DeviceError> {
+    fn ok(_: bool) -> Result<(), FlashlightError> {
         Ok(())
+    }
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
     }
 
     struct Harness {
@@ -557,11 +565,10 @@ mod tests {
 
     impl Harness {
         fn new() -> Self {
-            let ctx = egui::Context::default();
             let (tx, rx) = std::sync::mpsc::channel();
             Self {
                 state: FlashlightToggleState::default(),
-                tx: crate::app::egui_sender(tx, ctx),
+                tx: CompletionSender::new(tx, Arc::new(NoopWaker)),
                 rx,
                 timing: Timing::default(),
                 t0: Instant::now(),
@@ -599,12 +606,13 @@ mod tests {
         // 点灯が確認されて成功で完了した後、保留分を反映すると失敗が表示される。
         finish(&mut s, g, Ok(()), Some(true));
         assert_eq!(s.error, "");
-        let (gen, ok, read) = take_deferred_off().expect("保留されている");
-        assert_eq!(gen, g);
+        let (r#gen, ok, read) = take_deferred_off().expect("保留されている");
+        assert_eq!(r#gen, g);
         apply_minimize_off(&mut s, ok, read);
-        assert!(s
-            .error
-            .starts_with(fandhe_core::screens::flashlight_toggle::FAILED_PREFIX));
+        assert!(
+            s.error
+                .starts_with(fandhe_core::screens::flashlight_toggle::FAILED_PREFIX)
+        );
         assert!(take_deferred_off().is_none());
     }
 
@@ -675,10 +683,10 @@ mod tests {
 
     #[test]
     fn set_failures_are_failures_with_read_back_value() {
-        let cases: [fn(bool) -> Result<(), DeviceError>; 3] = [
-            |_| Err(DeviceError::PermissionDenied("flashlight")),
-            |_| Err(DeviceError::Cancelled("flashlight")),
-            |_| Err(DeviceError::Internal("flashlight")),
+        let cases: [fn(bool) -> Result<(), FlashlightError>; 3] = [
+            |_| Err(FlashlightError::PermissionDenied),
+            |_| Err(FlashlightError::Cancelled),
+            |_| Err(FlashlightError::Internal("flashlight")),
         ];
         for set in cases {
             let mut h = Harness::new();
@@ -707,10 +715,7 @@ mod tests {
     #[test]
     fn unsupported_is_not_success() {
         let mut h = Harness::new();
-        let light = Fake::new(
-            |_| Err(DeviceError::Unsupported("flashlight")),
-            &[Rd::Unsupported],
-        );
+        let light = Fake::new(|_| Err(FlashlightError::Unsupported), &[Rd::Unsupported]);
         turn_on(&mut h.state);
         h.frame(&light, 0);
         assert_eq!(status_text(&h.state), UNSUPPORTED_STATUS);
@@ -782,9 +787,9 @@ mod tests {
     fn default_impl_on_host_is_unsupported() {
         #[cfg(not(any(target_os = "ios", target_os = "android", target_os = "windows")))]
         {
-            let f = implementation();
-            assert!(matches!(f.set_on(true), Err(DeviceError::Unsupported(_))));
-            assert!(matches!(f.is_on(), Err(DeviceError::Unsupported(_))));
+            let f = platform_flashlight();
+            assert!(matches!(f.set_on(true), Err(FlashlightError::Unsupported)));
+            assert!(matches!(f.is_on(), Err(FlashlightError::Unsupported)));
         }
     }
 }

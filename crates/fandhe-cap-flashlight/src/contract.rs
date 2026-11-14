@@ -2,8 +2,8 @@
 //! `docs/device/capabilities/flashlight.json`）。
 //!
 //! 扱う範囲は「ライトを点ける / 消す」と「OS から読み戻した点灯状態」だけ（明るさ調整・点滅は
-//! 扱わない）。対象は iOS / Android / Windows / Web（macOS は `n-a`）。`fandhe-egui-proxy` の
-//! 橋渡し層が [`Flashlight::set_on`] で要求し、[`Flashlight::is_on`] で読み戻した値を画面
+//! 扱わない）。対象は iOS / Android / Windows / Web（macOS は `n-a`）。本 crate の
+//! `driver`が [`Flashlight::set_on`] で要求し、[`Flashlight::is_on`] で読み戻した値を画面
 //! （`fandhe_core::screens::flashlight_toggle`）へ返す。Web は `fandhe-web-dom` が直接配線する。
 //!
 //! # 契約
@@ -35,7 +35,7 @@
 
 use std::time::Duration;
 
-use crate::DeviceError;
+use crate::error::FlashlightError;
 
 /// 点灯状態を OS から読み直す間隔。
 pub const READ_INTERVAL: Duration = Duration::from_secs(1);
@@ -60,42 +60,42 @@ pub const READ_UNKNOWN: i32 = -2;
 /// ライトの契約（モジュール doc の「契約」節）。
 pub trait Flashlight: Send + Sync {
     /// `true` で点灯、`false` で消灯。冪等。
-    fn set_on(&self, on: bool) -> Result<(), DeviceError>;
+    fn set_on(&self, on: bool) -> Result<(), FlashlightError>;
 
     /// OS から読み戻した点灯状態。`Ok(None)` は「まだ分からない」。
-    fn is_on(&self) -> Result<Option<bool>, DeviceError>;
+    fn is_on(&self) -> Result<Option<bool>, FlashlightError>;
 }
 
 /// 非対応 OS 向け。どちらも `Unsupported` を返し、ダミーの成功を返さない。
 pub struct UnsupportedFlashlight;
 
 impl Flashlight for UnsupportedFlashlight {
-    fn set_on(&self, _on: bool) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("flashlight"))
+    fn set_on(&self, _on: bool) -> Result<(), FlashlightError> {
+        Err(FlashlightError::Unsupported)
     }
 
-    fn is_on(&self) -> Result<Option<bool>, DeviceError> {
-        Err(DeviceError::Unsupported("flashlight"))
+    fn is_on(&self) -> Result<Option<bool>, FlashlightError> {
+        Err(FlashlightError::Unsupported)
     }
 }
 
 /// set の結果コード（iOS / Android 共通の SSOT）を契約のエラー種別へ写す。未知の値は `Internal`。
-pub fn decode_set(code: i32) -> Result<(), DeviceError> {
+pub fn decode_set(code: i32) -> Result<(), FlashlightError> {
     match code {
         SET_OK => Ok(()),
-        SET_UNSUPPORTED => Err(DeviceError::Unsupported("flashlight")),
-        _ => Err(DeviceError::Internal("flashlight")),
+        SET_UNSUPPORTED => Err(FlashlightError::Unsupported),
+        _ => Err(FlashlightError::Internal("flashlight")),
     }
 }
 
 /// read の結果コード（iOS / Android 共通の SSOT）を契約の値へ写す。未知の値は `Internal`。
-pub fn decode_read(code: i32) -> Result<Option<bool>, DeviceError> {
+pub fn decode_read(code: i32) -> Result<Option<bool>, FlashlightError> {
     match code {
         READ_ON => Ok(Some(true)),
         READ_OFF => Ok(Some(false)),
         READ_UNKNOWN => Ok(None),
-        READ_UNSUPPORTED => Err(DeviceError::Unsupported("flashlight")),
-        _ => Err(DeviceError::Internal("flashlight")),
+        READ_UNSUPPORTED => Err(FlashlightError::Unsupported),
+        _ => Err(FlashlightError::Internal("flashlight")),
     }
 }
 
@@ -106,9 +106,9 @@ mod tests {
     #[test]
     fn decode_set_maps_codes() {
         assert!(decode_set(0).is_ok());
-        assert!(matches!(decode_set(1), Err(DeviceError::Unsupported(_))));
+        assert!(matches!(decode_set(1), Err(FlashlightError::Unsupported)));
         for c in [2, 99, -1] {
-            assert!(matches!(decode_set(c), Err(DeviceError::Internal(_))));
+            assert!(matches!(decode_set(c), Err(FlashlightError::Internal(_))));
         }
     }
 
@@ -117,18 +117,18 @@ mod tests {
         assert_eq!(decode_read(1).unwrap(), Some(true));
         assert_eq!(decode_read(0).unwrap(), Some(false));
         assert_eq!(decode_read(-2).unwrap(), None);
-        assert!(matches!(decode_read(-1), Err(DeviceError::Unsupported(_))));
+        assert!(matches!(decode_read(-1), Err(FlashlightError::Unsupported)));
         for c in [2, 3, 99] {
-            assert!(matches!(decode_read(c), Err(DeviceError::Internal(_))));
+            assert!(matches!(decode_read(c), Err(FlashlightError::Internal(_))));
         }
     }
 
     #[test]
     fn unsupported_is_never_success() {
         let u = UnsupportedFlashlight;
-        assert!(matches!(u.set_on(true), Err(DeviceError::Unsupported(_))));
-        assert!(matches!(u.set_on(false), Err(DeviceError::Unsupported(_))));
-        assert!(matches!(u.is_on(), Err(DeviceError::Unsupported(_))));
+        assert!(matches!(u.set_on(true), Err(FlashlightError::Unsupported)));
+        assert!(matches!(u.set_on(false), Err(FlashlightError::Unsupported)));
+        assert!(matches!(u.is_on(), Err(FlashlightError::Unsupported)));
     }
 
     #[test]
