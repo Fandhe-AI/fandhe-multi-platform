@@ -54,7 +54,7 @@ use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, poll_and_finish};
 type Outcome = Result<InAppBrowserOutcome, InAppBrowserFailure>;
 
 /// 現在のプラットフォームに応じた `InAppBrowser` 実装を返す（dispatch の最終形）。
-fn platform() -> Arc<dyn InAppBrowser> {
+pub fn platform_in_app_browser() -> Arc<dyn InAppBrowser> {
     #[cfg(target_os = "ios")]
     {
         crate::ios::implementation()
@@ -266,7 +266,12 @@ pub fn in_app_browser_show_effect(
     sender: &CompletionSender<InAppBrowserShowState>,
 ) {
     static IMPL: OnceLock<Arc<dyn InAppBrowser>> = OnceLock::new();
-    drive(state, sender, IMPL.get_or_init(platform), bridge());
+    drive(
+        state,
+        sender,
+        IMPL.get_or_init(platform_in_app_browser),
+        bridge(),
+    );
 }
 
 #[cfg(test)]
@@ -414,7 +419,7 @@ mod tests {
         {
             let u = validate_url("https://example.com/").unwrap();
             assert_eq!(
-                platform().open(1, &u),
+                platform_in_app_browser().open(1, &u),
                 Err(InAppBrowserFailure::Unsupported)
             );
         }
