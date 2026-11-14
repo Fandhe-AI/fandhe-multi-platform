@@ -79,7 +79,11 @@ pub fn platform_now_playing_controls() -> Arc<dyn NowPlaying> {
 }
 
 /// プロセスに 1 つの共有状態。各 OS の層は `push` だけを呼ぶ。
-pub(crate) fn commands() -> &'static SharedOsCommand {
+///
+/// 画面の状態型を使わないアプリへの公開口でもある（[`sync_audio_play`] を経由しない場合）。受付は自分で管理する:
+/// [`platform_now_playing_controls`] の `publish` の前に `arm()`（`publish` が失敗したら `disarm()`）、
+/// OS からの再生・一時停止は `take()` で取り出す。`clear` / 停止を確定する前に `disarm()` して、停止後に届く古い操作を捨てる。
+pub fn commands() -> &'static SharedOsCommand {
     static COMMANDS: OnceLock<SharedOsCommand> = OnceLock::new();
     COMMANDS.get_or_init(SharedOsCommand::new)
 }

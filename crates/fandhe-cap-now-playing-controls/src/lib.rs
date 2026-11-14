@@ -9,7 +9,7 @@
 //!
 //! 契約（`contract`）・失敗の種類（`error`）・effect ドライバ（`driver`）・OS 実装を 1 つに集める。
 //! 画面の状態型を参照してよいのは `driver` だけ。入口 `pub fn platform_now_playing_controls()` は状態型に依存しないため、
-//! フレームワークの外のアプリも使える。
+//! フレームワークの外のアプリも使える（OS の操作は共有の受信口 [`commands`] から取り出す）。
 
 // unsafe は OS 実装の FFI・JNI エクスポートに限る（`// SAFETY:` を付ける）。該当 OS だけ deny へ緩める。
 #![cfg_attr(

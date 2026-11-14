@@ -272,6 +272,12 @@ type WaiterTx = std::sync::mpsc::Sender<Result<Vec<BleDevice>, BluetoothLeError>
 /// 同期入口の待ち手（要求は 1 本だけ。新しい要求は古い待ち手を捨てて置き換える）。
 static WAITER: Mutex<Option<(u64, WaiterTx)>> = Mutex::new(None);
 
+/// 待ち手を捨てる（`Sender` の drop で同期入口の `recv` が `Err` で戻り `Cancelled` になる）。
+/// 画面側の新しい要求・Activity 再生成・終了で、古い要求の完了が届かなくなるときに呼ぶ。
+fn drop_waiter() {
+    drop(WAITER.lock().unwrap_or_else(|e| e.into_inner()).take());
+}
+
 fn take_waiter(request_id: u64) -> Option<WaiterTx> {
     let mut g = WAITER.lock().unwrap_or_else(|e| e.into_inner());
     if g.as_ref().is_some_and(|(id, _)| *id == request_id) {
@@ -314,8 +320,9 @@ fn start_native_scan(request_id: u64) {
 }
 
 /// 画面を介さない同期入口（iOS・macOS・Windows・Android）。`scan` は結果が届くまで呼び出しスレッドを塞ぐため、
-/// UI スレッドから呼ばない。権限ダイアログの回答待ちには期限を設けないが、`scan` 自体は
-/// [`SCAN_DURATION_MS`](crate::contract::SCAN_DURATION_MS) に余裕を足した期限で戻る（超えたらスキャンを止めて `Internal`）。
+/// UI スレッドから呼ばない。期限は実装側の [`SCAN_DURATION_MS`](crate::contract::SCAN_DURATION_MS) だけで、
+/// 権限ダイアログの回答待ちを含め呼び出し側では別の期限を持たない。画面側の新しい要求・Activity 再生成・
+/// [`stop_shared_scan`] で待ち手が捨てられたら `Cancelled` で戻る。
 #[cfg(any(
     target_os = "ios",
     target_os = "macos",
@@ -332,26 +339,14 @@ pub struct NativeBluetoothLe;
 ))]
 impl BluetoothLe for NativeBluetoothLe {
     fn scan(&self) -> Result<Vec<BleDevice>, BluetoothLeError> {
-        use std::time::Duration;
         let (tx, rx) = std::sync::mpsc::channel();
         let request_id = bridge::begin();
         *WAITER.lock().unwrap_or_else(|e| e.into_inner()) = Some((request_id, tx));
         start_native_scan(request_id);
-        let limit =
-            Duration::from_millis(crate::contract::SCAN_DURATION_MS) + Duration::from_secs(30);
-        match rx.recv_timeout(limit) {
-            Ok(r) => r,
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                // 別の要求に置き換えられた。
-                Err(BluetoothLeError::Cancelled("bluetooth_le"))
-            }
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                take_waiter(request_id);
-                stop_shared_scan();
-                bridge::SLOT.clear(request_id);
-                Err(BluetoothLeError::Internal("bluetooth_le timeout"))
-            }
-        }
+        // 期限は掛けない（権限ダイアログの回答待ちを含め、OS が完了を必ず返す契約。契約の「呼び出し側で別の期限を持たない」）。
+        // 置き換え・再生成・終了で待ち手が捨てられたら `Sender` の drop で `Err` が返り、`Cancelled` で戻る。
+        rx.recv()
+            .unwrap_or(Err(BluetoothLeError::Cancelled("bluetooth_le")))
     }
 }
 
@@ -377,6 +372,7 @@ pub(crate) mod bridge {
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
     pub(crate) fn begin() -> u64 {
+        super::drop_waiter();
         SLOT.begin()
     }
 
@@ -488,6 +484,7 @@ pub fn ble_scan_effect(state: &BleScanState, sender: &CompletionSender<BleScanSt
 /// Java 側の追跡は Activity インスタンスのフィールドで、再生成で一緒に消える）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
+    drop_waiter();
     bridge::SLOT.reset();
     OBSERVED.clear();
 }
@@ -496,6 +493,7 @@ pub fn reset_pending_tracking() {
 /// Rust 側のロックを握ったまま OS 側の停止を呼ばない（OS 側コールバックが同じ
 /// ロックを取るため、`device-bridge-contracts.md` 11 節）。
 pub fn stop_shared_scan() {
+    drop_waiter();
     OBSERVED.clear();
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     crate::apple::stop();

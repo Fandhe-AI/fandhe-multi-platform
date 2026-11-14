@@ -223,7 +223,12 @@ pub(crate) mod bridge {
     }
 
     /// 提示直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
+    ///
+    /// 古い要求の待ち手は捨てる（`Sender` を drop すると [`super::NativeNotifier`] の `recv` が
+    /// `Err` で戻り、`Ok(Cancelled)` として呼び出しが終わる）。置き換えられた要求の完了は
+    /// 世代不一致で届かないため、捨てないと同期呼び出しが永久に塞がる。
     pub(crate) fn begin() -> u64 {
+        drop(WAITER.lock().unwrap_or_else(|e| e.into_inner()).take());
         SLOT.begin()
     }
 
@@ -261,6 +266,8 @@ pub(crate) mod bridge {
     /// 同じ理由で `cfg` を割らず `allow(dead_code)` に留める。
     #[cfg_attr(not(target_os = "android"), allow(dead_code))]
     pub(crate) fn reset() {
+        // 再生成で要求ごと破棄するため、同期入口の待ち手も捨てて `Cancelled` で戻らせる。
+        drop(WAITER.lock().unwrap_or_else(|e| e.into_inner()).take());
         SLOT.reset()
     }
 }
