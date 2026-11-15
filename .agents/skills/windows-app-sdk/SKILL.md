@@ -2,18 +2,18 @@
 name: windows-app-sdk
 description: >
   Windows アプリ開発 (WinUI 3 / Windows App SDK 2.x) のライフサイクル・ウィンドウ・
-  通知・リソース・ウィジェット・配置。AppInstance, 単一インスタンス化, RichActivation, PowerManager、
-  AppWindow, AppWindowPresenter, OverlappedPresenter, タイトルバー, DisplayArea, Win32 相互運用、
-  AppNotification, Toast, PushNotificationManager, バッジ通知、ResourceManager, MRT, PRI, ローカライズ、
-  WidgetProvider, WidgetManager, アダプティブカード、MSIX, 自己完結型, DeploymentManager, PackageVolume,
-  IPackageValidator (パッケージ検証), RuntimeCompatibilityOptions, SemVer, サポート期間, リリースチャネル。
+  通知・リソース・ウィジェット・配置。AppInstance, RichActivation, PowerManager,
+  AppWindow, AppWindowPresenter, OverlappedPresenter, タイトルバー, DisplayArea,
+  AppNotification, Toast, PushNotificationManager, ResourceManager, MRT, PRI,
+  WidgetProvider, WidgetManager, MSIX, 自己完結型, DeploymentManager,
+  RuntimeCompatibilityOptions, SemVer。
 user-invocable: false
 ---
 
 # Windows App SDK リファレンス
 
 WinUI 3 / Windows App SDK のアプリライフサイクル・ウィンドウ管理・通知・リソース管理・ウィジェット・配置に関する公式ドキュメントの主要 API を網羅したスキル。
-対象は Windows App SDK 2.x (最新安定版 2.5.1、2026-09-16 リリース。ドキュメント取得日 2026-10-16)。2.0 は最初の SemVer 2.0.0 リリースで、SDK バージョンと NuGet バージョンが一致し、パッケージファミリー名はメジャーバージョンに追随する。1.8 は公式表では Maintenance 表示だが servicing 終了日 2026-09-24 を経過済み (取得日 2026-10-16 時点。以後の修正は期待できないため 2.x へ移行)。
+対象は Windows App SDK 2.x (最新安定版 2.6.5、2026-11-02 リリース。ドキュメント取得日 2026-11-14)。2.0 は最初の SemVer 2.0.0 リリースで、SDK バージョンと NuGet バージョンが一致し、パッケージファミリー名はメジャーバージョンに追随する。1.8 は公式表では Maintenance 表示だが servicing 終了日 2026-09-24 を経過済み (取得日 2026-11-14 時点でも表は Maintenance のまま。以後の修正は期待できないため 2.x へ移行)。
 ユーザーのタスクに応じて適切な README.md を読み、そこから個別ファイルへ辿ること。
 
 ## ディレクトリ構成
