@@ -133,16 +133,19 @@ pub(crate) mod bridge {
     use crate::contract::PrintOutcome;
     use crate::error::PrintError;
 
-    use fandhe_runtime::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::{RequestSlot, SlotOwner};
 
     /// OS の生の結果。画面用への写像は取り出す側が行う（画面経由でも公開入口でも同じ slot を使う）。
     pub(crate) type Outcome = Result<PrintOutcome, PrintError>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
-    /// 依頼直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
-    pub(crate) fn begin() -> u64 {
-        SLOT.begin()
+    /// 画面側の要求の持ち主印。公開入口の進行中・未取得の結果を画面側が置き換えないために使う。
+    pub(crate) static SCREEN: SlotOwner = SlotOwner::new();
+
+    /// 画面側の依頼直前に呼ぶ。公開入口の要求が進行中・未取得なら `None`（置き換えない）。
+    pub(crate) fn begin() -> Option<u64> {
+        SCREEN.begin_keeping_foreign(&SLOT)
     }
 
     /// OS からの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果ありは
@@ -198,8 +201,9 @@ fn begin_print_image(request_id: u64, img: &PrintImage) -> Result<(), PrintError
 /// 依頼自体が失敗したときは保留を残さず `Err` を返す。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn begin_print_request(req: &PrintRequest) -> Result<u64, PrintError> {
+    // 未取得の結果も守る（`keep` が常に真）。取り出すまで占有を維持し、新しい要求は busy にする。
     let id = bridge::SLOT
-        .try_begin()
+        .try_begin_unless(|_| true)
         .ok_or(PrintError::Internal("print busy"))?;
     begin_print(id, req).inspect_err(|_| bridge::SLOT.clear(id))?;
     Ok(id)
@@ -208,8 +212,9 @@ pub fn begin_print_request(req: &PrintRequest) -> Result<u64, PrintError> {
 /// [`begin_print_request`] の画面の画像版。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn begin_print_image_request(img: &PrintImage) -> Result<u64, PrintError> {
+    // 未取得の結果も守る（`keep` が常に真）。取り出すまで占有を維持し、新しい要求は busy にする。
     let id = bridge::SLOT
-        .try_begin()
+        .try_begin_unless(|_| true)
         .ok_or(PrintError::Internal("print busy"))?;
     begin_print_image(id, img).inspect_err(|_| bridge::SLOT.clear(id))?;
     Ok(id)
@@ -229,7 +234,10 @@ fn drive_callback(state: &PrintPageState, sender: &CompletionSender<PrintPageSta
 
     if let Some(view) = take_request(state) {
         let _ = sender.send(Box::new(mark_printing));
-        let request_id = bridge::begin();
+        let Some(request_id) = bridge::begin() else {
+            send_busy(sender, view.generation);
+            return;
+        };
         // 入力不正は OS へ渡さずその場で画面へ返す。
         let accepted = build_request(&view).and_then(|r| begin_print(request_id, &r));
         if let Err(e) = accepted {
@@ -238,6 +246,17 @@ fn drive_callback(state: &PrintPageState, sender: &CompletionSender<PrintPageSta
         return;
     }
     poll_bridge(state, sender);
+}
+
+/// 公開入口の要求が進行中・未取得で画面側の要求を受けられないとき、画面へ失敗を返す。
+#[cfg(any(target_os = "ios", target_os = "android"))]
+fn send_busy(sender: &CompletionSender<PrintPageState>, generation: u64) {
+    use fandhe_core::screens::print_page::finish_print;
+
+    let outcome = to_outcome(Err(PrintError::Internal("print busy")));
+    let _ = sender.send(Box::new(move |s: &mut PrintPageState| {
+        finish_print(s, generation, outcome);
+    }));
 }
 
 /// [`bridge`] に届いた結果を毎フレーム反映する（`print` と `print-screen` で共用）。
@@ -249,8 +268,10 @@ fn poll_bridge(state: &PrintPageState, sender: &CompletionSender<PrintPageState>
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    // 画面側の分だけを取る。公開入口の要求は触らない。slot が別 id へ変わった・空になったら失敗で確定する。
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &bridge::SCREEN,
         sender,
         |_request_id| {},
         move |s: &mut PrintPageState, outcome| {
@@ -260,6 +281,15 @@ fn poll_bridge(state: &PrintPageState, sender: &CompletionSender<PrintPageState>
                 true
             } else {
                 false
+            }
+        },
+        move |s: &mut PrintPageState| {
+            if s.phase != PrintPhase::Idle {
+                finish_print(
+                    s,
+                    generation,
+                    to_outcome(Err(PrintError::Internal("print lost"))),
+                );
             }
         },
     );
@@ -486,7 +516,10 @@ pub fn print_screen_page_effect(state: &PrintPageState, sender: &CompletionSende
             }));
         }
         CaptureStep::Done(Ok(img)) => {
-            let request_id = bridge::begin();
+            let Some(request_id) = bridge::begin() else {
+                send_busy(sender, generation);
+                return;
+            };
             if let Err(e) = begin_print_image(request_id, &img) {
                 bridge::deliver(request_id, Err(e));
                 // 入力が無いと次フレームが来ず Printing のまま止まるため、結果の反映を起こす。
@@ -914,7 +947,7 @@ mod bridge_tests {
 
     #[test]
     fn stale_request_id_is_dropped_and_second_deliver_ignored() {
-        let id = bridge::begin();
+        let id = bridge::SLOT.begin();
         assert!(!bridge::deliver(id + 1000, Ok(PrintOutcome::Submitted)));
         assert!(bridge::SLOT.snapshot().is_some_and(|(_, r)| r.is_none()));
         assert!(bridge::deliver(id, Ok(PrintOutcome::Cancelled)));
