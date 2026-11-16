@@ -21,6 +21,11 @@ thiserror = { workspace = true }
 fandhe-platform-android = { path = "../fandhe-platform-android" }
 jni = { workspace = true }
 
+# iOS の `.m` が `fandhe_ios_app_events.h` の通知定数（`FandheScene*Notification`）・delegate の登録関数を外部参照するため、
+# 共通層を通常依存にしてリンクに残す（lib.rs の `const _` が実際に参照する。build-dependencies だけでは成果物へ入らない）。
+[target.'cfg(target_os = "ios")'.dependencies]
+fandhe-platform-apple = { path = "../fandhe-platform-apple" }
+
 [build-dependencies]
 # iOS・macOS の ObjC を build.rs でコンパイルする helper。通常のビルドには cc を持ち込まない。
 fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }

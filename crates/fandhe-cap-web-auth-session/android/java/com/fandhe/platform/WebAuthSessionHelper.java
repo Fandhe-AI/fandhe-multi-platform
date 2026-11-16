@@ -56,6 +56,10 @@ final class WebAuthSessionHelper {
 
     private static native void nativeOnWebAuthSessionResult(long requestId, int kind, String url);
 
+    // 画面（effect）の要求の回収。画面状態は Activity の破棄で失われるので、破棄のたびに Rust 側の画面の要求だけを片付ける
+    // （公開入口の要求は引き継ぎ型のまま残る）。回収した id を返す（無ければ -1）。
+    private static native long nativeReclaimScreenRequest();
+
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private static final Map<Activity, WebAuthSessionHelper> HELPERS =
@@ -88,6 +92,21 @@ final class WebAuthSessionHelper {
     // Activity の破棄時。以後の要求は拒否される（要求が無ければ何もしない）。
     static void detach(Activity activity) {
         HELPERS.remove(activity);
+        long id;
+        try {
+            id = nativeReclaimScreenRequest();
+        } catch (UnsatisfiedLinkError e) {
+            return; // native が未ロード（Rust 側に画面の要求は無い）。
+        }
+        if (id >= 0) {
+            // Rust 側で閉じた要求を Java の追跡からも外す（以後のコールバックは追跡なしで捨てられる）。
+            synchronized (LOCK) {
+                if (request.complete(id)) {
+                    launchedId = RequestTracker.NONE;
+                    leftId = RequestTracker.NONE;
+                }
+            }
+        }
     }
 
     // Rust から呼ぶ入口（JNI スレッド）。helper が無い（生成前・破棄後）要求は受理せず false（失敗で確定させる）。

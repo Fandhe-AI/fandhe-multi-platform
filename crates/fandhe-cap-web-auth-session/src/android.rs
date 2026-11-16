@@ -12,7 +12,8 @@
 //!
 //! ライフサイクル（引き継ぎ型）: 認証中に Activity が再生成されても、要求の状態は Java 側が static に持ち、
 //! コールバックは新しい Activity の `onNewIntent`（singleTask）へ届いて確定する。Rust 側の `ACTIVE`・`SLOT` は残したままにし、
-//! 呼び出し側の掃除は要らない。結果が返らない間（Activity が再生成されずに終了・プロセス死）は期限
+//! 呼び出し側の掃除は要らない（画面の要求だけは、画面状態が失われるので `onHostDestroyed` が Rust 側の画面要求の回収を呼ぶ）。
+//! 結果が返らない間（Activity が再生成されずに終了・プロセス死）は期限
 //! （[`crate::SESSION_TIMEOUT`]）が期限切れとして確定する（期限の判定は取り出す側の呼び出しで行う）。
 //!
 //! 守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止（未知の結果コードを成功へ倒さない）。守らない範囲: Custom Tab を閉じられないこと・
@@ -196,6 +197,21 @@ mod imp {
         false
     }
     pub(super) fn cancel(_id: u64) {}
+}
+
+/// `WebAuthSessionHelper.nativeReclaimScreenRequest`（Activity の破棄時）。画面の要求だけを回収し、その id を返す（無ければ -1）。
+/// 画面状態は破棄で失われるため、表示中の画面に依存せずここで待ち受け・slot を片付ける。公開入口の要求は触らない。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない（引数のポインタは読まない）。
+#[cfg(target_os = "android")]
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+extern "system" fn Java_com_fandhe_platform_WebAuthSessionHelper_nativeReclaimScreenRequest(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+) -> jni::sys::jlong {
+    crate::driver::reclaim_screen_request().map_or(-1, |id| id as jni::sys::jlong)
 }
 
 /// `WebAuthSessionHelper.nativeOnWebAuthSessionResult` から呼ばれる JNI エクスポート。

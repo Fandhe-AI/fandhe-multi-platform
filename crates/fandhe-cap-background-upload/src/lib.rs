@@ -41,3 +41,9 @@ pub use driver::*;
 pub use error::BackgroundUploadError;
 #[cfg(target_os = "ios")]
 pub use ios::register;
+
+// `.m` が外部参照する `FandheScene*Notification`・delegate の登録関数は `fandhe-platform-apple` が定義する。
+// 公開関数を実際に参照して、この機能だけを選んだ iOS の成果物でもリンクから落ちないようにする
+// （`capability-crate-migration.md` §21）。
+#[cfg(target_os = "ios")]
+const _: fn() = fandhe_platform_apple::ios_scene_install;

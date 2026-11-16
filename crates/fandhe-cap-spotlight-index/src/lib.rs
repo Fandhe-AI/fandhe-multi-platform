@@ -47,3 +47,9 @@ pub use error::SpotlightIndexError;
 // リンク対象から外れないようにする（`capability-crate-migration.md` §21）。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 const _: fn() = fandhe_cap_url_scheme::register;
+
+// `.m` が外部参照する `FandheScene*Notification`・delegate の登録関数は `fandhe-platform-apple` が定義する。
+// 公開関数を実際に参照して、この機能だけを選んだ iOS の成果物でもリンクから落ちないようにする
+// （`capability-crate-migration.md` §21）。
+#[cfg(target_os = "ios")]
+const _: fn() = fandhe_platform_apple::ios_scene_install;

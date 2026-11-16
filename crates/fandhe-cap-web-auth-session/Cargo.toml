@@ -45,6 +45,8 @@ frameworks = ["AuthenticationServices"]
 java = ["android/java"]
 # Custom Tabs（`CustomTabsIntent`）。
 gradle = ["androidx.browser:browser:1.8.0"]
+# `DemoAuthServer` の 127.0.0.1 の `TcpListener`。Android はソケットの作成（`socket()`）の時点で INTERNET を見る（ループバックでも要る）。
+permissions = [{ name = "android.permission.INTERNET" }]
 # url-scheme と同じ filter（統合規則で内容が同じなら 1 つ）。`fandhe://web-auth/callback` を受ける。
 # ブラウザからのコールバックは `singleTask` の `onNewIntent` へ来る。
 main-activity-intent-filters = [

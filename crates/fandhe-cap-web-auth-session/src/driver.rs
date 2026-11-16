@@ -288,14 +288,30 @@ static SCREEN_OWNER: SlotOwner = SlotOwner::new();
 static EXTERNAL_OWNER: SlotOwner = SlotOwner::new();
 
 /// 画面の要求 1 件を打ち切る（OS のセッションとサーバーを閉じ、結果の置き場を空にする）。
-fn abandon_screen_request(imp: &dyn WebAuthSession, request_id: u64) {
+///
+/// `imp` が `None` のときは OS のセッションを閉じない（Activity の破棄中に OS 層へ戻らないため。Java が自分で閉じる）。
+/// 同じ要求を何度呼んでも 1 度だけ閉じる（`conclude_with` が `ACTIVE` を取り出した側だけが後片付けをする）。
+fn abandon_screen_request(imp: Option<&dyn WebAuthSession>, request_id: u64) {
     bridge::conclude_with(
         Some(request_id),
         |_| Some(Ok(WebAuthOutcome::Cancelled)),
-        Some(imp),
+        imp,
     );
     let _ = bridge::SLOT.take_ready(request_id);
     SCREEN_OWNER.release(request_id);
+}
+
+/// Activity の破棄（機能 crate 自身のライフサイクル、Java の `onHostDestroyed`）で呼ぶ。画面の要求は画面状態ごと失われるので、
+/// 表示中の画面に関係なく画面の要求（`SCREEN_OWNER`）だけを回収する（待ち受け・slot・印）。公開入口（`EXTERNAL_OWNER`）の要求は
+/// 引き継ぎ型のまま触らない。回収した要求の id を返す（Java が自分の追跡を外す）。`drive` 内の回収と重なっても 1 度だけ閉じる。
+#[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
+pub(crate) fn reclaim_screen_request() -> Option<u64> {
+    let mine = SCREEN_OWNER.current();
+    if mine == 0 {
+        return None;
+    }
+    abandon_screen_request(None, mine);
+    Some(mine)
 }
 
 /// 毎フレームの処理（テストから任意の実装を差し込めるよう切り出す）。
@@ -316,7 +332,7 @@ fn drive(
             // effect は毎フレームの先頭で完了（`mark_running`）を反映した後に呼ばれる（`fandhe-render-egui` の `app.rs`）。
             // よって `Requested` を見た時点で前フレームの発送は反映済みで、自分の持ち主の印が残っていれば
             // 前の画面状態（Activity 再生成で `default()` へ戻る前）の要求。打ち切って発送し直す。
-            abandon_screen_request(imp, mine);
+            abandon_screen_request(Some(imp), mine);
         }
         // 公開入口の進行中・未取得の要求があるあいだは始めない（置き換えない）。終わるまで毎フレーム見直す。
         let Some(request_id) = SCREEN_OWNER.begin_excluding(&bridge::SLOT, &[&EXTERNAL_OWNER])
@@ -348,7 +364,7 @@ fn drive(
         // （Activity 再生成で `Idle` へ戻る前）の要求。OS のセッション・待ち受け・slot・印を回収する
         // （残すと待ち受けが期限後も生き、`begin_web_auth` が断られ続ける）。
         if mine != 0 {
-            abandon_screen_request(imp, mine);
+            abandon_screen_request(Some(imp), mine);
         }
         return;
     }
@@ -971,6 +987,31 @@ mod tests {
         });
         assert_eq!(got.len(), 1);
         assert!(matches!(got[0], Ok(WebAuthOutcome::Returned(_))));
+    }
+
+    #[test]
+    fn lifecycle_reclaim_closes_only_the_screen_request() {
+        let _g = serial();
+        let (mut h, fake) = (Harness::new(), Fake::new());
+        screen::start(&mut h.state);
+        h.frame(&fake);
+        let port = bridge::lock()
+            .as_ref()
+            .unwrap()
+            .server
+            .as_ref()
+            .unwrap()
+            .port();
+        let rid = id();
+        // 画面の描画に関係なく、破棄の通知だけで回収できる。
+        assert_eq!(reclaim_screen_request(), Some(rid));
+        assert!(bridge::lock().is_none() && bridge::SLOT.snapshot().is_none());
+        assert!(std::net::TcpStream::connect(("127.0.0.1", port)).is_err());
+        assert_eq!(reclaim_screen_request(), None, "二重には閉じない");
+        assert!(begin_external(&fake, ext_request()).is_ok());
+        // 公開入口の要求は回収しない。
+        assert_eq!(reclaim_screen_request(), None);
+        assert!(bridge::lock().is_some());
     }
 
     #[test]
