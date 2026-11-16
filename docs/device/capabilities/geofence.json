@@ -16,7 +16,7 @@
       ],
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "`crates/fandhe-device/src/geofence.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-egui-proxy/src/device/geofence.rs` + `crates/fandhe-egui-proxy/apple/fandhe_apple_location.m`、Issue 旧#1058"
+      "impl": "`crates/fandhe-cap-geofence/src/contract.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-cap-geofence/src/driver.rs` + `crates/fandhe-cap-location/apple/fandhe_apple_location.m`、Issue 旧#1058"
     },
     "android": {
       "status": "done",
@@ -29,7 +29,7 @@
       ],
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "`crates/fandhe-device/src/geofence.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-egui-proxy/src/device/geofence.rs` + `platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java`、Issue 旧#1058"
+      "impl": "`crates/fandhe-cap-geofence/src/contract.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-cap-geofence/src/driver.rs` + `crates/fandhe-cap-location/android/java/com/fandhe/platform/LocationHelper.java`、Issue 旧#1058"
     },
     "macos": {
       "status": "done",
@@ -41,7 +41,7 @@
         "ジオフェンス（領域監視）"
       ],
       "implStatus": "実装済み（登録と内外表示は実機確認済み・出入りは未確認）",
-      "impl": "`crates/fandhe-device/src/geofence.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-egui-proxy/src/device/geofence.rs`、Issue 旧#1057"
+      "impl": "`crates/fandhe-cap-geofence/src/contract.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-cap-geofence/src/driver.rs`、Issue 旧#1057"
     },
     "windows": {
       "status": "done",
@@ -53,7 +53,7 @@
         "ジオフェンス（領域監視）"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "`crates/fandhe-device/src/geofence.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-egui-proxy/src/device/geofence.rs`、Issue 旧#1057"
+      "impl": "`crates/fandhe-cap-geofence/src/contract.rs` + `crates/fandhe-core/src/screens/geofence_show.rs` + `crates/fandhe-cap-geofence/src/driver.rs`、Issue 旧#1057"
     },
     "web": {
       "status": "no",

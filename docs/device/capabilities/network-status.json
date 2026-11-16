@@ -14,7 +14,7 @@
       "note": "実装済み（旧#1283）。macOS と同じ `.m`（`NWPathMonitor`）を共用し、プロセス寿命の monitor を 1 つだけ開始して（専用 serial queue・static 保持）、handler が最新 path を atomic に詰めた直後に `request_repaint` で次フレームを起こす。画面は 1 秒間隔で読む。`satisfied` のみ接続あり、`unsatisfied`/`satisfiable` は接続なし、`invalid` は不明。monitor は停止しない（OS がプロセス終了で片付ける）。権限・usage description は不要。守る範囲: 嘘の「接続あり」を出さないこと（初期値・不明・失敗・`satisfiable` は接続ありにしない）、1 プロセス内の取得、資源のプロセス寿命での単一保持。守らない範囲: インターネット到達性（captive portal・VPN）、変化からの反映遅れ（最大 1 秒。背景から戻った直後は次の path 更新まで古い値が残りうる）、複数プロセス間の食い違い。既知の天井: 起動直後の 1 回目は handler 未到達で「不明」になりうる。iOS 実機確認は #18 で済み",
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_network_status.rs + crates/fandhe-egui-proxy/src/device/apple_network_status.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_network_status.m + crates/fandhe-egui-proxy/src/device/network_status.rs + crates/fandhe-core/src/screens/network_status_show.rs + crates/fandhe-device/src/network_status.rs、Issue 旧#1283",
+      "impl": "crates/fandhe-cap-network-status/src/ios.rs + crates/fandhe-cap-network-status/src/apple.rs + crates/fandhe-cap-network-status/apple/fandhe_apple_network_status.m + crates/fandhe-cap-network-status/src/driver.rs + crates/fandhe-core/src/screens/network_status_show.rs + crates/fandhe-cap-network-status/src/contract.rs、Issue 旧#1283",
       "verified": true
     },
     "android": {
@@ -25,7 +25,7 @@
       "note": "実装済み（旧#1284）。`ConnectivityManager.getActiveNetwork` / `getNetworkCapabilities` を Rust 側から JNI で 1 秒間隔に同期で 1 回読む（`registerDefaultNetworkCallback` は購読しない。コールバック・要求 id・保留状態を持たないので、Activity 再生成で破棄すべき要求も無い）。アクティブなネットワークがあれば接続あり、無ければ接続なし、取得失敗・想定外の結果コードは `Internal`。種別は Wi-Fi → 携帯 → 有線 → その他（VPN・Bluetooth 等）、従量制は `NET_CAPABILITY_NOT_METERED` の有無。守る範囲: 嘘の「接続あり」を出さないこと（失敗・Activity 未確立・未定義コードは接続ありにしない）、1 プロセス内の取得、接続詳細をログへ出さないこと。守らない範囲: インターネット到達性（`VALIDATED` は見ない・captive portal・VPN）、変化の反映遅れ（最大 1 秒）。既知の天井: `TEMPORARILY_NOT_METERED`（API 30）は見ない。Android 実機確認は #18 で済み",
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_network_status.rs + platforms/android/app/src/main/java/com/fandhe/platform/NetworkStatusHelper.java + crates/fandhe-egui-proxy/src/device/network_status.rs + crates/fandhe-core/src/screens/network_status_show.rs + crates/fandhe-device/src/network_status.rs、Issue 旧#1284",
+      "impl": "crates/fandhe-cap-network-status/src/android.rs + crates/fandhe-cap-network-status/android/java/com/fandhe/platform/NetworkStatusHelper.java + crates/fandhe-cap-network-status/src/driver.rs + crates/fandhe-core/src/screens/network_status_show.rs + crates/fandhe-cap-network-status/src/contract.rs、Issue 旧#1284",
       "verified": true
     },
     "macos": {
@@ -36,7 +36,7 @@
       "note": "実装済み（旧#1282）。`NWPathMonitor` に同期取得 API が無いため、初回の読み取りでプロセス寿命の monitor を 1 つだけ開始し（専用 serial queue・static 保持）、handler が最新 path を atomic に詰め、画面が 1 秒間隔で読む。`satisfied` のみ接続あり、`unsatisfied`/`satisfiable` は接続なし、`invalid` は不明。種別は Wi-Fi → 携帯 → 有線 → その他、従量制は `isExpensive`。monitor は停止しない（OS がプロセス終了で片付ける）。守る範囲: 嘘の「接続あり」を出さないこと（初期値・不明・失敗・非対応・`satisfiable` は接続ありにしない）、1 プロセス内の取得、資源のプロセス寿命での単一保持。守らない範囲: インターネット到達性（captive portal・VPN）、変化からの反映遅れ（最大 1 秒）、複数プロセス間の食い違い。既知の天井: 起動直後の 1 回目は handler 未到達で「不明」になりうる。Mac 目視は #18 で済み",
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-egui-proxy/src/device/apple_network_status.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_network_status.m + crates/fandhe-core/src/screens/network_status_show.rs + crates/fandhe-device/src/network_status.rs + crates/fandhe-egui-proxy/src/device/network_status.rs、Issue 旧#1282",
+      "impl": "crates/fandhe-cap-network-status/src/apple.rs + crates/fandhe-cap-network-status/apple/fandhe_apple_network_status.m + crates/fandhe-core/src/screens/network_status_show.rs + crates/fandhe-cap-network-status/src/contract.rs + crates/fandhe-cap-network-status/src/driver.rs、Issue 旧#1282",
       "verified": true
     },
     "windows": {
@@ -47,7 +47,7 @@
       "note": "実装済み（旧#1282）。`NetworkInformation::GetInternetConnectionProfile` を UI スレッドで 1 秒間隔に同期で読む（`NetworkStatusChanged` は購読しない）。プロファイル無し（null）のときは `GetConnectionProfiles` から経路を持つもの（`LocalAccess` 以上）を探し、無ければ接続なし。それ以外の失敗は `Internal`。`NetworkConnectivityLevel` は `LocalAccess` / `ConstrainedInternetAccess` / `InternetAccess` が接続あり（LAN のみでも「通信経路がある」）、`None` のみ接続なし。種別は Wlan → Wi-Fi、Wwan → 携帯、アダプタ IANA 型 6 → 有線、種別判定の API が失敗したら不明、全て成功して該当無しのときだけその他。従量制は `NetworkCostType`（Unrestricted → いいえ、Fixed/Variable → はい、Unknown → 不明）。守る範囲: 嘘の「接続あり」を出さないこと（初期値・不明・失敗・非対応・`None` は接続ありにしない）、1 プロセス内の取得、資源のプロセス寿命での単一保持。守らない範囲: インターネット到達性（captive portal・VPN）、変化からの反映遅れ（最大 1 秒）、複数プロセス間の食い違い。既知の天井: パッケージ無しの素の exe での動作は実機未確認。Windows 実機確認は #18",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#18）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_network_status.rs + crates/fandhe-core/src/screens/network_status_show.rs + crates/fandhe-device/src/network_status.rs + crates/fandhe-egui-proxy/src/device/network_status.rs、Issue 旧#1282"
+      "impl": "crates/fandhe-cap-network-status/src/windows.rs + crates/fandhe-core/src/screens/network_status_show.rs + crates/fandhe-cap-network-status/src/contract.rs + crates/fandhe-cap-network-status/src/driver.rs、Issue 旧#1282"
     },
     "web": {
       "status": "done",

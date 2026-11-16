@@ -210,7 +210,7 @@ params = { text = "share_text", url = "share_url" }
 |------|----------------------|-----------|
 | `android.hardware.nfc` | `nfc`（タグ読み取り）の宣言で、HCE の宣言ではない | 対象外 |
 | `androidx.activity`・`androidx.core` | MainActivity が直接 import する共通依存。`fandhe-platform-android` の宣言（`gradle`）で決着。`fandhe-cap-*` 以外の共通層 crate も宣言を持てる（id は対応表の外） | 決着（#1259） |
-| `GmsAvailability.java` | document-scan 以外の GMS 機能（行動認識・決済）も使う共有コード。`platforms/android/app` に共有のまま残す。共通層（`fandhe-platform-android`）へ移さないのは、GMS を使わない機能だけを選んだ利用者に Play services の依存を乗せないため。document-scan は同じ判定を `DocumentScanHelper` の private メソッドに持つ（#1257）。残る 2 機能を crate へ移すときに同じ形にする | #1183 |
+| `GmsAvailability.java`（廃止済み） | かつて document-scan 以外の GMS 機能（行動認識・決済）も使う共有コードとして `platforms/android/app` に置いた。共通層（`fandhe-platform-android`）へ移さないのは、GMS を使わない機能だけを選んだ利用者に Play services の依存を乗せないため。各機能が同じ判定を Helper の private メソッドに持つ形にそろえ（document-scan #1257、activity-recognition #1329、payment-request #1335）、ファイルは削除した | #1183 |
 | `RequestTracker.java`・`FeatureLifecycleProvider.java` | 全機能が使う Java の共有クラス。共通層 `fandhe-platform-android` が `android/java` として持ち、その crate の宣言（`id = "platform-android"`。`fandhe-cap-*` 以外は id と crate 名の一致を求めない）が srcDirs に載る。機能 crate は Android の依存に共通層を持つので到達判定に入る（#1257） | 決着（#1257） |
 | UIKit・Foundation・CoreGraphics | 全機能の基盤リンクで機能固有ではない | #1168 |
 | `NSPortName` | 宣言は `$(EXECUTABLE_NAME)`、スクリプトは実行体名へ置換。生成はビルド設定変数のまま出す（Xcode が展開する）。iOS 本体の `CFBundle*` は確定値（下の行）だが、macOS は宣言が変数に依存するため変数のまま | 決着（#1176） |
@@ -302,11 +302,12 @@ cargo fandhe verify-scope --catalog <全機能を含む Cargo.toml> \
 - 到達した機能と同じ値を宣言する未選択機能の値は、正当に現れるため禁止にしません
 - 観測ファイルは成果物から外部ツールで取り出したテキストです。いずれかの禁止値が現れたら、機能 id・種別・値を出して終了コード 1 で終わります
 - 照合はトークン境界つきです。`android.hardware.camera` は `android.hardware.camera.autofocus` に、`group:artifact` は `group:artifact-ktx` に一致しません
-- 観測テキストが空なら失敗します（ツールの失敗の見逃し防止）。未選択の機能が 0 件なら検査対象なしで成功します
+- 観測テキストが空なら失敗します（ツールの失敗の見逃し防止）。未選択の機能が 0 件でも、禁止トークンの照合対象が空になるだけで、空の観測の検出と Android の構造照合は行います
 - 対象は次の値です
   - Android: 権限名、`uses-feature` 名、コンポーネント名（`activity-alias` を含む）、`application-meta-data` の名前、Gradle の `group:artifact`。`application-meta-data` の名前が、選んだ機能の依存 library の Manifest にも現れると誤検知しうる（実例が出たら `GENERIC_KEYS` と同じ除外で扱う）
+  - Android の構造照合（aapt2 xmltree を要素単位で読む）: カタログにある権限の `usesPermissionFlags` が、その権限を宣言した選んだ機能のフラグの和集合に収まるか。MainActivity の `main-activity-attributes`（許可リストの属性）が、選んだ機能の宣言値だけか。MainActivity が観測テキストに無ければ失敗します。カタログ外の権限は見ません。全機能を選んだアプリでも構造照合は走ります（トークン照合の禁止集合が空になるだけ）。検出は片方向で、宣言にあるのに成果物に無いフラグ・属性は見ません。依存 library が同名の権限にフラグを付けた場合は誤検知になりえます
   - iOS・macOS: entitlement キー（App Group は `com.apple.security.application-groups`）、framework 名、`*UsageDescription` キー、`info-plist` のキー、拡張（`<name>.appex`）
 - 観測ファイルの集め方は `scripts/audit/verify-capability-scope.sh` が担います（aapt2・codesign・otool・plutil。Gradle の依存ツリーは任意）
 - 判定ロジックは `cargo test -p cargo-fandhe` で守ります。実成果物への実行は CI の必須経路には載せていません
 
-範囲外: `queries`（統合後の Manifest には他 library 由来の同じ action が正当に現れうる）、権限の `flags`（権限名が対象で、フラグ名は他の権限にも正当に現れる）、`main-activity-attributes`、`main-activity-intent-filters`（他 library の manifest にも正当に現れるため。漏れは機能のコンポーネント名で検出します）、Windows の identity（#1208）、AAB の直接検査。
+範囲外: `queries`（統合後の Manifest には他 library 由来の同じ action が正当に現れうる）、`main-activity-intent-filters`（他 library の manifest にも正当に現れるため。漏れは機能のコンポーネント名で検出します）、Windows の identity（#1208）、AAB の直接検査。

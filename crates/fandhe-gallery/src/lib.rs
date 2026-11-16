@@ -262,6 +262,18 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // 以前は egui-proxy の `android::run` が呼んでいた。機能 crate を egui-proxy が知らないようにするため移した）。
     #[cfg(feature = "device")]
     fandhe_cap_document_scan::reset_pending_tracking();
+    // 写真ライブラリ保存の保留中の要求も破棄する（保留中の保存要求は復元せず破棄し、旧要求の遅延完了を id 不一致で無視させる。`fandhe_cap_photo_library::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_photo_library::reset_pending_tracking();
+    // 位置情報の再試行の処理済み世代を基準値へ戻す（画面状態は再生成で retry_seq 0 へ戻る。`fandhe_cap_location::reset_retry_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_location::reset_retry_tracking();
+    // ジオフェンス画面の状態も再生成で未登録へ戻るため、static 側の登録もまとめて破棄する。
+    #[cfg(feature = "device")]
+    fandhe_cap_geofence::reset_register_tracking();
+    // LAN のサービス探索の保留中の要求も破棄する（プロセス static の旧要求を再生成後へ持ち越さない。`fandhe_cap_lan_discovery::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_lan_discovery::reset_pending_tracking();
     // 機械学習推論の処理済み世代も破棄する。画面状態は再生成で generation 0 に戻るため、残すと次の
     // 「推論する」が飲み込まれる（`fandhe_cap_ml_inference::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
@@ -388,6 +400,15 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // アプリ内ブラウザの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない。`fandhe_cap_in_app_browser::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_in_app_browser::reset_pending_tracking();
+    // 決済シートの保留中の要求を破棄し、旧 request_id の完了を不一致で捨てさせる（`fandhe_cap_payment_request::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_payment_request::reset_pending_tracking();
+    // 近くの端末との直接通信の保留中の要求と受信バッファも破棄する（`bridge::SLOT` / `PENDING` はプロセス static のため再生成をまたいで残る。`fandhe_cap_local_peer_connect::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_local_peer_connect::reset_pending_tracking();
+    // ピクチャ・イン・ピクチャも同様。処理済み世代を捨て、小窓を止める（`fandhe_cap_picture_in_picture::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_picture_in_picture::reset_pending_tracking();
     // ドラッグ & ドロップの集約器もプロセス static のため再生成をまたいで残る。進行中のセッション・未適用イベントを
     // 新しい画面状態を作る前に捨てる（`fandhe_cap_drag_drop::reset_sessions` doc 参照。以前は egui-proxy の `run` が呼んでいた）。
     #[cfg(feature = "device")]
@@ -431,11 +452,19 @@ fn shutdown() {
     fandhe_cap_system_tray::stop_shared_system_tray();
     fandhe_cap_global_hotkey::shutdown();
     fandhe_cap_midi::shutdown();
+    // 位置情報の測位子プロセス（Windows）を止める。
+    fandhe_cap_location::stop_shared_location();
+    // LAN のサービス探索の停止（Rust 側のロックを握らずに OS 側を止める）。
+    fandhe_cap_lan_discovery::stop_shared_discovery();
     fandhe_cap_media_cast::shutdown();
     fandhe_cap_serial_port::shutdown();
     fandhe_cap_audio_session::shutdown();
     fandhe_cap_memory_pressure::shutdown();
     fandhe_cap_camera_preview_stream::shutdown();
+    // 近くの端末との直接通信の進行中の交換を止める。OS 側の停止は専用キューへの短い同期呼び出しで、Rust 側のロックは握らない。
+    fandhe_cap_local_peer_connect::shutdown();
+    // 小窓の資源（macOS はタイマー・controller・layer、Android は小窓の解除）を解放する。
+    fandhe_cap_picture_in_picture::shutdown();
 }
 
 /// Web のエントリポイント。wasm-bindgen の glue が読み込み時に呼ぶ。実処理は egui-proxy の

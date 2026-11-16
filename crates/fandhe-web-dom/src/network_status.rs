@@ -4,7 +4,7 @@
 //! [`super::mount::mount_with_effect`] の effect として駆動する。値の取得は
 //! `navigator.onLine` と（Chromium の一部のみ）`navigator.connection.type`。
 //! `fandhe-egui-proxy` の wasm canvas 経路は対象外。共有するのは
-//! `fandhe_device::network_status::READ_INTERVAL` だけで、core の `Reading` へ直接写す。
+//! `fandhe_cap_network_status::READ_INTERVAL` だけで、core の `Reading` へ直接写す。
 //!
 //! # 方式
 //!
@@ -60,10 +60,10 @@ mod web {
     use std::collections::HashMap;
     use std::rc::Rc;
 
+    use fandhe_cap_network_status::READ_INTERVAL;
     use fandhe_core::screens::network_status_show::{
         apply_read, NetworkStatusShowState, ReadFailure, Reading,
     };
-    use fandhe_device::network_status::READ_INTERVAL;
     use wasm_bindgen::prelude::*;
 
     use super::{reading_from, FAILED_LABEL};

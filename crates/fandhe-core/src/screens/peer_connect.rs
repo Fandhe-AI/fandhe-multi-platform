@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。実際の交換は本モジュール外
-//! （`fandhe-egui-proxy` の effect ドライバ、`device/local_peer.rs`）が [`take_request`] で要求を
+//! （`fandhe-cap-local-peer-connect` の effect ドライバ、`driver.rs`）が [`take_request`] で要求を
 //! 観測し、[`finish_exchange`] で結果を注入する。状態・定数・文言は全 OS 分をここで確定し、
 //! 後続の OS 実装は画面に触らない。
 //!
@@ -61,7 +61,7 @@ pub enum PeerPhase {
     Exchanging,
 }
 
-/// 交換結果（`fandhe_device::local_peer::PeerExchange` に対応する画面用の型。
+/// 交換結果（`fandhe_cap_local_peer_connect::PeerExchange` に対応する画面用の型。
 /// `fandhe-core` は `fandhe-device` に依存しないため、橋渡しは proxy 側の責務）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PeerRow {

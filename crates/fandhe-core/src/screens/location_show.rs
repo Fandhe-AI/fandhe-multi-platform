@@ -5,14 +5,14 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。実際の測位は本モジュール外
-//! （`fandhe-egui-proxy` の effect ドライバ、`device/location.rs`）が
-//! `fandhe_device::location::SharedLocation` を pull し、[`apply_fix`] /
+//! （`fandhe-cap-location` の effect ドライバ、`driver.rs`）が
+//! `fandhe_cap_location::SharedLocation` を pull し、[`apply_fix`] /
 //! [`apply_failure`] を呼んで結果を注入する。
 //!
 //! # 4 状態を区別する理由
 //!
 //! 「取得中」「取得できた」「拒否された」「使えない」を同じ文言・同じ画面レイアウトで
-//! 潰さない（`fandhe_device::location` モジュール doc の対応表が示す失敗理由の粒度を
+//! 潰さない（`fandhe_cap_location` の契約 doc の対応表が示す失敗理由の粒度を
 //! 画面側でも保つ）。デモ用の座標注入は作らない
 //! （実座標が無いと「取得できた」を作れないが、それは Mac 目視のキャプチャが
 //! 「使えない」状態になる理由でもある。`clipboard` の「嘘の成功を作らない」判断と同じ）。
@@ -33,7 +33,7 @@ pub const RETRYING_TEXT: &str = "取得できませんでした（再試行中�
 const RETRY_BUTTON_ID: WidgetId = WidgetId::from_raw(1);
 
 /// 画面が表示しうる状態。「未取得」と「(0, 0) に取得できた」を型で区別する契約
-/// （`fandhe_device::location::Location::last_fix` の doc と対応）。
+/// （`fandhe_cap_location::Location::last_fix` の doc と対応）。
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum LocationView {
     /// まだ測位できていない。
@@ -56,7 +56,7 @@ pub enum LocationView {
 pub struct LocationShowState {
     pub view: LocationView,
     /// 利用者が「再試行」ボタンを押した回数（[`retry`] のみが加算する世代番号）。
-    /// effect ドライバ（`fandhe-egui-proxy` の `device/location.rs::location_effect`）が
+    /// effect ドライバ（`fandhe-cap-location` の `driver.rs::location_effect`）が
     /// 前回処理済みの値と比較し、増えていたときだけ測位を再要求する契約。OS 起点の
     /// 回復（例: Android `onProviderEnabled` からの `nativeOnLocationRetrying`）は
     /// [`apply_waiting`] を呼ぶだけで本フィールドを進めないため、`view` の遷移だけを

@@ -15,7 +15,7 @@
 //! Activity 再生成で結果の表示が消えること。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `requestWallpaperSet` を経た後でしか呼ばれず、
-//! feature `device` 無効ビルドではその経路に到達しない（app_badge と同じ）。
+//! Android 以外のビルドではその経路に到達しない。
 
 use crate::contract::WallpaperTarget;
 use crate::error::WallpaperSetError;

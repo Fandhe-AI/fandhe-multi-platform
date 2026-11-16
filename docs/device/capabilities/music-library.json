@@ -17,7 +17,7 @@
       "note": "実装済み（#484）。「曲の一覧を読む」で曲のタイトルとアーティストを OS の返す順に先頭 20 件だけ表示する。0 曲は成功として別に出し、非対応・拒否・期限切れ（30 秒、許可ダイアログへの応答を含む）・失敗は区別して失敗として出す。守らない範囲: iCloud ミュージック・Apple Music 由来の曲が載るか、読み取り後の変化、期限後も OS 側の処理が走り切ること。シミュレータはライブラリが空のため「0 曲」になる見込み（【推測】、#480 で確認）。",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#480）",
-      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_music_library.m + crates/fandhe-egui-proxy/src/device/ios_music_library.rs + crates/fandhe-egui-proxy/src/device/music_library.rs + crates/fandhe-core/src/screens/music_library_list.rs + crates/fandhe-device/src/music_library.rs、Issue #484"
+      "impl": "crates/fandhe-cap-music-library/ios/fandhe_ios_music_library.m + crates/fandhe-cap-music-library/src/ios.rs + crates/fandhe-cap-music-library/src/driver.rs + crates/fandhe-core/src/screens/music_library_list.rs + crates/fandhe-cap-music-library/src/contract.rs、Issue #484"
     },
     "android": {
       "status": "done",
@@ -27,7 +27,7 @@
       "note": "実装済み（#485）。「曲の一覧を読む」で曲のタイトルとアーティストを OS の返す順に先頭 20 件だけ表示する。0 曲は成功として別に出し、非対応・拒否・失敗・Activity 破棄による中断・期限切れ（30 秒、許可ダイアログへの応答を含む）は失敗として出す。アーティストが `<unknown>` のときは未設定として扱う。守らない範囲: 並び順、読み取り後の変化、期限後も OS 側の処理が走り切ること。",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#480）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_music_library.rs + platforms/android/app/src/main/java/com/fandhe/platform/MusicLibraryHelper.java + crates/fandhe-egui-proxy/src/device/music_library.rs + crates/fandhe-core/src/screens/music_library_list.rs + crates/fandhe-device/src/music_library.rs、Issue #485"
+      "impl": "crates/fandhe-cap-music-library/src/android.rs + crates/fandhe-cap-music-library/android/java/com/fandhe/platform/MusicLibraryHelper.java + crates/fandhe-cap-music-library/android/java/com/fandhe/platform/MusicLibraryLifecycle.java + crates/fandhe-cap-music-library/src/driver.rs + crates/fandhe-core/src/screens/music_library_list.rs + crates/fandhe-cap-music-library/src/contract.rs、Issue #485"
     },
     "macos": {
       "status": "done",
@@ -37,7 +37,7 @@
       "note": "実装済み（#482）。「曲の一覧を読む」で曲のタイトルとアーティストを OS の返す順に先頭 20 件だけ表示する。0 曲は成功として別に出し、非対応・拒否・期限切れ（30 秒）・失敗は区別して失敗として出す。ad-hoc 署名で `ITLibrary` が nil になれば「この端末では使えません」と出る（拒否と署名不足は区別しない）。その場合は後で `deferred` に戻す。守らない範囲: iCloud ミュージック・Apple Music 由来の曲が載るか、読み取り後の変化。",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#480）",
-      "impl": "crates/fandhe-egui-proxy/src/device/macos_music_library.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_music_library.m + crates/fandhe-egui-proxy/src/device/music_library.rs + crates/fandhe-core/src/screens/music_library_list.rs + crates/fandhe-device/src/music_library.rs、Issue #482"
+      "impl": "crates/fandhe-cap-music-library/src/macos.rs + crates/fandhe-cap-music-library/macos/fandhe_macos_music_library.m + crates/fandhe-cap-music-library/src/driver.rs + crates/fandhe-core/src/screens/music_library_list.rs + crates/fandhe-cap-music-library/src/contract.rs、Issue #482"
     },
     "windows": {
       "status": "done",
@@ -50,7 +50,7 @@
       "note": "実装済み（#483）。Music フォルダをパスの名前順の深さ優先で、深さ 8・5000 エントリまで見る。対象の拡張子は mp3・m4a・aac・flac・wav・wma・ogg・opus。クラウドのプレースホルダ（オフライン・再呼び出し属性）は開かずに飛ばす。先頭 20 件だけ表示し、期限は 30 秒。0 曲は成功として別に出し、フォルダが無い・読めないときは失敗として出す。守らない範囲: 深さ 8・5000 エントリより先、タグの無いファイルの補完、期限後も OS 側の処理が走り切ること。Windows 実機確認は #480。",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#480）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_music_library.rs + crates/fandhe-egui-proxy/src/device/windows_photo_library.rs + crates/fandhe-egui-proxy/src/device/music_library.rs、Issue #483"
+      "impl": "crates/fandhe-cap-music-library/src/windows.rs + crates/fandhe-platform-windows/src/lib.rs + crates/fandhe-cap-music-library/src/driver.rs、Issue #483"
     },
     "web": {
       "status": "no",

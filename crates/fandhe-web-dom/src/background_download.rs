@@ -384,7 +384,9 @@ mod web {
                 .await
                 .map_err(|e| error_from_name(js_error_name(&e).as_deref()))?
                 .unchecked_into();
-        crate::background_task::wait_until_active(&w, &reg).await?;
+        crate::background_task::wait_until_active(&w, &reg)
+            .await
+            .map_err(crate::background_task::to_device_error)?;
         let reg: JsValue = reg.into();
 
         if !live(mount_id) {
