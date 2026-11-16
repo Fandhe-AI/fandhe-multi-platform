@@ -30,8 +30,12 @@ import java.util.WeakHashMap;
 //   よって再生成では何も捨てない。要求 id は残し、新 helper の callback が static の tracker から id を 1 度だけ取って
 //   結果を届ける（Rust 側の待ち手は id 照合で受け取る）。`contactPickerOpen` はその結果が届くまで true のまま残し、
 //   新しい起動を断る（断らないと、再生成後に始めた要求 B の id を旧要求 A の結果が消費して B の成功に見える）。
-// - 再生成を伴わない破棄（`isChangingConfigurations()` が偽）では registry ごと消え、結果は二度と届かない。
+// - 終了による破棄（`isFinishing()` が真）では registry ごと消え、結果は二度と届かない。
 //   `detach` が中断として失敗（3）を 1 度だけ届け、`contactPickerOpen` を下ろす。Rust 側は 3 を `Internal` にする。
+//   終了ではないシステム破棄（「アクティビティを保持しない」等）は、registry が状態を保存して復元後の Activity へ結果を
+//   届けるため、再生成と同じく何も捨てない。
+// 残る限界: 連絡先アプリが結果を一度も返さない間（終了ではない破棄の後、利用者が戻らない間を含む）は、後続の要求が
+// 失敗（`Internal`）で断られ続ける。固定タイムアウトは掛けない。
 // Rust 側 `reset_pending_tracking`（gallery の `android_main`）が待ち手を先に戻していれば、引き継いだ結果は旧 id として捨てられる。
 // 読み書きは UI スレッドだけで行う。
 final class ContactsHelper {
@@ -60,13 +64,13 @@ final class ContactsHelper {
         }
     }
 
-    // 再生成なら何もしない（結果は新 helper へ届く）。再生成を伴わない破棄では結果が届かないため、
+    // 終了でなければ何もしない（再生成・システム破棄とも結果は復元後の helper へ届く）。終了による破棄では結果が届かないため、
     // 待ち手へ失敗を 1 度だけ届け、開閉状態を下ろす。`take` が first-wins なので callback との二重通知にならない。
     static void detach(Activity activity) {
         synchronized (ContactsHelper.class) {
             HELPERS.remove(activity);
         }
-        if (!activity.isChangingConfigurations()) {
+        if (activity.isFinishing()) {
             contactPickerOpen = false;
             long requestId = contactPickRequest.take();
             if (requestId != RequestTracker.NONE) {

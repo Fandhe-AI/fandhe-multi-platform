@@ -136,7 +136,7 @@ pub(crate) fn outcome_from_reply(
 /// | code | 意味（`UserConsentVerificationResult`） | 写像 |
 /// |---|---|---|
 /// | 0 | `Verified`（生体または PIN） | `Ok(Authenticated)` |
-/// | 6 | `Canceled`（利用者が認証 UI を閉じた。OS 起因の取り消しは列挙値に無く、`AsyncStatus::Canceled` は完了ハンドラ側で `Err(Internal)`） | `Ok(Cancelled)` |
+/// | 6 | `Canceled`（公式文書は「検証が取り消された」とだけ書き、原因を区別しない。利用者が閉じた場合として扱う。自分の `Cancel()` による `AsyncStatus::Canceled` は完了ハンドラ側で `Err(Internal)`） | `Ok(Cancelled)` |
 /// | 1 | `DeviceNotPresent` | `Ok(Unavailable)` |
 /// | 2 | `NotConfiguredForUser` | `Ok(Unavailable)` |
 /// | 3 | `DisabledByPolicy` | `Ok(Unavailable)` |
