@@ -1,15 +1,15 @@
 //! macOS・iOS 共用のピクチャ・イン・ピクチャ実装（Issue #364 macOS、#365 iOS）。
-//! `device/picture_in_picture.rs::platform_pip` の macOS・iOS 経路から呼ばれる。
+//! `driver.rs` の `platform_picture_in_picture` の macOS・iOS 経路から呼ばれる。
 //! `apple/fandhe_apple_picture_in_picture.m`（AVKit の sample buffer 経路、`build.rs` の macOS・iOS 分岐が
 //! コンパイル）を C ABI で呼ぶ薄いラッパーで、世代の採番だけを Rust 側で持つ。色の表・間隔・寸法は
-//! `fandhe_device::picture_in_picture` の定数を FFI の引数で渡す（SSOT を 1 か所にする）。
+//! `contract.rs` の定数を FFI の引数で渡す（SSOT を 1 か所にする）。
 //! 戻りコードを契約上のエラーへ写す純関数は [`result_from_code`]、状態コードは [`phase_from_code`]。
 //! `unsafe` は extern 呼び出しに閉じ、映像の内容はログに出さない。
 //! 呼び出しはすべて egui の update（macOS・iOS とも main thread）から来る前提で、`.m` は main thread 以外を拒否する。
 
 use std::sync::Arc;
 
-use fandhe_device::picture_in_picture::PictureInPicture;
+use crate::contract::PictureInPicture;
 
 /// 現在の OS 向け実装を返す。
 pub(crate) fn implementation() -> Arc<dyn PictureInPicture> {
@@ -22,11 +22,11 @@ struct ApplePictureInPicture;
 mod imp {
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    use fandhe_device::picture_in_picture::{
-        PictureInPicture, PipFailure, PipPhase, PipSnapshot, FRAME_COLORS, FRAME_HEIGHT,
-        FRAME_INTERVAL, FRAME_WIDTH,
+    use crate::contract::{
+        FRAME_COLORS, FRAME_HEIGHT, FRAME_INTERVAL, FRAME_WIDTH, PictureInPicture, PipFailure,
+        PipPhase, PipSnapshot,
     };
-    use fandhe_device::DeviceError;
+    use crate::error::PictureInPictureError;
 
     /// `prepare` ごとに進める世代（0 は「資源なし」を表すため 1 から）。
     static GENERATION: AtomicU64 = AtomicU64::new(0);
@@ -50,14 +50,16 @@ mod imp {
     }
 
     /// `.m` の戻りコードを契約へ写す純関数。OS の生値は見ず固定の種別へ畳む。
-    pub(super) fn result_from_code(code: i32) -> Result<(), DeviceError> {
+    pub(super) fn result_from_code(code: i32) -> Result<(), PictureInPictureError> {
         match code {
             0 => Ok(()),
-            1 => Err(DeviceError::Unsupported("picture_in_picture")),
-            2 => Err(DeviceError::InvalidInput("picture_in_picture")),
-            5 => Err(DeviceError::Disabled("picture_in_picture")),
-            6 => Err(DeviceError::InvalidInput("picture_in_picture generation")),
-            _ => Err(DeviceError::Internal("picture_in_picture")),
+            1 => Err(PictureInPictureError::Unsupported),
+            2 => Err(PictureInPictureError::InvalidInput("picture_in_picture")),
+            5 => Err(PictureInPictureError::Disabled("picture_in_picture")),
+            6 => Err(PictureInPictureError::InvalidInput(
+                "picture_in_picture generation",
+            )),
+            _ => Err(PictureInPictureError::Internal("picture_in_picture")),
         }
     }
 
@@ -78,7 +80,7 @@ mod imp {
 
     impl PictureInPicture for super::ApplePictureInPicture {
         #[allow(unsafe_code)]
-        fn prepare(&self) -> Result<u64, DeviceError> {
+        fn prepare(&self) -> Result<u64, PictureInPictureError> {
             let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
             let rgb: Vec<u8> = FRAME_COLORS.iter().flatten().copied().collect();
             let interval_ms = FRAME_INTERVAL.as_millis() as u32;
@@ -98,13 +100,13 @@ mod imp {
         }
 
         #[allow(unsafe_code)]
-        fn start(&self, generation: u64) -> Result<(), DeviceError> {
+        fn start(&self, generation: u64) -> Result<(), PictureInPictureError> {
             // SAFETY: 値渡しの引数のみ。`.m` は 1 本のミューテックスの内側で処理する。
             result_from_code(unsafe { fandhe_apple_pip_start(generation) })
         }
 
         #[allow(unsafe_code)]
-        fn stop(&self, generation: u64) -> Result<(), DeviceError> {
+        fn stop(&self, generation: u64) -> Result<(), PictureInPictureError> {
             // SAFETY: 同上。
             result_from_code(unsafe { fandhe_apple_pip_stop(generation) })
         }
@@ -136,22 +138,27 @@ mod imp {
             assert!(result_from_code(0).is_ok());
             assert!(matches!(
                 result_from_code(1),
-                Err(DeviceError::Unsupported("picture_in_picture"))
+                Err(PictureInPictureError::Unsupported)
             ));
             assert!(matches!(
                 result_from_code(2),
-                Err(DeviceError::InvalidInput("picture_in_picture"))
+                Err(PictureInPictureError::InvalidInput("picture_in_picture"))
             ));
             assert!(matches!(
                 result_from_code(5),
-                Err(DeviceError::Disabled("picture_in_picture"))
+                Err(PictureInPictureError::Disabled("picture_in_picture"))
             ));
             assert!(matches!(
                 result_from_code(6),
-                Err(DeviceError::InvalidInput("picture_in_picture generation"))
+                Err(PictureInPictureError::InvalidInput(
+                    "picture_in_picture generation"
+                ))
             ));
             for c in [3, 4, 99] {
-                assert!(matches!(result_from_code(c), Err(DeviceError::Internal(_))));
+                assert!(matches!(
+                    result_from_code(c),
+                    Err(PictureInPictureError::Internal(_))
+                ));
             }
         }
 

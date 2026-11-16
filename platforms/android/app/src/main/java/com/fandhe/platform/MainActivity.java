@@ -375,30 +375,6 @@ public class MainActivity extends GameActivity {
         return fullscreenHelper.set(on);
     }
 
-    // ピクチャ・イン・ピクチャ（Issue #366）。実装は `PictureInPictureHelper`。Rust の
-    // `android_picture_in_picture.rs` が egui スレッドから同期 JNI で呼ぶ。
-    private final PictureInPictureHelper pictureInPictureHelper = new PictureInPictureHelper(this);
-
-    int pipPrepare(long generation, int w, int h) {
-        return pictureInPictureHelper.prepare(generation, w, h);
-    }
-
-    int pipStart(long generation) {
-        return pictureInPictureHelper.start(generation);
-    }
-
-    int pipStop(long generation) {
-        return pictureInPictureHelper.stop(generation);
-    }
-
-    long[] pipSnapshot() {
-        return pictureInPictureHelper.snapshot();
-    }
-
-    void pipShutdown() {
-        pictureInPictureHelper.shutdown();
-    }
-
     // マイク録音（Issue #957、Phase 11 型サンプル「マイク録音」の Android 経路）。
     // `MicRecorder` trait は通らない（`device/mic_record.rs` モジュール doc の
     // 「macOS/Android は pull 型 bridge」参照）。Rust 側は
@@ -1146,12 +1122,6 @@ public class MainActivity extends GameActivity {
         // `Window.Callback` を包み、通知してから元の戻り値をそのまま返すため、GameActivity → winit → egui の
         // 既存のタッチ経路は変わらない。
         HostInput.addTouchObserver(this, penStylusHelper::onTouch);
-
-        // ピクチャ・イン・ピクチャの切り替わり（Issue #366）。`ComponentActivity` のリスナーで受ける
-        // （`onPictureInPictureModeChanged` の上書きは持たない）。
-        addOnPictureInPictureModeChangedListener(
-                info -> pictureInPictureHelper.onPictureInPictureModeChanged(
-                        info.isInPictureInPictureMode()));
     }
 
     // 傾きセンサのリスナー登録（Issue #831）。バックグラウンド中は登録しない
@@ -2627,7 +2597,6 @@ public class MainActivity extends GameActivity {
         healthDataHelper.onDestroy();
         lanDiscoveryHelper.onDestroy();
         musicLibraryHelper.onDestroy();
-        pictureInPictureHelper.onDestroy();
         printHelper.onDestroy();
         screenOrientationHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため

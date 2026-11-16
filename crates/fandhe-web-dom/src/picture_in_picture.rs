@@ -4,7 +4,7 @@
 //! [`super::mount::mount_with_effect`] の effect として直接駆動する。`take_command` で要求を観測し
 //! Picture-in-Picture API へ渡し、`apply_update` / `set_preview` / `expire` で結果を返す。
 //! `fandhe-device` の trait は通らない（他の Web モジュールと同じ。`fandhe-egui-proxy` の
-//! wasm canvas 経路は対象外）。色表・期限は `fandhe_device::picture_in_picture` と共有する。
+//! wasm canvas 経路は対象外）。色表・期限は `fandhe_cap_picture_in_picture` と共有する。
 //!
 //! # 方式
 //!
@@ -61,7 +61,7 @@ pub(crate) fn color_at(elapsed_ms: f64) -> [u8; 3] {
     } else {
         0
     };
-    fandhe_device::picture_in_picture::frame_color(Duration::from_millis(ms))
+    fandhe_cap_picture_in_picture::frame_color(Duration::from_millis(ms))
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -76,12 +76,10 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    use fandhe_cap_picture_in_picture::{FRAME_HEIGHT, FRAME_WIDTH, POLL_INTERVAL, START_DEADLINE};
     use fandhe_core::screens::pip_show::{
         apply_update, expire, mark_command_taken, prepare, set_preview, take_command, PipCommand,
         PipShowFailure, PipShowPhase, PipShowState, PipShowUpdate,
-    };
-    use fandhe_device::picture_in_picture::{
-        FRAME_HEIGHT, FRAME_WIDTH, POLL_INTERVAL, START_DEADLINE,
     };
     use js_sys::{Function, Promise, Reflect};
     use wasm_bindgen::prelude::*;
@@ -676,7 +674,7 @@ mod tests {
 
     #[test]
     fn color_follows_interval_and_survives_bad_clock() {
-        use fandhe_device::picture_in_picture::FRAME_COLORS;
+        use fandhe_cap_picture_in_picture::FRAME_COLORS;
         assert_eq!(color_at(0.0), FRAME_COLORS[0]);
         assert_eq!(color_at(999.0), FRAME_COLORS[0]);
         assert_eq!(color_at(1000.0), FRAME_COLORS[1]);

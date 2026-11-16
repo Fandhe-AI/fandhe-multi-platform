@@ -86,11 +86,6 @@ pub mod android_pen_stylus;
 /// `device/photo_save.rs` の Android 経路から呼ばれる。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_photo_library;
-/// Issue #364: Android 向けピクチャ・イン・ピクチャ実装。
-/// `device/picture_in_picture.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_picture_in_picture;
 /// Issue #328: Android 向け印刷（`PrintHelper` + JNI）。`device/print.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -183,10 +178,6 @@ pub mod apple_network_status;
 /// `device/photo_save.rs` の iOS / macOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_photo_library;
-/// Issue #364（macOS）/ #365（iOS）: ピクチャ・イン・ピクチャ実装（`apple/fandhe_apple_picture_in_picture.m` の AVKit を
-/// 呼ぶ C ABI ラッパー）。`device/picture_in_picture.rs` の macOS・iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_picture_in_picture;
 /// Issue #1024（macOS）/ #1025（iOS）: iOS / macOS 向け音声認識実装（`apple/
 /// fandhe_apple_speech_recognition.m` を呼ぶ C ABI ラッパー）。`device/
 /// speech_recognition.rs` の iOS/macOS 経路から呼ばれる。
@@ -301,11 +292,6 @@ pub mod ios_network_status;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_pen_stylus;
-/// Issue #365: iOS 向けピクチャ・イン・ピクチャ実装（macOS と共用の `apple_picture_in_picture` へ委譲）。
-/// `device/picture_in_picture.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_picture_in_picture;
 /// Issue #327: iOS 向け印刷実装（`ios/fandhe_ios_print.m` を呼ぶ C ABI ラッパー、`UIPrintInteractionController`）。
 /// `device/print.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -403,9 +389,6 @@ pub mod photo_pick;
 /// iOS / Android は pull 型 `bridge`、Windows は Pictures フォルダへ同期書き込み、
 /// Linux は `UnsupportedPhotoLibrary` 固定。iOS / Android は兄弟 issue #1255 / #1256 まで非対応）。
 pub mod photo_save;
-/// Phase 11 の拡充ループ（親 #97、Issue #364）: ピクチャ・イン・ピクチャの effect ドライバ（macOS・iOS・Android 実装、
-/// 他 OS は `UnsupportedPictureInPicture` 固定）。
-pub mod picture_in_picture;
 /// Phase 11 の拡充ループ（親 #94、Issue #325）: 印刷ダイアログの effect ドライバ（macOS 実装、
 /// Windows / iOS / Android 実装、他 OS は `UnsupportedPrint` 固定。
 /// Web は `fandhe-web-dom`）。画面の内容の印刷（print-screen、親 #341、Issue #1010）の取り込み段と
@@ -553,7 +536,6 @@ pub fn shutdown() {
     tts::stop_shared_tts();
     location::stop_shared_location();
     lan_discovery::stop_shared_discovery();
-    picture_in_picture::shutdown();
     web_auth_session::shutdown();
 }
 

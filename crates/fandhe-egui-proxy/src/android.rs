@@ -127,10 +127,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // Issue #325: `print::bridge::SLOT` も同様に破棄する（Activity 再生成で印刷の保留は復元しない）。
     #[cfg(feature = "device")]
     crate::device::print::reset_pending_tracking();
-    // Issue #364: ピクチャ・イン・ピクチャも同様。処理済み世代を捨て、小窓を止める
-    // （`device::picture_in_picture::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::picture_in_picture::reset_pending_tracking();
     // Issue #560: OS の検索への登録の処理済み世代も破棄する（理由は translation と同じ。
     // `device::spotlight_index::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

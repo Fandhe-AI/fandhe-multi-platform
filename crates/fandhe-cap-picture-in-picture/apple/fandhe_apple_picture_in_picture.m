@@ -4,7 +4,7 @@
 // 流し、AVKit の sample buffer 経路（AVPictureInPictureControllerContentSource、macOS 12.0+ / iOS 15.0+）で OS の
 // 小窓へ出す。素材ファイル・URL・ネットワークは使わない。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_picture_in_picture.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-picture-in-picture/src/apple.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の macOS・iOS 分岐がコンパイルし AVKit・CoreMedia・CoreVideo・QuartzCore をリンクする。
 // 12.0+ / 15.0+ の API は @available で守る（macOS の実行体の最低版は 11.0。12 未満は prepare が非対応 = 1 を返す）。
 //
@@ -58,7 +58,7 @@
 #include <stdint.h>
 
 #if TARGET_OS_IOS
-// ios_picture_in_picture.rs が定義する再描画の受け口。
+// `ios.rs` が定義する再描画の受け口。
 extern void fandhe_rust_picture_in_picture_changed(void);
 #endif
 

@@ -2072,6 +2072,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-picture-in-picture"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-power-state"
 version = "0.2.0"
 dependencies = [
@@ -2622,6 +2634,7 @@ dependencies = [
  "fandhe-cap-pdf-viewer",
  "fandhe-cap-pedometer",
  "fandhe-cap-per-app-language",
+ "fandhe-cap-picture-in-picture",
  "fandhe-cap-power-state",
  "fandhe-cap-quick-settings-tile",
  "fandhe-cap-radio-control",
@@ -2785,6 +2798,7 @@ dependencies = [
  "fandhe-cap-on-device-llm",
  "fandhe-cap-passkey-signin",
  "fandhe-cap-payment-request",
+ "fandhe-cap-picture-in-picture",
  "fandhe-cap-power-state",
  "fandhe-cap-screen-capture",
  "fandhe-cap-serial-port",

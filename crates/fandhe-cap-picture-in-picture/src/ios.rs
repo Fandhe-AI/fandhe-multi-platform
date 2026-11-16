@@ -1,6 +1,6 @@
 //! iOS 向けピクチャ・イン・ピクチャ実装（Issue #365。親 #97 の b-ios）。
-//! `device/picture_in_picture.rs::platform_pip` の iOS 経路から呼ばれ、macOS と共用の
-//! `apple_picture_in_picture`（`apple/fandhe_apple_picture_in_picture.m`、AVKit の sample buffer 経路）を返す。
+//! `driver.rs` の `platform_picture_in_picture` の iOS 経路から呼ばれ、macOS と共用の
+//! `apple.rs`（`apple/fandhe_apple_picture_in_picture.m`、AVKit の sample buffer 経路）を返す。
 //! Linux ホストの `cargo test` では共用実装が存在しないため、関数と import は iOS 限定にしている。
 //!
 //! # iOS 固有の挙動
@@ -13,7 +13,7 @@
 //! # 再描画（契約表 4）
 //!
 //! `.m` が delegate で状態を変えた直後、`g_lock` を外してから [`fandhe_rust_picture_in_picture_changed`] を呼ぶ。
-//! ここで `crate::ios::request_repaint` を呼び次フレームを起こす（入力が無いと egui が描画せず表示が止まるため）。
+//! ここで `fandhe_runtime::request_repaint` を呼び次フレームを起こす（入力が無いと egui が描画せず表示が止まるため）。
 //!
 //! # 守る範囲と守らない範囲（契約表 11）
 //!
@@ -24,19 +24,19 @@
 use std::sync::Arc;
 
 #[cfg(target_os = "ios")]
-use fandhe_device::picture_in_picture::PictureInPicture;
+use crate::contract::PictureInPicture;
 
 /// iOS の実装を返す（macOS と共用）。
 #[cfg(target_os = "ios")]
 pub(crate) fn implementation() -> Arc<dyn PictureInPicture> {
-    super::apple_picture_in_picture::implementation()
+    crate::apple::implementation()
 }
 
 /// `.m` が状態を変えた直後に呼ぶ受け口。引数なし・ポインタなしで、main thread（delegate）から呼ばれる。
 /// `request_repaint` は Mutex を取るだけで `dispatch_sync` はしない（デッドロックしない）。panic しない。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_picture_in_picture_changed() {
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }

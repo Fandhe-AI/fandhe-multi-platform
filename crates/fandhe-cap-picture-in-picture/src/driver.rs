@@ -1,14 +1,14 @@
 //! Phase 11 の拡充ループ（親 #97）型サンプル「ピクチャ・イン・ピクチャ」（Issue #364）の effect ドライバ。
 //! `fandhe_core::screens::pip_show`（端末依存ゼロ）の要求を `take_command` で観測し、
-//! `fandhe_device::picture_in_picture::PictureInPicture` を操作して、状態を `CompletionSender` 経由で
+//! `crate::contract::PictureInPicture` を操作して、状態を `CompletionSender` 経由で
 //! 注入する（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約の SSOT は `fandhe_device::picture_in_picture`。
+//! 契約の SSOT は `contract.rs`。
 //!
 //! # OS 別実装の差し込み口
 //!
-//! [`platform_pip`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
-//! モジュールだけを埋める（macOS: `apple_picture_in_picture`、iOS: `ios_picture_in_picture`、
-//! Android: `android_picture_in_picture`。いずれも実装済み）。それ以外（Windows は保留、Linux）は
+//! [`platform_picture_in_picture`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
+//! モジュールだけを埋める（macOS: `apple.rs`、iOS: `ios.rs`、
+//! Android: `android.rs`。いずれも実装済み）。それ以外（Windows は保留、Linux）は
 //! `UnsupportedPictureInPicture` 固定で、ダミーの成功実装へは倒さない。
 //!
 //! # 並行性
@@ -23,37 +23,37 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
-use fandhe_device::picture_in_picture::UnsupportedPictureInPicture;
-use fandhe_device::picture_in_picture::{
-    frame_color, PictureInPicture, PipFailure, PipPhase, POLL_INTERVAL, START_DEADLINE,
+use crate::contract::UnsupportedPictureInPicture;
+use crate::contract::{
+    POLL_INTERVAL, PictureInPicture, PipFailure, PipPhase, START_DEADLINE, frame_color,
 };
-use fandhe_device::DeviceError;
+use crate::error::PictureInPictureError;
 
 use fandhe_core::screens::pip_show::{
-    apply_update, expire, mark_command_taken, prepare, set_preview, take_command, PipCommand,
-    PipShowFailure, PipShowPhase, PipShowState, PipShowUpdate,
+    PipCommand, PipShowFailure, PipShowPhase, PipShowState, PipShowUpdate, apply_update, expire,
+    mark_command_taken, prepare, set_preview, take_command,
 };
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// OS の生コードを含まない固定の失敗文言。
 const FAILED_PIP: &str = "小窓の操作";
 
 /// プロセスに 1 つだけ持つ実装（`stop` が `start` と同じ実体に届くようにする）。
-fn platform_pip() -> &'static Arc<dyn PictureInPicture> {
+pub fn platform_picture_in_picture() -> &'static Arc<dyn PictureInPicture> {
     static PIP: OnceLock<Arc<dyn PictureInPicture>> = OnceLock::new();
     PIP.get_or_init(|| {
         #[cfg(target_os = "macos")]
         {
-            super::apple_picture_in_picture::implementation()
+            crate::apple::implementation()
         }
         #[cfg(target_os = "ios")]
         {
-            super::ios_picture_in_picture::implementation()
+            crate::ios::implementation()
         }
         #[cfg(target_os = "android")]
         {
-            super::android_picture_in_picture::implementation()
+            crate::android::implementation()
         }
         #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
         {
@@ -90,10 +90,9 @@ static SESSION: OnceLock<Session> = OnceLock::new();
 
 /// Activity 再生成時（`android_main` の再実行）に、ドライバの記録を破棄して小窓を止める。
 /// 画面状態は `default()` に戻るため、処理済み世代を残すと次の準備が飲み込まれる。
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     if let Some(s) = SESSION.get() {
-        reset_session(s, platform_pip());
+        reset_session(s, platform_picture_in_picture());
     }
 }
 
@@ -116,11 +115,11 @@ fn release_resources(inner: &mut SessionInner, pip: &Arc<dyn PictureInPicture>) 
     inner.last_preview = None;
 }
 
-fn to_failure(e: &DeviceError) -> PipShowFailure {
+fn to_failure(e: &PictureInPictureError) -> PipShowFailure {
     match e {
-        DeviceError::Unsupported(_) => PipShowFailure::Unsupported,
-        DeviceError::Disabled(_) => PipShowFailure::NotPossible,
-        DeviceError::PermissionDenied(_) => PipShowFailure::NotAllowed,
+        PictureInPictureError::Unsupported => PipShowFailure::Unsupported,
+        PictureInPictureError::Disabled(_) => PipShowFailure::NotPossible,
+        PictureInPictureError::PermissionDenied(_) => PipShowFailure::NotAllowed,
         // OS の生コードは画面へ出さない（security.md A09）。
         _ => PipShowFailure::Failed(FAILED_PIP.to_string()),
     }
@@ -238,7 +237,7 @@ fn handle_command(
     command: PipCommand,
     generation: u64,
 ) {
-    let fail = |inner: &mut SessionInner, e: &DeviceError| {
+    let fail = |inner: &mut SessionInner, e: &PictureInPictureError| {
         inner.pending = None;
         release_resources(inner, pip);
         send_update(sender, generation, PipShowUpdate::Failed(to_failure(e)));
@@ -263,7 +262,10 @@ fn handle_command(
         }
         PipCommand::Start | PipCommand::Stop => {
             let Some(g) = inner.device_gen else {
-                return fail(inner, &DeviceError::Internal("picture_in_picture"));
+                return fail(
+                    inner,
+                    &PictureInPictureError::Internal("picture_in_picture"),
+                );
             };
             let r = if command == PipCommand::Start {
                 pip.start(g)
@@ -304,29 +306,36 @@ pub fn pip_show_effect(state: &PipShowState, sender: &CompletionSender<PipShowSt
     drive(
         state,
         sender,
-        platform_pip(),
+        platform_picture_in_picture(),
         SESSION.get_or_init(Session::default),
         START_DEADLINE,
     );
 }
 
-/// アプリ終了時に小窓の資源を解放する（`device::shutdown` から呼ばれる）。
-pub(super) fn shutdown() {
-    platform_pip().shutdown();
+/// アプリ終了時に小窓の資源を解放する（最終成果物の終了フックが呼ぶ）。
+pub fn shutdown() {
+    platform_picture_in_picture().shutdown();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::PipSnapshot;
     use fandhe_core::screens::pip_show::{start, stop};
-    use fandhe_device::picture_in_picture::PipSnapshot;
     use std::sync::mpsc;
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
     struct FakeSt {
-        gen: u64,
+        r#gen: u64,
         phase: PipPhase,
-        prepare_err: Option<DeviceError>,
-        start_err: Option<DeviceError>,
+        prepare_err: Option<PictureInPictureError>,
+        start_err: Option<PictureInPictureError>,
         auto_active: bool,
         stops: usize,
     }
@@ -336,7 +345,7 @@ mod tests {
     impl Fake {
         fn new(auto_active: bool) -> Arc<Self> {
             Arc::new(Self(Mutex::new(FakeSt {
-                gen: 0,
+                r#gen: 0,
                 phase: PipPhase::Idle,
                 prepare_err: None,
                 start_err: None,
@@ -350,19 +359,21 @@ mod tests {
     }
 
     impl PictureInPicture for Fake {
-        fn prepare(&self) -> Result<u64, DeviceError> {
+        fn prepare(&self) -> Result<u64, PictureInPictureError> {
             let mut s = self.0.lock().unwrap();
             if let Some(e) = s.prepare_err.take() {
                 return Err(e);
             }
-            s.gen += 1;
+            s.r#gen += 1;
             s.phase = PipPhase::Ready;
-            Ok(s.gen)
+            Ok(s.r#gen)
         }
-        fn start(&self, g: u64) -> Result<(), DeviceError> {
+        fn start(&self, g: u64) -> Result<(), PictureInPictureError> {
             let mut s = self.0.lock().unwrap();
-            if g != s.gen {
-                return Err(DeviceError::InvalidInput("picture_in_picture generation"));
+            if g != s.r#gen {
+                return Err(PictureInPictureError::InvalidInput(
+                    "picture_in_picture generation",
+                ));
             }
             if let Some(e) = s.start_err.take() {
                 return Err(e);
@@ -374,7 +385,7 @@ mod tests {
             };
             Ok(())
         }
-        fn stop(&self, _g: u64) -> Result<(), DeviceError> {
+        fn stop(&self, _g: u64) -> Result<(), PictureInPictureError> {
             let mut s = self.0.lock().unwrap();
             s.stops += 1;
             if matches!(s.phase, PipPhase::Starting | PipPhase::Active) {
@@ -385,7 +396,7 @@ mod tests {
         fn snapshot(&self) -> PipSnapshot {
             let s = self.0.lock().unwrap();
             PipSnapshot {
-                generation: s.gen,
+                generation: s.r#gen,
                 phase: s.phase,
             }
         }
@@ -395,14 +406,14 @@ mod tests {
     /// 常に `Unsupported` を返す実装（非対応 OS の fallback と同じ契約）。
     struct Unsupported;
     impl PictureInPicture for Unsupported {
-        fn prepare(&self) -> Result<u64, DeviceError> {
-            Err(DeviceError::Unsupported("picture_in_picture"))
+        fn prepare(&self) -> Result<u64, PictureInPictureError> {
+            Err(PictureInPictureError::Unsupported)
         }
-        fn start(&self, _: u64) -> Result<(), DeviceError> {
-            Err(DeviceError::Unsupported("picture_in_picture"))
+        fn start(&self, _: u64) -> Result<(), PictureInPictureError> {
+            Err(PictureInPictureError::Unsupported)
         }
-        fn stop(&self, _: u64) -> Result<(), DeviceError> {
-            Err(DeviceError::Unsupported("picture_in_picture"))
+        fn stop(&self, _: u64) -> Result<(), PictureInPictureError> {
+            Err(PictureInPictureError::Unsupported)
         }
         fn snapshot(&self) -> PipSnapshot {
             PipSnapshot {
@@ -413,7 +424,7 @@ mod tests {
         fn shutdown(&self) {}
     }
 
-    type Rx = mpsc::Receiver<crate::app::Completion<PipShowState>>;
+    type Rx = mpsc::Receiver<fandhe_runtime::Completion<PipShowState>>;
 
     struct H {
         fake: Arc<Fake>,
@@ -434,7 +445,7 @@ mod tests {
             Self {
                 fake,
                 pip,
-                sender: crate::app::egui_sender(tx, egui::Context::default()),
+                sender: CompletionSender::new(tx, Arc::new(NoopWaker)),
                 rx,
                 session: Session::default(),
                 state: PipShowState::default(),
@@ -504,7 +515,7 @@ mod tests {
     #[test]
     fn prepare_internal_error_fails() {
         let fake = Fake::new(true);
-        fake.0.lock().unwrap().prepare_err = Some(DeviceError::Internal("x"));
+        fake.0.lock().unwrap().prepare_err = Some(PictureInPictureError::Internal("x"));
         let mut h = H::new(fake);
         h.drive(D);
         h.drive(D);
@@ -517,13 +528,16 @@ mod tests {
     #[test]
     fn start_disabled_is_not_possible_and_denied_is_not_allowed() {
         for (err, want) in [
-            (DeviceError::Disabled("x"), PipShowFailure::NotPossible),
             (
-                DeviceError::PermissionDenied("x"),
+                PictureInPictureError::Disabled("x"),
+                PipShowFailure::NotPossible,
+            ),
+            (
+                PictureInPictureError::PermissionDenied("x"),
                 PipShowFailure::NotAllowed,
             ),
             (
-                DeviceError::InvalidInput("x"),
+                PictureInPictureError::InvalidInput("x"),
                 PipShowFailure::Failed(FAILED_PIP.to_string()),
             ),
         ] {
@@ -589,7 +603,7 @@ mod tests {
         h.open_ready();
         start(&mut h.state);
         h.drive(D);
-        h.fake.0.lock().unwrap().gen += 1;
+        h.fake.0.lock().unwrap().r#gen += 1;
         h.fake.set_phase(PipPhase::Active);
         h.drive(D);
         assert_eq!(h.state.phase, PipShowPhase::Starting);
@@ -605,7 +619,7 @@ mod tests {
         h.drive(D);
         h.state.command = c.map(|(c, _)| c);
         h.drive(D);
-        assert_eq!(h.fake.0.lock().unwrap().gen, 1);
+        assert_eq!(h.fake.0.lock().unwrap().r#gen, 1);
     }
 
     #[test]

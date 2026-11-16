@@ -95,6 +95,7 @@ device = [
   "dep:fandhe-cap-pdf-viewer",
   "dep:fandhe-cap-pedometer",
   "dep:fandhe-cap-per-app-language",
+  "dep:fandhe-cap-picture-in-picture",
   "dep:fandhe-cap-power-state",
   "dep:fandhe-cap-quick-settings-tile",
   "dep:fandhe-cap-radio-control",
@@ -267,6 +268,7 @@ fandhe-cap-payment-request = { path = "../fandhe-cap-payment-request", optional 
 fandhe-cap-pdf-viewer = { path = "../fandhe-cap-pdf-viewer", optional = true }
 fandhe-cap-pedometer = { path = "../fandhe-cap-pedometer", optional = true }
 fandhe-cap-per-app-language = { path = "../fandhe-cap-per-app-language", optional = true }
+fandhe-cap-picture-in-picture = { path = "../fandhe-cap-picture-in-picture", optional = true }
 fandhe-cap-power-state = { path = "../fandhe-cap-power-state", optional = true }
 fandhe-cap-quick-settings-tile = { path = "../fandhe-cap-quick-settings-tile", optional = true }
 fandhe-cap-radio-control = { path = "../fandhe-cap-radio-control", optional = true }

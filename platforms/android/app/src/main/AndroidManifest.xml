@@ -547,6 +547,10 @@
             android:authorities="${applicationId}.fandhe.local-peer-connect"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.PictureInPictureLifecycle"
+            android:authorities="${applicationId}.fandhe.picture-in-picture"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.BiometricAuthLifecycle"
             android:authorities="${applicationId}.fandhe.biometric-auth"
             android:exported="false" />

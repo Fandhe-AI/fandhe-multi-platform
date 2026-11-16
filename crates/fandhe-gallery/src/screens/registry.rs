@@ -296,7 +296,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pip_show" => fandhe_core::screens::pip_show::current_screen,
-    fandhe_egui_proxy::device::picture_in_picture::pip_show_effect,
+    fandhe_cap_picture_in_picture::pip_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "cast_show" => fandhe_core::screens::cast_show::current_screen,

@@ -80,8 +80,6 @@ pub mod pen_stylus;
 pub mod photo_library;
 /// Phase 11（端末機能の拡充ループ）: 写真 1 枚の選択。
 pub mod photo_picker;
-/// Phase 11（端末機能の拡充ループ、親 #97、Issue #364）: ピクチャ・イン・ピクチャ（映像の小窓表示）。
-pub mod picture_in_picture;
 /// Phase 11（端末機能の拡充ループ、親 #94、Issue #325）: 印刷ダイアログを開く。
 pub mod print;
 /// Phase 11（端末機能の拡充ループ、親 #105、Issue #444）: セーフエリア・ディスプレイ切り欠き。

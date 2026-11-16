@@ -1,6 +1,6 @@
 //! Android 向けピクチャ・イン・ピクチャ実装（Issue #366、親 #97 の b-android）。
-//! `device/picture_in_picture.rs::platform_pip` の Android 経路から egui スレッドで呼ばれ、
-//! `MainActivity.pipPrepare` / `pipStart` / `pipStop` / `pipSnapshot` / `pipShutdown` を同期 JNI で呼ぶ
+//! `driver.rs` の `platform_picture_in_picture` の Android 経路から egui スレッドで呼ばれ、
+//! `PictureInPictureHelper.prepare` / `start` / `stop` / `snapshot` / `shutdown`（static、第 1 引数は Activity）を同期 JNI で呼ぶ
 //! pull 型。Java 側は `PictureInPictureHelper`。Java から Rust への native コールバックは無い
 //! （ドライバが `snapshot` をポーリングする）ので、JNI 署名の照合先は Java のみ。
 //!
@@ -14,7 +14,7 @@
 //!
 //! 世代は本モジュールが `AtomicU64` で採番する（1 から。Activity の作り直しでも戻さない）。
 //! Activity は `configChanges` により小窓への遷移で作り直されない。作り直し（`onDestroy`）では
-//! Java 側が状態を捨て、Rust 側の保留記録は `device/picture_in_picture.rs::reset_pending_tracking` が捨てる。
+//! Java 側が状態を捨て、Rust 側の保留記録は `driver.rs` の `reset_pending_tracking` が捨てる。
 //! winit は小窓の間 `onPause` で描画を止めるため、Java は `enterPictureInPictureMode` が true を返した
 //! 時点で Active にする（ドライバは `start` 直後の同フレームで読む）。`onPause` は中断扱いにしない。
 //! 利用者が小窓を閉じた・戻した・開始中の取り消しは `Exited`（成功）。
@@ -24,19 +24,21 @@
 //! 遅れ、小窓の位置・大きさ（OS が決める）、複数プロセス。実機確認は #363。
 
 #[cfg(any(target_os = "android", test))]
-use fandhe_device::picture_in_picture::{PipFailure, PipPhase, PipSnapshot};
+use crate::contract::{PipFailure, PipPhase, PipSnapshot};
 #[cfg(any(target_os = "android", test))]
-use fandhe_device::DeviceError;
+use crate::error::PictureInPictureError;
 
 /// 操作の戻りコードを契約へ写す。0 以外は固定の種別へ畳む。
 #[cfg(any(target_os = "android", test))]
-fn result_from_code(code: i32) -> Result<(), DeviceError> {
+fn result_from_code(code: i32) -> Result<(), PictureInPictureError> {
     match code {
         0 => Ok(()),
-        2 => Err(DeviceError::Unsupported("picture_in_picture")),
-        3 => Err(DeviceError::Disabled("picture_in_picture")),
-        4 => Err(DeviceError::InvalidInput("picture_in_picture generation")),
-        _ => Err(DeviceError::Internal("picture_in_picture")),
+        2 => Err(PictureInPictureError::Unsupported),
+        3 => Err(PictureInPictureError::Disabled("picture_in_picture")),
+        4 => Err(PictureInPictureError::InvalidInput(
+            "picture_in_picture generation",
+        )),
+        _ => Err(PictureInPictureError::Internal("picture_in_picture")),
     }
 }
 
@@ -79,11 +81,12 @@ fn decode_snapshot(v: &[i64]) -> PipSnapshot {
 mod imp {
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    use fandhe_device::picture_in_picture::{
-        PictureInPicture, PipFailure, PipPhase, PipSnapshot, FRAME_HEIGHT, FRAME_WIDTH,
+    use crate::contract::{
+        FRAME_HEIGHT, FRAME_WIDTH, PictureInPicture, PipFailure, PipPhase, PipSnapshot,
     };
-    use fandhe_device::DeviceError;
-    use jni::objects::{JLongArray, JObject, JValue};
+    use crate::error::PictureInPictureError;
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+    use jni::objects::{JClass, JLongArray, JObject, JValue};
 
     use super::{decode_snapshot, result_from_code};
 
@@ -92,59 +95,56 @@ mod imp {
 
     pub(super) struct AndroidPictureInPicture;
 
-    /// `MainActivity` の同期メソッドを呼ぶ。Activity 未確立・JNI 失敗は `None`（例外は消す）。
-    /// 2 箇所の `unsafe` は `android_media_playback.rs::call_activity` と同一の根拠。
-    #[allow(unsafe_code)]
-    fn call_activity<T>(
-        f: impl FnOnce(&mut jni::Env, &JObject) -> Result<T, crate::device::android::JniCallFailed>,
+    /// `PictureInPictureHelper`（機能 crate の Java）の static メソッドへ `f` を実行する。
+    /// クラスは Activity の class loader で解決する（`fandhe_platform_android::with_activity_class`）。
+    /// Activity 未確立・JNI 失敗は `None`（例外は共通層が消す）。Helper が無い（生成前・破棄後）ときは
+    /// Java 側が失敗コード・`null` を返す（成功には畳まない）。
+    fn call_helper<T>(
+        f: impl FnOnce(&mut jni::Env, &JObject, &JClass) -> Result<T, JniCallFailed>,
     ) -> Option<T> {
-        let app = crate::android::android_app()?;
-        // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-        // `app` は本呼び出しの間生存する。
-        let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-        vm.attach_current_thread(|env: &mut jni::Env| {
-            let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-            // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-            let activity = unsafe { env.as_cast_raw::<JObject>(&raw_activity)? };
-            let r = f(env, &activity);
-            if r.is_err() && env.exception_check() {
-                env.exception_clear();
-            }
-            r
-        })
+        let app = android_app()?;
+        with_activity_class(
+            &app,
+            jni::jni_str!("com.fandhe.platform.PictureInPictureHelper"),
+            f,
+        )
         .ok()
     }
 
-    fn by_generation(start: bool, generation: u64) -> Result<(), DeviceError> {
-        let code = call_activity(|env, a| {
+    fn by_generation(start: bool, generation: u64) -> Result<(), PictureInPictureError> {
+        let code = call_helper(|env, activity, class| {
             let name = if start {
-                jni::jni_str!("pipStart")
+                jni::jni_str!("start")
             } else {
-                jni::jni_str!("pipStop")
+                jni::jni_str!("stop")
             };
             Ok(env
-                .call_method(
-                    a,
+                .call_static_method(
+                    class,
                     name,
-                    jni::jni_sig!((long) -> int),
-                    &[JValue::Long(generation as jni::sys::jlong)],
+                    jni::jni_sig!((android.app.Activity, long) -> int),
+                    &[
+                        JValue::Object(activity),
+                        JValue::Long(generation as jni::sys::jlong),
+                    ],
                 )?
                 .i()?)
         })
-        .ok_or(DeviceError::Internal("picture_in_picture"))?;
+        .ok_or(PictureInPictureError::Internal("picture_in_picture"))?;
         result_from_code(code)
     }
 
     impl PictureInPicture for AndroidPictureInPicture {
-        fn prepare(&self) -> Result<u64, DeviceError> {
+        fn prepare(&self) -> Result<u64, PictureInPictureError> {
             let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
-            let code = call_activity(|env, a| {
+            let code = call_helper(|env, activity, class| {
                 Ok(env
-                    .call_method(
-                        a,
-                        jni::jni_str!("pipPrepare"),
-                        jni::jni_sig!((long, int, int) -> int),
+                    .call_static_method(
+                        class,
+                        jni::jni_str!("prepare"),
+                        jni::jni_sig!((android.app.Activity, long, int, int) -> int),
                         &[
+                            JValue::Object(activity),
                             JValue::Long(generation as jni::sys::jlong),
                             JValue::Int(FRAME_WIDTH as i32),
                             JValue::Int(FRAME_HEIGHT as i32),
@@ -152,25 +152,25 @@ mod imp {
                     )?
                     .i()?)
             })
-            .ok_or(DeviceError::Internal("picture_in_picture"))?;
+            .ok_or(PictureInPictureError::Internal("picture_in_picture"))?;
             result_from_code(code).map(|()| generation)
         }
 
-        fn start(&self, generation: u64) -> Result<(), DeviceError> {
+        fn start(&self, generation: u64) -> Result<(), PictureInPictureError> {
             by_generation(true, generation)
         }
 
-        fn stop(&self, generation: u64) -> Result<(), DeviceError> {
+        fn stop(&self, generation: u64) -> Result<(), PictureInPictureError> {
             by_generation(false, generation)
         }
 
         fn snapshot(&self) -> PipSnapshot {
-            let values = call_activity(|env, a| {
-                let ret = env.call_method(
-                    a,
-                    jni::jni_str!("pipSnapshot"),
-                    jni::jni_sig!(() -> long[]),
-                    &[],
+            let values = call_helper(|env, activity, class| {
+                let ret = env.call_static_method(
+                    class,
+                    jni::jni_str!("snapshot"),
+                    jni::jni_sig!((android.app.Activity) -> long[]),
+                    &[JValue::Object(activity)],
                 )?;
                 let arr = env.cast_local::<JLongArray>(ret.l()?)?;
                 if arr.is_null() {
@@ -195,12 +195,12 @@ mod imp {
         }
 
         fn shutdown(&self) {
-            let _ = call_activity(|env, a| {
-                env.call_method(
-                    a,
-                    jni::jni_str!("pipShutdown"),
-                    jni::jni_sig!(() -> ()),
-                    &[],
+            let _ = call_helper(|env, activity, class| {
+                env.call_static_method(
+                    class,
+                    jni::jni_str!("shutdown"),
+                    jni::jni_sig!((android.app.Activity) -> ()),
+                    &[JValue::Object(activity)],
                 )?;
                 Ok(())
             });
@@ -210,8 +210,7 @@ mod imp {
 
 /// Android の実装を返す。
 #[cfg(target_os = "android")]
-pub(crate) fn implementation(
-) -> std::sync::Arc<dyn fandhe_device::picture_in_picture::PictureInPicture> {
+pub(crate) fn implementation() -> std::sync::Arc<dyn crate::contract::PictureInPicture> {
     std::sync::Arc::new(imp::AndroidPictureInPicture)
 }
 
@@ -224,18 +223,23 @@ mod tests {
         assert!(result_from_code(0).is_ok());
         assert!(matches!(
             result_from_code(2),
-            Err(DeviceError::Unsupported("picture_in_picture"))
+            Err(PictureInPictureError::Unsupported)
         ));
         assert!(matches!(
             result_from_code(3),
-            Err(DeviceError::Disabled("picture_in_picture"))
+            Err(PictureInPictureError::Disabled("picture_in_picture"))
         ));
         assert!(matches!(
             result_from_code(4),
-            Err(DeviceError::InvalidInput("picture_in_picture generation"))
+            Err(PictureInPictureError::InvalidInput(
+                "picture_in_picture generation"
+            ))
         ));
         for c in [1, 99, -1] {
-            assert!(matches!(result_from_code(c), Err(DeviceError::Internal(_))));
+            assert!(matches!(
+                result_from_code(c),
+                Err(PictureInPictureError::Internal(_))
+            ));
         }
     }
 

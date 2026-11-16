@@ -340,6 +340,9 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // 近くの端末との直接通信の保留中の要求と受信バッファも破棄する（`bridge::SLOT` / `PENDING` はプロセス static のため再生成をまたいで残る。`fandhe_cap_local_peer_connect::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_local_peer_connect::reset_pending_tracking();
+    // ピクチャ・イン・ピクチャも同様。処理済み世代を捨て、小窓を止める（`fandhe_cap_picture_in_picture::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_picture_in_picture::reset_pending_tracking();
     // ドラッグ & ドロップの集約器もプロセス static のため再生成をまたいで残る。進行中のセッション・未適用イベントを
     // 新しい画面状態を作る前に捨てる（`fandhe_cap_drag_drop::reset_sessions` doc 参照。以前は egui-proxy の `run` が呼んでいた）。
     #[cfg(feature = "device")]
@@ -390,6 +393,8 @@ fn shutdown() {
     fandhe_cap_camera_preview_stream::shutdown();
     // 近くの端末との直接通信の進行中の交換を止める。OS 側の停止は専用キューへの短い同期呼び出しで、Rust 側のロックは握らない。
     fandhe_cap_local_peer_connect::shutdown();
+    // 小窓の資源（macOS はタイマー・controller・layer、Android は小窓の解除）を解放する。
+    fandhe_cap_picture_in_picture::shutdown();
 }
 
 /// Web のエントリポイント。wasm-bindgen の glue が読み込み時に呼ぶ。実処理は egui-proxy の

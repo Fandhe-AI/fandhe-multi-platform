@@ -7,13 +7,20 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.util.Rational;
 
+import androidx.activity.ComponentActivity;
+import androidx.core.app.PictureInPictureModeChangedInfo;
+import androidx.core.util.Consumer;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 // ピクチャ・イン・ピクチャ（Issue #366、親 #97）の Android 実装ヘルパー。
-// MainActivity から生成・委譲され、Rust の `device/android_picture_in_picture.rs` が egui スレッドから
-// `MainActivity.pipPrepare` / `pipStart` / `pipStop` / `pipSnapshot` / `pipShutdown` を同期 JNI で呼ぶ
+// `PictureInPictureLifecycle`（`FeatureLifecycleProvider` 派生）が Activity ごとに生成・破棄し、Rust の `android.rs` が egui スレッドから
+// static の `prepare` / `start` / `stop` / `snapshot` / `shutdown`（第 1 引数は Activity）を同期 JNI で呼ぶ
 // pull 型（Rust 側ドライバが snapshot をポーリングするので native コールバックは無い）。
 //
 // コード表の SSOT はここで、Rust 側が同じ値で写像する。
@@ -57,7 +64,11 @@ final class PictureInPictureHelper {
         volatile int code = RESULT_FAILED;
     }
 
-    private final Activity activity;
+    // Activity ごとの helper。`PictureInPictureLifecycle` が生成（attach）と破棄（detach）を知らせる。
+    private static final Map<Activity, PictureInPictureHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    private final ComponentActivity activity;
     private final Object lock = new Object();
     private boolean destroyed;
     private long current;
@@ -65,9 +76,57 @@ final class PictureInPictureHelper {
     private PictureInPictureParams params;
     // 小窓が OS 側に残りうる間 true。phase（操作の成否）とは別に持ち、失敗後も shutdown が解除を再試行できる。
     private boolean pipMayRemain;
+    // `ComponentActivity` の PiP リスナー（#1327）。登録と解除で同じインスタンスを渡す（重複排除と解除のため）。
+    private final Consumer<PictureInPictureModeChangedInfo> modeListener =
+            info -> onPictureInPictureModeChanged(info.isInPictureInPictureMode());
 
-    PictureInPictureHelper(Activity activity) {
+    private PictureInPictureHelper(ComponentActivity activity) {
         this.activity = activity;
+    }
+
+    // Activity の生成時（`PictureInPictureLifecycle` から、UI スレッド）。小窓の出入りを受けるリスナーを登録する。
+    static void attach(ComponentActivity activity) {
+        PictureInPictureHelper helper = new PictureInPictureHelper(activity);
+        HELPERS.put(activity, helper);
+        activity.addOnPictureInPictureModeChangedListener(helper.modeListener);
+    }
+
+    // Activity の破棄時（同上）。リスナーを外し、状態を捨てる。
+    static void detach(Activity activity) {
+        PictureInPictureHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.activity.removeOnPictureInPictureModeChangedListener(helper.modeListener);
+            helper.onDestroy();
+        }
+    }
+
+    // Rust から呼ぶ static の入口（egui スレッド）。helper が無い（生成前・破棄後）ときは成功に畳まず失敗を返す
+    // （prepare / start / stop は RESULT_FAILED、snapshot は null＝Rust が失敗へ写す、shutdown は何もしない）。
+    static int prepare(Activity activity, long gen, int w, int h) {
+        PictureInPictureHelper helper = HELPERS.get(activity);
+        return helper == null ? RESULT_FAILED : helper.prepare(gen, w, h);
+    }
+
+    static int start(Activity activity, long gen) {
+        PictureInPictureHelper helper = HELPERS.get(activity);
+        return helper == null ? RESULT_FAILED : helper.start(gen);
+    }
+
+    static int stop(Activity activity, long gen) {
+        PictureInPictureHelper helper = HELPERS.get(activity);
+        return helper == null ? RESULT_FAILED : helper.stop(gen);
+    }
+
+    static long[] snapshot(Activity activity) {
+        PictureInPictureHelper helper = HELPERS.get(activity);
+        return helper == null ? null : helper.snapshot();
+    }
+
+    static void shutdown(Activity activity) {
+        PictureInPictureHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.shutdown();
+        }
     }
 
     // egui スレッドから。UI スレッド不要。
@@ -197,7 +256,7 @@ final class PictureInPictureHelper {
             }
             try {
                 if (activity.isInPictureInPictureMode()) {
-                    activity.startActivity(new Intent(activity, MainActivity.class)
+                    activity.startActivity(new Intent(activity, activity.getClass())
                             .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
                 } else {
                     pipMayRemain = false;
@@ -282,7 +341,7 @@ final class PictureInPictureHelper {
                         }
                         try {
                             if (activity.isInPictureInPictureMode()) {
-                                activity.startActivity(new Intent(activity, MainActivity.class)
+                                activity.startActivity(new Intent(activity, activity.getClass())
                                         .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
                             } else {
                                 pipMayRemain = false;
@@ -303,7 +362,7 @@ final class PictureInPictureHelper {
         }
     }
 
-    // MainActivity.onCreate で登録した `ComponentActivity` の PiP リスナー（UI スレッド、#1327）から。
+    // `attach` で登録した `ComponentActivity` の PiP リスナー（UI スレッド、#1327）から。
     void onPictureInPictureModeChanged(boolean inPip) {
         synchronized (lock) {
             if (destroyed) {

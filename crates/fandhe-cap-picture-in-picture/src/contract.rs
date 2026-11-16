@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #97、Issue #364）: ピクチャ・イン・ピクチャ（映像の小窓表示）の契約。
-//! `fandhe-egui-proxy` の `device/picture_in_picture.rs`（effect ドライバ）が [`PictureInPicture`] を
+//! 本 crate の `driver.rs`（effect ドライバ）が [`PictureInPicture`] を
 //! 呼び、各 OS 実装（macOS: AVKit の sample buffer 経路 = #364、iOS・Android・Web は後続の子）が
 //! 本トレイトを実装する。小窓に出す映像は実行時に生成する単色フレーム（[`FRAME_COLORS`] を
 //! [`FRAME_INTERVAL`] ごとに切り替え）で、URL・ファイルパス・バイナリ素材は受けない。
@@ -14,12 +14,12 @@
 //!   開始中のキャンセル（`Starting` 中の `stop`）も失敗にせず `Exited`
 //! - 非対応は `Err(Unsupported("picture_in_picture"))`。macOS 12 未満と `isPictureInPictureSupported == NO`
 //!   もここに含める。成功値へ倒さない
-//! - 失敗の写し方: `DeviceError::Disabled` → [`PipFailure::NotPossible`]、`PermissionDenied` →
+//! - 失敗の写し方: `PictureInPictureError::Disabled` → [`PipFailure::NotPossible`]、`PermissionDenied` →
 //!   [`PipFailure::NotAllowed`]、期限切れ（[`START_DEADLINE`]）はドライバが `Timeout` にして `stop` を呼ぶ
 //!
 //! # ライフサイクル（契約表 1）
 //!
-//! - macOS: 窓が背面・最小化でも小窓は続く。終了時は `device::shutdown` から止めて解放する
+//! - macOS: 窓が背面・最小化でも小窓は続く。終了時は最終成果物の終了フックが `shutdown` で止めて解放する
 //! - iOS: 小窓中の背景遷移は正常（中断にしない）
 //! - Android: 小窓に入るときの `onPause` を中断と扱わない。Activity の作り直しでは `reset_pending_tracking`
 //! - Web: `pagehide` で小窓を閉じる
@@ -37,7 +37,7 @@
 
 use std::time::Duration;
 
-use crate::DeviceError;
+use crate::error::PictureInPictureError;
 
 /// 小窓に出す単色フレームの RGB。[`frame_color`] がこの表を巡回する（OS 側の映像と画面内プレビューで共有）。
 pub const FRAME_COLORS: [[u8; 3]; 5] = [
@@ -111,12 +111,12 @@ pub struct PipSnapshot {
 pub trait PictureInPicture: Send + Sync {
     /// 映像源と controller を作り、世代を進めて返す。前の資源を解放してから作り、失敗経路でも
     /// 作りかけを解放する。非対応は `Unsupported`。
-    fn prepare(&self) -> Result<u64, DeviceError>;
+    fn prepare(&self) -> Result<u64, PictureInPictureError>;
     /// 小窓にする。受付は `Ready` / `Exited` のときだけ。結果は非同期で、[`Self::snapshot`] で確定する。
     /// 古い世代は `InvalidInput("picture_in_picture generation")`。
-    fn start(&self, generation: u64) -> Result<(), DeviceError>;
+    fn start(&self, generation: u64) -> Result<(), PictureInPictureError>;
     /// 小窓をやめる。`Starting` 中なら開始の完了後に必ず止める。古い世代は `InvalidInput`。
-    fn stop(&self, generation: u64) -> Result<(), DeviceError>;
+    fn stop(&self, generation: u64) -> Result<(), PictureInPictureError>;
     /// 最新状態。
     fn snapshot(&self) -> PipSnapshot;
     /// アプリ終了時の解放。冪等。
@@ -127,14 +127,14 @@ pub trait PictureInPicture: Send + Sync {
 pub struct UnsupportedPictureInPicture;
 
 impl PictureInPicture for UnsupportedPictureInPicture {
-    fn prepare(&self) -> Result<u64, DeviceError> {
-        Err(DeviceError::Unsupported("picture_in_picture"))
+    fn prepare(&self) -> Result<u64, PictureInPictureError> {
+        Err(PictureInPictureError::Unsupported)
     }
-    fn start(&self, _generation: u64) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("picture_in_picture"))
+    fn start(&self, _generation: u64) -> Result<(), PictureInPictureError> {
+        Err(PictureInPictureError::Unsupported)
     }
-    fn stop(&self, _generation: u64) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("picture_in_picture"))
+    fn stop(&self, _generation: u64) -> Result<(), PictureInPictureError> {
+        Err(PictureInPictureError::Unsupported)
     }
     fn snapshot(&self) -> PipSnapshot {
         PipSnapshot {
@@ -163,7 +163,7 @@ mod tests {
         let p = UnsupportedPictureInPicture;
         assert!(matches!(
             p.prepare(),
-            Err(DeviceError::Unsupported("picture_in_picture"))
+            Err(PictureInPictureError::Unsupported)
         ));
         assert!(p.start(1).is_err() && p.stop(1).is_err());
         assert_eq!(p.snapshot().phase, PipPhase::Idle);
