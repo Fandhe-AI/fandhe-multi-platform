@@ -305,6 +305,18 @@ fn unselected_permission_flag_fails() {
             && e.contains("android.permission.BLUETOOTH_SCAN"),
         "{e}"
     );
+    // uses-permission-sdk-23 でも同じ検査が効く。
+    let e = check(
+        "android",
+        &m,
+        &format!(
+            "{ANDROID_CLEAN}{}",
+            scan_perm(Some("0x00010000"))
+                .replace("E: uses-permission ", "E: uses-permission-sdk-23 ")
+        ),
+    )
+    .unwrap_err();
+    assert!(e.contains("neverForLocation"), "{e}");
     check(
         "android",
         &m,

@@ -224,7 +224,7 @@ fn android_structure(
     let unreached_flags = perms(&unreached);
     let mut hits = Vec::new();
     let els = android_elements(observed);
-    for el in els.iter().filter(|e| e.tag == "uses-permission") {
+    for el in els.iter().filter(|e| e.tag.starts_with("uses-permission")) {
         let Some(name) = el
             .attrs
             .get("name")
