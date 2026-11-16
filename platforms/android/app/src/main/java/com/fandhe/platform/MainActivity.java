@@ -275,7 +275,7 @@ public class MainActivity extends GameActivity {
 
     byte[] webAuthSha256(byte[] data) {
         return WebAuthSessionHelper.sha256(data);
-
+    }
 
     // 印刷ダイアログ（Issue #328）。実装は `PrintHelper`。
     // Rust の `android_print.rs` が JNI で呼ぶ。
