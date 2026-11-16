@@ -54,7 +54,7 @@ pub fn platform_spotlight_index() -> Arc<dyn SpotlightIndex> {
     }
 }
 
-/// ドライバの可変状態。要求の追跡は [`RequestSlot`] に任せ、ここは期限の起点と発送直後の見張りを持つ。
+/// ドライバの可変状態。要求の追跡は [`RequestSlot`] に任せ、ここは期限の起点だけを持つ。
 /// テストが並列で干渉しないよう static から切り出して引数で渡す（スロットは leak）。
 ///
 /// 画面の状態は Activity の再生成で `default()`（世代 0）に戻るが、本 struct は static のため残る。
@@ -63,9 +63,6 @@ struct Session {
     slot: &'static RequestSlot<Result<(), IndexFailure>>,
     /// 進行中の要求を観測した時刻（単調時計）。
     started: Mutex<Option<Instant>>,
-    /// 発送したが `mark_running` の反映を見ていない世代。同じ世代の `Requested` を 1 回だけ見逃すための印
-    /// （直前のフレームで発送した要求の二重発送を防ぐ）。
-    awaiting_mark: Mutex<Option<u64>>,
 }
 
 impl Default for Session {
@@ -73,7 +70,6 @@ impl Default for Session {
         Self {
             slot: Box::leak(Box::new(RequestSlot::new())),
             started: Mutex::new(None),
-            awaiting_mark: Mutex::new(None),
         }
     }
 }
@@ -138,26 +134,14 @@ fn drive(
     }
 
     let slot = session.slot;
-    if let Some((generation, action)) = take_request(state) {
+    if let Some((_, action)) = take_request(state) {
+        // effect は毎フレームの先頭で完了（`mark_running`）を反映した後に呼ばれる（`fandhe-render-egui` の `app.rs`）。
+        // よって `Requested` を見た時点で前フレームの発送は反映済みで、保留が残っていれば前の画面状態
+        // （Activity 再生成で世代 0 へ戻る前）が残したもの。捨てて発送し直す（古いワーカーの結果は要求 id の不一致で捨てられる。
+        // 走っている OS 呼び出しは止めない）。
         if slot.snapshot().is_some() {
-            // 直前のフレームで発送した同じ世代なら `mark_running` の適用待ち。1 回だけ見逃して二重に発送しない。
-            // 見逃した後も `Requested` のままなら、前の画面状態（Activity 再生成で世代 0 へ戻る前）が残した保留なので
-            // 捨てて発送し直す。古いワーカーの結果は要求 id の不一致で捨てられる（走っている OS 呼び出しは止めない）。
-            if session
-                .awaiting_mark
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .take()
-                == Some(generation)
-            {
-                return;
-            }
             slot.reset();
         }
-        *session
-            .awaiting_mark
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Some(generation);
         let request_id = slot.begin();
         let started = Instant::now();
         *session.started.lock().unwrap_or_else(|e| e.into_inner()) = Some(started);
@@ -410,36 +394,29 @@ mod tests {
     }
 
     #[test]
-    fn double_drive_before_mark_applied_calls_os_once() {
+    fn running_state_does_not_dispatch_again() {
         let (sender, rx) = channel();
-        let f = fake_with(|| Ok(()), Duration::ZERO);
+        let f = fake_with(|| Ok(()), Duration::from_millis(50));
         let imp: Arc<dyn SpotlightIndex> = f.clone();
         let session = Session::default();
         let mut state = SpotlightIndexState::default();
         request(&mut state, Action::Index);
-        drive(
-            &state,
-            &sender,
-            &imp,
-            &no_url(),
-            &session,
-            Duration::from_secs(30),
-        );
-        drive(
-            &state,
-            &sender,
-            &imp,
-            &no_url(),
-            &session,
-            Duration::from_secs(30),
-        );
-        // mark_running 1 件のみ（2 回目は発送されない）
-        let mut n = 0;
-        while rx.try_recv().is_ok() {
-            n += 1;
+        for _ in 0..2 {
+            drive(
+                &state,
+                &sender,
+                &imp,
+                &no_url(),
+                &session,
+                Duration::from_secs(30),
+            );
+            // 実行時の順序契約: 毎フレームの先頭で完了を反映してから effect を呼ぶ。
+            while let Ok(c) = rx.try_recv() {
+                c(&mut state);
+            }
         }
-        assert_eq!(n, 1);
-        std::thread::sleep(Duration::from_millis(100));
+        std::thread::sleep(Duration::from_millis(20));
+        assert_eq!(state.phase, Phase::Running);
         assert_eq!(f.calls.load(Ordering::SeqCst), 1);
     }
 

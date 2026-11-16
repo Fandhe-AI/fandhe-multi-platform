@@ -20,7 +20,6 @@
 //! それ以外（Linux 等）は `UnsupportedWebAuthSession` 固定で、ダミーの成功実装へは倒さない。
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 #[cfg(not(any(
     target_os = "macos",
@@ -287,8 +286,6 @@ fn setup(imp: &dyn WebAuthSession, request_id: u64) -> Result<bridge::Active, We
 static SCREEN_OWNER: SlotOwner = SlotOwner::new();
 /// 公開入口（[`begin_web_auth`]）の要求の持ち主。
 static EXTERNAL_OWNER: SlotOwner = SlotOwner::new();
-/// 画面が発送したが `mark_running` の反映を見ていない要求の id（0 は無し）。同じ要求の `Requested` を 1 回だけ見逃すための印。
-static AWAITING_MARK: AtomicU64 = AtomicU64::new(0);
 
 /// 画面の要求 1 件を打ち切る（OS のセッションとサーバーを閉じ、結果の置き場を空にする）。
 fn abandon_screen_request(imp: &dyn WebAuthSession, request_id: u64) {
@@ -314,11 +311,9 @@ fn drive(
     if take_request(state).is_some() {
         let mine = SCREEN_OWNER.current();
         if mine != 0 {
-            // `mark_running` の反映前に次フレームが同じ要求を観測しても、二重に開かない（1 回だけ見逃す）。
-            // 見逃した後も `Requested` のままなら、前の画面状態が残した要求なので打ち切って発送し直す。
-            if AWAITING_MARK.swap(0, Ordering::AcqRel) == mine {
-                return;
-            }
+            // effect は毎フレームの先頭で完了（`mark_running`）を反映した後に呼ばれる（`fandhe-render-egui` の `app.rs`）。
+            // よって `Requested` を見た時点で前フレームの発送は反映済みで、自分の持ち主の印が残っていれば
+            // 前の画面状態（Activity 再生成で `default()` へ戻る前）の要求。打ち切って発送し直す。
             abandon_screen_request(imp, mine);
         }
         // 公開入口の進行中・未取得の要求があるあいだは始めない（置き換えない）。終わるまで毎フレーム見直す。
@@ -327,7 +322,6 @@ fn drive(
             sender.request_repaint_after(fandhe_runtime::request_slot::POLL_INTERVAL);
             return;
         };
-        AWAITING_MARK.store(request_id, Ordering::Release);
         let _ = sender.send(Box::new(mark_running));
         match setup(imp, request_id) {
             // 準備に失敗した要求は登録前なので、結果だけを置く（サーバーは `Drop` で止まる）。
@@ -394,7 +388,11 @@ fn drive(
 /// `req` は呼び出し側が作る（`state`・PKCE・`start_url`。乱数と SHA-256 は [`platform_web_auth_session`] の
 /// `fill_random`・`sha256` を使う）。開始後は [`poll_web_auth`] を呼び続けて結果を 1 度だけ受け取る。
 /// 1 プロセスに 1 要求で、進行中または結果が未取得の要求があるうち（画面の要求を含む）は `Internal` で断る。
-/// OS が UI を開けなかったときは `Err` で、結果は届かない。Windows はループバックの受け口を呼び出し側が持ち、
+/// OS が UI を開けなかったときは `Err` で、結果は届かない。
+///
+/// 制約（デモ認可ページ向けの実装）: Android は開く URL を `http://127.0.0.1`、コールバックを `fandhe://web-auth` に固定している
+/// （`WebAuthSessionHelper`）ため、外部アプリの実際の認可サーバーには使えない。Windows も `http://127.0.0.1:` か `https://` に限る。
+/// 実 OAuth 対応（開く URL・コールバックの設定化）は未実装。Windows はループバックの受け口を呼び出し側が持ち、
 /// 受けた URL を [`complete_web_auth_loopback`] へ渡す。非対応 OS は `Unsupported`。
 pub fn begin_web_auth(req: AuthRequest) -> Result<u64, WebAuthFailure> {
     begin_external(&*platform_web_auth_session(), req)
@@ -422,6 +420,8 @@ fn begin_external(imp: &dyn WebAuthSession, req: AuthRequest) -> Result<u64, Web
 }
 
 /// [`begin_web_auth`] の結果を取り出す。確定していれば 1 度だけ `Some`（`take_ready` で原子的に取る）、未着・旧 id・取り出し済みは `None`。
+///
+/// 同じ `request_id` を複数スレッドから並行して呼ばない（取り出せるのは 1 回だけで、期限の確定と取り出しは 1 呼び出し内で順に行う）。
 ///
 /// 期限（[`SESSION_TIMEOUT`]、開始から単調時計）の判定はここで行う。超えていれば OS のセッションを閉じ、
 /// `Ok(TimedOut)` を返す。呼び出さない間は期限切れが確定しない。要求が失われた（Activity の終了後に結果が返らず
@@ -553,7 +553,6 @@ mod tests {
         bridge::SLOT.reset();
         SCREEN_OWNER.adopt(0);
         EXTERNAL_OWNER.adopt(0);
-        AWAITING_MARK.store(0, Ordering::SeqCst);
     }
 
     struct Harness {
@@ -903,7 +902,6 @@ mod tests {
         // Activity 再生成: 画面状態は作り直され、static の要求だけが残る（掃除の呼び出しなし）。
         let mut fresh = Harness::new();
         screen::start(&mut fresh.state);
-        fresh.frame(&fake);
         fresh.frame(&fake);
         assert!(
             fake.cancelled.load(Ordering::SeqCst),
