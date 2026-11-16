@@ -279,7 +279,9 @@ pub(crate) mod bridge {
     /// 同じ理由で `cfg` を割らず `allow(dead_code)` に留める。
     #[cfg_attr(not(target_os = "android"), allow(dead_code))]
     pub(crate) fn reset() {
-        // 再生成で要求ごと破棄するため、同期入口の待ち手も捨てて `Cancelled` で戻らせる。
+        // 再生成で要求ごと破棄するため、同期入口の待ち手も捨てる。旧 Activity の `detach` が先に走った通常の
+        // 順序では、待ち手は中断（`Internal("notification interrupted")`）で既に戻っている。ここで捨てた
+        // 待ち手が残っていた場合だけ `Cancelled` で戻る（後から届く旧 id の結果は [`deliver`] が捨てる）。
         drop(WAITER.lock().unwrap_or_else(|e| e.into_inner()).take());
         SLOT.reset()
     }

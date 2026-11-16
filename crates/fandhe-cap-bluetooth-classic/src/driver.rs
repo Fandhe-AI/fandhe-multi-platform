@@ -317,9 +317,18 @@ fn begin_and_present_with(
         };
         OBSERVED.begin(request_id);
         let duration = Duration::from_millis(crate::contract::DISCOVERY_WINDOW_MS);
+        // `present` が panic しても印を下ろす（残ると、このスレッドの完了が以後すべて保留されたままになる）。
+        struct InPresent;
+        impl Drop for InPresent {
+            fn drop(&mut self) {
+                IN_PRESENT.with(|f| f.set(false));
+            }
+        }
         IN_PRESENT.with(|f| f.set(true));
-        let started = present(request_id, duration);
-        IN_PRESENT.with(|f| f.set(false));
+        let started = {
+            let _in_present = InPresent;
+            present(request_id, duration)
+        };
         (request_id, old, started)
     };
     // `present` 中に同期で届いた完了を、[`START`] 解放後に利用者へ渡す。
