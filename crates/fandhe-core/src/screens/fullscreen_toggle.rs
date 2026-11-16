@@ -4,9 +4,9 @@
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod fullscreen_toggle;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは本モジュール外
-//! （`fandhe-egui-proxy` の `device/fullscreen_immersive.rs`、Web は `fandhe-web-dom`）が
+//! （`fandhe-cap-fullscreen-immersive` の `driver.rs`、Web は `fandhe-web-dom`）が
 //! [`take_request`] で要求を観測し、[`finish`] / [`apply_observed`] で読み戻した値を注入する
-//! （`wake_lock_toggle.rs` と同型）。契約の SSOT は `fandhe_device::fullscreen_immersive`。
+//! （`wake_lock_toggle.rs` と同型）。契約の SSOT は `fandhe_cap_fullscreen_immersive`。
 //!
 //! # 「要求した」と「実際に全画面」を分ける
 //!

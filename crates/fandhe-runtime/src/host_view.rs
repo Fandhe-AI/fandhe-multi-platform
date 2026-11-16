@@ -18,6 +18,8 @@
 
 use std::path::PathBuf;
 
+use fandhe_core::WidgetId;
+
 /// 画面の読み戻し結果（RGBA8・行優先）。画素は `width * height * 4` バイトが期待で、
 /// 長さ・寸法の検査は受け手（印刷の `PrintImage::new` 等）の責務。
 #[derive(Clone, PartialEq, Eq)]
@@ -86,6 +88,9 @@ pub enum WindowCommand {
     },
     /// 最前面に固定する（`true`）か、通常へ戻す（`false`）。
     AlwaysOnTop(bool),
+    /// 全画面表示にする（`true`）か、通常へ戻す（`false`）。成否は
+    /// [`HostView::window_state`] の `fullscreen` の読み戻しで判定する（Issue #1334）。
+    Fullscreen(bool),
 }
 
 /// 入力欄に付けるヒント。
@@ -175,6 +180,32 @@ pub trait HostView {
     /// ウィンドウへ操作を依頼する。反映は次フレーム以降で、成否は [`HostView::window_state`] の
     /// 読み戻しで判定する。既定は何もしない。
     fn request_window(&self, _command: WindowCommand) {}
+
+    /// OS が報告した物理画素密度（1 point あたりの画素数）。拡大率（zoom）を含まない。
+    /// Android の insets（物理 px）を dp へ換算するために使う。未確定・非対応は `None`
+    /// （既定。換算できない値を 0 にせず、呼び出し側は「読めない」として扱う。Issue #1334）。
+    fn native_pixels_per_point(&self) -> Option<f32> {
+        None
+    }
+
+    /// キャンバス `id` 上で主ボタンを押下中のポインタ位置（キャンバス左上原点）。押していなければ
+    /// `None`（既定。接触なし）。描画層が毎フレーム記録した値を読むだけで、effect はフレーム末尾で
+    /// 呼ばれるため同じフレームの値が見える（pen-stylus 用、Issue #1334）。
+    fn canvas_pointer(&self, _id: WidgetId) -> Option<(f32, f32)> {
+        None
+    }
+
+    /// キャンバス `id` 上で、このフレームに主ボタンが新しく押されたか。既定は `false`。
+    /// 1 フレーム内の「離す → 押す」を新しい接触として扱うために使う。
+    fn canvas_pressed(&self, _id: WidgetId) -> bool {
+        false
+    }
+
+    /// キャンバス `id` 上で、このフレームに接触が終わった位置。押下から解放までが 1 フレームに
+    /// 収まった短いタップも含む。終わっていなければ（既定も）`None`。
+    fn canvas_released(&self, _id: WidgetId) -> Option<(f32, f32)> {
+        None
+    }
 
     /// 入力欄のヒントを描画層へ渡す。既定は [`TextInputHintError::Unsupported`]。
     fn set_text_input_hint(&self, _hint: TextInputHint) -> Result<(), TextInputHintError> {

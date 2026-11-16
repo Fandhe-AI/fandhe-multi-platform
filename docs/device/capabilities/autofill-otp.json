@@ -14,10 +14,10 @@
         "https://developer.apple.com/documentation/security/enabling-password-autofill-on-a-text-input-view",
         "https://developer.apple.com/documentation/security/one-time-codes"
       ],
-      "note": "ソフトキーボード入力の隠し `UITextField`（`FandheTextField`）に `textContentType = oneTimeCode` と数字キーボードを設定する。入力欄の生成前は希望状態を保持して生成時に反映し、first responder なら `reloadInputViews` でキーボードを差し替える。`on = false` で `nil` と既定のキーボードへ戻すため、日本語入力画面の挙動は変わらない。main スレッド以外と入力欄の橋渡し未完は失敗にし、計測ビルドは非対応。守る範囲は嘘の成功の禁止と main 以外で UIKit に触れないこと、守らない範囲は候補が出るか（OS と SMS 次第）・domain-bound code とパスワード保存・同じプロセスの別画面へヒントが残ること。コードの値はログに出さない。確認は #576",
+      "note": "入力欄のヒントは `HostView::set_text_input_hint` で描画層へ渡し、UIKit 側（`fandhe-egui-proxy` の `ios_text_input.rs`・`fandhe_ios_text_input.m`、置き場の移動は #1194）がソフトキーボード入力の隠し `UITextField`（`FandheTextField`）に `textContentType = oneTimeCode` と数字キーボードを設定する。入力欄の生成前は希望状態を保持して生成時に反映し、first responder なら `reloadInputViews` でキーボードを差し替える。`on = false` で `nil` と既定のキーボードへ戻すため、日本語入力画面の挙動は変わらない。main スレッド以外と入力欄の橋渡し未完は失敗にし、計測ビルドは非対応。守る範囲は嘘の成功の禁止と main 以外で UIKit に触れないこと、守らない範囲は候補が出るか（OS と SMS 次第）・domain-bound code とパスワード保存・同じプロセスの別画面へヒントが残ること。コードの値はログに出さない。確認は #576",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#576）",
-      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_text_input.m + crates/fandhe-egui-proxy/src/ios_text_input.rs + crates/fandhe-egui-proxy/src/device/autofill_otp.rs + crates/fandhe-device/src/autofill_otp.rs + crates/fandhe-core/src/screens/otp_input.rs、Issue #586"
+      "impl": "crates/fandhe-runtime/src/host_view.rs + crates/fandhe-render-egui/src/app.rs + crates/fandhe-cap-autofill-otp/src/driver.rs + crates/fandhe-cap-autofill-otp/src/contract.rs + crates/fandhe-core/src/screens/otp_input.rs、Issue #586"
     },
     "android": {
       "status": "possible",
@@ -58,7 +58,7 @@
       "safari": "WebOTP は非対応。`autocomplete=\"one-time-code\"` で iOS のコード候補が出る",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実ブラウザ確認待ち（#576）",
-      "impl": "crates/fandhe-web-dom/src/autofill_otp.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/otp_input.rs + crates/fandhe-device/src/autofill_otp.rs、Issue #587"
+      "impl": "crates/fandhe-web-dom/src/autofill_otp.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/otp_input.rs + crates/fandhe-cap-autofill-otp/src/contract.rs、Issue #587"
     }
   },
   "note": "secure-credential（端末内保存）との違い: 本機能は OS の自動入力にコードを入れてもらう側。範囲: ワンタイムコードの入力欄 1 つ。パスワード・ユーザー名・domain-bound code は範囲外。Web は WebOTP（Chromium）を含む。独自描画の橋渡し方針: iOS はソフトキーボード入力の隠し UITextField（FandheTextField）、Web は fandhe-web-dom が出す本物の `<input>` に OS 向けのヒントを付ける。Android・macOS は入力欄の橋渡しそのものが設計課題のため保留（deferred）。DSL の入力欄には種別の属性を足さず、画面単位でヒントを掛ける。"

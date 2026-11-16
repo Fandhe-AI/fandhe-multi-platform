@@ -233,6 +233,12 @@ mod tests {
         assert_eq!(v.viewport_size(), None);
         assert_eq!(v.window_state(), WindowState::default());
         v.request_window(WindowCommand::AlwaysOnTop(true));
+        v.request_window(WindowCommand::Fullscreen(true));
+        assert_eq!(v.native_pixels_per_point(), None);
+        let id = fandhe_core::WidgetId::from_raw(1);
+        assert_eq!(v.canvas_pointer(id), None);
+        assert!(!v.canvas_pressed(id));
+        assert_eq!(v.canvas_released(id), None);
         assert_eq!(
             v.set_text_input_hint(TextInputHint::OneTimeCode),
             Err(TextInputHintError::Unsupported)

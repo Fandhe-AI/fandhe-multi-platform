@@ -221,31 +221,6 @@ public class MainActivity extends GameActivity {
         return WebAuthSessionHelper.sha256(data);
     }
 
-    // 印刷ダイアログ（Issue #328）。実装は `PrintHelper`。
-    // Rust の `android_print.rs` が JNI で呼ぶ。
-    private final PrintHelper printHelper = new PrintHelper(this);
-
-    void requestPrint(long requestId, String title, String body) {
-        printHelper.print(requestId, title, body);
-    }
-
-    // 画面の内容の印刷（#1012）も同じヘルパー。画素は ARGB の int[]。
-    void requestPrintImage(long requestId, int[] argb, int width, int height) {
-        printHelper.printImage(requestId, argb, width, height);
-    }
-
-    // 画面向きの取得・固定（Issue #657）。実装は `ScreenOrientationHelper`。Rust の
-    // `android_screen_orientation.rs` が egui スレッドから同期で JNI 呼び出しする。
-    private final ScreenOrientationHelper screenOrientationHelper = new ScreenOrientationHelper(this);
-
-    int screenOrientationRequest(int lock) {
-        return screenOrientationHelper.request(lock);
-    }
-
-    int[] screenOrientationRead() {
-        return screenOrientationHelper.read();
-    }
-
     @Override
     protected void onStart() {
         super.onStart();
@@ -286,17 +261,6 @@ public class MainActivity extends GameActivity {
 
     int backgroundUploadObserve() {
         return backgroundUploadHelper.observe();
-    }
-
-    // ペン・筆圧入力（Issue #357）。実装は `PenStylusHelper`。
-    private final PenStylusHelper penStylusHelper = new PenStylusHelper();
-
-    // 全画面表示（Issue #1314）。実装は `FullscreenHelper`。Rust の
-    // `android_fullscreen_immersive.rs` が egui スレッドから同期で JNI 呼び出しする。
-    private final FullscreenHelper fullscreenHelper = new FullscreenHelper(this);
-
-    int fullscreenSet(boolean on) {
-        return fullscreenHelper.set(on);
     }
 
     // マイク録音（Issue #957、Phase 11 型サンプル「マイク録音」の Android 経路）。
@@ -846,7 +810,6 @@ public class MainActivity extends GameActivity {
         super.onCreate(savedInstanceState);
         backgroundUploadHelper.onCreate();
         installAccessibilityOffGuard();
-        fullscreenHelper.register();
 
         // コールドスタートの URL を届ける（共有テキストは機能 crate の `ShareReceiveLifecycle` が届ける）。二重配送を避けるため、再生成（savedInstanceState
         // あり）と履歴（Recents）からの再起動（元のインテントが再送される）では届けない。
@@ -882,15 +845,6 @@ public class MainActivity extends GameActivity {
         // 再生成を跨いで値を保持しており（`filePickRequest` doc 参照）、
         // Bundle 経由の復元は不要。`pickDocument` が再生成後の新インスタンスへ届く
         // 実際の結果は、この static requestId との一致で正しく処理される。
-
-        // window insets（systemBars | displayCutout）の native 送信と fullscreen への配信は共通層
-        // `HostInsets`（#1327）が持つ。リスナーは decorView に 1 つだけ付く。
-        HostInsets.addListener(this, fullscreenHelper::onInsets);
-
-        // ペン・筆圧の観測（Issue #357）。【契約】イベントは消費しない: 共通層 `HostInput` が
-        // `Window.Callback` を包み、通知してから元の戻り値をそのまま返すため、GameActivity → winit → egui の
-        // 既存のタッチ経路は変わらない。
-        HostInput.addTouchObserver(this, penStylusHelper::onTouch);
     }
 
     // 傾きセンサのリスナー登録（Issue #831）。バックグラウンド中は登録しない
@@ -930,7 +884,6 @@ public class MainActivity extends GameActivity {
     protected void onPause() {
         super.onPause();
         activityResumed = false;
-        penStylusHelper.onPause();
         webAuthSessionHelper.onPause();
         // マイク録音（Issue #957）: バックグラウンド遷移で録音中なら破棄する（保留要求を
         // 残さない、device-bridge-contracts.md「ライフサイクル境界」節）。権限ダイアログ
@@ -2118,13 +2071,8 @@ public class MainActivity extends GameActivity {
         // `ttsRequest` の Runnable・`onTtsInit` はこのフラグを見て要求を拒否する
         // （`ttsActivityDestroyed` doc 参照）。
         ttsActivityDestroyed = true;
-        // 破棄中ウィンドウの insets 報告が新 Activity の状態を潰さないよう、super より前に確定する。
-        fullscreenHelper.onDestroy();
-        penStylusHelper.onDestroy();
         // UI キューを待つネイティブ終了処理（clear）が super.onDestroy() の後ろで詰まらないよう先に解放する。
         super.onDestroy();
-        printHelper.onDestroy();
-        screenOrientationHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため
         // `micRecorder == null` で no-op（`onPause` doc 参照）。`onPause` を経由せず
         // 直接 `onDestroy` へ来るケース（Android の契約上は稀）に備えて同じ処理を置く。

@@ -3,9 +3,9 @@
 //! `fandhe_core::screens::window_management_show`（端末依存ゼロ）の画面を
 //! [`super::mount::mount_with_effect`] の effect として駆動する。`take_request` で要求を観測し
 //! `window.moveTo` / `window.resizeTo` へ渡し、`finish` で結果を返す。`fandhe-device` の trait 実装は
-//! 作らず、型と [`fandhe_device::window_management::reached`] だけを共有する（他の Web モジュールと同じ。
+//! 作らず、型と [`fandhe_cap_window_management::reached`] だけを共有する（他の Web モジュールと同じ。
 //! `fandhe-egui-proxy` の wasm canvas 経路は対象外）。契約の SSOT は
-//! `fandhe_device::window_management`、駆動の手本は `fandhe-egui-proxy` の同名 effect ドライバ。
+//! `fandhe_cap_window_management`、駆動の手本は `fandhe-egui-proxy` の同名 effect ドライバ。
 //!
 //! # 方式
 //!
@@ -31,12 +31,10 @@
 //! Safari・Firefox、複数タブ・複数マウント間の表示の食い違い、外部変化の反映遅れ（最大 1 秒）、
 //! ページ終了時の後片付け（ブラウザが戻す）。
 
+use fandhe_cap_window_management::{reached, WindowFrame, WindowOp, WindowSnapshot, WindowSupport};
 use fandhe_core::screens::window_management_show::{
     WindowAction, WindowFailure, WindowObserved, WindowSupportView, CONFIRM_TIMEOUT_SECS,
     DEFAULT_INNER_SIZE, NOT_APPLIED_REASON, UNREADABLE_REASON,
-};
-use fandhe_device::window_management::{
-    reached, WindowFrame, WindowOp, WindowSnapshot, WindowSupport,
 };
 
 /// 期限（ミリ秒）。

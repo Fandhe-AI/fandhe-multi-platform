@@ -164,11 +164,11 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "print_page" => fandhe_core::screens::print_page::current_screen,
-    fandhe_egui_proxy::device::print::print_page_effect,
+    fandhe_cap_print::print_page_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "print_screen_page" => fandhe_core::screens::print_screen_page::current_screen,
-    fandhe_egui_proxy::device::print::print_screen_page_effect,
+    fandhe_cap_print::print_screen_page_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "managed_app_config_show" => fandhe_core::screens::managed_app_config_show::current_screen,
@@ -384,7 +384,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "safe_area_insets_show" => fandhe_core::screens::safe_area_insets_show::current_screen,
-    fandhe_egui_proxy::device::safe_area_insets::safe_area_insets_show_effect,
+    fandhe_cap_safe_area_insets::safe_area_insets_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "foldable_posture_show" => fandhe_core::screens::foldable_posture_show::current_screen,
@@ -420,7 +420,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pen_draw" => fandhe_core::screens::pen_draw::current_screen,
-    fandhe_egui_proxy::device::pen_stylus::pen_draw_effect,
+    fandhe_cap_pen_stylus::pen_draw_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "per_app_language_show" => fandhe_core::screens::per_app_language_show::current_screen,
@@ -428,11 +428,11 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "fullscreen_toggle" => fandhe_core::screens::fullscreen_toggle::current_screen,
-    fandhe_egui_proxy::device::fullscreen_immersive::fullscreen_toggle_effect,
+    fandhe_cap_fullscreen_immersive::fullscreen_toggle_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "window_management_show" => fandhe_core::screens::window_management_show::current_screen,
-    fandhe_egui_proxy::device::window_management::window_management_show_effect,
+    fandhe_cap_window_management::window_management_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wake_lock_toggle" => fandhe_core::screens::wake_lock_toggle::current_screen,
@@ -448,7 +448,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "screen_orientation_show" => fandhe_core::screens::screen_orientation_show::current_screen,
-    fandhe_egui_proxy::device::screen_orientation::screen_orientation_show_effect,
+    fandhe_cap_screen_orientation::screen_orientation_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "uwb_ranging_show" => fandhe_core::screens::uwb_ranging_show::current_screen,
@@ -468,7 +468,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "otp_input" => fandhe_core::screens::otp_input::current_screen,
-    fandhe_egui_proxy::device::autofill_otp::autofill_otp_effect,
+    fandhe_cap_autofill_otp::autofill_otp_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "in_app_review" => fandhe_core::screens::in_app_review::current_screen,

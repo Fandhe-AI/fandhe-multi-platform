@@ -411,6 +411,7 @@ mod tests {
 
     #[test]
     fn bridge_drops_stale_request_id_and_second_deliver() {
+        let _g = WAITERS_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let id = bridge::begin();
         assert!(!bridge::deliver(id + 1000, Ok(PasskeyOutcome::NotAllowed)));
         assert!(bridge::SLOT.snapshot().is_some_and(|(_, r)| r.is_none()));
