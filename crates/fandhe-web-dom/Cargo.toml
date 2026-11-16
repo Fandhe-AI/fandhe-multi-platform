@@ -115,6 +115,10 @@ fandhe-cap-bluetooth-le = { path = "../fandhe-cap-bluetooth-le" }
 fandhe-cap-compass-heading = { path = "../fandhe-cap-compass-heading" }
 # motion-raw-sensors の契約の型・純関数（`RawReading`・`RawSensorFailure`・`READ_INTERVAL` など）。Web 実装の本体は本クレートに残す。wasm32 では OS 別の依存が cfg で外れる。
 fandhe-cap-motion-raw-sensors = { path = "../fandhe-cap-motion-raw-sensors" }
+# payment-request の契約の定数・結果の写像（`METHOD_DATA_JSON`・`outcome_from_dom_error` など）。Web 実装の本体は本クレートに残す。wasm32 では OS 別の依存が cfg で外れる。
+fandhe-cap-payment-request = { path = "../fandhe-cap-payment-request" }
+# picture-in-picture の契約の定数・純関数（`frame_color`・`FRAME_COLORS`・`POLL_INTERVAL` など）。Web 実装の本体は本クレートに残す。wasm32 では OS 別の依存が cfg で外れる。
+fandhe-cap-picture-in-picture = { path = "../fandhe-cap-picture-in-picture" }
 # Issue #1185: Web 共通層（`Applier`・マウントの生存管理と解放・`query_param_bytes`）。`url_scheme` の native テストが純関数を使うため全ターゲットの依存にする。
 fandhe-platform-web = { path = "../fandhe-platform-web" }
 

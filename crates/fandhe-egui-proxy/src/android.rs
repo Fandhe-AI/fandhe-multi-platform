@@ -110,9 +110,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // Activity 再生成をまたいで残る旧要求の保留をここで捨てる。
     #[cfg(feature = "device")]
     crate::device::lan_discovery::reset_pending_tracking();
-    // Issue #511: `local_peer::bridge::SLOT` / `PENDING` も同じ理由でプロセス static のため捨てる。
-    #[cfg(feature = "device")]
-    crate::device::local_peer::reset_pending_tracking();
     // Issue #1104: `photo_pick::bridge::SLOT` もプロセス static のため再生成をまたいで残る。
     // 写真選択の契約は「保留中の要求は復元せず破棄」（`fandhe_device::photo_picker` モジュール
     // doc）なので、新しい `Idle` の画面状態を作る前に捨て、旧要求の遅延完了を id 不一致で
@@ -130,17 +127,10 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // Issue #325: `print::bridge::SLOT` も同様に破棄する（Activity 再生成で印刷の保留は復元しない）。
     #[cfg(feature = "device")]
     crate::device::print::reset_pending_tracking();
-    // Issue #364: ピクチャ・イン・ピクチャも同様。処理済み世代を捨て、小窓を止める
-    // （`device::picture_in_picture::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::picture_in_picture::reset_pending_tracking();
     // Issue #560: OS の検索への登録の処理済み世代も破棄する（理由は translation と同じ。
     // `device::spotlight_index::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::spotlight_index::reset_pending_tracking();
-    // Issue #1130: 決済シートの保留中の要求を破棄し、旧 request_id の完了を不一致で捨てさせる。
-    #[cfg(feature = "device")]
-    crate::device::payment_request::reset_pending_tracking();
 
     // TASK-17.2（REQ-17）/ Issue #715: `FANDHE_PROXY_APP=<名前>` で描画対象を切り替える
     // （`main.rs`/`web.rs`/`ios.rs` と同じ契約、A03 対策・security.md 準拠の固定文字列

@@ -36,6 +36,7 @@ device = [
   "dep:fandhe-cap-camera-capture",
   "dep:fandhe-cap-camera-preview-stream",
   "dep:fandhe-cap-capture-protection",
+  "dep:fandhe-cap-car-display",
   "dep:fandhe-cap-clipboard",
   "dep:fandhe-cap-color-picker",
   "dep:fandhe-cap-companion-device",
@@ -62,6 +63,7 @@ device = [
   "dep:fandhe-cap-geocoding-search",
   "dep:fandhe-cap-global-hotkey",
   "dep:fandhe-cap-haptics",
+  "dep:fandhe-cap-health-data",
   "dep:fandhe-cap-home-widget",
   "dep:fandhe-cap-http-get",
   "dep:fandhe-cap-human-presence",
@@ -71,6 +73,7 @@ device = [
   "dep:fandhe-cap-launch-at-login",
   "dep:fandhe-cap-live-activity",
   "dep:fandhe-cap-local-fonts",
+  "dep:fandhe-cap-local-peer-connect",
   "dep:fandhe-cap-managed-app-config",
   "dep:fandhe-cap-media-cast",
   "dep:fandhe-cap-media-playback",
@@ -89,9 +92,11 @@ device = [
   "dep:fandhe-cap-open-in-shell",
   "dep:fandhe-cap-open-system-settings",
   "dep:fandhe-cap-passkey-signin",
+  "dep:fandhe-cap-payment-request",
   "dep:fandhe-cap-pdf-viewer",
   "dep:fandhe-cap-pedometer",
   "dep:fandhe-cap-per-app-language",
+  "dep:fandhe-cap-picture-in-picture",
   "dep:fandhe-cap-power-state",
   "dep:fandhe-cap-quick-settings-tile",
   "dep:fandhe-cap-radio-control",
@@ -157,6 +162,7 @@ NSMotionUsageDescription = "型サンプル「歩数」「気圧」「行動認�
 NSLocalNetworkUsageDescription = "型サンプル「LAN のサービス探索」「近くの端末との直接通信」「UWB による距離」の動作確認に使います"
 NSNearbyInteractionUsageDescription = "型サンプル「UWB による距離」で、近くの端末までの距離を測るために使います"
 NSHomeKitUsageDescription = "型サンプル「スマートホーム操作」の動作確認に使います"
+NSHealthShareUsageDescription = "型サンプル「ヘルスデータ読み書き」の動作確認で、今日の歩数を読むために使います"
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」「音声認識」「動画の撮影」の動作確認に使います"
 NSAlarmKitUsageDescription = "型サンプル「アラーム」の動作確認に使います"
 NSBluetoothAlwaysUsageDescription = "型サンプル「BLE スキャン」「BLE の周辺機器役」の動作確認に使います"
@@ -205,6 +211,7 @@ fandhe-cap-call-ui = { path = "../fandhe-cap-call-ui", optional = true }
 fandhe-cap-camera-capture = { path = "../fandhe-cap-camera-capture", optional = true }
 fandhe-cap-camera-preview-stream = { path = "../fandhe-cap-camera-preview-stream", optional = true }
 fandhe-cap-capture-protection = { path = "../fandhe-cap-capture-protection", optional = true }
+fandhe-cap-car-display = { path = "../fandhe-cap-car-display", optional = true }
 fandhe-cap-clipboard = { path = "../fandhe-cap-clipboard", optional = true }
 fandhe-cap-color-picker = { path = "../fandhe-cap-color-picker", optional = true }
 fandhe-cap-companion-device = { path = "../fandhe-cap-companion-device", optional = true }
@@ -231,6 +238,7 @@ fandhe-cap-gamepad = { path = "../fandhe-cap-gamepad", optional = true }
 fandhe-cap-geocoding-search = { path = "../fandhe-cap-geocoding-search", optional = true }
 fandhe-cap-global-hotkey = { path = "../fandhe-cap-global-hotkey", optional = true }
 fandhe-cap-haptics = { path = "../fandhe-cap-haptics", optional = true }
+fandhe-cap-health-data = { path = "../fandhe-cap-health-data", optional = true }
 fandhe-cap-home-widget = { path = "../fandhe-cap-home-widget", optional = true }
 fandhe-cap-http-get = { path = "../fandhe-cap-http-get", optional = true }
 fandhe-cap-human-presence = { path = "../fandhe-cap-human-presence", optional = true }
@@ -240,6 +248,7 @@ fandhe-cap-in-app-review = { path = "../fandhe-cap-in-app-review", optional = tr
 fandhe-cap-launch-at-login = { path = "../fandhe-cap-launch-at-login", optional = true }
 fandhe-cap-live-activity = { path = "../fandhe-cap-live-activity", optional = true }
 fandhe-cap-local-fonts = { path = "../fandhe-cap-local-fonts", optional = true }
+fandhe-cap-local-peer-connect = { path = "../fandhe-cap-local-peer-connect", optional = true }
 fandhe-cap-managed-app-config = { path = "../fandhe-cap-managed-app-config", optional = true }
 fandhe-cap-media-cast = { path = "../fandhe-cap-media-cast", optional = true }
 fandhe-cap-media-playback = { path = "../fandhe-cap-media-playback", optional = true }
@@ -258,9 +267,11 @@ fandhe-cap-on-device-llm = { path = "../fandhe-cap-on-device-llm", optional = tr
 fandhe-cap-open-in-shell = { path = "../fandhe-cap-open-in-shell", optional = true }
 fandhe-cap-open-system-settings = { path = "../fandhe-cap-open-system-settings", optional = true }
 fandhe-cap-passkey-signin = { path = "../fandhe-cap-passkey-signin", optional = true }
+fandhe-cap-payment-request = { path = "../fandhe-cap-payment-request", optional = true }
 fandhe-cap-pdf-viewer = { path = "../fandhe-cap-pdf-viewer", optional = true }
 fandhe-cap-pedometer = { path = "../fandhe-cap-pedometer", optional = true }
 fandhe-cap-per-app-language = { path = "../fandhe-cap-per-app-language", optional = true }
+fandhe-cap-picture-in-picture = { path = "../fandhe-cap-picture-in-picture", optional = true }
 fandhe-cap-power-state = { path = "../fandhe-cap-power-state", optional = true }
 fandhe-cap-quick-settings-tile = { path = "../fandhe-cap-quick-settings-tile", optional = true }
 fandhe-cap-radio-control = { path = "../fandhe-cap-radio-control", optional = true }

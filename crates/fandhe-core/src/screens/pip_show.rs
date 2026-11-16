@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod pip_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 呼び出しは
-//! `fandhe-egui-proxy` の `device/picture_in_picture.rs` が [`take_command`] で要求を観測し、
+//! `fandhe-cap-picture-in-picture` の `driver.rs` が [`take_command`] で要求を観測し、
 //! [`apply_update`] で通知を注入する（`audio_play.rs` と同型の状態機械）。
 //!
 //! 全対象 OS（macOS / iOS / Android / Web）の状態・文言をここで確定済みで、後続の OS 実装は本画面を

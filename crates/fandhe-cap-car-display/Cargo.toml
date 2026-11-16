@@ -1,0 +1,45 @@
+[package]
+name = "fandhe-cap-car-display"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の car-display の機能 crate（契約・OS 別実装・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知の送り口（CompletionSender）・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+jni = { workspace = true }
+
+# 機能宣言（capability-declaration.md）。`cargo fandhe check` が現行の設定と突き合わせる。
+[package.metadata.fandhe]
+id = "car-display"
+
+# Android Auto のホストが bind する CarAppService。exported だが接続元は createHostValidator で絞る。
+# 版は scripts/android/versions.env の CAR_APP_VERSION と一致させる。
+[package.metadata.fandhe.android]
+application-meta-data = [
+  { name = "androidx.car.app.minCarApiLevel", value = "7" },
+  { name = "com.google.android.gms.car.application", resource = "@xml/automotive_app_desc" },
+]
+# 推移依存の guava 31.1-android には勧告 3 件があるため、直接依存で引き上げる（版は versions.env の GUAVA_VERSION と一致させる）。
+gradle = ["androidx.car.app:app:1.7.0", "com.google.guava:guava:33.7.2-android"]
+java = ["android/java"]
+res = ["android/res"]
+
+[[package.metadata.fandhe.android.components]]
+kind = "service"
+name = "com.fandhe.platform.CarDisplayService"
+exported = true
+intent-filters = [{ actions = ["androidx.car.app.CarAppService"], categories = ["androidx.car.app.category.IOT"] }]
+
+[lints]
+workspace = true

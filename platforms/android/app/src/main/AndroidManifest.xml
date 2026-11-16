@@ -175,7 +175,7 @@
     <!-- 近くの端末との直接通信（local-peer-connect、Issue #513）: Wi-Fi Aware のメッセージのみ（データパスは
          使わない）。NEARBY_WIFI_DEVICES は API 33+ の実行時許可（位置情報は導かない）、API 32 以下は
          宣言済みの ACCESS_FINE_LOCATION を使う。非搭載端末をストアの自動フィルタから除外しないため
-         uses-feature は required=false。切り離し時に削除する。 -->
+         uses-feature は required=false。切り離し時にこの宣言と `crates/fandhe-cap-local-peer-connect/` を削除する。 -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission
@@ -222,7 +222,7 @@
     <!-- Issue #1100: ヘルスデータ画面が Health Connect の歩数を読む（API 34 以上のフレームワーク API）。
          実行時の許可は Health Connect の許可画面。背景・履歴・書き込みの権限は足さない。
          API 34 以上は OS 組み込みのため `<queries>` は足さない。切り離し時にこの行と下の
-         HealthPermissionsRationaleActivity・activity-alias を削除する。 -->
+         HealthPermissionsRationaleActivity・activity-alias と `crates/fandhe-cap-health-data/` を削除する。 -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
 
     <!-- 資格情報の安全な保存（Issue #924）: `allowBackup="false"` はクラウドバックアップを
@@ -539,6 +539,22 @@
             android:authorities="${applicationId}.fandhe.gamepad"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.PaymentRequestLifecycle"
+            android:authorities="${applicationId}.fandhe.payment-request"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.LocalPeerLifecycle"
+            android:authorities="${applicationId}.fandhe.local-peer-connect"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.PictureInPictureLifecycle"
+            android:authorities="${applicationId}.fandhe.picture-in-picture"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.HealthDataLifecycle"
+            android:authorities="${applicationId}.fandhe.health-data"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.BiometricAuthLifecycle"
             android:authorities="${applicationId}.fandhe.biometric-auth"
             android:exported="false" />
@@ -667,8 +683,7 @@
         </service>
         <!-- Issue #1117: 車載ディスプレイ（Android Auto）。ホストが bind するため exported="true" が必要で、
              接続元は CarDisplayService.createHostValidator で絞る。uses-permission は不要。
-             切り離し時にこの service・meta-data 2 つ・res/xml/automotive_app_desc.xml・
-             strings.xml の car_display_*・Java 2 ファイルを削除する。 -->
+             切り離し時にこの service・meta-data 2 つと `crates/fandhe-cap-car-display/` を削除する。 -->
         <service
             android:name="com.fandhe.platform.CarDisplayService"
             android:exported="true">
@@ -704,7 +719,7 @@
             android:name="android.content.APP_RESTRICTIONS"
             android:resource="@xml/app_restrictions" />
         <!-- Issue #1131: Google Pay API（play-services-wallet）の有効化。AAR の manifest には含まれない。
-             決済リクエストを切り離すときに削除する。 -->
+             決済リクエストを切り離すときに、この meta-data と `crates/fandhe-cap-payment-request/` を削除する。 -->
         <meta-data
             android:name="com.google.android.gms.wallet.api.enabled"
             android:value="true" />
