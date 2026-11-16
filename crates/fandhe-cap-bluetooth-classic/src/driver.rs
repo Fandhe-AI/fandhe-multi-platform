@@ -518,9 +518,15 @@ pub fn stop_shared_discovery() {
     crate::macos::stop();
     #[cfg(target_os = "windows")]
     crate::windows::stop_shared();
+    // 無効化の後・OS 停止の前に始まった要求は OS 停止に巻き込まれ、完了が届かない（macOS の teardown は
+    // `finished` を呼ばず、Windows は `current` を捨てる）。OS 停止の後でもう一度無効化し、キャンセルで確定させる。
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    let swept = invalidate_for_stop();
     // 後片付けを終えてから通知する（通知内の再開始を消さない）。
     #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
     fire_cancelled(old);
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    fire_cancelled(swept);
 }
 
 #[cfg(test)]
@@ -691,6 +697,8 @@ mod tests {
 
     #[test]
     fn stale_bridge_delivery_is_rejected() {
+        #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
+        let _g = GLOBALS.lock().unwrap_or_else(|e| e.into_inner());
         let slot = bridge::SLOT.begin();
         assert!(!bridge::deliver(slot.wrapping_add(1), Ok(vec![])));
         bridge::SLOT.reset();
