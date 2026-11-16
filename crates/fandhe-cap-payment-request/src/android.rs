@@ -24,7 +24,6 @@
 
 use crate::contract::{PaymentOutcome, outcome_from_android_result};
 use crate::error::PaymentRequestError;
-use fandhe_core::screens::payment_request::PaymentAction;
 
 /// 結果の種別（SSOT は Java 側 `PaymentRequestHelper.KIND_*`）。
 const KIND_READY: i32 = 0;
@@ -62,9 +61,9 @@ fn decode_pay(
 /// OS へ依頼する。`Ok` は受理済みで結果は後から `bridge::deliver_*` で届く。`Err` は呼び出し自体の
 /// 失敗で、呼び出し元がその場で結果を置く。
 #[cfg(target_os = "android")]
-pub(crate) fn begin(request_id: u64, action: PaymentAction) -> Result<(), PaymentRequestError> {
+/// `pay` が `true` なら決済シート、`false` なら「使えるか」の確認（画面の型は driver.rs で写す）。
+pub(crate) fn begin(request_id: u64, pay: bool) -> Result<(), PaymentRequestError> {
     use crate::contract::{ANDROID_IS_READY_TO_PAY_JSON, ANDROID_PAYMENT_DATA_REQUEST_JSON};
-    let pay = matches!(action, PaymentAction::Pay);
     let payment_json = pay.then_some(ANDROID_PAYMENT_DATA_REQUEST_JSON);
     if call_request(request_id, pay, ANDROID_IS_READY_TO_PAY_JSON, payment_json) {
         Ok(())
@@ -75,7 +74,7 @@ pub(crate) fn begin(request_id: u64, action: PaymentAction) -> Result<(), Paymen
 
 /// ホストのテストビルド用。非対応を返し、成功へは倒さない。
 #[cfg(not(target_os = "android"))]
-pub(crate) fn begin(_request_id: u64, _action: PaymentAction) -> Result<(), PaymentRequestError> {
+pub(crate) fn begin(_request_id: u64, _pay: bool) -> Result<(), PaymentRequestError> {
     Err(PaymentRequestError::Unsupported)
 }
 
@@ -173,8 +172,11 @@ mod tests {
 
     #[test]
     fn host_begin_never_succeeds() {
-        for a in [PaymentAction::Check, PaymentAction::Pay] {
-            assert!(matches!(begin(1, a), Err(PaymentRequestError::Unsupported)));
+        for pay in [false, true] {
+            assert!(matches!(
+                begin(1, pay),
+                Err(PaymentRequestError::Unsupported)
+            ));
         }
     }
 

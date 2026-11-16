@@ -30,7 +30,8 @@ application-meta-data = [
   { name = "androidx.car.app.minCarApiLevel", value = "7" },
   { name = "com.google.android.gms.car.application", resource = "@xml/automotive_app_desc" },
 ]
-gradle = ["androidx.car.app:app:1.7.0"]
+# 推移依存の guava 31.1-android には勧告 3 件があるため、直接依存で引き上げる（版は versions.env の GUAVA_VERSION と一致させる）。
+gradle = ["androidx.car.app:app:1.7.0", "com.google.guava:guava:33.7.2-android"]
 java = ["android/java"]
 res = ["android/res"]
 

@@ -39,12 +39,15 @@ info-plist = { NSBonjourServices = ["_fandhe-p2p._tcp", "_fandhe-p2p._udp"] }
 frameworks = ["MultipeerConnectivity"]
 
 # Wi-Fi Aware のメッセージのみ（データパスは使わない）。NEARBY_WIFI_DEVICES は API 33+ の実行時許可で、位置情報を導かない
-# （`neverForLocation`）。API 32 以下の ACCESS_FINE_LOCATION は他機能の宣言を共用し、ここでは足さない。
+# （`neverForLocation`）。API 32 以下は位置情報の実行時許可（FINE が必須、COARSE と同時に要求）が要るため、単独利用でも
+# Manifest に入るよう max-sdk=32 で自身が宣言する。
 [package.metadata.fandhe.android]
 permissions = [
   { name = "android.permission.ACCESS_WIFI_STATE" },
   { name = "android.permission.CHANGE_WIFI_STATE" },
   { name = "android.permission.NEARBY_WIFI_DEVICES", flags = ["neverForLocation"] },
+  { name = "android.permission.ACCESS_FINE_LOCATION", max-sdk = 32 },
+  { name = "android.permission.ACCESS_COARSE_LOCATION", max-sdk = 32 },
 ]
 features = [{ name = "android.hardware.wifi.aware", required = false }]
 java = ["android/java"]

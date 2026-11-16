@@ -45,7 +45,7 @@ pub enum PaymentPoll {
 
 /// フレームワークの外のアプリ用: 「使えるか」の確認を OS へ依頼し、要求 id を返す。
 /// 進行中、または結果が未取得の要求があれば `None`（置き換えない）。同期で失敗した場合も id を返し、失敗は [`poll_payment`] で受け取る。
-/// 画面用の effect（[`payment_request_effect`]）と同じ slot を使うため、同時には使わない（画面側の要求が先行を置き換える）。
+/// 画面用の effect（[`payment_request_effect`]）と同じ slot を使うが、持ち主（`SlotOwner`）で分け、互いの要求を置き換えも横取りもしない（先行があれば後からの側が失敗または `None`）。
 pub fn start_payment_check() -> Option<u64> {
     start(PaymentAction::Check)
 }
@@ -58,7 +58,7 @@ pub fn start_payment() -> Option<u64> {
 fn start(action: PaymentAction) -> Option<u64> {
     let request_id = bridge::SLOT.try_begin_unless(|_| true)?;
     #[cfg(target_os = "android")]
-    let started = crate::android::begin(request_id, action);
+    let started = crate::android::begin(request_id, matches!(action, PaymentAction::Pay));
     #[cfg(not(target_os = "android"))]
     let started: Result<(), PaymentRequestError> = Err(PaymentRequestError::Unsupported);
     if let Err(e) = started {
@@ -144,21 +144,36 @@ pub fn reset_pending_tracking() {
     bridge::reset();
 }
 
+/// 画面側の要求の持ち主印（公開入口の要求と同じ [`bridge::SLOT`] を共有するため、自分の分だけを追う）。
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
+    fandhe_runtime::request_slot::SlotOwner::new();
+
 /// Android 版の effect ドライバ本体。`begin` が `Err` なら依頼自体の失敗としてその場で結果を置く。
+/// 公開入口の要求が進行中・未取得なら置き換えず、画面へ失敗を返す。
+/// `begin` へ渡す第 2 引数は決済シートなら `true`（画面の型は OS 実装へ渡さない）。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 fn drive_callback(
     state: &PaymentRequestState,
     sender: &CompletionSender<PaymentRequestState>,
     slot: &'static fandhe_runtime::request_slot::RequestSlot<bridge::Outcome>,
-    begin: fn(u64, PaymentAction) -> Result<(), PaymentRequestError>,
+    owner: &'static fandhe_runtime::request_slot::SlotOwner,
+    begin: fn(u64, bool) -> Result<(), PaymentRequestError>,
 ) {
     use fandhe_core::screens::payment_request::PaymentPhase;
 
     if let Some(view) = take_request(state) {
         let _ = sender.send(Box::new(mark_running));
-        let request_id = slot.begin();
-        if let Err(e) = begin(request_id, view.action) {
+        let Some(request_id) = owner.begin_keeping_foreign(slot) else {
+            let generation = view.generation;
+            let _ = sender.send(Box::new(move |s: &mut PaymentRequestState| {
+                finish(s, generation, Err(FAILED_TEXT.to_string()));
+            }));
+            return;
+        };
+        if let Err(e) = begin(request_id, matches!(view.action, PaymentAction::Pay)) {
             let outcome = match view.action {
                 PaymentAction::Check => check_outcome(Err(e)),
                 PaymentAction::Pay => pay_outcome(Err(e)),
@@ -171,8 +186,9 @@ fn drive_callback(
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         slot,
+        owner,
         sender,
         |_request_id| {},
         move |s: &mut PaymentRequestState, outcome| {
@@ -182,6 +198,10 @@ fn drive_callback(
             } else {
                 false
             }
+        },
+        // Activity 再生成・公開入口で自分の要求が失われた。処理中のまま止めない。
+        move |s: &mut PaymentRequestState| {
+            finish(s, generation, Err(FAILED_TEXT.to_string()));
         },
     );
 }
@@ -212,7 +232,13 @@ pub fn payment_request_effect(
     state: &PaymentRequestState,
     sender: &CompletionSender<PaymentRequestState>,
 ) {
-    drive_callback(state, sender, &bridge::SLOT, crate::android::begin);
+    drive_callback(
+        state,
+        sender,
+        &bridge::SLOT,
+        &SCREEN_OWNER,
+        crate::android::begin,
+    );
 }
 
 /// `registry.rs` から配線される effect ドライバ（Android 以外。常に「使えない」を表示する）。
@@ -318,17 +344,18 @@ mod tests {
     fn frame(
         s: &mut PaymentRequestState,
         slot: &'static fandhe_runtime::request_slot::RequestSlot<bridge::Outcome>,
-        begin: fn(u64, PaymentAction) -> Result<(), PaymentRequestError>,
+        owner: &'static fandhe_runtime::request_slot::SlotOwner,
+        begin: fn(u64, bool) -> Result<(), PaymentRequestError>,
     ) {
         let (tx, rx) = std::sync::mpsc::channel();
         let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
-        drive_callback(s, &sender, slot, begin);
+        drive_callback(s, &sender, slot, owner, begin);
         while let Ok(apply) = rx.try_recv() {
             apply(s);
         }
     }
 
-    fn accept(_: u64, _: PaymentAction) -> Result<(), PaymentRequestError> {
+    fn accept(_: u64, _: bool) -> Result<(), PaymentRequestError> {
         Ok(())
     }
 
@@ -338,10 +365,12 @@ mod tests {
         for press in [screen::check, screen::pay] {
             static SLOT: fandhe_runtime::request_slot::RequestSlot<bridge::Outcome> =
                 fandhe_runtime::request_slot::RequestSlot::new();
+            static OWNER: fandhe_runtime::request_slot::SlotOwner =
+                fandhe_runtime::request_slot::SlotOwner::new();
             let mut s = PaymentRequestState::default();
             press(&mut s);
-            frame(&mut s, &SLOT, begin);
-            frame(&mut s, &SLOT, begin);
+            frame(&mut s, &SLOT, &OWNER, begin);
+            frame(&mut s, &SLOT, &OWNER, begin);
             assert_eq!(s.status, screen::UNSUPPORTED_STATUS);
             assert!(s.error.is_empty());
             SLOT.reset();
@@ -352,12 +381,14 @@ mod tests {
     fn cancelled_via_bridge_is_not_error() {
         static SLOT: fandhe_runtime::request_slot::RequestSlot<bridge::Outcome> =
             fandhe_runtime::request_slot::RequestSlot::new();
+        static OWNER: fandhe_runtime::request_slot::SlotOwner =
+            fandhe_runtime::request_slot::SlotOwner::new();
         let mut s = PaymentRequestState::default();
         screen::pay(&mut s);
-        frame(&mut s, &SLOT, accept);
+        frame(&mut s, &SLOT, &OWNER, accept);
         let (id, _) = SLOT.snapshot().unwrap();
         assert!(SLOT.deliver(id, pay_outcome(Ok(PaymentOutcome::Cancelled))));
-        frame(&mut s, &SLOT, accept);
+        frame(&mut s, &SLOT, &OWNER, accept);
         assert_eq!(s.status, screen::CANCELLED_STATUS);
         assert!(s.error.is_empty());
     }
@@ -383,15 +414,17 @@ mod tests {
         for (action, outcome) in cases {
             static SLOT: fandhe_runtime::request_slot::RequestSlot<bridge::Outcome> =
                 fandhe_runtime::request_slot::RequestSlot::new();
+            static OWNER: fandhe_runtime::request_slot::SlotOwner =
+                fandhe_runtime::request_slot::SlotOwner::new();
             let mut s = PaymentRequestState::default();
             match action {
                 PaymentAction::Check => screen::check(&mut s),
                 PaymentAction::Pay => screen::pay(&mut s),
             }
-            frame(&mut s, &SLOT, accept);
+            frame(&mut s, &SLOT, &OWNER, accept);
             let (id, _) = SLOT.snapshot().unwrap();
             assert!(SLOT.deliver(id, outcome));
-            frame(&mut s, &SLOT, accept);
+            frame(&mut s, &SLOT, &OWNER, accept);
             assert!(s.status.is_empty());
             assert!(s.error.starts_with(screen::FAILED_PREFIX));
             SLOT.reset();
@@ -399,22 +432,42 @@ mod tests {
     }
 
     #[test]
+    fn screen_does_not_replace_or_take_public_request() {
+        static SLOT: fandhe_runtime::request_slot::RequestSlot<bridge::Outcome> =
+            fandhe_runtime::request_slot::RequestSlot::new();
+        static OWNER: fandhe_runtime::request_slot::SlotOwner =
+            fandhe_runtime::request_slot::SlotOwner::new();
+        let public = SLOT.try_begin().expect("空き");
+        let mut s = PaymentRequestState::default();
+        screen::pay(&mut s);
+        frame(&mut s, &SLOT, &OWNER, accept);
+        // 画面は失敗で確定し、公開入口の要求はそのまま残る。
+        assert!(s.error.starts_with(screen::FAILED_PREFIX));
+        assert_eq!(SLOT.snapshot().map(|(id, _)| id), Some(public));
+        assert!(SLOT.deliver(public, pay_outcome(Ok(PaymentOutcome::Cancelled))));
+        frame(&mut s, &SLOT, &OWNER, accept);
+        assert_eq!(SLOT.take_ready(public), Some(Ok(CoreOutcome::Cancelled)));
+    }
+
+    #[test]
     fn stale_request_id_is_dropped() {
         static SLOT: fandhe_runtime::request_slot::RequestSlot<bridge::Outcome> =
             fandhe_runtime::request_slot::RequestSlot::new();
+        static OWNER: fandhe_runtime::request_slot::SlotOwner =
+            fandhe_runtime::request_slot::SlotOwner::new();
         let mut s = PaymentRequestState::default();
         screen::pay(&mut s);
-        frame(&mut s, &SLOT, accept);
+        frame(&mut s, &SLOT, &OWNER, accept);
         let (id, _) = SLOT.snapshot().unwrap();
         let stale = id.wrapping_add(1);
         assert!(!SLOT.deliver(stale, pay_outcome(Ok(PaymentOutcome::TestAuthorized))));
-        frame(&mut s, &SLOT, accept);
+        frame(&mut s, &SLOT, &OWNER, accept);
         assert_eq!(s.phase, screen::PaymentPhase::Running);
         assert!(s.status.is_empty() && s.error.is_empty());
         // first-wins: 2 回目の deliver は捨てる
         assert!(SLOT.deliver(id, pay_outcome(Ok(PaymentOutcome::Cancelled))));
         assert!(!SLOT.deliver(id, pay_outcome(Ok(PaymentOutcome::TestAuthorized))));
-        frame(&mut s, &SLOT, accept);
+        frame(&mut s, &SLOT, &OWNER, accept);
         assert_eq!(s.status, screen::CANCELLED_STATUS);
     }
 
@@ -422,14 +475,16 @@ mod tests {
     fn reset_drops_pending_and_old_completion() {
         static SLOT: fandhe_runtime::request_slot::RequestSlot<bridge::Outcome> =
             fandhe_runtime::request_slot::RequestSlot::new();
+        static OWNER: fandhe_runtime::request_slot::SlotOwner =
+            fandhe_runtime::request_slot::SlotOwner::new();
         let mut s = PaymentRequestState::default();
         screen::pay(&mut s);
-        frame(&mut s, &SLOT, accept);
+        frame(&mut s, &SLOT, &OWNER, accept);
         let (id, _) = SLOT.snapshot().unwrap();
         SLOT.reset();
         assert!(!SLOT.deliver(id, pay_outcome(Ok(PaymentOutcome::TestAuthorized))));
         let mut fresh = PaymentRequestState::default();
-        frame(&mut fresh, &SLOT, accept);
+        frame(&mut fresh, &SLOT, &OWNER, accept);
         assert!(fresh.status.is_empty() && fresh.error.is_empty());
     }
 
@@ -437,12 +492,14 @@ mod tests {
     fn ready_false_is_unsupported_not_available() {
         static SLOT: fandhe_runtime::request_slot::RequestSlot<bridge::Outcome> =
             fandhe_runtime::request_slot::RequestSlot::new();
+        static OWNER: fandhe_runtime::request_slot::SlotOwner =
+            fandhe_runtime::request_slot::SlotOwner::new();
         let mut s = PaymentRequestState::default();
         screen::check(&mut s);
-        frame(&mut s, &SLOT, accept);
+        frame(&mut s, &SLOT, &OWNER, accept);
         let (id, _) = SLOT.snapshot().unwrap();
         assert!(SLOT.deliver(id, check_outcome(Ok(false))));
-        frame(&mut s, &SLOT, accept);
+        frame(&mut s, &SLOT, &OWNER, accept);
         assert_eq!(s.status, screen::UNSUPPORTED_STATUS);
     }
 

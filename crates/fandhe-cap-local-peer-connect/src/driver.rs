@@ -166,11 +166,6 @@ pub(crate) mod bridge {
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
-    #[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
-    pub(crate) fn begin() -> u64 {
-        SLOT.begin()
-    }
-
     /// `request_id` 不一致・既に結果ありは捨てて `false`。
     #[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
     pub(crate) fn deliver(request_id: u64, result: Outcome) -> bool {
@@ -220,7 +215,7 @@ fn launch(request_id: u64) -> String {
 
 /// フレームワークの外のアプリ用: 近くの端末との交換を始め、要求 id を返す。
 /// 進行中、または結果が未取得の要求があれば `None`（置き換えない）。対象外 OS・同期の失敗も id を返し、失敗は [`poll_exchange`] で受け取る。
-/// 画面用の effect（[`peer_connect_effect`]）と同じ slot を使うため、同時には使わない（画面側の要求が先行を置き換える）。
+/// 画面用の effect（[`peer_connect_effect`]）と同じ slot を使うが、持ち主（`SlotOwner`）で分け、互いの要求を置き換えも横取りもしない（先行があれば後からの側が失敗または `None`）。
 pub fn start_exchange() -> Option<u64> {
     let request_id = bridge::SLOT.try_begin_unless(|_| true)?;
     #[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
@@ -242,13 +237,26 @@ pub fn poll_exchange(
     bridge::SLOT.take_ready(request_id)
 }
 
+/// 画面側の要求の持ち主印（公開入口の要求と同じ [`bridge::SLOT`] を共有するため、自分の分だけを追う）。
+#[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
+static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
+    fandhe_runtime::request_slot::SlotOwner::new();
+
 /// iOS / macOS / Android の effect ドライバ本体（`lan_discovery::drive_callback` と同型）。
+/// 公開入口の要求が進行中・未取得なら置き換えず、画面へ失敗を返す。
 #[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
 fn drive_callback(state: &PeerConnectState, sender: &CompletionSender<PeerConnectState>) {
     use fandhe_core::screens::peer_connect::PeerPhase;
 
-    if take_request(state).is_some() {
-        let request_id = bridge::begin();
+    if let Some(request) = take_request(state) {
+        let Some(request_id) = SCREEN_OWNER.begin_keeping_foreign(&bridge::SLOT) else {
+            let generation = request.generation;
+            let _ = sender.send(Box::new(move |s: &mut PeerConnectState| {
+                mark_exchanging(s, "-");
+                finish_exchange(s, generation, Err(PeerError::Other("busy".into())));
+            }));
+            return;
+        };
         let label = launch(request_id);
         let _ = sender.send(Box::new(move |s: &mut PeerConnectState| {
             mark_exchanging(s, &label)
@@ -260,8 +268,9 @@ fn drive_callback(state: &PeerConnectState, sender: &CompletionSender<PeerConnec
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &SCREEN_OWNER,
         sender,
         |_request_id| {},
         move |s: &mut PeerConnectState, outcome| {
@@ -273,6 +282,10 @@ fn drive_callback(state: &PeerConnectState, sender: &CompletionSender<PeerConnec
             } else {
                 false
             }
+        },
+        // Activity 再生成・公開入口で自分の要求が失われた。処理中のまま止めない。
+        move |s: &mut PeerConnectState| {
+            finish_exchange(s, generation, Err(PeerError::Other("cancelled".into())));
         },
     );
 }
