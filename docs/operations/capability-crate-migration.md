@@ -37,7 +37,8 @@ crates/fandhe-cap-<id>/
 - `unsafe` を持たなければ `#![forbid(unsafe_code)]`。持つなら、該当 OS だけ `deny` へ緩める `cfg_attr` の組にする
   （`fandhe-cap-camera-capture` と同じ形）。`scripts/audit/unsafe-audit.sh` は `fandhe-cap-*` のクレートルートに
   `forbid(unsafe_code)` が無ければ違反にする
-- 宣言の `frameworks` には基盤（Foundation・UIKit・CoreGraphics）を書かない
+- 宣言の `frameworks` には基盤（Foundation・UIKit・AppKit・CoreGraphics）を書かなくてよい。`verify-scope` が基盤の framework
+  （`crates/cargo-fandhe/src/scope.rs` の `BASE_FRAMEWORKS`）を禁止の対象にしないため、書いても判定は変わらない
 - 画面の状態型（`fandhe_core::screens`）を参照してよいのは `driver.rs` だけ。契約と OS 実装は依存させない
 
 ## 3. 手順
@@ -225,7 +226,7 @@ per-app-language・screen-brightness・spell-check・geocoding-search の 9 機�
 
 | 型 | 扱い |
 |----|------|
-| `scaffold` が書く `build.rs` の framework | 元の `compile_*` の framework と必ず照合する（scaffold の既定は誤る。in-app-review は `StoreKit`（iOS は `UIKit` も）、user-idle は `CoreGraphics`、serial-port は `IOKit`、geocoding-search は `CoreLocation` + `MapKit`、per-app-language は `Foundation` のみ）。宣言の `frameworks` には基盤を除いたものだけを書く |
+| `scaffold` が書く `build.rs` の framework | 元の `compile_*` の framework と必ず照合する（scaffold の既定は誤る。in-app-review は `StoreKit`（iOS は `UIKit` も）、user-idle は `CoreGraphics`、serial-port は `IOKit`、geocoding-search は `CoreLocation` + `MapKit`、per-app-language は `Foundation` のみ）。宣言の `frameworks` は基盤（`BASE_FRAMEWORKS`）を除いたものを書けば足りる |
 | `scaffold` が拾わない Android の Helper | Helper の名前が `<Pascal>Helper` でない機能（geocoding-search の `GeocodingHelper`）は `git mv` されない。手で `android/java/` へ移し、対応表の `impl` も直す |
 | Activity のインスタンスを持つ Helper（screen-brightness・spell-check・geocoding-search） | Helper を private コンストラクタ + static の入口（`set(Activity, …)` など）にし、Activity ごとの helper は `HELPERS`（`Collections.synchronizedMap(new WeakHashMap<>())`）に持つ。`FeatureLifecycleProvider` の派生（`<Name>Lifecycle`）が `onHostCreated` で `attach`、`onHostDestroyed` で `detach` する。Helper が無い（生成前・破棄後）要求は FAILED で確定し、結果が来ないまま待たせない。provider は宣言の `components` と `AndroidManifest.xml` に同じ名前・authorities で書く。Helper が Activity を持たない設計（geocoding-search）は、static の入口が `getApplicationContext()` を取り出して渡す |
 | Helper の native コールバック（spell-check・geocoding-search） | Helper クラスの `native` と Rust の JNI エクスポート名（`Java_com_fandhe_platform_<Helper>_native…`）は移動で変わらない。Rust 側の呼び出しだけ `with_activity_class` + `call_static_method` に変え、JNI の署名は Java と Rust の 2 か所で照合する |
