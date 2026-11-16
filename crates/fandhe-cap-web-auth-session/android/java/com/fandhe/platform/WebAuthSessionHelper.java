@@ -24,8 +24,7 @@ import java.util.WeakHashMap;
 //
 // 流れ: Custom Tabs で認可ページ（デモは 127.0.0.1）を開く（開けなければ ACTION_VIEW）→ ブラウザが
 // `fandhe://web-auth/callback?...` へ遷移 → 既存の intent-filter + singleTask により
-// `onNewIntent` へ届き、`attach` が足した `addOnNewIntentListener`（起動中のコールバックだけ要るため共通層の
-// `deliverIntents` は使わない）で確定する。url-scheme 受信箱へは流さない（code・state を別画面に出さない。
+// `onNewIntent`（Activity が破棄されていたときは起動 Intent）へ届き、`WebAuthSessionLifecycle` の共通層 `deliverIntents` 経由で確定する。url-scheme 受信箱へは流さない（code・state を別画面に出さない。
 // `UrlSchemeHelper.deliver` が同じ条件で除外する）。コールバックなしで戻った（onPause 後の onResume）はキャンセル。
 // 従来の `MainActivity.onNewIntent` は `setIntent` を呼ばずに返していたため、code を含む intent は残らない（本経路も保持しない）。
 // 期限（300 秒）は Rust 側の単調時計だけが持ち、ここには持たない。
@@ -37,6 +36,9 @@ import java.util.WeakHashMap;
 // 認証中に Activity が再生成（回転等）されても、コールバックは新しい Activity の `onNewIntent` へ届く
 // （MainActivity は singleTask。公式文書 Tasks and the back stack: 既存インスタンスがあれば `onNewIntent()` へ routing、
 // 構成変更は同じ Activity の破棄と再生成）。新しい helper が同じ状態を見るので、再生成をまたいで結果を 1 度だけ確定できる。
+// プロセスが生きたまま Activity だけが破棄されていた場合（メモリ逼迫・「アクティビティを保持しない」）は、コールバックが
+// 新インスタンスの起動 Intent（`onCreate` の `getIntent()`）に入り `onNewIntent` は呼ばれない。`deliverIntents` が
+// 起動 Intent も `onNewIntent` と同じ経路へ配るので、離脱記録（`onResume` で取り消し扱いにする）より先に照合して確定する。
 // Rust 側の保留（`bridge::ACTIVE`・`SLOT`）も残したままにするので、呼び出し側の掃除は要らない。
 // 結果が一度も返らない場合（Activity が再生成されずに終了した・プロセス死）は、Rust 側の期限（300 秒）が失敗として確定する。
 // 旧要求の遅延結果は id 照合で捨てる。
@@ -75,10 +77,11 @@ final class WebAuthSessionHelper {
 
     // Activity の生成時（`WebAuthSessionLifecycle.onHostCreated`）。要求の状態は static なので、再生成後の新 helper も
     // 認証中の要求を引き継いで、`onNewIntent` のコールバックを確定できる。
-    static void attach(ComponentActivity activity) {
+    // コールバックの配送（起動時の Intent と `onNewIntent`）は呼び出し元が `deliverIntents` で `onNewIntent` へ繋ぐ。
+    static WebAuthSessionHelper attach(ComponentActivity activity) {
         WebAuthSessionHelper helper = new WebAuthSessionHelper(activity);
         HELPERS.put(activity, helper);
-        activity.addOnNewIntentListener(helper::onNewIntent);
+        return helper;
     }
 
     // Activity の破棄時。以後の要求は拒否される（要求が無ければ何もしない）。

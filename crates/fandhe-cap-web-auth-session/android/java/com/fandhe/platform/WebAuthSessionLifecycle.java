@@ -8,14 +8,16 @@ import androidx.activity.ComponentActivity;
 // 宣言は `fandhe-cap-web-auth-session` の Cargo.toml（`android.components`）にあり、OS がプロセス開始時に生成する。
 // 利用者の `MainActivity` の `onNewIntent` / `onPause` / `onResume` に何も書かせない。
 //
-// コールバック URL は `onHostCreated` で足す `addOnNewIntentListener`（`WebAuthSessionHelper.attach`）が受ける。
+// コールバック URL は `onHostCreated` の `deliverIntents`（起動時の Intent と `onNewIntent`）が受ける。
 // Paused / Resumed は `Activity.onPause()` / `onResume()` の中、つまり `super.onXxx()` の中で届く。従来の `MainActivity` は
 // `super` の後で helper を呼んでいたため、`super` に対する前後だけが違う。helper の状態は同じ経路（UI スレッド・`this` のロック）で
 // 冪等に決まる（離脱の記録とコールバックの確定は、どちらが先でも `onNewIntent` → `onResume` の順で矛盾しない）。
 public final class WebAuthSessionLifecycle extends FeatureLifecycleProvider {
     @Override
     protected void onHostCreated(ComponentActivity activity, Bundle savedInstanceState) {
-        WebAuthSessionHelper.attach(activity);
+        WebAuthSessionHelper helper = WebAuthSessionHelper.attach(activity);
+        // 起動 Intent（Activity が破棄されていた場合のコールバック）と `onNewIntent` を同じ経路で受ける。`onResume` より前に届く。
+        deliverIntents(activity, savedInstanceState, helper::onNewIntent);
     }
 
     @Override
