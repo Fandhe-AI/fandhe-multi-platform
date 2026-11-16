@@ -187,6 +187,7 @@ static PUBLIC_OWNER: fandhe_runtime::request_slot::SlotOwner =
     fandhe_runtime::request_slot::SlotOwner::new();
 
 /// 画面 effect が追う自分の分の要求（公開入口と slot を共有するため区別する）。
+/// 画面の再要求は自分の前の要求を置き換える（OS 側も置き換わり、捨てた結果に副作用が残らないため。副作用が残る写真保存は置き換えない）。
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
     fandhe_runtime::request_slot::SlotOwner::new();

@@ -183,8 +183,10 @@ fn drive_callback(state: &PhotoSaveState, sender: &CompletionSender<PhotoSaveSta
 
     if let Some(request) = take_request(state) {
         let _ = sender.send(Box::new(mark_saving));
-        // 公開入口の要求は置き換えず、画面には失敗として返す。画面自身の前の要求は置き換える（古い完了は id 照合で捨てる）。
-        let Some(request_id) = SCREEN_OWNER.begin_replacing(&bridge::SLOT, &[&PUBLIC_OWNER]) else {
+        // 進行中の保存（公開入口・画面自身とも）は置き換えず、画面には失敗として返す。保存は OS 側で取り消せず、
+        // 置き換えると両方が走って写真が重複するため（lan-discovery・map-view は OS 側で置き換わり、捨てた結果に
+        // 副作用が残らないので置き換え型）。画面自身の完了済み・未取得の結果は置き換える。
+        let Some(request_id) = SCREEN_OWNER.begin_keeping_foreign(&bridge::SLOT) else {
             let generation = request.generation;
             let _ = sender.send(Box::new(move |s: &mut PhotoSaveState| {
                 finish_save(
@@ -282,6 +284,36 @@ mod tests {
     impl fandhe_runtime::RepaintWaker for NoopWaker {
         fn wake(&self) {}
         fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
+    /// 画面の保存は自分の進行中の保存を置き換えず、自分の未取得の結果は置き換え、公開入口の結果は守る。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+    #[test]
+    fn screen_save_refuses_in_flight_replaces_own_ready_and_keeps_public() {
+        // 自分の保存が進行中なら断る（取り消せない保存を二重に始めない）。
+        let first = SCREEN_OWNER.begin_keeping_foreign(&bridge::SLOT).unwrap();
+        assert!(SCREEN_OWNER.begin_keeping_foreign(&bridge::SLOT).is_none());
+        // 自分の古い未取得の結果は置き換える（残すと永久に busy になる）。
+        assert!(bridge::deliver(
+            first,
+            Err(PhotoLibraryError::Internal("x"))
+        ));
+        let second = SCREEN_OWNER.begin_keeping_foreign(&bridge::SLOT).unwrap();
+        assert_ne!(first, second);
+        bridge::SLOT.clear(second);
+        SCREEN_OWNER.release(second);
+
+        // 公開入口の進行中・未取得の結果は守る。
+        let public = PUBLIC_OWNER
+            .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
+            .unwrap();
+        assert!(SCREEN_OWNER.begin_keeping_foreign(&bridge::SLOT).is_none());
+        assert!(bridge::deliver(
+            public,
+            Err(PhotoLibraryError::Internal("x"))
+        ));
+        assert!(SCREEN_OWNER.begin_keeping_foreign(&bridge::SLOT).is_none());
+        assert!(poll_photo_save(public).is_some());
     }
 
     #[test]
