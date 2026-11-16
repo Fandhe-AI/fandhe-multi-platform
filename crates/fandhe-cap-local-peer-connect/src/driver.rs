@@ -50,8 +50,9 @@ use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `LocalPeer` 実装を返す。
 ///
-/// iOS・macOS・Android は OS のコールバックが非同期に届くため `LocalPeer` を実装せず、pull 型 [`bridge`] を
-/// [`peer_connect_effect`] が扱う。Windows は保留、Web は対象外のため、どの OS でも `Unsupported` 固定を返す。
+/// iOS・macOS・Android は OS のコールバックが非同期に届くため `LocalPeer` を実装せず、この trait 経由は
+/// どの OS でも `Unsupported` 固定を返す（Windows は保留、Web は対象外）。
+/// 実際の交換は [`start_exchange`] と [`poll_exchange`] の組で行う。
 /// 画面の状態型に依存しない入口（`docs/architecture/consumer-app-structure.md` §8.2）。
 pub fn platform_local_peer_connect() -> std::sync::Arc<dyn LocalPeer> {
     std::sync::Arc::new(crate::contract::UnsupportedLocalPeer)
@@ -153,29 +154,27 @@ pub(crate) fn finish(request_id: u64, result: Result<(), LocalPeerConnectError>)
     }
 }
 
-#[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
 /// OS からのコールバックとの橋渡し（pull 型、`RequestSlot` の facade）。
+/// 結果は画面にも公開入口にも使えるよう契約の型のまま置き、画面用への写像（[`to_core`]）は反映側が行う。
 pub(crate) mod bridge {
     use crate::contract::PeerExchange;
     use crate::error::LocalPeerConnectError;
-    use fandhe_core::screens::peer_connect::{PeerError, PeerRow};
 
     use fandhe_runtime::request_slot::RequestSlot;
 
-    pub(crate) type Outcome = Result<Option<PeerRow>, PeerError>;
+    pub(crate) type Outcome = Result<Option<PeerExchange>, LocalPeerConnectError>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
+    #[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
     pub(crate) fn begin() -> u64 {
         SLOT.begin()
     }
 
     /// `request_id` 不一致・既に結果ありは捨てて `false`。
-    pub(crate) fn deliver(
-        request_id: u64,
-        result: Result<Option<PeerExchange>, LocalPeerConnectError>,
-    ) -> bool {
-        SLOT.deliver(request_id, crate::driver::to_core(result))
+    #[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
+    pub(crate) fn deliver(request_id: u64, result: Outcome) -> bool {
+        SLOT.deliver(request_id, result)
     }
 }
 
@@ -189,41 +188,71 @@ fn random_seed() -> u64 {
         .finish()
 }
 
+/// 受信バッファを `request_id` で始め、OS へ交換開始を依頼して自分の表示名を返す。
+/// 依頼が同期で失敗したら（コールバックは二度と来ない）その場で失敗を確定する。
+#[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
+fn launch(request_id: u64) -> String {
+    use crate::contract::{EXCHANGE_WINDOW_MS, outgoing_text, peer_token};
+    use std::time::Duration;
+
+    let seed = random_seed();
+    let own_name = peer_token(seed);
+    #[cfg(target_os = "macos")]
+    let os = "macOS";
+    #[cfg(target_os = "ios")]
+    let os = "iOS";
+    #[cfg(target_os = "android")]
+    let os = "Android";
+    let outgoing = outgoing_text(os, seed);
+    PENDING.begin(request_id);
+    let window = Duration::from_millis(EXCHANGE_WINDOW_MS);
+    #[cfg(target_os = "macos")]
+    let started = crate::apple::present(request_id, &own_name, &outgoing, window);
+    #[cfg(target_os = "ios")]
+    let started = crate::ios::present(request_id, &own_name, &outgoing, window);
+    #[cfg(target_os = "android")]
+    let started = crate::android::present(request_id, &own_name, &outgoing, window);
+    if let Err(e) = started {
+        finish(request_id, Err(e));
+    }
+    own_name
+}
+
+/// フレームワークの外のアプリ用: 近くの端末との交換を始め、要求 id を返す。
+/// 進行中、または結果が未取得の要求があれば `None`（置き換えない）。対象外 OS・同期の失敗も id を返し、失敗は [`poll_exchange`] で受け取る。
+/// 画面用の effect（[`peer_connect_effect`]）と同じ slot を使うため、同時には使わない（画面側の要求が先行を置き換える）。
+pub fn start_exchange() -> Option<u64> {
+    let request_id = bridge::SLOT.try_begin_unless(|_| true)?;
+    #[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
+    let _ = launch(request_id);
+    #[cfg(not(any(target_os = "ios", target_os = "macos", target_os = "android")))]
+    bridge::SLOT.deliver(
+        request_id,
+        Err(LocalPeerConnectError::Unsupported("local_peer")),
+    );
+    Some(request_id)
+}
+
+/// [`start_exchange`] の結果を取り出す。未着・別の id・取り出し済みは `None`。
+/// 取り出すと要求は終わり、次の [`start_exchange`] を受け付ける。契約は [`LocalPeer::exchange`] と同じ
+/// （相手が居なければ `Ok(None)`、失敗時は受け取り済みの結果も捨てる）。
+pub fn poll_exchange(
+    request_id: u64,
+) -> Option<Result<Option<PeerExchange>, LocalPeerConnectError>> {
+    bridge::SLOT.take_ready(request_id)
+}
+
 /// iOS / macOS / Android の effect ドライバ本体（`lan_discovery::drive_callback` と同型）。
 #[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
 fn drive_callback(state: &PeerConnectState, sender: &CompletionSender<PeerConnectState>) {
-    use crate::contract::{EXCHANGE_WINDOW_MS, outgoing_text, peer_token};
     use fandhe_core::screens::peer_connect::PeerPhase;
-    use std::time::Duration;
 
     if take_request(state).is_some() {
-        let seed = random_seed();
-        let own_name = peer_token(seed);
-        #[cfg(target_os = "macos")]
-        let os = "macOS";
-        #[cfg(target_os = "ios")]
-        let os = "iOS";
-        #[cfg(target_os = "android")]
-        let os = "Android";
-        let outgoing = outgoing_text(os, seed);
-        let label = own_name.clone();
+        let request_id = bridge::begin();
+        let label = launch(request_id);
         let _ = sender.send(Box::new(move |s: &mut PeerConnectState| {
             mark_exchanging(s, &label)
         }));
-
-        let request_id = bridge::begin();
-        PENDING.begin(request_id);
-        let window = Duration::from_millis(EXCHANGE_WINDOW_MS);
-        #[cfg(target_os = "macos")]
-        let started = crate::apple::present(request_id, &own_name, &outgoing, window);
-        #[cfg(target_os = "ios")]
-        let started = crate::ios::present(request_id, &own_name, &outgoing, window);
-        #[cfg(target_os = "android")]
-        let started = crate::android::present(request_id, &own_name, &outgoing, window);
-        if let Err(e) = started {
-            // 依頼自体が同期的に失敗した（コールバックは二度と来ない）。
-            finish(request_id, Err(e));
-        }
         return;
     }
 
@@ -239,7 +268,7 @@ fn drive_callback(state: &PeerConnectState, sender: &CompletionSender<PeerConnec
             // 反映できる状態か確かめてから `finish_exchange` し、反映できたときだけ
             // `true` を返す（`RequestSlot` 側がそれを見て `clear` する）。
             if s.phase != PeerPhase::Idle {
-                finish_exchange(s, generation, outcome);
+                finish_exchange(s, generation, to_core(outcome));
                 true
             } else {
                 false

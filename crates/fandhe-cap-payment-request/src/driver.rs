@@ -22,12 +22,65 @@ use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `PaymentSheet` 実装を返す。
 ///
-/// Android は Google Pay API がコールバック型のため `PaymentSheet` を実装せず（pull 型 `bridge` で
-/// [`payment_request_effect`] が扱う）、iOS・macOS は対応表で保留、Windows は非対応のため、どの OS でも
-/// `Unsupported` 固定を返す。Web の実装は `fandhe-web-dom` にあり、この契約の定数と写像だけを共有する。
+/// Android は Google Pay API がコールバック型のため `PaymentSheet` を実装せず、iOS・macOS は対応表で保留、
+/// Windows は非対応のため、どの OS でもこの trait 経由は `Unsupported` 固定を返す。
+/// 実際の確認・決済シートは [`start_payment_check`] / [`start_payment`] と [`poll_payment`] の組で行う。Web の実装は `fandhe-web-dom` にあり、この契約の定数と写像だけを共有する。
 /// 画面の状態型に依存しない入口（`docs/architecture/consumer-app-structure.md` §8.2）。
 pub fn platform_payment_request() -> std::sync::Arc<dyn PaymentSheet> {
     std::sync::Arc::new(UnsupportedPaymentSheet)
+}
+
+/// 公開入口 [`poll_payment`] が返す結果（画面の状態型に依存しない）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaymentPoll {
+    /// 支払いに使える。
+    Available,
+    /// テスト環境で承認された（決済の成立ではない）。
+    TestAuthorized,
+    /// キャンセル・中断。
+    Cancelled,
+    /// この環境では非対応（Google Pay が使えない Android・Android 以外）。
+    Unsupported,
+}
+
+/// フレームワークの外のアプリ用: 「使えるか」の確認を OS へ依頼し、要求 id を返す。
+/// 進行中、または結果が未取得の要求があれば `None`（置き換えない）。同期で失敗した場合も id を返し、失敗は [`poll_payment`] で受け取る。
+/// 画面用の effect（[`payment_request_effect`]）と同じ slot を使うため、同時には使わない（画面側の要求が先行を置き換える）。
+pub fn start_payment_check() -> Option<u64> {
+    start(PaymentAction::Check)
+}
+
+/// フレームワークの外のアプリ用: 決済シートの表示を OS へ依頼し、要求 id を返す。規則は [`start_payment_check`] と同じ。
+pub fn start_payment() -> Option<u64> {
+    start(PaymentAction::Pay)
+}
+
+fn start(action: PaymentAction) -> Option<u64> {
+    let request_id = bridge::SLOT.try_begin_unless(|_| true)?;
+    #[cfg(target_os = "android")]
+    let started = crate::android::begin(request_id, action);
+    #[cfg(not(target_os = "android"))]
+    let started: Result<(), PaymentRequestError> = Err(PaymentRequestError::Unsupported);
+    if let Err(e) = started {
+        let outcome = match action {
+            PaymentAction::Check => check_outcome(Err(e)),
+            PaymentAction::Pay => pay_outcome(Err(e)),
+        };
+        bridge::SLOT.deliver(request_id, outcome);
+    }
+    Some(request_id)
+}
+
+/// [`start_payment_check`] / [`start_payment`] の結果を取り出す。未着・別の id・取り出し済みは `None`。
+/// 取り出すと要求は終わり、次の `start_*` を受け付ける。失敗は固定文言（内部名を出さない）。
+pub fn poll_payment(request_id: u64) -> Option<Result<PaymentPoll, String>> {
+    let outcome = bridge::SLOT.take_ready(request_id)?;
+    Some(outcome.map(|o| match o {
+        CoreOutcome::Available => PaymentPoll::Available,
+        CoreOutcome::TestAuthorized => PaymentPoll::TestAuthorized,
+        CoreOutcome::Cancelled => PaymentPoll::Cancelled,
+        CoreOutcome::Unsupported => PaymentPoll::Unsupported,
+    }))
 }
 
 /// 内部名を出さない固定文言（security.md A09）。
@@ -52,7 +105,6 @@ fn pay_outcome(result: Result<PaymentOutcome, PaymentRequestError>) -> Result<Co
 
 /// OS 側コールバックとの橋渡し（Android、pull 型、`RequestSlot` の facade）。
 /// `deliver_*` は `android_payment_request` の JNI 受け口が呼ぶ。
-#[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub(crate) mod bridge {
     use super::{CoreOutcome, PaymentOutcome, check_outcome, pay_outcome};
@@ -392,6 +444,18 @@ mod tests {
         assert!(SLOT.deliver(id, check_outcome(Ok(false))));
         frame(&mut s, &SLOT, accept);
         assert_eq!(s.status, screen::UNSUPPORTED_STATUS);
+    }
+
+    #[test]
+    #[cfg(not(target_os = "android"))]
+    fn public_entry_reports_unsupported_and_blocks_until_polled() {
+        let id = start_payment_check().expect("空きがあれば登録できる");
+        assert!(start_payment().is_none(), "未取得の結果を置き換えない");
+        assert_eq!(poll_payment(id.wrapping_add(1)), None);
+        assert_eq!(poll_payment(id), Some(Ok(PaymentPoll::Unsupported)));
+        assert_eq!(poll_payment(id), None);
+        let id2 = start_payment().expect("取り出し後は受け付ける");
+        assert_eq!(poll_payment(id2), Some(Ok(PaymentPoll::Unsupported)));
     }
 
     #[test]
