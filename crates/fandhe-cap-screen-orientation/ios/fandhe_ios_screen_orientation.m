@@ -1,7 +1,7 @@
 // 画面向きの取得・固定: iOS 実装（Issue #656、親 #128、#655 で dispatch・trait 確定済み）。
 //
-// `src/device/ios_screen_orientation.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
-// feature `device` 有効時のみ `cc` コンパイルする（UIKit / objc ランタイムはリンク済み）。
+// `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS ターゲットで
+// `cc` コンパイルする（UIKit / objc ランタイムはリンク済み）。
 //
 // 前提とする winit は 0.30.13（`WinitUIViewController` は `platform_impl/ios/view_controller.rs`）。
 // 版が変わってクラス名や構造が変わると差し込めず、request / read は 3 を返す（嘘の成功にしない）。

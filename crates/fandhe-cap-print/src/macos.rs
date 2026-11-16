@@ -36,8 +36,8 @@ pub(crate) fn outcome_from_code(code: i32) -> Result<PrintOutcome, PrintError> {
 mod ffi {
     use std::ffi::CString;
 
-    // SAFETY: `macos/fandhe_macos_print.m`（`build.rs` が macOS ターゲットの feature `device`
-    // 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
+    // SAFETY: `macos/fandhe_macos_print.m`（`build.rs` が macOS ターゲットで
+    // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {
         fn fandhe_macos_print_text(

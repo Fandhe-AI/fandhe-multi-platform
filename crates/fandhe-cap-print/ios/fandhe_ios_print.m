@@ -1,4 +1,4 @@
-// iOS 向け印刷（Issue #327）。`src/device/ios_print.rs` から呼ばれ、`UIPrintInteractionController` の
+// iOS 向け印刷（Issue #327）。`src/ios.rs` から呼ばれ、`UIPrintInteractionController` の
 // 印刷シートを main queue で提示する。権限・Info.plist キー・追加 framework は不要。
 //
 // C ABI:

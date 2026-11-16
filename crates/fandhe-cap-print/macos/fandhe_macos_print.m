@@ -5,8 +5,8 @@
 // 2 段構成。1 回の `NSPrintOperation` だと `runOperation` の NO が取り消しか失敗か区別できない。
 // 権限は不要。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_print.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `src/macos.rs` から C ABI 経由で呼ばれる。
+// `build.rs` が macOS ターゲットでコンパイルする。
 //
 // 契約:
 //   fandhe_macos_print_text(const char *title, const char *body) -> int32_t

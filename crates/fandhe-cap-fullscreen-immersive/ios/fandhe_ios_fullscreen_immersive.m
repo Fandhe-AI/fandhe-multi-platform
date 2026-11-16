@@ -1,7 +1,7 @@
 // 全画面表示（システムバー非表示）: iOS 実装（Issue #1313、親 #1133）。
 //
-// `src/device/ios_fullscreen_immersive.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
-// feature `device` 有効時のみ `cc` コンパイルする（UIKit / objc ランタイムはリンク済み）。
+// `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS ターゲットで
+// `cc` コンパイルする（UIKit / objc ランタイムはリンク済み）。
 //
 // 前提とする winit は 0.30.x（`WinitUIViewController` は `platform_impl/ios/view.rs` で定義）。
 // 版が変わってクラス名や構造が変わると差し込めず、set / is_on は 3 を返す（嘘の成功にしない）。

@@ -2,8 +2,8 @@
 // key window の `UIView.safeAreaInsets`（iOS 11+）を読む。通知は購読しない（呼び出し側が
 // 1 秒間隔で読み直すため、回転・分割表示はその読み直しで追従する）。
 //
-// `crates/fandhe-egui-proxy/src/device/ios_safe_area_insets.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_ios()` が feature `device` 有効時にのみコンパイルする。
+// `src/ios.rs` から C ABI 経由で呼ばれる。
+// `build.rs` が iOS ターゲットでコンパイルする。
 //
 // 契約:
 //   int32_t fandhe_ios_safe_area_insets_read(double out[4])

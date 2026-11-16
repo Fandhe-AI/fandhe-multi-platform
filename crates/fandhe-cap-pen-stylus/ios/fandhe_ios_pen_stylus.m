@@ -2,8 +2,8 @@
 // `altitudeAngle` を捨てるため、winit の base view へ観測専用の `UIGestureRecognizer` を付けて
 // 主ポインタ 1 本の種類・筆圧・傾きを読み、Rust へ渡す。位置は扱わない（egui のポインタから取る）。
 //
-// `crates/fandhe-egui-proxy/src/device/ios_pen_stylus.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が iOS ターゲット・feature `device` 有効時のみ `cc` でコンパイルする。
+// `src/ios.rs` から C ABI 経由で呼ばれる。
+// `build.rs` が iOS ターゲットでコンパイルする。
 //
 // 契約（`ios_pen_stylus.rs` と対）:
 //   int32_t fandhe_ios_pen_stylus_install(void)

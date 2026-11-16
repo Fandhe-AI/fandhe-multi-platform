@@ -4,8 +4,8 @@
 // 最新値を static に持つ。イベントは消費も改変もせずそのまま返す（global monitor は使わない）。
 // 位置は winit/egui 側から取るため扱わない。値・座標をログへ出さない。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_pen_stylus.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `src/macos.rs` から C ABI 経由で呼ばれる。
+// `build.rs` が macOS ターゲットでコンパイルする。
 //
 // 契約:
 //   fandhe_macos_pen_stylus_install(void) -> int32_t

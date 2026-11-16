@@ -2,8 +2,8 @@
 // 窓の `contentView.safeAreaInsets`（NSView、macOS 11+）を読む。`NSScreen.safeAreaInsets`
 // （画面についての値）は使わない。通知は購読しない（呼び出し側が 1 秒間隔で読み直す）。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_safe_area_insets.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `src/macos.rs` から C ABI 経由で呼ばれる。
+// `build.rs` が macOS ターゲットでコンパイルする。
 //
 // 契約:
 //   int32_t fandhe_macos_safe_area_insets_read(double out[4])

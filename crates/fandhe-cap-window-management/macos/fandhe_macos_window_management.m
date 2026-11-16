@@ -3,8 +3,8 @@
 // egui の viewport 情報に無い 2 つだけを読む: 窓の level（最前面か）と、窓がいる画面の作業領域
 // （メニューバー・Dock を除く visibleFrame）。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_window_management.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `src/macos.rs` から C ABI 経由で呼ばれる。
+// `build.rs` が macOS ターゲットでコンパイルする。
 //
 // 契約（どちらも UI（main）スレッドから同期で呼ぶ。-1: 失敗 = main 以外・NSApp 未確立・
 // 窓か画面が無い・out が NULL。失敗時は out に書かない）:
