@@ -40,6 +40,8 @@ use crate::error::FullscreenImmersiveError;
 /// 全画面表示の契約（モジュール doc の「契約」節）。
 pub trait Fullscreen: Send + Sync {
     /// `true` で全画面、`false` で通常へ戻す依頼を出す。完了は待たない。
+    /// `Ok` は依頼を出しただけで、成否は [`Fullscreen::is_fullscreen`] の読み戻しで確認する
+    /// （描画層が処理しない場合も `Ok` になりうる）。
     fn request(&self, on: bool) -> Result<(), FullscreenImmersiveError>;
 
     /// 実際に全画面か。`None` は読めない状態。

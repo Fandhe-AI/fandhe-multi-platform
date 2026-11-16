@@ -124,6 +124,8 @@ pub trait WindowManager: Send + Sync {
     fn target(&self) -> Result<WindowFrame, WindowManagementError>;
 
     /// 操作を依頼する。完了は待たない。
+    /// `Ok` は依頼を出しただけで、成否は [`WindowManager::snapshot`] の読み戻しで確認する
+    /// （描画層が処理しない場合も `Ok` になりうる）。
     fn request(&self, op: WindowOp) -> Result<(), WindowManagementError>;
 }
 
