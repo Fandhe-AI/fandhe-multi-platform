@@ -20,6 +20,7 @@ import android.print.PrintAttributes;
 import android.print.PrintDocumentAdapter;
 import android.print.PrintDocumentInfo;
 import android.print.PrintJob;
+import android.print.PrintJobInfo;
 import android.print.PrintManager;
 import android.print.pdf.PrintedPdfDocument;
 
@@ -46,7 +47,7 @@ import java.util.WeakHashMap;
 // ライフサイクル: `request` はインスタンスフィールド。Activity の破棄で印刷ダイアログは閉じ、結果は再生成後の
 // Activity へ引き継がれない（AOSP `PrintManager.PrintDocumentAdapterDelegate.onActivityDestroyed` が adapter を
 // 手放し、保留中の onLayout / onWrite / onFinish を捨てる）。よって `onDestroy` で追跡中の id があれば、
-// ジョブの状態（`PrintJob.getInfo().getState()`。スプーラへの問い合わせを 1 回だけ）から通常の `evaluate` と同じ写像で
+// ジョブの状態（`PrintJob.getInfo().getState()` を 1 回だけ読む。失敗は決められない扱い）から通常の `evaluate` と同じ写像で
 // 結果を 1 回だけ届け、Rust の `SLOT` を解放する。状態が CREATED で決められないときは、onFinish 後なら
 // RESULT_UNCONFIRMED、ダイアログ表示中なら RESULT_PRESENT_FAILED。外部アプリは `reset_pending_tracking()` を
 // 呼ばないため、この確定が無いと busy が残る。破棄後に届く `onFinish` は `complete` が false になり何も送らない。
@@ -78,6 +79,8 @@ final class PrintHelper {
     private PrintJob job;
     private boolean writeFailed;
     private long finishedAt;
+    // writeFailed・finishedAt がどの要求のものか。start() 前に破棄された要求が前の要求の残りを読まないための印。
+    private long stateId = RequestTracker.NONE;
 
     // Activity ごとの helper。再生成後は新しい Activity に新しい helper が付き、旧 Activity の分は破棄時に外す。
     private static final Map<Activity, PrintHelper> HELPERS = new WeakHashMap<>();
@@ -150,21 +153,29 @@ final class PrintHelper {
         activity.runOnUiThread(() -> start(id, page -> drawImage(page, argb, width, height)));
     }
 
-    // UI スレッド。
+    // UI スレッド。take した id には、例外が出ても必ず 1 回だけ結果を届ける（届かないと Rust の SLOT が busy のまま残る）。
     private void onDestroy() {
         handler.removeCallbacksAndMessages(null);
         long id = request.take();
-        if (id != RequestTracker.NONE) {
-            // OS のジョブ状態を 1 回だけ読んで確定する（推測のタイマーは足さない）。
-            // 状態がまだ CREATED のとき: onFinish 後（印刷フレームワークの手を離れた）なら確認できなかったので
-            // UNCONFIRMED、ダイアログ表示中なら提示は途中で終わったので PRESENT_FAILED。
-            int code = decide();
-            if (code < 0) {
-                code = finishedAt != 0L ? RESULT_UNCONFIRMED : RESULT_PRESENT_FAILED;
+        if (id == RequestTracker.NONE) {
+            job = null;
+            return;
+        }
+        // 状態がまだ CREATED（または問い合わせ失敗）のとき: onFinish 後（印刷フレームワークの手を離れた）なら
+        // 確認できなかったので UNCONFIRMED、ダイアログ表示中・未開始なら提示は途中で終わったので PRESENT_FAILED。
+        // writeFailed・finishedAt は start() が stateId に書いた要求のものだけを使う（前の要求の残りを読まない）。
+        int code = RESULT_PRESENT_FAILED;
+        try {
+            if (stateId == id) {
+                code = decide();
+                if (code < 0) {
+                    code = finishedAt != 0L ? RESULT_UNCONFIRMED : RESULT_PRESENT_FAILED;
+                }
             }
+        } finally {
+            job = null;
             nativeOnPrintResult(id, code);
         }
-        job = null;
     }
 
     private void finish(long id, int code) {
@@ -191,6 +202,7 @@ final class PrintHelper {
         }
         writeFailed = false;
         finishedAt = 0L;
+        stateId = id;
         try {
             job = manager.print("fandhe", new Adapter(id, drawer), null);
         } catch (RuntimeException e) {
@@ -204,17 +216,27 @@ final class PrintHelper {
     }
 
     // ジョブの現在の状態から結果コードを決める。CREATED 等でまだ決められないときは -1。
+    // 状態は `PrintJob.getInfo().getState()`（スプーラへ binder で問い合わせる）を 1 回だけ読んで分岐する
+    // （判定ごとに読むと main で同期 binder を重ね、間で状態が変わる）。Activity 破棄後も読める。
+    // 問い合わせの失敗（RuntimeException。DeadSystemException 等）は決められない（-1）として扱う。
     // 取り消しを失敗より先に見る（利用者の取り消しを失敗に化けさせない。契約表 10）。
     // writeFailed は直近の onWrite 試行の結果で、再試行が成功すれば false に戻っている。
-    // 状態は `PrintJob.getInfo().getState()`（スプーラへ問い合わせる）なので Activity 破棄後も読める。
     private int decide() {
+        int state = PrintJobInfo.STATE_CREATED;
         PrintJob j = job;
-        if (j != null && j.isCancelled()) {
+        if (j != null) {
+            try {
+                state = j.getInfo().getState();
+            } catch (RuntimeException e) {
+                return -1;
+            }
+        }
+        if (state == PrintJobInfo.STATE_CANCELED) {
             return RESULT_CANCELLED;
-        } else if (writeFailed || (j != null && j.isFailed())) {
+        } else if (writeFailed || state == PrintJobInfo.STATE_FAILED) {
             return RESULT_FAILED;
-        } else if (j != null && (j.isQueued() || j.isStarted() || j.isBlocked()
-                || j.isCompleted())) {
+        } else if (state == PrintJobInfo.STATE_QUEUED || state == PrintJobInfo.STATE_STARTED
+                || state == PrintJobInfo.STATE_BLOCKED || state == PrintJobInfo.STATE_COMPLETED) {
             return RESULT_SUBMITTED;
         }
         return -1;
