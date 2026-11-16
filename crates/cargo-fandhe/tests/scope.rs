@@ -240,7 +240,7 @@ fn shared_value_with_selected_feature_is_not_forbidden() {
 }
 
 #[test]
-fn empty_observation_fails_and_no_unselected_passes() {
+fn empty_observation_fails_even_when_all_selected() {
     let m = make_ws("empty", SELECT_CAM, &[]);
     assert!(check("android", &m, "  \n").unwrap_err().contains("空"));
     assert!(check("watch", &m, "x").unwrap_err().contains("未知の OS"));
@@ -249,8 +249,8 @@ fn empty_observation_fails_and_no_unselected_passes() {
         &deps(&["cam", "nfc", "both", "ble", "scan", "pip"]),
         &[],
     );
-    let r = verify_scope(Some(&m), Some(&m), "android", "").unwrap();
-    assert_eq!(r.unselected, 0);
+    // 全機能選択でも空の観測（aapt2 失敗）は失敗にする。
+    assert!(check("android", &m, "").unwrap_err().contains("空"));
 }
 
 #[test]
@@ -394,19 +394,67 @@ fn missing_main_activity_fails_and_empty_selection_has_no_false_positive() {
 }
 
 #[test]
-fn all_selected_skips_structure_checks_entirely() {
-    // 未選択 0 件では構造照合（フラグ・属性の「宣言にありません」系）まで進まず早期に成功する仕様。
-    // フラグと属性を実際に評価する経路は selected_permission_flag_passes 等が担う。
+fn all_selected_still_checks_structure() {
+    // 未選択 0 件でも構造照合は走る。全機能を選んだ正常系（宣言どおりのフラグ・属性）は誤検知しない。
     let m = make_ws(
         "all-flags",
         &deps(&["cam", "nfc", "both", "ble", "scan", "pip"]),
         &[],
     );
-    let obs = format!("{}{}", scan_perm(Some("0x00010000")), MAIN_ACTIVITY_CLEAN);
+    let pip = "        A: http://schemas.android.com/apk/res/android:supportsPictureInPicture(0x010104f7)=true\n";
+    let ok = format!(
+        "{}{MAIN_ACTIVITY_CLEAN}{pip}",
+        scan_perm(Some("0x00010000"))
+    );
     assert_eq!(
-        verify_scope(Some(&m), Some(&m), "android", &obs)
+        verify_scope(Some(&m), Some(&m), "android", &ok)
             .unwrap()
             .unselected,
         0
     );
+    // 宣言にない属性値・未知のフラグビット・MainActivity 欠落・空の観測は、全機能選択でも失敗する。
+    let bad_attr = format!("{ok}        A: http://schemas.android.com/apk/res/android:supportsPictureInPicture(0x010104f7)=false\n");
+    let e = check("android", &m, &bad_attr).unwrap_err();
+    assert!(e.contains("supportsPictureInPicture"), "{e}");
+    let bad_flag = format!(
+        "{}{MAIN_ACTIVITY_CLEAN}{pip}",
+        scan_perm(Some("0x00000002"))
+    );
+    assert!(check("android", &m, &bad_flag).is_err());
+    assert!(check("android", &m, &scan_perm(None))
+        .unwrap_err()
+        .contains("MainActivity"));
+    assert!(check("android", &m, "").is_err());
+}
+
+/// 実 APK（aapt2 2.20 の `dump xmltree --file AndroidManifest.xml`）から取った行。識別子は一般化済み。
+#[test]
+fn real_aapt2_output_forms_pass_through_verify_scope() {
+    let m = make_ws("real-forms", &deps(&["cam", "ble", "pip"]), &[]);
+    let obs = "\
+N: android=http://schemas.android.com/apk/res/android (line=3)
+  E: manifest (line=3)
+    A: http://schemas.android.com/apk/res/android:versionCode(0x0101021b)=1
+    A: package=\"com.example.app\" (Raw: \"com.example.app\")
+    A: platformBuildVersionCode=35
+      E: uses-permission (line=12)
+        A: http://schemas.android.com/apk/res/android:name(0x01010003)=\"android.permission.CAMERA\" (Raw: \"android.permission.CAMERA\")
+      E: uses-permission (line=157)
+        A: http://schemas.android.com/apk/res/android:name(0x01010003)=\"android.permission.BLUETOOTH_SCAN\" (Raw: \"android.permission.BLUETOOTH_SCAN\")
+        A: http://schemas.android.com/apk/res/android:usesPermissionFlags(0x01010644)=0x00010000
+      E: application (line=40)
+        A: http://schemas.android.com/apk/res/android:theme(0x01010000)=@0x7f0d0005
+        A: http://schemas.android.com/apk/res/android:allowBackup(0x01010280)=false
+        E: activity (line=45)
+            A: http://schemas.android.com/apk/res/android:name(0x01010003)=\"com.fandhe.platform.MainActivity\" (Raw: \"com.fandhe.platform.MainActivity\")
+            A: http://schemas.android.com/apk/res/android:exported(0x01010010)=true
+            A: http://schemas.android.com/apk/res/android:launchMode(0x0101001d)=2
+            A: http://schemas.android.com/apk/res/android:configChanges(0x0101001f)=0x5000ffff
+            A: http://schemas.android.com/apk/res/android:supportsPictureInPicture(0x010104f7)=true
+";
+    check("android", &m, obs).unwrap();
+    // 未選択（nfc・both・scan）側から見ると、同じ出力のフラグ・属性は宣言どおりでなければ検出される。
+    let m2 = make_ws("real-forms-nopip", &deps(&["cam", "ble"]), &[]);
+    let e = check("android", &m2, obs).unwrap_err();
+    assert!(e.contains("supportsPictureInPicture"), "{e}");
 }

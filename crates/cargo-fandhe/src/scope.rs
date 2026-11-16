@@ -20,7 +20,7 @@ use crate::native::{ANDROID_TRIPLE, APP_GROUPS_KEY, IOS_TRIPLE, MACOS_TRIPLE, MA
 use crate::reach::reachable;
 use crate::workspace::{collect, run_metadata};
 
-/// 検査結果。`unselected` が 0 なら検査対象なし（成功）。
+/// 検査結果。`unselected` が 0 でも構造照合（フラグ・MainActivity 属性）は走る。
 #[derive(Debug, PartialEq)]
 pub struct ScopeReport {
     pub unselected: usize,
@@ -148,6 +148,9 @@ pub(crate) fn scan(forbidden: &BTreeMap<String, Owner>, observed: &str) -> Vec<S
         .collect()
 }
 
+/// aapt2 xmltree の `android` 名前空間の URI（属性名の接頭辞）。
+const ANDROID_NS: &str = "http://schemas.android.com/apk/res/android:";
+
 /// aapt2 xmltree の 1 要素（タグと、直下の属性の名前 → 値）。入れ子は追わない（必要なのは直下の属性だけ）。
 struct Element {
     tag: String,
@@ -168,36 +171,23 @@ fn android_elements(observed: &str) -> Vec<Element> {
             let Some((lhs, rhs)) = rest.split_once('=') else {
                 continue;
             };
-            let lhs = lhs.split('(').next().unwrap_or(lhs);
-            let name = lhs.rsplit(':').next().unwrap_or(lhs).to_string();
+            // `android:` 名前空間の属性だけを取る（別名前空間の同名属性・名前空間なしの `package=` 等で上書きされない）。
+            let Some(name) = lhs
+                .split('(')
+                .next()
+                .and_then(|l| l.strip_prefix(ANDROID_NS))
+            else {
+                continue;
+            };
+            // 実出力: 文字列は `"v" (Raw: "v")`、真偽は `true` / `false`、整数・フラグは `0x…` / 10 進、参照は `@0x7f…`。
             let val = match rhs.strip_prefix('"') {
                 Some(r) => r.split('"').next().unwrap_or("").to_string(),
-                None => typed_value(rhs),
+                None => rhs.split_whitespace().next().unwrap_or("").to_string(),
             };
-            el.attrs.insert(name, val);
+            el.attrs.insert(name.to_string(), val);
         }
     }
     out
-}
-
-/// 非クォートの値を読む。`(type 0x12)0xffffffff` のような型付き値は型接頭辞を外し、
-/// boolean（type 0x12）は `true` / `false` に正規化する。それ以外は値トークンをそのまま返す。
-fn typed_value(rhs: &str) -> String {
-    let rhs = rhs.trim();
-    let (ty, rest) = match rhs.strip_prefix("(type ").and_then(|r| r.split_once(')')) {
-        Some((t, r)) => (Some(t.trim()), r),
-        None => (None, rhs),
-    };
-    let tok = rest.split_whitespace().next().unwrap_or("");
-    if ty == Some("0x12") {
-        return if parse_u32(tok) == Some(0) {
-            "false"
-        } else {
-            "true"
-        }
-        .to_string();
-    }
-    tok.to_string()
 }
 
 /// aapt2 が出す数値（`0x…` 16 進または 10 進）を u32 にする。
@@ -366,12 +356,6 @@ pub fn verify_scope(
         .iter()
         .filter(|d| !reached_ids.contains(d.id.as_str()))
         .count();
-    if unselected == 0 {
-        return Ok(ScopeReport {
-            unselected: 0,
-            forbidden: 0,
-        });
-    }
     if observed.trim().is_empty() {
         return Err(vec![
             "観測テキストが空です（ツールの失敗を見逃さないため失敗にします）".into(),
@@ -440,16 +424,15 @@ mod tests {
         assert_eq!(els[1].attrs["supportsPictureInPicture"], "true");
     }
 
+    /// 実 APK（aapt2 2.20）の出力形: 真偽は `true`、整数・フラグは `0x…`、参照は `@0x7f…`、
+    /// 名前空間なしの属性（`package=`）と別名前空間の同名属性は android: 属性を上書きしない。
     #[test]
-    fn parses_typed_values() {
-        let t = "E: uses-permission (line=1)\n  A: http://x/android:usesPermissionFlags(0x01010644)=(type 0x11)0x10000\nE: activity (line=2)\n  A: http://x/android:supportsPictureInPicture(0x010104f7)=(type 0x12)0xffffffff\n  A: http://x/android:resizeableActivity(0x010104f6)=(type 0x12)0x0\n";
+    fn parses_real_value_forms() {
+        let t = "E: activity (line=2)\n  A: http://schemas.android.com/apk/res/android:supportsPictureInPicture(0x010104f7)=true\n  A: http://other/ns:supportsPictureInPicture(0x1)=false\n  A: supportsPictureInPicture=false\n  A: http://schemas.android.com/apk/res/android:theme(0x01010000)=@0x7f0d0005\n  A: http://schemas.android.com/apk/res/android:configChanges(0x0101001f)=0x5000ffff\n";
         let els = android_elements(t);
-        assert_eq!(
-            parse_u32(&els[0].attrs["usesPermissionFlags"]),
-            Some(0x10000)
-        );
-        assert_eq!(els[1].attrs["supportsPictureInPicture"], "true");
-        assert_eq!(els[1].attrs["resizeableActivity"], "false");
+        assert_eq!(els[0].attrs["supportsPictureInPicture"], "true");
+        assert_eq!(els[0].attrs["theme"], "@0x7f0d0005");
+        assert_eq!(parse_u32(&els[0].attrs["configChanges"]), Some(0x5000ffff));
     }
 
     #[test]
