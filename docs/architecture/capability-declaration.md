@@ -298,6 +298,7 @@ cargo fandhe verify-scope --catalog <全機能を含む Cargo.toml> \
 ```
 
 - 禁止集合は「カタログの宣言 − アプリが到達した宣言」から作ります。到達判定は `gen` と同じです
+- 基盤の framework（`scope.rs` の `BASE_FRAMEWORKS`。UIKit・AppKit 等、選択によらずどのアプリもリンクするもの）は禁止にしません。宣言に書いても書かなくても判定は変わりません
 - 到達した機能と同じ値を宣言する未選択機能の値は、正当に現れるため禁止にしません
 - 観測ファイルは成果物から外部ツールで取り出したテキストです。いずれかの禁止値が現れたら、機能 id・種別・値を出して終了コード 1 で終わります
 - 照合はトークン境界つきです。`android.hardware.camera` は `android.hardware.camera.autofocus` に、`group:artifact` は `group:artifact-ktx` に一致しません
