@@ -303,6 +303,21 @@ pub fn poll_and_finish_owned<S: 'static, O: Clone + Send + 'static>(
 #[cfg(test)]
 mod tests {
     #[test]
+    fn concurrent_take_ready_returns_some_once() {
+        let slot: std::sync::Arc<RequestSlot<u8>> = std::sync::Arc::new(RequestSlot::new());
+        let id = slot.begin();
+        assert!(slot.deliver(id, 1));
+        let hs: Vec<_> = (0..8)
+            .map(|_| {
+                let s = slot.clone();
+                std::thread::spawn(move || s.take_ready(id))
+            })
+            .collect();
+        let n = hs.into_iter().filter_map(|h| h.join().unwrap()).count();
+        assert_eq!(n, 1);
+    }
+
+    #[test]
     fn begin_with_advances_generated_ids_past_caller_id() {
         let slot: RequestSlot<u8> = RequestSlot::new();
         slot.begin_with(7);

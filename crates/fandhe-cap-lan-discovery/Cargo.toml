@@ -37,7 +37,11 @@ id = "lan-discovery"
 
 [package.metadata.fandhe.android]
 # mDNS 応答を受ける MulticastLock 用（API 31 以下。通常権限）。
-permissions = [{ name = "android.permission.CHANGE_WIFI_MULTICAST_STATE" }]
+permissions = [
+  { name = "android.permission.CHANGE_WIFI_MULTICAST_STATE" },
+  # 接続中ネットワークの確認（ConnectivityManager.getActiveNetwork）用。通常権限。
+  { name = "android.permission.ACCESS_NETWORK_STATE" },
+]
 java = ["android/java"]
 
 # Activity のライフサイクルへ参加する非公開 provider（FeatureLifecycleProvider、fandhe-platform-android）。

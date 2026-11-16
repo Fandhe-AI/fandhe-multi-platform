@@ -142,13 +142,9 @@ pub fn begin_photo_save(image: &PngImage) -> Result<u64, PhotoLibraryError> {
 pub fn poll_photo_save(request_id: u64) -> Option<Result<SavedTo, PhotoLibraryError>> {
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     {
-        let (id, ready) = bridge::SLOT.snapshot()?;
-        if id != request_id {
-            return None;
-        }
-        let result = ready?;
-        bridge::SLOT.clear(id);
-        PUBLIC_OWNER.release(id);
+        // 照合・取得・消去を同じロックで行う（並行 poll でも Some は 1 件だけ）。
+        let result = bridge::SLOT.take_ready(request_id)?;
+        PUBLIC_OWNER.release(request_id);
         Some(result)
     }
     #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]

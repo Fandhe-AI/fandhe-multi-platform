@@ -433,13 +433,9 @@ pub fn poll_lan_discovery(request_id: u64) -> Option<Result<Vec<LanService>, Lan
         target_os = "android"
     ))]
     {
-        let (id, ready) = bridge::SLOT.snapshot()?;
-        if id != request_id {
-            return None;
-        }
-        let result = ready?;
-        bridge::SLOT.clear(id);
-        PUBLIC_OWNER.release(id);
+        // 照合・取得・消去を同じロックで行う（並行 poll でも Some は 1 件だけ）。
+        let result = bridge::SLOT.take_ready(request_id)?;
+        PUBLIC_OWNER.release(request_id);
         Some(result)
     }
     #[cfg(not(any(

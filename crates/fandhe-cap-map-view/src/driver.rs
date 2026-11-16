@@ -212,17 +212,18 @@ pub fn begin_map_snapshot(region: MapRegion) -> Result<u64, MapViewError> {
 pub fn poll_map_snapshot(request_id: u64) -> Option<Result<fandhe_device::Image, MapViewError>> {
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
-        let (id, ready) = bridge::SLOT.snapshot()?;
-        if id != request_id {
-            return None;
+        // 照合・取得・消去を同じロックで行う（並行 poll でも Some は 1 件だけ）。
+        if let Some(result) = bridge::SLOT.take_ready(request_id) {
+            PUBLIC_OWNER.release(request_id);
+            return Some(result);
         }
-        let Some(result) = ready else {
-            expire_if_needed(id, std::time::Instant::now());
-            return None;
-        };
-        bridge::SLOT.clear(id);
-        PUBLIC_OWNER.release(id);
-        Some(result)
+        if bridge::SLOT
+            .snapshot()
+            .is_some_and(|(id, _)| id == request_id)
+        {
+            expire_if_needed(request_id, std::time::Instant::now());
+        }
+        None
     }
     #[cfg(not(any(target_os = "macos", target_os = "ios")))]
     {
