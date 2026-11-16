@@ -101,10 +101,9 @@ pub(crate) fn implementation() -> Arc<dyn SpotlightIndex> {
 }
 
 /// 検索結果から開かれたときの受信を登録する。main thread から呼ぶ（macOS は `run_native` より前、
-/// iOS は `UIApplicationMain` より前）。URL の接頭辞は画面側の `URL_PREFIX`。冪等。
+/// iOS は `UIApplicationMain` より前）。URL の接頭辞 `prefix`（例: `fandhe://spotlight/`）は呼び出し側のアプリが渡す。冪等。
 #[allow(unsafe_code)]
-pub fn register() {
-    let prefix = fandhe_core::screens::spotlight_index::URL_PREFIX;
+pub fn register(prefix: &'static str) {
     // SAFETY: `prefix` は 'static な `&str` で、長さと一致する。`.m` 側は同期でコピーして保持する。
     // main thread から呼ぶ契約は呼び出し元（`main`）が守る。
     unsafe { fandhe_apple_spotlight_register(prefix.as_ptr(), prefix.len()) }

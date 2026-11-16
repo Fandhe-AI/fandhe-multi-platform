@@ -27,7 +27,7 @@
 //! 守らない: 画面を一度開くまで出ない、他アプリからの同じ `fandhe://` URL との区別、
 //! ランチャーごとの表示差、失敗後のプロセス内再試行、ポーリング間隔ぶんの遅れ。
 
-use crate::contract::{AppShortcuts, Registration};
+use crate::contract::{AppShortcuts, Registration, ShortcutSpec};
 use crate::error::AppShortcutsError;
 
 /// Java `AppShortcutsHelper.RESULT_INSTALLED`。
@@ -53,16 +53,15 @@ struct AndroidAppShortcuts;
 impl AndroidAppShortcuts {
     /// Java の static メソッドを呼ぶ。Activity 未確立・JNI 失敗は `None`。
     /// `unsafe` は共通層 `fandhe_platform_android::with_activity_class` に閉じており、本ファイルには無い。
-    fn call_install(&self) -> Option<i32> {
-        use fandhe_core::screens::url_scheme_show::{SHORTCUT_TITLE, SHORTCUT_URL};
+    fn call_install(&self, spec: &ShortcutSpec<'_>) -> Option<i32> {
         use fandhe_platform_android::{JniCallFailed, with_activity_class};
         let app = fandhe_platform_android::android_app()?;
         with_activity_class(
             &app,
             jni::jni_str!("com.fandhe.platform.AppShortcutsHelper"),
             |env, activity, class| -> Result<i32, JniCallFailed> {
-                let label = env.new_string(SHORTCUT_TITLE)?;
-                let url = env.new_string(SHORTCUT_URL)?;
+                let label = env.new_string(spec.title)?;
+                let url = env.new_string(spec.url)?;
                 let ret = env.call_static_method(
                     class,
                     jni::jni_str!("install"),
@@ -92,8 +91,8 @@ impl AndroidAppShortcuts {
 
 #[cfg(target_os = "android")]
 impl AppShortcuts for AndroidAppShortcuts {
-    fn install(&self) -> Result<Registration, AppShortcutsError> {
-        match self.call_install() {
+    fn install(&self, spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError> {
+        match self.call_install(spec) {
             Some(code) => registration_from_code(code),
             None => Err(AppShortcutsError::Internal("app_shortcuts install")),
         }
@@ -119,7 +118,10 @@ mod tests {
     #[test]
     fn host_implementation_is_unsupported() {
         assert!(matches!(
-            implementation().install(),
+            implementation().install(&ShortcutSpec {
+                title: "t",
+                url: "x://y"
+            }),
             Err(AppShortcutsError::Unsupported(_))
         ));
     }

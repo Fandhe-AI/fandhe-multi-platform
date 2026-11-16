@@ -4,7 +4,8 @@
 //!
 //! 契約（`contract`）・失敗の種類（`error`）・effect ドライバ（`driver`）・OS 実装（macOS は `macos` と `macos/*.m`、
 //! iOS は Info.plist の静的宣言、Android は `android` と `android/java`、Windows は `windows`）を 1 つに集める。
-//! 画面の状態型を参照してよいのは `driver` だけ。入口 `pub fn platform_app_shortcuts()` は状態型に依存しないため、
+//! 画面の状態型・定数を参照してよいのは `driver` だけ（契約と OS 実装は [`ShortcutSpec`] を引数で受ける）。
+//! 入口 `pub fn platform_app_shortcuts()` は状態型に依存しないため、
 //! フレームワークの外のアプリも使える。
 //!
 //! # 依存方向

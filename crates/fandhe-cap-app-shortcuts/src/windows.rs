@@ -37,9 +37,8 @@ pub(crate) use win::implementation;
 
 #[cfg(target_os = "windows")]
 mod win {
-    use crate::contract::{AppShortcuts, Registration};
+    use crate::contract::{AppShortcuts, Registration, ShortcutSpec};
     use crate::error::AppShortcutsError;
-    use fandhe_core::screens::url_scheme_show::{SHORTCUT_TITLE, SHORTCUT_URL};
     use windows::Win32::Foundation::E_FAIL;
     use windows::Win32::Storage::EnhancedStorage::PKEY_Title;
     use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
@@ -64,7 +63,7 @@ mod win {
 
     impl AppShortcuts for WindowsAppShortcuts {
         #[allow(unsafe_code)]
-        fn install(&self) -> Result<Registration, AppShortcutsError> {
+        fn install(&self, spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError> {
             // COM 初期化はこのガードが生存する間だけ有効（COM オブジェクトより先に宣言し最後に解放）。
             let _com = ComInit::new()
                 .map_err(|_| AppShortcutsError::Internal("app_shortcuts com init"))?;
@@ -89,10 +88,10 @@ mod win {
                         CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)?;
                     let exe_h = HSTRING::from(exe.as_os_str());
                     link.SetPath(&exe_h)?;
-                    link.SetArguments(&HSTRING::from(super::task_arguments(SHORTCUT_URL)))?;
+                    link.SetArguments(&HSTRING::from(super::task_arguments(spec.url)))?;
                     link.SetIconLocation(&exe_h, 0)?;
                     let store: IPropertyStore = link.cast()?;
-                    let title = lpwstr_variant(SHORTCUT_TITLE)
+                    let title = lpwstr_variant(spec.title)
                         .map_err(|_| windows::core::Error::from(E_FAIL))?;
                     store.SetValue(&PKEY_Title, &title)?;
                     store.Commit()?;
@@ -117,7 +116,7 @@ mod win {
 mod tests {
     use super::*;
     use fandhe_cap_url_scheme::windows::{launch_unaltered, parse_url_args};
-    use fandhe_core::screens::url_scheme_show::SHORTCUT_URL;
+    const SHORTCUT_URL: &str = "fandhe://shortcut/open-demo";
 
     #[test]
     fn task_command_line_is_accepted_by_url_scheme() {

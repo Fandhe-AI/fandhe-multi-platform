@@ -9,13 +9,13 @@
 //! 守らない範囲: 他アプリが同じ URL を送った場合との区別、表示数の上限（OS 次第）、
 //! 項目の動的な書き換え。
 
-use crate::contract::{AppShortcuts, Registration};
+use crate::contract::{AppShortcuts, Registration, ShortcutSpec};
 use crate::error::AppShortcutsError;
 
 struct IosAppShortcuts;
 
 impl AppShortcuts for IosAppShortcuts {
-    fn install(&self) -> Result<Registration, AppShortcutsError> {
+    fn install(&self, _spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError> {
         Ok(Registration::Declared)
     }
 }
@@ -28,17 +28,21 @@ pub(crate) fn implementation() -> &'static dyn AppShortcuts {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::url_scheme_show::{SHORTCUT_TITLE, SHORTCUT_URL};
+    const SHORTCUT_TITLE: &str = "デモを開く";
+    const SHORTCUT_URL: &str = "fandhe://shortcut/open-demo";
 
     #[test]
     fn install_is_declared_only() {
         assert!(matches!(
-            implementation().install(),
+            implementation().install(&ShortcutSpec {
+                title: SHORTCUT_TITLE,
+                url: SHORTCUT_URL
+            }),
             Ok(Registration::Declared)
         ));
     }
 
-    /// Info.plist の静的項目が画面の定数とずれていないこと。
+    /// Info.plist の静的項目がCargo.toml の宣言とずれていないこと。
     #[test]
     fn info_plist_matches_screen_constants() {
         let plist = include_str!(concat!(

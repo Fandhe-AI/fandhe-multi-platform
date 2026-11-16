@@ -27,9 +27,9 @@ use std::time::Duration;
     test
 ))]
 use crate::contract::UnsupportedAppShortcuts;
-use crate::contract::{AppShortcuts, InstallCell, InstallOutcome};
+use crate::contract::{AppShortcuts, InstallCell, InstallOutcome, ShortcutSpec};
 use fandhe_core::screens::url_scheme_show::{
-    ShortcutStatus, UrlSchemeShowState, apply_shortcut_status,
+    SHORTCUT_TITLE, SHORTCUT_URL, ShortcutStatus, UrlSchemeShowState, apply_shortcut_status,
 };
 
 use fandhe_runtime::CompletionSender;
@@ -39,6 +39,12 @@ const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 /// Windows・Android は別スレッドで呼ぶ。後続の子は変えない。
 const ON_WORKER: bool = cfg!(any(target_os = "windows", target_os = "android"));
+
+/// 画面（`url_scheme_show`）のショートカット仕様。契約と OS 実装へは引数として渡す（画面の定数を参照してよいのは driver だけ）。
+const SCREEN_SPEC: ShortcutSpec<'static> = ShortcutSpec {
+    title: SHORTCUT_TITLE,
+    url: SHORTCUT_URL,
+};
 
 /// プロセス全体で 1 回だけ登録するための状態。
 static CELL: InstallCell = InstallCell::new();
@@ -114,7 +120,7 @@ fn drive(
     let run = {
         let sender = sender.clone();
         move || {
-            let result = sc.install();
+            let result = sc.install(&SCREEN_SPEC);
             cell.finish(&result);
             if let Some(o) = cell.get() {
                 send(&sender, o);
@@ -149,7 +155,7 @@ mod tests {
         result: fn() -> Result<Registration, AppShortcutsError>,
     }
     impl AppShortcuts for Fake {
-        fn install(&self) -> Result<Registration, AppShortcutsError> {
+        fn install(&self, _spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             (self.result)()
         }
@@ -267,11 +273,22 @@ mod tests {
         assert!(rx.recv_timeout(Duration::from_millis(200)).is_err());
     }
 
+    /// iOS の Info.plist の静的項目が画面の定数とずれていないこと。
+    #[test]
+    fn info_plist_matches_screen_constants() {
+        let plist = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../platforms/apple/FandheIosApp/Resources/Info.plist"
+        ));
+        assert!(plist.contains(&format!("<string>{SHORTCUT_URL}</string>")));
+        assert!(plist.contains(&format!("<string>{SHORTCUT_TITLE}</string>")));
+    }
+
     #[test]
     fn unsupported_stub_is_not_success() {
         let f: &'static Fake = Box::leak(Box::new(Fake {
             calls: AtomicUsize::new(0),
-            result: || UnsupportedAppShortcuts.install(),
+            result: || UnsupportedAppShortcuts.install(&SCREEN_SPEC),
         }));
         assert_eq!(run_once(f), ShortcutStatus::Unsupported);
     }

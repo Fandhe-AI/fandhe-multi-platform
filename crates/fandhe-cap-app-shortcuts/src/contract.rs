@@ -39,17 +39,28 @@ pub enum Registration {
     Installed,
 }
 
-/// ショートカットを OS に登録する抽象。各 OS 実装は `fandhe-egui-proxy` が持つ。
+/// 登録するショートカット 1 件の仕様。呼び出し側（driver・外部アプリ）が自分の値を渡し、契約と OS 実装は
+/// 画面の定数を持たない。iOS は Info.plist の静的宣言なので、値は宣言側と一致させる（照合は呼び出し側）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShortcutSpec<'a> {
+    /// ランチャー・Dock・ジャンプリストに出すラベル。
+    pub title: &'a str,
+    /// 選ばれたときに起動する URL（url-scheme の受信箱へ入る）。
+    pub url: &'a str,
+}
+
+/// ショートカットを OS に登録する抽象。各 OS 実装は本 crate が持つ。
 pub trait AppShortcuts: Send + Sync {
     /// ショートカット 1 件を登録する。契約はモジュール doc 参照。
-    fn install(&self) -> Result<Registration, AppShortcutsError>;
+    /// iOS は `spec` を使わず宣言済みとして返す（`Registration::Declared`）。
+    fn install(&self, spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError>;
 }
 
 /// 非対応 OS 用。常に `Err(Unsupported)` を返し、成功を装わない。
 pub struct UnsupportedAppShortcuts;
 
 impl AppShortcuts for UnsupportedAppShortcuts {
-    fn install(&self) -> Result<Registration, AppShortcutsError> {
+    fn install(&self, _spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError> {
         Err(AppShortcutsError::Unsupported("app_shortcuts"))
     }
 }
@@ -191,7 +202,10 @@ mod tests {
     #[test]
     fn unsupported_is_never_ok() {
         assert!(matches!(
-            UnsupportedAppShortcuts.install(),
+            UnsupportedAppShortcuts.install(&ShortcutSpec {
+                title: "t",
+                url: "x://y"
+            }),
             Err(AppShortcutsError::Unsupported(_))
         ));
     }

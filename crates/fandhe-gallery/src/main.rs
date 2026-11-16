@@ -170,7 +170,7 @@ fn main() -> Result<(), fandhe_render_egui::LaunchError> {
     // Issue #560: OS の検索から開かれたときの受信（`continueUserActivity`）を登録する
     // （`fandhe-cap-spotlight-index` の `src/apple.rs`・`apple/fandhe_apple_spotlight_index.m` 参照）。
     #[cfg(all(target_os = "macos", feature = "device"))]
-    fandhe_cap_spotlight_index::register();
+    fandhe_cap_spotlight_index::register(fandhe_core::screens::spotlight_index::URL_PREFIX);
 
     // Issue #416: ファイルの関連付け（odoc）の Apple Event ハンドラも同じ理由で登録する
     // （`fandhe-cap-file-association` の `src/apple.rs`・`apple/fandhe_apple_file_association.m` 参照）。
@@ -305,7 +305,7 @@ fn main() -> Result<(), fandhe_render_egui::LaunchError> {
     // 未起動からの起動は `willConnectToSession` にだけ届くため、observer が後だと取りこぼす
     // （`fandhe-cap-spotlight-index` の `apple/fandhe_apple_spotlight_index.m`・`fandhe-platform-apple` の `ios/fandhe_ios_scene.m` 参照）。
     #[cfg(feature = "device")]
-    fandhe_cap_spotlight_index::register();
+    fandhe_cap_spotlight_index::register(fandhe_core::screens::spotlight_index::URL_PREFIX);
 
     // 終了時の解放処理を登録する（frame-metrics 単独の計測ビルドでは従来も登録しない）。
     #[cfg(not(all(feature = "frame-metrics", not(feature = "cold-start-probe"))))]

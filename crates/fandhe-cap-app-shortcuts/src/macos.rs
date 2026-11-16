@@ -14,7 +14,7 @@
 //! - 実機の目視（AppKit が Dock 右クリックのたびに selector を引くか）は #413
 
 #[cfg(target_os = "macos")]
-use crate::contract::AppShortcuts;
+use crate::contract::{AppShortcuts, ShortcutSpec};
 
 // `.m` が呼ぶ `fandhe_rust_url_scheme_received` は url-scheme の `apple.rs` にある。同じ codegen unit の公開関数を
 // 実際に参照して、リンク対象から外れないようにする（`capability-crate-migration.md` §21）。
@@ -55,16 +55,15 @@ struct MacosAppShortcuts;
 
 #[cfg(target_os = "macos")]
 impl AppShortcuts for MacosAppShortcuts {
-    fn install(&self) -> Result<Registration, AppShortcutsError> {
-        use fandhe_core::screens::url_scheme_show::{SHORTCUT_TITLE, SHORTCUT_URL};
-        // SAFETY: 2 本の `&str` は本呼び出しの間生きており、`.m` は同期でコピーするだけ。
+    fn install(&self, spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError> {
+        // SAFETY: `spec` の 2 本の `&str` は本呼び出しの間生きており、`.m` は同期でコピーするだけ。
         #[allow(unsafe_code)]
         let status = unsafe {
             ffi::fandhe_macos_app_shortcuts_install(
-                SHORTCUT_TITLE.as_ptr(),
-                SHORTCUT_TITLE.len(),
-                SHORTCUT_URL.as_ptr(),
-                SHORTCUT_URL.len(),
+                spec.title.as_ptr(),
+                spec.title.len(),
+                spec.url.as_ptr(),
+                spec.url.len(),
             )
         };
         registration_from_status(status)
