@@ -15,6 +15,11 @@ fandhe-core = { path = "../fandhe-core" }
 fandhe-runtime = { path = "../fandhe-runtime" }
 thiserror = { workspace = true }
 
+# Rust からは使わない。Java の基底クラス FeatureLifecycleProvider・HostInput を持つ共通層を、
+# `cargo fandhe gen` の到達判定に入れる（PenStylusLifecycle のコンパイルに必要）ための依存。
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+
 # `SetWindowSubclass`（Win32_UI_Shell）・`GetPointerType` / `GetPointerPenInfo`（Win32_UI_Input_Pointer）を呼ぶ（`windows.rs`）。
 # HWND は共通層が保持する。
 [target.'cfg(target_os = "windows")'.dependencies]
