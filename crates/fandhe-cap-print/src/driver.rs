@@ -199,8 +199,9 @@ fn begin_print_image(request_id: u64, img: &PrintImage) -> Result<(), PrintError
 /// 画面の状態型に依存しない公開入口（iOS / Android）。文章の印刷を依頼して要求 id を返す。
 /// 結果は [`poll_print`] で取り出す。先行の要求（画面の保留を含む）が未取得のあいだは `Internal` で拒否し、置き換えない。
 /// 依頼自体が失敗したときは保留を残さず `Err` を返す。
-/// Android で Activity が破棄されると、追跡中の要求へ失敗が配られる。外部アプリは [`poll_print`] で
-/// 取り出すまで次の要求が busy になる。
+/// Android で Activity が破棄されると、追跡中の要求へ破棄時の OS のジョブ状態から決めた結果が配られる
+/// （投入済みなら Submitted、取り消しなら Cancelled、確定できなければ Unconfirmed か失敗）。
+/// 外部アプリは [`poll_print`] で取り出すまで次の要求が busy になる。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn begin_print_request(req: &PrintRequest) -> Result<u64, PrintError> {
     // 未取得の結果も守る（`keep` が常に真）。取り出すまで占有を維持し、新しい要求は busy にする。
