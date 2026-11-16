@@ -23,8 +23,6 @@ pub mod app_shortcuts;
 pub mod autofill_otp;
 /// Phase 11（端末機能の拡充ループ、親 #100、Issue #390）: OS 管理のバックグラウンドダウンロード。
 pub mod background_download;
-/// Phase 11（端末機能の拡充ループ、親 #1042、Issue #1043）: バックグラウンド処理。
-pub mod background_task;
 /// Phase 11 の拡充ループ（親 #170、Issue #835）: OS 管理のバックグラウンド送信の契約。
 pub mod background_upload;
 /// Phase 11（端末機能の拡充ループ、親 #116、Issue #557）: 画像内のバーコード・QR 読み取り。

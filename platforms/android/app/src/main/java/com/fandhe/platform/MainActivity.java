@@ -79,9 +79,6 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
-import androidx.work.ExistingWorkPolicy;
-import androidx.work.OneTimeWorkRequest;
-import androidx.work.WorkManager;
 import com.google.androidgamesdk.GameActivity;
 import java.io.File;
 import java.io.FileDescriptor;
@@ -2164,13 +2161,7 @@ public class MainActivity extends GameActivity {
         }
     }
 
-    // バックグラウンド処理（Issue #1046）。`WorkManager` の一意名。予約の実体
-    // （記録の書き込み）は `BackgroundTaskWorker` が `getFilesDir()` 直下へ直接行う
-    // （Rust 側 JNI 呼び出しは `schedule`/`cancel`/`state` の橋渡しのみ、
-    // `device/android_background_task.rs` モジュール doc「記録を書く主体」参照）。
-    private static final String BACKGROUND_TASK_WORK_NAME = "fandhe.background-task";
-
-    // `schedule`/`cancel` の結果（`Operation.getResult()`）を、確定するまで待つ。
+    // WorkManager の `Operation`（背景アップロードの予約・取り消し）の結果を、確定するまで待つ。
     // 待ち上限を設けると、上限を過ぎた後に操作が確定して戻り値と実際の予約が
     // 食い違い、取り消しで巻き戻そうとすると置き換え前の予約まで失う（PR #1052
     // codex 指摘）。呼び出し元（Rust 側 `AndroidBackgroundTask`）は UI スレッド外の
@@ -2194,39 +2185,6 @@ public class MainActivity extends GameActivity {
             if (interrupted) {
                 Thread.currentThread().interrupt();
             }
-        }
-    }
-
-    // Rust 側（`device/android_background_task.rs::AndroidBackgroundTask::call_schedule`、
-    // Issue #1046）から JNI 経由で呼ばれる同期メソッド。処理 1 件を一意名で予約する。
-    // 二重予約は常に置き換える（`ExistingWorkPolicy.REPLACE`、
-    // `fandhe_device::background_task` の契約）。戻り値: 0 = 成功、それ以外 = 失敗。
-    private int backgroundTaskSchedule() {
-        try {
-            androidx.work.OneTimeWorkRequest request =
-                    new OneTimeWorkRequest.Builder(BackgroundTaskWorker.class).build();
-            return awaitOperation(
-                    WorkManager.getInstance(getApplicationContext())
-                            .enqueueUniqueWork(
-                                    BACKGROUND_TASK_WORK_NAME,
-                                    ExistingWorkPolicy.REPLACE,
-                                    request));
-        } catch (RuntimeException e) {
-            return 1;
-        }
-    }
-
-    // Rust 側（`AndroidBackgroundTask::call_cancel`）から JNI 経由で呼ばれる同期
-    // メソッド。予約を取り消す。未予約でも `cancelUniqueWork` 自体は成功する
-    // （べき等、`fandhe_device::background_task` の契約。Rust 側はこの戻り値
-    // 0 をそのまま `Ok(())` として扱う）。戻り値: 0 = 成功、それ以外 = 失敗。
-    private int backgroundTaskCancel() {
-        try {
-            return awaitOperation(
-                    WorkManager.getInstance(getApplicationContext())
-                            .cancelUniqueWork(BACKGROUND_TASK_WORK_NAME));
-        } catch (RuntimeException e) {
-            return 1;
         }
     }
 

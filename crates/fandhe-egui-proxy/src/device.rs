@@ -28,11 +28,6 @@ pub mod android_app_shortcuts;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_background_download;
-/// Issue #1046: Android 向けバックグラウンド処理実装（`WorkManager`/
-/// `OneTimeWorkRequest` を呼ぶ Java 側 `MainActivity` の JNI 受け口）。状態変換の
-/// 純関数はホストでテストできるよう cfg を付けない（`fandhe-cap-gamepad` の `android.rs` と同じ
-/// 判断）。`device/background_task.rs` の Android 経路から使われる。
-pub mod android_background_task;
 /// Issue #835（骨格）/ #837（実装）: Android 向けバックグラウンド送信実装。
 /// `device/background_upload.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -200,9 +195,6 @@ pub mod autofill_otp;
 /// Phase 11 の拡充ループ（親 #100、Issue #390）: OS 管理のバックグラウンドダウンロードの effect ドライバ
 /// （macOS・iOS・Android・Windows 実装、他 OS は `Unsupported` 固定）。
 pub mod background_download;
-/// Phase 11 の拡充ループ（親 #1042、Issue #1043）: バックグラウンド処理の effect
-/// ドライバ（macOS 実装、他 OS は兄弟 issue #1044〜#1047）。
-pub mod background_task;
 /// Phase 11 の拡充ループ（親 #170、Issue #835）: OS 管理のバックグラウンド送信の effect ドライバ
 /// （macOS #835・iOS #836 は共用実装、Android は兄弟 issue #837 が埋めるスタブ、他 OS は `Unsupported` 固定）。
 pub mod background_upload;
@@ -241,12 +233,6 @@ pub mod ios_app_shortcuts;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_background_download;
-/// Issue #1045: iOS 向けバックグラウンド処理実装（`ios/
-/// fandhe_ios_background_task.m` を呼ぶ C ABI ラッパー）。`device/
-/// background_task.rs` の iOS 経路から呼ばれる。モジュール自体は `cfg(any(ios, test))`
-/// で host の `cargo test` から状態機械を検証できる（モジュール doc 参照）。
-#[cfg(any(target_os = "ios", test))]
-pub mod ios_background_task;
 /// Issue #835（骨格）/ #836（実装）: iOS 向けバックグラウンド送信実装。
 /// `device/background_upload.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -323,11 +309,6 @@ pub mod local_peer;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_app_shortcuts;
-/// Issue #1043: macOS 向けバックグラウンド処理実装（`macos/
-/// fandhe_macos_background_task.m` を呼ぶ C ABI ラッパー）。`device/
-/// background_task.rs` の macOS 経路から呼ばれる。
-#[cfg(target_os = "macos")]
-pub mod macos_background_task;
 /// Issue #482: macOS 向け音楽ライブラリ実装（`macos/fandhe_macos_music_library.m` の `ITLibrary` を
 /// 呼ぶ C ABI ラッパー）。`device/music_library.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
@@ -442,15 +423,6 @@ pub mod windows_app_shortcuts;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_background_download;
-/// Issue #1044: Windows 向けバックグラウンド処理実装（Task Scheduler 2.0 COM
-/// `ITaskService` ラッパー）。`device/background_task.rs` の Windows 経路から
-/// 呼ばれる。HRESULT 写像・引数解析・時刻整形等の純関数はホストの `cargo test`
-/// から検証できるよう `cfg(target_os = "windows")` を付けず、COM 呼び出しだけを
-/// モジュール内の `cfg(target_os = "windows")` に閉じる（`speech_recognition.rs::
-/// error_from_hresult` と同じ方針）。Windows 以外では利用者が無いため
-/// `dead_code` を許容する。
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_background_task;
 /// Issue #416: Windows 向けファイルの関連付け受信実装。
 /// `device/file_association.rs` の Windows 経路と `main.rs` から呼ばれる。
 #[cfg(any(target_os = "windows", test))]

@@ -3,14 +3,14 @@
 //! 自分の実行ファイルを専用引数付きで 1 回だけ起動するタスクを現在ユーザーで登録する。
 //! パッケージ化前提の `BackgroundTaskBuilder` は使わない（10-01 のユーザー判断）。
 //!
-//! `device/background_task.rs` の Windows 経路から [`WindowsBackgroundTask`] を使う
-//! （`fandhe_device::background_task::BackgroundTask` 実装、`macos_background_task.rs`
+//! `driver.rs` の Windows 経路から [`WindowsBackgroundTask`] を使う
+//! （`crate::contract::BackgroundTask` 実装、`macos_background_task.rs`
 //! と同型）。実行そのものは別プロセス（タスク起動時に専用引数付きで `main.rs` が
 //! 再度立つ）が行うため発火コールバックは無く、[`WindowsBackgroundTask::state`] は
 //! 保存済みの実行記録と自分が出した予約時刻を比較するだけで判定する
 //! （下記「状態判定」節）。
 //!
-//! # 契約の簡略化（オーナー判断 10/2、`fandhe_device::background_task` モジュール
+//! # 契約の簡略化（オーナー判断 10/2、本 crate の `contract.rs` モジュール
 //! doc「契約」節参照）
 //!
 //! 予約・取り消し・実行の順序が入れ替わる競合条件を厳密に処理する契約は採らない。
@@ -23,7 +23,7 @@
 //! - **子プロセスの引数**: [`task_arguments`] は固定フラグのみ（世代番号を含まない）。
 //!   [`run_scheduled`] は登録済みタスク定義との照合をせず、起動されたら常に実行結果
 //!   を書く
-//! - **実行記録**: [`fandhe_device::background_task::write_record_if_newer`] で
+//! - **実行記録**: [`crate::contract::write_record_if_newer`] で
 //!   「時刻の新しい方を残す」。旧世代の子プロセスが遅れて発火しても、既に新しい
 //!   記録が書かれていれば上書きしない（厳密な世代照合ではなく、この程度の保護で
 //!   十分という契約）
@@ -44,12 +44,12 @@
 //! 期限で止める。`RegisterTaskDefinition` の登録自体は原子的（`TASK_CREATE_OR_UPDATE`）
 //! なため、失敗時に中途半端な定義が残らない。
 //!
-//! # 状態判定（UI スレッドからのポーリング、`device/background_task.rs::drive_poll`）
+//! # 状態判定（UI スレッドからのポーリング、`driver.rs::drive_poll`）
 //!
 //! `state()`/`last_run()` はフレームごとに呼ばれるため COM を呼ばない（UI スレッドが
 //! STA の可能性があり、`schedule`/`cancel` 側の MTA 初期化と衝突させないため）。
 //! [`WindowsBackgroundTask`] が持つ直近の予約時刻（`scheduled_at_ms`）と、保存済みの
-//! 実行記録（`fandhe_device::background_task::read_record`、共通 key）を比較する
+//! 実行記録（`crate::contract::read_record`、共通 key）を比較する
 //! だけで判定する: 予約なし → `NotScheduled`、記録の `ran_at_unix_ms` が予約時刻
 //! 以降 → `Ran`、それ以外で現在時刻が予約時に記録した `EndBoundary` 未満 →
 //! `Scheduled`、以上（Task Scheduler が `SetDeleteExpiredTaskAfter` で自動削除済みの
@@ -79,15 +79,15 @@
 use std::ffi::OsString;
 use std::sync::{Arc, Mutex};
 
-use fandhe_device::background_task::{read_record, BackgroundTask, RunRecord, ScheduleState};
+use crate::contract::{BackgroundTask, RunRecord, ScheduleState, read_record};
+use crate::error::BackgroundTaskError;
 use fandhe_device::storage::Storage;
-use fandhe_device::DeviceError;
 // `RunResult`/`write_record_if_newer` は [`run_scheduled`]（Windows ターゲットのみ）
 // と本ファイルのテストから使うため、ホスト（非 Windows）の通常 lib ビルドでは未使用
 // になる。`device-bridge-contracts.md`「7. 対応表・権限」の cfg 整合として、
 // 利用箇所に合わせた cfg を import 自体にも付ける。
 #[cfg(any(target_os = "windows", test))]
-use fandhe_device::background_task::{write_record_if_newer, RunResult};
+use crate::contract::{RunResult, write_record_if_newer};
 
 /// タスクの置き場・名前（ルートフォルダ `\` に固定、設計判断表参照）。
 pub(crate) const TASK_NAME: &str = "fandhe-egui-proxy.background-task";
@@ -150,20 +150,20 @@ fn is_not_found(code: i32) -> bool {
 
 /// HRESULT → 契約上のエラー種別への写像（SSOT。`schedule`/`cancel` の全呼び出し
 /// 箇所がここを通す、`device-bridge-contracts.md`「5. FFI 境界」）。
-fn map_hresult(code: i32) -> DeviceError {
+fn map_hresult(code: i32) -> BackgroundTaskError {
     const E_ACCESSDENIED: i32 = 0x8007_0005_u32 as i32;
     const SCHED_E_SERVICE_NOT_RUNNING: i32 = 0x8004_1315_u32 as i32;
     const ERROR_SERVICE_DISABLED_HR: i32 = 0x8007_0422_u32 as i32;
     const REGDB_E_CLASSNOTREG: i32 = 0x8004_0154_u32 as i32;
 
     if code == E_ACCESSDENIED {
-        DeviceError::PermissionDenied("background task")
+        BackgroundTaskError::PermissionDenied("background task")
     } else if code == SCHED_E_SERVICE_NOT_RUNNING || code == ERROR_SERVICE_DISABLED_HR {
-        DeviceError::Disabled("background task")
+        BackgroundTaskError::Disabled("background task")
     } else if code == REGDB_E_CLASSNOTREG {
-        DeviceError::Unsupported("background task")
+        BackgroundTaskError::Unsupported("background task")
     } else {
-        DeviceError::Internal("background task")
+        BackgroundTaskError::Internal("background task")
     }
 }
 
@@ -208,7 +208,7 @@ pub struct WindowsBackgroundTask {
 }
 
 impl WindowsBackgroundTask {
-    /// 既定の COM 実装で構築する（`device/background_task.rs::implementation` から
+    /// 既定の COM 実装で構築する（`driver.rs::platform_background_task` から
     /// 呼ばれる契約。構築時に COM は呼ばない）。
     #[cfg(target_os = "windows")]
     pub fn new(storage: Arc<dyn Storage>) -> Self {
@@ -234,7 +234,7 @@ impl WindowsBackgroundTask {
 }
 
 impl BackgroundTask for WindowsBackgroundTask {
-    fn schedule(&self) -> Result<(), DeviceError> {
+    fn schedule(&self) -> Result<(), BackgroundTaskError> {
         let _ffi_guard = self.ffi.lock().expect("lock は成功する");
         let scheduled_at_ms = (self.now_ms_fn)();
         match (self.register_fn)(scheduled_at_ms) {
@@ -255,7 +255,7 @@ impl BackgroundTask for WindowsBackgroundTask {
         }
     }
 
-    fn cancel(&self) -> Result<(), DeviceError> {
+    fn cancel(&self) -> Result<(), BackgroundTaskError> {
         let _ffi_guard = self.ffi.lock().expect("lock は成功する");
         match (self.delete_fn)() {
             Ok(()) => {
@@ -271,7 +271,7 @@ impl BackgroundTask for WindowsBackgroundTask {
         }
     }
 
-    fn state(&self) -> Result<ScheduleState, DeviceError> {
+    fn state(&self) -> Result<ScheduleState, BackgroundTaskError> {
         let entry = *self.inner.lock().expect("lock は成功する");
         let Some(entry) = entry else {
             return Ok(ScheduleState::NotScheduled);
@@ -296,8 +296,8 @@ impl BackgroundTask for WindowsBackgroundTask {
         Ok(ScheduleState::Scheduled)
     }
 
-    fn last_run(&self) -> Result<Option<RunRecord>, DeviceError> {
-        // 共通 key（`fandhe_device::background_task::RECORD_KEY`）をそのまま読む。
+    fn last_run(&self) -> Result<Option<RunRecord>, BackgroundTaskError> {
+        // 共通 key（`crate::contract::RECORD_KEY`）をそのまま読む。
         // 未存在は未実行、読み出し・形式解釈の失敗は `Err`（「last_run の 3 値」契約を
         // そのまま守る）。
         read_record(self.storage.as_ref())
@@ -311,17 +311,17 @@ mod com {
     use std::os::windows::ffi::OsStrExt;
     use std::path::Path;
 
-    use windows::core::{Interface, Result as WinResult, BSTR};
     use windows::Win32::Foundation::{VARIANT_FALSE, VARIANT_TRUE};
-    use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER};
+    use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
     use windows::Win32::System::TaskScheduler::{
-        IExecAction, ITaskDefinition, ITaskFolder, ITaskService, ITimeTrigger, TaskScheduler,
-        TASK_ACTION_EXEC, TASK_CREATE_OR_UPDATE, TASK_LOGON_INTERACTIVE_TOKEN, TASK_RUNLEVEL_LUA,
-        TASK_TRIGGER_TIME,
+        IExecAction, ITaskDefinition, ITaskFolder, ITaskService, ITimeTrigger, TASK_ACTION_EXEC,
+        TASK_CREATE_OR_UPDATE, TASK_LOGON_INTERACTIVE_TOKEN, TASK_RUNLEVEL_LUA, TASK_TRIGGER_TIME,
+        TaskScheduler,
     };
     use windows::Win32::System::Variant::VARIANT;
+    use windows::core::{BSTR, Interface, Result as WinResult};
 
-    use super::{start_boundary, task_arguments, TASK_NAME};
+    use super::{TASK_NAME, start_boundary, task_arguments};
 
     /// COM 呼び出しを 1 つも行う前の失敗（`current_exe()` 等）に使う専用コード。
     /// 実在する COM エラーコードと衝突しない `E_FAIL` を流用する。
@@ -455,7 +455,7 @@ mod com {
 /// （`std::process::exit` へそのまま渡す契約）。
 #[cfg(target_os = "windows")]
 pub fn run_scheduled() -> i32 {
-    let Ok(dir) = fandhe_device::storage::FsStorage::desktop_default() else {
+    let Ok(dir) = fandhe_cap_local_storage_kv::data_dir() else {
         return 1;
     };
     let storage = fandhe_device::storage::FsStorage::new(dir);
@@ -464,7 +464,7 @@ pub fn run_scheduled() -> i32 {
         result: RunResult::Completed,
     };
     // 「時刻の新しい方を残す」保護のみで、厳密な世代照合は行わない
-    // （`fandhe_device::background_task::write_record_if_newer` 参照）。予約
+    // （`crate::contract::write_record_if_newer` 参照）。予約
     // （OS 側のタスク）はそのまま残す（タスク自体は削除しない。モジュール doc
     // 「残骸の防止」参照）。
     i32::from(write_record_if_newer(&storage, &record).is_err())
@@ -524,7 +524,7 @@ mod tests {
     fn map_hresult_maps_access_denied_to_permission_denied() {
         assert!(matches!(
             map_hresult(0x8007_0005_u32 as i32),
-            DeviceError::PermissionDenied("background task")
+            BackgroundTaskError::PermissionDenied("background task")
         ));
     }
 
@@ -532,11 +532,11 @@ mod tests {
     fn map_hresult_maps_service_not_running_to_disabled() {
         assert!(matches!(
             map_hresult(0x8004_1315_u32 as i32),
-            DeviceError::Disabled("background task")
+            BackgroundTaskError::Disabled("background task")
         ));
         assert!(matches!(
             map_hresult(0x8007_0422_u32 as i32),
-            DeviceError::Disabled("background task")
+            BackgroundTaskError::Disabled("background task")
         ));
     }
 
@@ -544,7 +544,7 @@ mod tests {
     fn map_hresult_maps_classnotreg_to_unsupported() {
         assert!(matches!(
             map_hresult(0x8004_0154_u32 as i32),
-            DeviceError::Unsupported("background task")
+            BackgroundTaskError::Unsupported("background task")
         ));
     }
 
@@ -552,7 +552,7 @@ mod tests {
     fn map_hresult_maps_other_codes_to_internal() {
         assert!(matches!(
             map_hresult(-1),
-            DeviceError::Internal("background task")
+            BackgroundTaskError::Internal("background task")
         ));
     }
 
@@ -560,11 +560,11 @@ mod tests {
     struct MemStorage(StdMutex<Option<Vec<u8>>>);
 
     impl Storage for MemStorage {
-        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, DeviceError> {
+        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, fandhe_device::DeviceError> {
             Ok(self.0.lock().expect("lock は成功する").clone())
         }
 
-        fn write(&self, _key: &str, bytes: &[u8]) -> Result<(), DeviceError> {
+        fn write(&self, _key: &str, bytes: &[u8]) -> Result<(), fandhe_device::DeviceError> {
             *self.0.lock().expect("lock は成功する") = Some(bytes.to_vec());
             Ok(())
         }
@@ -573,12 +573,12 @@ mod tests {
     struct ErrOnReadStorage;
 
     impl Storage for ErrOnReadStorage {
-        fn read(&self, key: &str) -> Result<Option<Vec<u8>>, DeviceError> {
-            Err(DeviceError::InvalidKey(key.to_string()))
+        fn read(&self, key: &str) -> Result<Option<Vec<u8>>, fandhe_device::DeviceError> {
+            Err(fandhe_device::DeviceError::InvalidKey(key.to_string()))
         }
 
-        fn write(&self, key: &str, _bytes: &[u8]) -> Result<(), DeviceError> {
-            Err(DeviceError::InvalidKey(key.to_string()))
+        fn write(&self, key: &str, _bytes: &[u8]) -> Result<(), fandhe_device::DeviceError> {
+            Err(fandhe_device::DeviceError::InvalidKey(key.to_string()))
         }
     }
 
@@ -631,7 +631,7 @@ mod tests {
         t.schedule().expect("成功する");
         assert_eq!(t.state().expect("成功する"), ScheduleState::Scheduled);
 
-        fandhe_device::background_task::write_record(
+        crate::contract::write_record(
             storage.as_ref(),
             &RunRecord {
                 ran_at_unix_ms: 11_000,
@@ -648,7 +648,7 @@ mod tests {
         let t = task(storage, denied_register, ok_delete, now_1000);
         assert!(matches!(
             t.schedule(),
-            Err(DeviceError::PermissionDenied("background task"))
+            Err(BackgroundTaskError::PermissionDenied("background task"))
         ));
         assert_eq!(t.state().expect("成功する"), ScheduleState::NotScheduled);
     }
@@ -695,7 +695,7 @@ mod tests {
         t.schedule().expect("成功する");
         assert!(matches!(
             t.cancel(),
-            Err(DeviceError::PermissionDenied("background task"))
+            Err(BackgroundTaskError::PermissionDenied("background task"))
         ));
         // 取り消し失敗時は旧予約を残す（嘘の成功を返さない）。
         assert_eq!(t.state().expect("成功する"), ScheduleState::Scheduled);
@@ -707,7 +707,7 @@ mod tests {
         let t = task(storage.clone(), ok_register, ok_delete, now_1000);
         t.schedule().expect("成功する");
         // 予約と同じミリ秒の記録は前の予約のものとみなし `Ran` にしない。
-        fandhe_device::background_task::write_record(
+        crate::contract::write_record(
             storage.as_ref(),
             &RunRecord {
                 ran_at_unix_ms: 1_000,
@@ -716,7 +716,7 @@ mod tests {
         )
         .expect("書き込みは成功する");
         assert_eq!(t.state().expect("成功する"), ScheduleState::Scheduled);
-        fandhe_device::background_task::write_record(
+        crate::contract::write_record(
             storage.as_ref(),
             &RunRecord {
                 ran_at_unix_ms: 1_001,
@@ -753,7 +753,7 @@ mod tests {
             ran_at_unix_ms: 2_000,
             result: RunResult::Completed,
         };
-        fandhe_device::background_task::write_record(&storage, &newer).expect("書き込みは成功する");
+        crate::contract::write_record(&storage, &newer).expect("書き込みは成功する");
 
         let older = RunRecord {
             ran_at_unix_ms: 1_000,

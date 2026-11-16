@@ -236,7 +236,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "background-task" => fandhe_core::screens::background_task::current_screen,
-    fandhe_egui_proxy::device::background_task::background_task_effect,
+    fandhe_cap_background_task::background_task_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "home_widget_show" => fandhe_core::screens::home_widget_show::current_screen,

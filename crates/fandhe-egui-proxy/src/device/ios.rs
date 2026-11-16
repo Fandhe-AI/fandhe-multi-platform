@@ -31,22 +31,7 @@ use std::sync::{Condvar, Mutex};
 
 use fandhe_device::file_picker::{read_picked, MAX_FILE_BYTES};
 use fandhe_device::tts::Tts;
-use fandhe_device::{DataDir, DeviceError};
-
-/// iOS アプリコンテナ内 `Documents/` を `DataDir` として返す（`storage::FsStorage::new`
-/// へ渡す契約、`device.rs::storage_note_state` から呼ばれる）。
-///
-/// iOS では `$HOME` がアプリごとにサンドボックス化されたコンテナのルートを指すため、
-/// `std::env::home_dir()`（deprecated だが単純な環境変数参照で unsafe を伴わない、
-/// `fandhe-device` の `FsStorage::desktop_default` と同じ判断）に `Documents` を
-/// 連結するだけで App Store の審査要件（ユーザーデータは Documents/Library 配下）に
-/// 沿ったパスが得られる。
-pub fn documents_dir() -> Result<DataDir, DeviceError> {
-    #[allow(deprecated)]
-    std::env::home_dir()
-        .map(|home| DataDir(home.join("Documents")))
-        .ok_or(DeviceError::Unsupported("home directory not found"))
-}
+use fandhe_device::DeviceError;
 
 // SAFETY: `ios/fandhe_ios_tts.m` が定義する C ABI（`build.rs` が iOS ターゲットの
 // み・feature `device` 有効時のみコンパイル・リンクする）。契約は下記 `IosTts` の

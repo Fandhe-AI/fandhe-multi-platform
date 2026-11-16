@@ -1,33 +1,33 @@
 //! Android 向けバックグラウンド処理実装（Issue #1046、親 #1042、macOS 実装 #1043 の
-//! 横展開）。`WorkManager`/`OneTimeWorkRequest` を呼ぶ Java 側 `MainActivity` の
-//! JNI 受け口を橋渡しする。`device/background_task.rs` の Android 経路から
-//! [`AndroidBackgroundTask`] を使う（`fandhe_device::background_task::BackgroundTask`
+//! 横展開）。`WorkManager`/`OneTimeWorkRequest` を呼ぶ Java 側 `BackgroundTaskHelper` の
+//! static 入口を橋渡しする。`driver.rs` の Android 経路から
+//! [`AndroidBackgroundTask`] を使う（`crate::contract::BackgroundTask`
 //! 実装）。
 //!
 //! # 記録を書く主体（macOS 実装との違い）
 //!
-//! macOS 実装（`device/macos_background_task.rs`）は OS の発火コールバックが Rust
+//! macOS 実装（`macos.rs`）は OS の発火コールバックが Rust
 //! プロセス内へ届くため、Rust 側が `write_record` で記録を書く。`WorkManager` は
 //! Activity も cdylib も動いていない冷えたプロセスで `Worker` を起動しうるため、
-//! `android_main` 前提の `crate::android::android_app()` が `None` になる。この
+//! `android_main` 前提の `fandhe_platform_android::android_app()` が `None` になる。この
 //! プロセスで記録を書くと取りこぼすため、Java 側の `BackgroundTaskWorker`
 //! （`platforms/android/app/src/main/java/com/fandhe/platform/BackgroundTaskWorker.java`）
-//! が `fandhe_device::background_task::RECORD_KEY`/`encode_record` と同じ形式・
+//! が `crate::contract::RECORD_KEY`/`encode_record` と同じ形式・
 //! 保存先（`getFilesDir()` 直下、[`super::android::data_dir`] と同じパス）へ直接
 //! 書き込む。本モジュールは Rust プロセスが動いている間の `schedule`/`cancel`
 //! の橋渡しと、保存済み記録の読み出し（[`read_record`]、ファイルは共通）だけを担う。
 //!
 //! # 二重予約は REPLACE
 //!
-//! `fandhe_device::background_task` の契約（二重予約は置き換え）に合わせ、Java 側は
+//! 本 crate の `contract.rs` の契約（二重予約は置き換え）に合わせ、Java 側は
 //! `ExistingWorkPolicy.REPLACE` で一意名 `enqueueUniqueWork` する
-//! （`MainActivity.backgroundTaskSchedule` 参照）。
+//! （`BackgroundTaskHelper.schedule` 参照）。
 //!
 //! # `RunResult::Expired` は使わない
 //!
 //! `Worker.doWork()` は即座に記録を書いて終わるため、OS の停止による中断の余地が
 //! ほぼ無い。停止された `Worker` は `WorkManager` が再試行するだけで、結果は
-//! 報告しない（`fandhe-device/src/background_task.rs` の `RunResult` doc 参照）。
+//! 報告しない（`contract.rs` の `RunResult` doc 参照）。
 //!
 //! # 状態は参考値・`WorkManager` へは問い合わせない（オーナー承認済み方針、10/2、
 //! Windows 実装 `windows_background_task.rs` と同じ形）
@@ -54,14 +54,14 @@
 
 #![cfg_attr(not(target_os = "android"), allow(dead_code))]
 
-use fandhe_device::background_task::ScheduleState;
+use crate::contract::ScheduleState;
 
 #[cfg(target_os = "android")]
-use fandhe_device::background_task::{read_record, BackgroundTask, RunRecord};
+use crate::contract::{BackgroundTask, RunRecord, read_record};
+#[cfg(target_os = "android")]
+use crate::error::BackgroundTaskError;
 #[cfg(target_os = "android")]
 use fandhe_device::storage::Storage;
-#[cfg(target_os = "android")]
-use fandhe_device::DeviceError;
 #[cfg(target_os = "android")]
 use std::sync::{Arc, Mutex};
 
@@ -84,7 +84,7 @@ fn decide_state(scheduled_at_ms: Option<u64>, ran_at_unix_ms: Option<u64>) -> Sc
 /// `encode_key(RECORD_KEY)` を 16 進符号化した結果の固定値）。本モジュールの
 /// ホストテストが「Java 側が書く契約のファイルと Rust 側の読み出しが同じパスを
 /// 指す」ことを固定するためだけに使う（`storage::encode_key` は非公開のため値を
-/// 複製する。`fandhe_device::background_task::RECORD_KEY` が変わればここも追随
+/// 複製する。`crate::contract::RECORD_KEY` が変わればここも追随
 /// が必要）。
 #[cfg(test)]
 const RECORD_FILE_NAME: &str = "6261636b67726f756e642d7461736b2e6c6173742d72756e";
@@ -103,7 +103,7 @@ fn now_unix_ms() -> u64 {
 }
 
 /// Android 実バックグラウンド処理実装（`WorkManager`、Issue #1046）。
-/// `device/background_task.rs::implementation` の Android 分岐から構築される。
+/// `driver.rs::platform_background_task` の Android 分岐から構築される。
 #[cfg(target_os = "android")]
 pub struct AndroidBackgroundTask {
     /// このプロセスが最後に出した予約の時刻（`state()` が実行記録と比較する
@@ -124,57 +124,32 @@ impl AndroidBackgroundTask {
         }
     }
 
-    /// Java 側 `MainActivity.backgroundTaskSchedule()` を呼ぶ（戻り値 0 = 成功、
-    /// それ以外 = 失敗）。本体内の 2 箇所の `unsafe`（`JavaVM::from_raw`/
-    /// `as_cast_raw`）は `AndroidClipboard::request` と同じ根拠・同じ形に揃えている
-    /// （各 `// SAFETY:` コメント参照）。
-    #[allow(unsafe_code)]
+    /// Java 側 `BackgroundTaskHelper.schedule(Context)` を static 呼び出しする（戻り値 0 = 成功、それ以外 = 失敗）。
+    /// JavaVM と Activity の取得は `with_activity_class` が持つため、ここに `unsafe` は無い。
     fn call_schedule(&self) -> bool {
-        let Some(app) = crate::android::android_app() else {
-            return false;
-        };
-        // SAFETY: `AndroidClipboard::request` と同一の根拠。`app.vm_as_ptr()` は
-        // android-activity が管理する有効な `JavaVM*` を返し、`android_app()` は
-        // 最新の `AndroidApp` を複製して返すため、ここで得た `app` は呼び出し
-        // 時点で有効な `Activity` を指す。
-        let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-        let result = vm.attach_current_thread(
-            |env: &mut jni::Env| -> Result<i32, super::android::JniCallFailed> {
-                let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                // SAFETY: `AndroidClipboard::request` と同一の根拠。`Cast` は
-                // 所有権を持たないラッパーのため delete を試みない。
-                let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-                let value = env.call_method(
-                    &activity,
-                    jni::jni_str!("backgroundTaskSchedule"),
-                    jni::jni_sig!(() -> int),
-                    &[],
-                )?;
-                Ok(value.i()?)
-            },
-        );
-        matches!(result, Ok(0))
+        Self::call_static(jni::jni_str!("schedule"))
     }
 
-    /// Java 側 `MainActivity.backgroundTaskCancel()` を呼ぶ（[`call_schedule`]
-    /// と同型）。
-    #[allow(unsafe_code)]
+    /// Java 側 `BackgroundTaskHelper.cancel(Context)` を static 呼び出しする（[`Self::call_schedule`] と同型）。
     fn call_cancel(&self) -> bool {
-        let Some(app) = crate::android::android_app() else {
+        Self::call_static(jni::jni_str!("cancel"))
+    }
+
+    fn call_static(method: &jni::strings::JNIStr) -> bool {
+        use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+        use jni::objects::JValue;
+        let Some(app) = android_app() else {
             return false;
         };
-        // SAFETY: `call_schedule` と同一の根拠。
-        let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-        let result = vm.attach_current_thread(
-            |env: &mut jni::Env| -> Result<i32, super::android::JniCallFailed> {
-                let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                // SAFETY: `call_schedule` と同一の根拠。
-                let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-                let value = env.call_method(
-                    &activity,
-                    jni::jni_str!("backgroundTaskCancel"),
-                    jni::jni_sig!(() -> int),
-                    &[],
+        let result = with_activity_class(
+            &app,
+            jni::jni_str!("com.fandhe.platform.BackgroundTaskHelper"),
+            |env, activity, class| -> Result<i32, JniCallFailed> {
+                let value = env.call_static_method(
+                    class,
+                    method,
+                    jni::jni_sig!((android.content.Context) -> int),
+                    &[JValue::Object(activity)],
                 )?;
                 Ok(value.i()?)
             },
@@ -185,7 +160,7 @@ impl AndroidBackgroundTask {
 
 #[cfg(target_os = "android")]
 impl BackgroundTask for AndroidBackgroundTask {
-    fn schedule(&self) -> Result<(), DeviceError> {
+    fn schedule(&self) -> Result<(), BackgroundTaskError> {
         // 予約時刻は enqueue より前に取る。制約の無い `OneTimeWorkRequest` は
         // enqueue の完了待ち中に実行され得るため、後で取ると実行記録の方が古く
         // 見え、実行済みでも `Scheduled` のまま残る（PR #1052 codex 指摘）。
@@ -204,11 +179,11 @@ impl BackgroundTask for AndroidBackgroundTask {
             // JNI 呼び出し自体の失敗時は旧予約時刻（あれば）をそのまま残す
             // （`device-bridge-contracts.md`「9. 失敗時のリソース解放・共有状態
             // 復元」。嘘の成功を返さない）。
-            Err(DeviceError::Internal("background task schedule"))
+            Err(BackgroundTaskError::Internal("background task schedule"))
         }
     }
 
-    fn cancel(&self) -> Result<(), DeviceError> {
+    fn cancel(&self) -> Result<(), BackgroundTaskError> {
         let ok = self.call_cancel();
         // 未予約での取り消しもべき等に `Ok`（`cancelUniqueWork` は未予約でも成功する
         // 契約、モジュール doc 参照）。JNI 呼び出し自体の失敗（`android_app()` が
@@ -220,11 +195,11 @@ impl BackgroundTask for AndroidBackgroundTask {
                 .unwrap_or_else(|e| e.into_inner()) = None;
             Ok(())
         } else {
-            Err(DeviceError::Internal("background task cancel"))
+            Err(BackgroundTaskError::Internal("background task cancel"))
         }
     }
 
-    fn state(&self) -> Result<ScheduleState, DeviceError> {
+    fn state(&self) -> Result<ScheduleState, BackgroundTaskError> {
         let scheduled_at_ms = *self
             .scheduled_at_ms
             .lock()
@@ -239,7 +214,7 @@ impl BackgroundTask for AndroidBackgroundTask {
         Ok(decide_state(scheduled_at_ms, ran_at_unix_ms))
     }
 
-    fn last_run(&self) -> Result<Option<RunRecord>, DeviceError> {
+    fn last_run(&self) -> Result<Option<RunRecord>, BackgroundTaskError> {
         read_record(self.storage.as_ref())
     }
 }
@@ -282,9 +257,9 @@ mod tests {
     /// 書く主体」参照）。
     #[test]
     fn record_file_name_matches_fs_storage_encoding() {
-        use fandhe_device::background_task::{write_record, RunRecord, RunResult};
-        use fandhe_device::storage::FsStorage;
+        use crate::contract::{RunRecord, RunResult, write_record};
         use fandhe_device::DataDir;
+        use fandhe_device::storage::FsStorage;
 
         let dir = std::env::temp_dir().join(format!(
             "fandhe-background-task-test-{}-{}",

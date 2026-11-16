@@ -1,6 +1,6 @@
 //! Phase 11（親 #1042）型サンプル「バックグラウンド処理」（Issue #1043）の
 //! effect ドライバ。`fandhe_core::screens::background_task`（端末依存ゼロ）の
-//! ボタン要求を観測して `fandhe_device::background_task::BackgroundTask` を呼び、
+//! ボタン要求を観測して `crate::contract::BackgroundTask` を呼び、
 //! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect`
 //! 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`device/
 //! notification.rs::drive` と同型）。
@@ -27,37 +27,39 @@
 //!
 //! # macOS・Windows・iOS・Android 実装（Issue #1043〜#1046）。Web は兄弟 issue（#1047）
 //!
-//! macOS・Windows・iOS・Android 以外は [`fandhe_device::background_task::UnsupportedBackgroundTask`]
+//! macOS・Windows・iOS・Android 以外は [`crate::contract::UnsupportedBackgroundTask`]
 //! 固定（`Unsupported` は画面側で固定文言へ畳む、[`to_message`]）。
 
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::contract::{BackgroundTask, RunRecord, RunResult, ScheduleState};
+use crate::error::BackgroundTaskError;
 use fandhe_core::screens::background_task::{
-    apply_snapshot, finish_action, mark_in_flight, take_request, Action, BackgroundTaskState,
-    LastRunView, RunResultView, ScheduleView,
+    Action, BackgroundTaskState, LastRunView, RunResultView, ScheduleView, apply_snapshot,
+    finish_action, mark_in_flight, take_request,
 };
-use fandhe_device::background_task::{BackgroundTask, RunRecord, RunResult, ScheduleState};
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// `ScheduleView::Scheduled` の間、次回ポーリングを予約する間隔
 /// （モジュール doc「ポーリング」参照。短すぎる busy loop を避けつつ、OS 発火の
 /// 検知遅延が体感で問題にならない範囲に収める）。
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 
-/// `DeviceError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
-/// それ以外は `Display` の文言のみを転送する（`DeviceError` の内部構造は漏らさない、
+/// `BackgroundTaskError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
+/// それ以外は `Display` の文言のみを転送する（`BackgroundTaskError` の内部構造は漏らさない、
 /// security.md A09。`notification.rs::to_message` と同型）。
-fn to_message(e: DeviceError) -> String {
+fn to_message(e: BackgroundTaskError) -> String {
     match e {
-        DeviceError::Unsupported(_) => "この環境ではバックグラウンド処理を使えません".to_string(),
+        BackgroundTaskError::Unsupported(_) => {
+            "この環境ではバックグラウンド処理を使えません".to_string()
+        }
         other => other.to_string(),
     }
 }
 
-fn to_schedule_view(state: Result<ScheduleState, DeviceError>) -> ScheduleView {
+fn to_schedule_view(state: Result<ScheduleState, BackgroundTaskError>) -> ScheduleView {
     match state {
         Ok(ScheduleState::NotScheduled) => ScheduleView::NotScheduled,
         Ok(ScheduleState::Scheduled) => ScheduleView::Scheduled,
@@ -77,7 +79,7 @@ fn to_run_result_view(result: RunResult) -> RunResultView {
     }
 }
 
-fn to_last_run_view(last_run: Result<Option<RunRecord>, DeviceError>) -> LastRunView {
+fn to_last_run_view(last_run: Result<Option<RunRecord>, BackgroundTaskError>) -> LastRunView {
     match last_run {
         Ok(None) => LastRunView::NeverRan,
         Ok(Some(record)) => LastRunView::Ran {
@@ -89,45 +91,44 @@ fn to_last_run_view(last_run: Result<Option<RunRecord>, DeviceError>) -> LastRun
 }
 
 /// iOS の `.m` 側（`ios/fandhe_ios_background_task.m::fandhe_ios_background_task_submit`）
-/// が返すコードから `DeviceError` への写像（SSOT。`.m` 側で二重に写像しない、
+/// が返すコードから `BackgroundTaskError` への写像（SSOT。`.m` 側で二重に写像しない、
 /// 実装計画 §3.4 参照）。iOS 専用のため非 iOS の非テストでは呼び出し元が無く
 /// `dead_code` になる。
 #[cfg_attr(not(any(target_os = "ios", test)), allow(dead_code))]
-pub(crate) fn submit_code_to_result(code: i32) -> Result<(), DeviceError> {
+pub(crate) fn submit_code_to_result(code: i32) -> Result<(), BackgroundTaskError> {
     match code {
         0 => Ok(()),
-        1 => Err(DeviceError::Disabled("background task")),
-        2 => Err(DeviceError::PermissionDenied("background task")),
-        3 => Err(DeviceError::Unsupported("background task")),
-        _ => Err(DeviceError::Internal("background task schedule")),
+        1 => Err(BackgroundTaskError::Disabled("background task")),
+        2 => Err(BackgroundTaskError::PermissionDenied("background task")),
+        3 => Err(BackgroundTaskError::Unsupported("background task")),
+        _ => Err(BackgroundTaskError::Internal("background task schedule")),
     }
 }
 
 /// 現在のプラットフォームに応じた `BackgroundTask` 実装を返す。macOS は
-/// [`super::macos_background_task::MacBackgroundTask`]（初期化失敗時は
+/// [`crate::macos::MacBackgroundTask`]（初期化失敗時は
 /// `UnsupportedBackgroundTask` へ、ダミーの成功実装へは倒さない。
 /// `device-bridge-contracts.md`「6. 嘘の成功」参照）。Windows は
-/// [`super::windows_background_task::WindowsBackgroundTask`]（同じく初期化失敗時は
-/// `UnsupportedBackgroundTask` へ。構築時に COM は呼ばないため、`FsStorage::
-/// desktop_default` の失敗のみがここで倒す対象）。iOS は
-/// [`super::ios_background_task::IosBackgroundTask`]、Android は
-/// [`super::android_background_task::AndroidBackgroundTask`]（初期化失敗時は同様）。
+/// [`crate::windows::WindowsBackgroundTask`]（同じく初期化失敗時は
+/// `UnsupportedBackgroundTask` へ。構築時に COM は呼ばないため、保存先の解決（`data_dir()`）の失敗のみがここで倒す対象）。iOS は
+/// [`crate::ios::IosBackgroundTask`]、Android は
+/// [`crate::android::AndroidBackgroundTask`]（初期化失敗時は同様）。
 /// それ以外（Web）は `UnsupportedBackgroundTask`（兄弟 issue #1047 が差し替える）。
-fn implementation() -> Arc<dyn BackgroundTask> {
+pub fn platform_background_task() -> Arc<dyn BackgroundTask> {
     #[cfg(target_os = "macos")]
     {
         use fandhe_device::storage::FsStorage;
         use std::sync::OnceLock;
         static INSTANCE: OnceLock<Arc<dyn BackgroundTask>> = OnceLock::new();
         INSTANCE
-            .get_or_init(|| match FsStorage::desktop_default() {
+            .get_or_init(|| match fandhe_cap_local_storage_kv::data_dir() {
                 Ok(dir) => {
-                    let task = Arc::new(super::macos_background_task::MacBackgroundTask::new(
-                        Arc::new(FsStorage::new(dir)),
-                    ));
-                    super::macos_background_task::install(task) as Arc<dyn BackgroundTask>
+                    let task = Arc::new(crate::macos::MacBackgroundTask::new(Arc::new(
+                        FsStorage::new(dir),
+                    )));
+                    crate::macos::install(task) as Arc<dyn BackgroundTask>
                 }
-                Err(_) => Arc::new(fandhe_device::background_task::UnsupportedBackgroundTask),
+                Err(_) => Arc::new(crate::contract::UnsupportedBackgroundTask),
             })
             .clone()
     }
@@ -137,11 +138,11 @@ fn implementation() -> Arc<dyn BackgroundTask> {
         use std::sync::OnceLock;
         static INSTANCE: OnceLock<Arc<dyn BackgroundTask>> = OnceLock::new();
         INSTANCE
-            .get_or_init(|| match FsStorage::desktop_default() {
-                Ok(dir) => Arc::new(super::windows_background_task::WindowsBackgroundTask::new(
-                    Arc::new(FsStorage::new(dir)),
-                )) as Arc<dyn BackgroundTask>,
-                Err(_) => Arc::new(fandhe_device::background_task::UnsupportedBackgroundTask),
+            .get_or_init(|| match fandhe_cap_local_storage_kv::data_dir() {
+                Ok(dir) => Arc::new(crate::windows::WindowsBackgroundTask::new(Arc::new(
+                    FsStorage::new(dir),
+                ))) as Arc<dyn BackgroundTask>,
+                Err(_) => Arc::new(crate::contract::UnsupportedBackgroundTask),
             })
             .clone()
     }
@@ -150,9 +151,9 @@ fn implementation() -> Arc<dyn BackgroundTask> {
         use std::sync::OnceLock;
         static INSTANCE: OnceLock<Arc<dyn BackgroundTask>> = OnceLock::new();
         INSTANCE
-            .get_or_init(|| match super::ios_background_task::instance() {
+            .get_or_init(|| match crate::ios::instance() {
                 Some(task) => task as Arc<dyn BackgroundTask>,
-                None => Arc::new(fandhe_device::background_task::UnsupportedBackgroundTask),
+                None => Arc::new(crate::contract::UnsupportedBackgroundTask),
             })
             .clone()
     }
@@ -162,11 +163,11 @@ fn implementation() -> Arc<dyn BackgroundTask> {
         use std::sync::OnceLock;
         static INSTANCE: OnceLock<Arc<dyn BackgroundTask>> = OnceLock::new();
         INSTANCE
-            .get_or_init(|| match super::android::data_dir() {
-                Some(dir) => Arc::new(super::android_background_task::AndroidBackgroundTask::new(
-                    Arc::new(FsStorage::new(dir)),
-                )) as Arc<dyn BackgroundTask>,
-                None => Arc::new(fandhe_device::background_task::UnsupportedBackgroundTask),
+            .get_or_init(|| match fandhe_cap_local_storage_kv::data_dir() {
+                Ok(dir) => Arc::new(crate::android::AndroidBackgroundTask::new(Arc::new(
+                    FsStorage::new(dir),
+                ))) as Arc<dyn BackgroundTask>,
+                Err(_) => Arc::new(crate::contract::UnsupportedBackgroundTask),
             })
             .clone()
     }
@@ -181,8 +182,7 @@ fn implementation() -> Arc<dyn BackgroundTask> {
         static INSTANCE: OnceLock<Arc<dyn BackgroundTask>> = OnceLock::new();
         INSTANCE
             .get_or_init(|| {
-                Arc::new(fandhe_device::background_task::UnsupportedBackgroundTask)
-                    as Arc<dyn BackgroundTask>
+                Arc::new(crate::contract::UnsupportedBackgroundTask) as Arc<dyn BackgroundTask>
             })
             .clone()
     }
@@ -247,7 +247,7 @@ pub fn background_task_effect(
     state: &BackgroundTaskState,
     sender: &CompletionSender<BackgroundTaskState>,
 ) {
-    let task = implementation();
+    let task = platform_background_task();
     if drive_request(state, sender, task.clone()) {
         return;
     }
@@ -259,16 +259,22 @@ mod tests {
     use super::*;
     use fandhe_core::screens::background_task::{cancel, schedule};
 
-    fn sender_with_channel() -> (
-        CompletionSender<BackgroundTaskState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<BackgroundTaskState>>,
-    ) {
-        let ctx = egui::Context::default();
-        let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
     }
 
-    /// `schedule()`/`cancel()` の戻り値（`DeviceError` は `Clone` ではないため
+    fn sender_with_channel() -> (
+        CompletionSender<BackgroundTaskState>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<BackgroundTaskState>>,
+    ) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
+    }
+
+    /// `schedule()`/`cancel()` の戻り値（`BackgroundTaskError` は `Clone` ではないため
     /// `Result` をそのまま保持せず、テストごとに必要な固定バリアントだけを
     /// 列挙して都度組み立てる）。
     #[derive(Clone, Copy, Default)]
@@ -279,10 +285,12 @@ mod tests {
     }
 
     impl ActionOutcome {
-        fn into_result(self) -> Result<(), DeviceError> {
+        fn into_result(self) -> Result<(), BackgroundTaskError> {
             match self {
                 ActionOutcome::Ok => Ok(()),
-                ActionOutcome::Unsupported => Err(DeviceError::Unsupported("background task")),
+                ActionOutcome::Unsupported => {
+                    Err(BackgroundTaskError::Unsupported("background task"))
+                }
             }
         }
     }
@@ -297,11 +305,13 @@ mod tests {
     }
 
     impl LastRunOutcome {
-        fn into_result(self) -> Result<Option<RunRecord>, DeviceError> {
+        fn into_result(self) -> Result<Option<RunRecord>, BackgroundTaskError> {
             match self {
                 LastRunOutcome::NeverRan => Ok(None),
                 LastRunOutcome::Ran(record) => Ok(Some(record)),
-                LastRunOutcome::ReadFailed => Err(DeviceError::Internal("background task record")),
+                LastRunOutcome::ReadFailed => {
+                    Err(BackgroundTaskError::Internal("background task record"))
+                }
             }
         }
     }
@@ -317,17 +327,17 @@ mod tests {
     }
 
     impl BackgroundTask for MockTask {
-        fn schedule(&self) -> Result<(), DeviceError> {
+        fn schedule(&self) -> Result<(), BackgroundTaskError> {
             self.schedule_outcome.into_result()
         }
-        fn cancel(&self) -> Result<(), DeviceError> {
+        fn cancel(&self) -> Result<(), BackgroundTaskError> {
             self.cancel_outcome.into_result()
         }
-        fn state(&self) -> Result<ScheduleState, DeviceError> {
+        fn state(&self) -> Result<ScheduleState, BackgroundTaskError> {
             self.state_value
-                .ok_or(DeviceError::Internal("background task state"))
+                .ok_or(BackgroundTaskError::Internal("background task state"))
         }
-        fn last_run(&self) -> Result<Option<RunRecord>, DeviceError> {
+        fn last_run(&self) -> Result<Option<RunRecord>, BackgroundTaskError> {
             self.last_run_outcome.into_result()
         }
     }

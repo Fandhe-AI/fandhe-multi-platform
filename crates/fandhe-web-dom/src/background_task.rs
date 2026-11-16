@@ -10,7 +10,7 @@
 //! Web は `fandhe-device` の `BackgroundTask` trait を通らない（`notification.rs`/
 //! `share.rs` と同じ理由、`fandhe_device::background_task` モジュール doc の
 //! schedule は同期 API だが Web は Promise ベースで非同期のため実装できない）。
-//! 保存形式（[`fandhe_device::background_task::RECORD_KEY`]/`encode_record`/
+//! 保存形式（[`fandhe_cap_background_task::RECORD_KEY`]/`encode_record`/
 //! `decode_record`）だけは SSOT として共有する。
 //!
 //! # 保存先（IndexedDB、ページと Service Worker の両方が読む）
@@ -19,7 +19,7 @@
 //! object store [`web::STORE_NAME`]（out-of-line key）に 2 つの key を持つ。
 //!
 //! - [`web::PENDING_KEY`]: 予約中の印（値は予約した時刻、ms）
-//! - [`fandhe_device::background_task::RECORD_KEY`]: 最後の実行記録
+//! - [`fandhe_cap_background_task::RECORD_KEY`]: 最後の実行記録
 //!   （`encode_record` と同じ JSON 文字列）
 //!
 //! sync tag は固定の [`web::SYNC_TAG`]。`web/background-task-sw.js` が `sync`
@@ -126,31 +126,47 @@
 //!
 //! 例外オブジェクトの `message` は console にも画面にも出さない（`name` のみ見る）。
 
+use fandhe_cap_background_task::BackgroundTaskError;
+use fandhe_cap_background_task::{RunRecord, RunResult};
 use fandhe_core::screens::background_task::{LastRunView, RunResultView, ScheduleView};
-use fandhe_device::background_task::{RunRecord, RunResult};
-use fandhe_device::DeviceError;
 
-/// `DeviceError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
+/// Web の背景ダウンロード（`background_download.rs`、`fandhe_device::DeviceError` で返す別機能）が、本ファイルの
+/// `wait_until_active` の失敗を自分の型へ写すための変換。種別と固定識別子はそのまま写し、それ以外は内部エラーへ畳む。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn to_device_error(e: BackgroundTaskError) -> fandhe_device::DeviceError {
+    use fandhe_device::DeviceError;
+    match e {
+        BackgroundTaskError::Unsupported(s) => DeviceError::Unsupported(s),
+        BackgroundTaskError::PermissionDenied(s) => DeviceError::PermissionDenied(s),
+        BackgroundTaskError::Disabled(s) => DeviceError::Disabled(s),
+        BackgroundTaskError::Internal(s) => DeviceError::Internal(s),
+        BackgroundTaskError::Storage(_) => DeviceError::Internal("background task"),
+    }
+}
+
+/// `BackgroundTaskError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
 /// それ以外は `Display` の文言のみを転送する（`fandhe-egui-proxy::device::
 /// background_task::to_message` と同じ文言で揃える、security.md A09）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-pub(crate) fn to_message(e: DeviceError) -> String {
+pub(crate) fn to_message(e: BackgroundTaskError) -> String {
     match e {
-        DeviceError::Unsupported(_) => "この環境ではバックグラウンド処理を使えません".to_string(),
+        BackgroundTaskError::Unsupported(_) => {
+            "この環境ではバックグラウンド処理を使えません".to_string()
+        }
         other => other.to_string(),
     }
 }
 
 /// `sync.register()`/`serviceWorker.register()` が投げた例外の `name` を
-/// [`DeviceError`] へ写す純関数（ブラウザ API を呼ばないため native からも
+/// [`BackgroundTaskError`] へ写す純関数（ブラウザ API を呼ばないため native からも
 /// テストできる、モジュール doc「結果の写像表」参照）。`message` は受け取らない
 /// （security.md A09）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-pub(crate) fn error_from_name(name: Option<&str>) -> DeviceError {
+pub(crate) fn error_from_name(name: Option<&str>) -> BackgroundTaskError {
     match name {
-        Some("SecurityError") => DeviceError::Unsupported("background task"),
-        Some("NotAllowedError") => DeviceError::PermissionDenied("background sync"),
-        _ => DeviceError::Internal("background task"),
+        Some("SecurityError") => BackgroundTaskError::Unsupported("background task"),
+        Some("NotAllowedError") => BackgroundTaskError::PermissionDenied("background sync"),
+        _ => BackgroundTaskError::Internal("background task"),
     }
 }
 
@@ -182,7 +198,9 @@ fn to_run_result_view(result: RunResult) -> RunResultView {
 /// 区別。壊れた値を「未実行」として成功へ畳まない、`device-bridge-contracts.md`
 /// 「6. 嘘の成功」）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-pub(crate) fn to_last_run_view(last_run: Result<Option<RunRecord>, DeviceError>) -> LastRunView {
+pub(crate) fn to_last_run_view(
+    last_run: Result<Option<RunRecord>, BackgroundTaskError>,
+) -> LastRunView {
     match last_run {
         Ok(None) => LastRunView::NeverRan,
         Ok(Some(record)) => LastRunView::Ran {
@@ -198,12 +216,12 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashSet;
 
+    use fandhe_cap_background_task::BackgroundTaskError;
+    use fandhe_cap_background_task::{decode_record, RunRecord, RECORD_KEY};
     use fandhe_core::screens::background_task::{
         apply_snapshot, finish_action, mark_in_flight, take_request, Action, BackgroundTaskState,
         Phase, ScheduleView,
     };
-    use fandhe_device::background_task::{decode_record, RunRecord, RECORD_KEY};
-    use fandhe_device::DeviceError;
     use js_sys::{Function, Promise, Reflect};
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
@@ -481,7 +499,7 @@ mod web {
     /// `device-bridge-contracts.md`「6. 嘘の成功」）。
     async fn read_snapshot(
         db: &IdbDatabase,
-    ) -> Result<(Option<u64>, Result<Option<RunRecord>, DeviceError>), JsValue> {
+    ) -> Result<(Option<u64>, Result<Option<RunRecord>, BackgroundTaskError>), JsValue> {
         let (_tx, s) = store(db, IdbTransactionMode::Readonly)?;
         let pending_req = s.get(&JsValue::from_str(PENDING_KEY))?;
         let record_req = s.get(&JsValue::from_str(RECORD_KEY))?;
@@ -506,7 +524,7 @@ mod web {
         } else {
             match record_val.as_string() {
                 Some(text) => decode_record(text.as_bytes()).map(Some),
-                None => Err(DeviceError::Internal("background task record")),
+                None => Err(BackgroundTaskError::Internal("background task record")),
             }
         };
         Ok((pending, last_run))
@@ -563,10 +581,14 @@ mod web {
     /// 予約失敗時の後片付け（自分の予約の印を消す）を行い、返すエラーを決める。
     /// 後片付け自体が失敗したら、印が残って後から実行され得るため元のエラーでは
     /// なく「後片付けに失敗した」ことを返す（失敗確定と表示しない。PR #1051 codex 指摘）。
-    async fn cleanup_then(db: &IdbDatabase, token: f64, original: DeviceError) -> DeviceError {
+    async fn cleanup_then(
+        db: &IdbDatabase,
+        token: f64,
+        original: BackgroundTaskError,
+    ) -> BackgroundTaskError {
         match delete_pending_if(db, token).await {
             Ok(()) => original,
-            Err(_) => DeviceError::Internal("background task schedule cleanup"),
+            Err(_) => BackgroundTaskError::Internal("background task schedule cleanup"),
         }
     }
 
@@ -575,15 +597,15 @@ mod web {
     async fn sync_register(
         registration: &ServiceWorkerRegistration,
         tag: &str,
-    ) -> Result<(), DeviceError> {
+    ) -> Result<(), BackgroundTaskError> {
         let reg_value: JsValue = registration.clone().into();
         let sync_value = Reflect::get(&reg_value, &JsValue::from_str("sync"))
-            .map_err(|_| DeviceError::Internal("background task"))?;
+            .map_err(|_| BackgroundTaskError::Internal("background task"))?;
         if !has_function(&sync_value, "register") {
-            return Err(DeviceError::Unsupported("background task"));
+            return Err(BackgroundTaskError::Unsupported("background task"));
         }
         let register_fn: Function = Reflect::get(&sync_value, &JsValue::from_str("register"))
-            .map_err(|_| DeviceError::Internal("background task"))?
+            .map_err(|_| BackgroundTaskError::Internal("background task"))?
             .unchecked_into();
         let promise_value = register_fn
             .call1(&sync_value, &JsValue::from_str(tag))
@@ -619,7 +641,7 @@ mod web {
     pub(crate) async fn wait_until_active(
         window: &Window,
         registration: &ServiceWorkerRegistration,
-    ) -> Result<(), DeviceError> {
+    ) -> Result<(), BackgroundTaskError> {
         const ACTIVATION_POLL_INTERVAL_MS: i32 = 50;
         const ACTIVATION_MAX_ATTEMPTS: u32 = 100; // 最大 5 秒
 
@@ -632,7 +654,7 @@ mod web {
                 return Ok(());
             }
         }
-        Err(DeviceError::Internal("background task"))
+        Err(BackgroundTaskError::Internal("background task"))
     }
 
     /// 「予約する」の OS 呼び出し（モジュール doc「取り消し・二重予約の意味」参照）。
@@ -641,7 +663,7 @@ mod web {
     /// `sync.register()` の前に [`wait_until_active`] で worker の activation を
     /// 待つ（Bugbot 指摘: active 前に呼ぶと reject される）。register が失敗したら
     /// `PENDING_KEY` を削除して戻す（契約表「9. 失敗時のリソース解放」）。
-    async fn do_schedule(window: Window) -> Result<(), DeviceError> {
+    async fn do_schedule(window: Window) -> Result<(), BackgroundTaskError> {
         let container = window.navigator().service_worker();
         let options = RegistrationOptions::new();
         options.set_scope(SW_SCOPE);
@@ -654,14 +676,14 @@ mod web {
         let db = CloseOnDrop(
             open_db(&window)
                 .await
-                .map_err(|_| DeviceError::Internal("background task"))?,
+                .map_err(|_| BackgroundTaskError::Internal("background task"))?,
         );
         // 予約ごとの印。ミリ秒に乱数の端数を足し、同じミリ秒に別タブが予約しても
         // 区別できるようにする（`read_snapshot` は整数部だけを読む）。
         let token = js_sys::Date::now().floor() + js_sys::Math::random();
         write_pending(&db, token)
             .await
-            .map_err(|_| DeviceError::Internal("background task"))?;
+            .map_err(|_| BackgroundTaskError::Internal("background task"))?;
 
         if let Err(e) = wait_until_active(&window, &registration).await {
             return Err(cleanup_then(&db, token, e).await);
@@ -678,18 +700,18 @@ mod web {
     /// `fandhe_device::background_task` モジュール doc 参照）。Background Sync に
     /// 取り消し API は無いためベストエフォート（オーナー承認済みの方針、10/2）。
     /// 直前に始まった実行は記録として残り得る。
-    async fn do_cancel(window: Window) -> Result<(), DeviceError> {
+    async fn do_cancel(window: Window) -> Result<(), BackgroundTaskError> {
         if !is_supported(&window) {
-            return Err(DeviceError::Unsupported("background task"));
+            return Err(BackgroundTaskError::Unsupported("background task"));
         }
         let db = CloseOnDrop(
             open_db(&window)
                 .await
-                .map_err(|_| DeviceError::Internal("background task"))?,
+                .map_err(|_| BackgroundTaskError::Internal("background task"))?,
         );
         delete_pending(&db)
             .await
-            .map_err(|_| DeviceError::Internal("background task"))?;
+            .map_err(|_| BackgroundTaskError::Internal("background task"))?;
         Ok(())
     }
 
@@ -768,7 +790,9 @@ mod web {
                         s,
                         generation,
                         action,
-                        Err(to_message(DeviceError::Unsupported("background task"))),
+                        Err(to_message(BackgroundTaskError::Unsupported(
+                            "background task",
+                        ))),
                     )
                 });
                 return;
@@ -779,7 +803,7 @@ mod web {
                 let result = match action {
                     Action::Schedule => {
                         if !is_supported(&window) {
-                            Err(DeviceError::Unsupported("background task"))
+                            Err(BackgroundTaskError::Unsupported("background task"))
                         } else {
                             do_schedule(window).await
                         }
@@ -881,16 +905,16 @@ mod tests {
     #[test]
     fn to_message_maps_unsupported_to_fixed_text() {
         assert_eq!(
-            to_message(DeviceError::Unsupported("background task")),
+            to_message(BackgroundTaskError::Unsupported("background task")),
             "この環境ではバックグラウンド処理を使えません"
         );
     }
 
     #[test]
     fn to_message_forwards_other_variants() {
-        let e = DeviceError::PermissionDenied("background sync");
+        let e = BackgroundTaskError::PermissionDenied("background sync");
         assert_eq!(
-            to_message(DeviceError::PermissionDenied("background sync")),
+            to_message(BackgroundTaskError::PermissionDenied("background sync")),
             e.to_string()
         );
     }
@@ -899,7 +923,7 @@ mod tests {
     fn error_from_name_maps_security_error_to_unsupported() {
         assert!(matches!(
             error_from_name(Some("SecurityError")),
-            DeviceError::Unsupported("background task")
+            BackgroundTaskError::Unsupported("background task")
         ));
     }
 
@@ -907,7 +931,7 @@ mod tests {
     fn error_from_name_maps_not_allowed_to_permission_denied() {
         assert!(matches!(
             error_from_name(Some("NotAllowedError")),
-            DeviceError::PermissionDenied("background sync")
+            BackgroundTaskError::PermissionDenied("background sync")
         ));
     }
 
@@ -915,11 +939,11 @@ mod tests {
     fn error_from_name_maps_unknown_or_missing_to_internal() {
         assert!(matches!(
             error_from_name(Some("TypeError")),
-            DeviceError::Internal("background task")
+            BackgroundTaskError::Internal("background task")
         ));
         assert!(matches!(
             error_from_name(None),
-            DeviceError::Internal("background task")
+            BackgroundTaskError::Internal("background task")
         ));
     }
 
@@ -952,7 +976,7 @@ mod tests {
                 result: RunResultView::Completed,
             }
         );
-        let failed = to_last_run_view(Err(DeviceError::Internal("background task record")));
+        let failed = to_last_run_view(Err(BackgroundTaskError::Internal("background task record")));
         assert!(matches!(failed, LastRunView::ReadFailed(_)));
         assert_ne!(failed, LastRunView::NeverRan);
     }

@@ -92,10 +92,6 @@ fn build() {
     // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
     compile_apple_spotlight_index();
 
-    // `ios/fandhe_ios_background_task.m`（Issue #1045）は iOS 分岐のみから呼ぶ
-    // （`build_macos` からは呼ばない）。
-    compile_ios_background_task();
-
     // `ios/fandhe_ios_url_scheme.m`（Issue #1217）。iOS 分岐のみ（macOS は別 .m）。
     compile_ios_url_scheme();
 
@@ -206,12 +202,6 @@ fn compile_apple_local_peer() {
             &["Foundation", "MultipeerConnectivity"]
         },
     );
-}
-
-/// `macos/fandhe_macos_background_task.m` を `cc` でコンパイルする（Issue #1043）。
-/// **macOS 分岐のみ**から呼ばれる（`NSBackgroundActivityScheduler` は macOS 専用、doc 参照）。
-fn compile_macos_background_task() {
-    compile_objc("macos/fandhe_macos_background_task.m", &["Foundation"]);
 }
 
 /// `macos/fandhe_macos_url_scheme.m` を `cc` でコンパイルする（Issue #1215）。
@@ -391,13 +381,6 @@ fn compile_ios_pen_stylus() {
     compile_objc("ios/fandhe_ios_pen_stylus.m", &["UIKit"]);
 }
 
-/// `ios/fandhe_ios_background_task.m` を `cc` でコンパイルし BackgroundTasks を
-/// リンクする（Issue #1045）。**iOS 分岐のみ**から呼ばれる（`BGTaskScheduler` は
-/// iOS 専用、doc 参照）。
-fn compile_ios_background_task() {
-    compile_objc("ios/fandhe_ios_background_task.m", &["BackgroundTasks"]);
-}
-
 /// macOS ターゲット向けビルド（Issue #889・#897）。iOS と異なり macOS は位置情報
 /// （機能 crate `fandhe-cap-location` が持つ）などの `apple/*.m` だけを対象とする。既存の `ios/*.m` 群（文字入力・カメラ・傾き・クリップボード・読み上げ・
 /// ファイル選択）は iOS 専用のため対象外。
@@ -428,8 +411,6 @@ fn build_macos() {
     compile_apple_barcode_scan();
     // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
     compile_apple_spotlight_index();
-    // `macos/fandhe_macos_background_task.m`（Issue #1043）は macOS 専用（doc 参照）。
-    compile_macos_background_task();
     // `macos/fandhe_macos_url_scheme.m`（Issue #1215）も macOS 専用。
     compile_macos_url_scheme();
     // `macos/fandhe_macos_app_shortcuts.m`（Issue #424）も macOS 専用。

@@ -5,8 +5,8 @@
 //! 呼び出しに閉じ `// SAFETY:` で契約を明記する（`macos_background_task.rs` と同型、
 //! coding-rust.md の FFI 例外規定準拠）。
 //!
-//! `device/background_task.rs` の iOS 経路から [`IosBackgroundTask`] を使う
-//! （`fandhe_device::background_task::BackgroundTask` 実装）。
+//! `driver.rs` の iOS 経路から [`IosBackgroundTask`] を使う
+//! （`crate::contract::BackgroundTask` 実装）。
 //!
 //! # 世代管理をしない（オーナー承認済み方針、2026-10-02）
 //!
@@ -35,13 +35,13 @@ use std::sync::{Arc, Mutex};
 #[cfg(target_os = "ios")]
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use fandhe_device::background_task::{
-    read_record, write_record_if_newer, BackgroundTask, RunRecord, RunResult, ScheduleState,
+use crate::contract::{
+    BackgroundTask, RunRecord, RunResult, ScheduleState, read_record, write_record_if_newer,
 };
+use crate::error::BackgroundTaskError;
 use fandhe_device::storage::Storage;
-use fandhe_device::DeviceError;
 
-use super::background_task::submit_code_to_result;
+use crate::driver::submit_code_to_result;
 
 /// `submit` 時に渡す予約の最短開始猶予（秒）。iOS は実行時刻を保証しないため
 /// 調整用の knob として定数にしておく（`ponytail:` iOS は実行時刻を保証しない。
@@ -112,7 +112,7 @@ pub struct IosBackgroundTask {
 }
 
 impl IosBackgroundTask {
-    /// 既定の FFI 実装で構築する（`device/background_task.rs::implementation` から
+    /// 既定の FFI 実装で構築する（`driver.rs::implementation` から
     /// 呼ばれる契約）。実 C ABI を参照するため iOS ターゲットのみ（モジュール doc 参照）。
     #[cfg(target_os = "ios")]
     pub fn new(storage: Arc<dyn Storage>) -> Self {
@@ -136,7 +136,7 @@ impl IosBackgroundTask {
 }
 
 impl BackgroundTask for IosBackgroundTask {
-    fn schedule(&self) -> Result<(), DeviceError> {
+    fn schedule(&self) -> Result<(), BackgroundTaskError> {
         let _ffi_guard = self.ffi.lock().expect("lock は成功する");
         let code = (self.submit_fn)(EARLIEST_BEGIN_SECS);
         let result = submit_code_to_result(code);
@@ -159,7 +159,7 @@ impl BackgroundTask for IosBackgroundTask {
         result
     }
 
-    fn cancel(&self) -> Result<(), DeviceError> {
+    fn cancel(&self) -> Result<(), BackgroundTaskError> {
         let _ffi_guard = self.ffi.lock().expect("lock は成功する");
         (self.cancel_fn)();
         self.state.lock().expect("lock は成功する").state = ScheduleState::NotScheduled;
@@ -167,14 +167,16 @@ impl BackgroundTask for IosBackgroundTask {
         Ok(())
     }
 
-    fn state(&self) -> Result<ScheduleState, DeviceError> {
+    fn state(&self) -> Result<ScheduleState, BackgroundTaskError> {
         Ok(self.state.lock().expect("lock は成功する").state)
     }
 
-    fn last_run(&self) -> Result<Option<RunRecord>, DeviceError> {
+    fn last_run(&self) -> Result<Option<RunRecord>, BackgroundTaskError> {
         if self.state.lock().expect("lock は成功する").write_failed {
             // 保存失敗を「未実行」に見せない（device-bridge-contracts.md「6. 嘘の成功」）。
-            return Err(DeviceError::Internal("background task record write"));
+            return Err(BackgroundTaskError::Internal(
+                "background task record write",
+            ));
         }
         read_record(self.storage.as_ref())
     }
@@ -234,13 +236,13 @@ fn on_fired(task: &IosBackgroundTask, result: RunResult, now_unix_ms: u64) -> bo
     }
 }
 
-/// プロセス static（`device/background_task.rs::implementation` が構築した
+/// プロセス static（`driver.rs::platform_background_task` が構築した
 /// 唯一のインスタンスを保持する。発火コールバックは FFI 境界を越えて届くため
 /// `Arc` 経由でしか参照できない、`macos_background_task.rs::INSTANCE` と同じ必要性）。
 #[cfg(target_os = "ios")]
 static INSTANCE: OnceLock<Arc<IosBackgroundTask>> = OnceLock::new();
 
-/// `device/background_task.rs::implementation` から 1 度だけ構築する
+/// `driver.rs::platform_background_task` から 1 度だけ構築する
 /// （`Documents/` を保存先とする `FsStorage`、`ios::documents_dir()` が失敗したら
 /// `None`。画面を開かないままバックグラウンド起動されても保存先を作れるよう、
 /// 発火コールバックからもこの関数を経由する）。
@@ -254,7 +256,7 @@ pub(crate) fn instance() -> Option<Arc<IosBackgroundTask>> {
     }
     match INSTANCE.get() {
         Some(task) => Some(task.clone()),
-        None => match super::ios::documents_dir() {
+        None => match fandhe_cap_local_storage_kv::data_dir() {
             Ok(dir) => {
                 let task = Arc::new(IosBackgroundTask::new(Arc::new(FsStorage::new(dir))));
                 Some(INSTANCE.get_or_init(|| task).clone())
@@ -283,7 +285,7 @@ pub fn register() {
 /// `.m` 側はこれを `setTaskCompletedWithSuccess:` の判定に使う）。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_ios_background_task_fired(result: i32) -> i32 {
     let Some(task) = instance() else {
         return 1;
@@ -307,19 +309,19 @@ extern "C" fn fandhe_rust_ios_background_task_fired(result: i32) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::DeviceError;
-    use std::sync::atomic::{AtomicI32, Ordering};
+    use crate::error::BackgroundTaskError;
     use std::sync::Mutex as StdMutex;
+    use std::sync::atomic::{AtomicI32, Ordering};
 
     #[derive(Default)]
     struct MemStorage(StdMutex<Option<Vec<u8>>>);
 
     impl Storage for MemStorage {
-        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, DeviceError> {
+        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, fandhe_device::DeviceError> {
             Ok(self.0.lock().expect("lock は成功する").clone())
         }
 
-        fn write(&self, _key: &str, bytes: &[u8]) -> Result<(), DeviceError> {
+        fn write(&self, _key: &str, bytes: &[u8]) -> Result<(), fandhe_device::DeviceError> {
             *self.0.lock().expect("lock は成功する") = Some(bytes.to_vec());
             Ok(())
         }
@@ -328,12 +330,12 @@ mod tests {
     struct FailingWriteStorage;
 
     impl Storage for FailingWriteStorage {
-        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, DeviceError> {
+        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, fandhe_device::DeviceError> {
             Ok(None)
         }
 
-        fn write(&self, _key: &str, _bytes: &[u8]) -> Result<(), DeviceError> {
-            Err(DeviceError::Internal("write failure"))
+        fn write(&self, _key: &str, _bytes: &[u8]) -> Result<(), fandhe_device::DeviceError> {
+            Err(fandhe_device::DeviceError::Internal("write failure"))
         }
     }
 
@@ -374,7 +376,7 @@ mod tests {
         let task = task_with(always_fail_disabled, Arc::new(MemStorage::default()));
         assert!(matches!(
             task.schedule(),
-            Err(DeviceError::Disabled("background task"))
+            Err(BackgroundTaskError::Disabled("background task"))
         ));
         assert_eq!(task.state().unwrap(), ScheduleState::NotScheduled);
     }
@@ -387,7 +389,7 @@ mod tests {
         );
         assert!(matches!(
             task.schedule(),
-            Err(DeviceError::PermissionDenied("background task"))
+            Err(BackgroundTaskError::PermissionDenied("background task"))
         ));
         assert_eq!(task.state().unwrap(), ScheduleState::NotScheduled);
     }
@@ -397,7 +399,7 @@ mod tests {
         let task = task_with(always_fail_unsupported, Arc::new(MemStorage::default()));
         assert!(matches!(
             task.schedule(),
-            Err(DeviceError::Unsupported("background task"))
+            Err(BackgroundTaskError::Unsupported("background task"))
         ));
         assert_eq!(task.state().unwrap(), ScheduleState::NotScheduled);
     }
@@ -407,7 +409,7 @@ mod tests {
         let task = task_with(always_fail_internal, Arc::new(MemStorage::default()));
         assert!(matches!(
             task.schedule(),
-            Err(DeviceError::Internal("background task schedule"))
+            Err(BackgroundTaskError::Internal("background task schedule"))
         ));
         assert_eq!(task.state().unwrap(), ScheduleState::NotScheduled);
     }

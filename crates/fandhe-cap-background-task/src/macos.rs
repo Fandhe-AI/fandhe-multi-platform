@@ -4,8 +4,8 @@
 //! [`ffi::cancel`]）で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する
 //! （`apple_mic_record.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
-//! `device/background_task.rs` の macOS 経路から [`MacBackgroundTask`] を使う
-//! （`fandhe_device::background_task::BackgroundTask` 実装）。
+//! `driver.rs` の macOS 経路から [`MacBackgroundTask`] を使う
+//! （`crate::contract::BackgroundTask` 実装）。
 //!
 //! # 世代管理（`device-bridge-contracts.md`「2. 並行性・世代」）
 //!
@@ -44,11 +44,11 @@
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use fandhe_device::background_task::{
-    read_record, write_record_if_newer, BackgroundTask, RunRecord, RunResult, ScheduleState,
+use crate::contract::{
+    BackgroundTask, RunRecord, RunResult, ScheduleState, read_record, write_record_if_newer,
 };
+use crate::error::BackgroundTaskError;
 use fandhe_device::storage::Storage;
-use fandhe_device::DeviceError;
 
 /// 予約の調整用定数（実機の遅延に合わせて調整できるよう定数にしておく）。
 const INTERVAL_SECS: f64 = 10.0;
@@ -60,7 +60,7 @@ const TOLERANCE_SECS: f64 = 5.0;
 #[allow(unsafe_code)]
 unsafe extern "C" {
     fn fandhe_macos_background_task_schedule(generation: u64, interval: f64, tolerance: f64)
-        -> i32;
+    -> i32;
     fn fandhe_macos_background_task_cancel();
 }
 
@@ -123,7 +123,7 @@ pub struct MacBackgroundTask {
 }
 
 impl MacBackgroundTask {
-    /// 既定の FFI 実装で構築する（`device/background_task.rs::implementation` から
+    /// 既定の FFI 実装で構築する（`driver.rs::platform_background_task` から
     /// 呼ばれる契約）。
     pub fn new(storage: Arc<dyn Storage>) -> Self {
         Self::with_ffi(storage, ffi::schedule, ffi::cancel)
@@ -151,7 +151,7 @@ impl MacBackgroundTask {
 }
 
 impl BackgroundTask for MacBackgroundTask {
-    fn schedule(&self) -> Result<(), DeviceError> {
+    fn schedule(&self) -> Result<(), BackgroundTaskError> {
         let _ffi_guard = self.ffi.lock().expect("lock は成功する");
 
         // FFI 呼び出しより先に `Scheduled` を立てる（発火が状態確定より先に届いて
@@ -223,10 +223,10 @@ impl BackgroundTask for MacBackgroundTask {
                 None => inner.state = previous_state,
             }
         }
-        Err(DeviceError::Internal("background task schedule"))
+        Err(BackgroundTaskError::Internal("background task schedule"))
     }
 
-    fn cancel(&self) -> Result<(), DeviceError> {
+    fn cancel(&self) -> Result<(), BackgroundTaskError> {
         let _ffi_guard = self.ffi.lock().expect("lock は成功する");
         {
             let mut inner = self.state.lock().expect("lock は成功する");
@@ -241,14 +241,16 @@ impl BackgroundTask for MacBackgroundTask {
         Ok(())
     }
 
-    fn state(&self) -> Result<ScheduleState, DeviceError> {
+    fn state(&self) -> Result<ScheduleState, BackgroundTaskError> {
         Ok(self.state.lock().expect("lock は成功する").state)
     }
 
-    fn last_run(&self) -> Result<Option<RunRecord>, DeviceError> {
+    fn last_run(&self) -> Result<Option<RunRecord>, BackgroundTaskError> {
         if self.state.lock().expect("lock は成功する").write_failed {
             // 保存失敗を「未実行」に見せない（`device-bridge-contracts.md`「6. 嘘の成功」）。
-            return Err(DeviceError::Internal("background task record write"));
+            return Err(BackgroundTaskError::Internal(
+                "background task record write",
+            ));
         }
         read_record(self.storage.as_ref())
     }
@@ -266,20 +268,19 @@ fn on_fired(task: &MacBackgroundTask, generation: u64, now_unix_ms: u64) {
         // 新しい予約自身が既に発火済み（`state` が `Scheduled` でない）なら、
         // そちらの記録の方が新しいので旧世代の記録で上書きしない（PR #1048 codex 指摘）。
         let newer_fired = inner.state != ScheduleState::Scheduled;
-        if let Some(pending) = inner.pending_replacement.as_mut() {
-            if pending.generation == generation
-                && pending.fired_write_failed.is_none()
-                && !newer_fired
-            {
-                let record = RunRecord {
-                    ran_at_unix_ms: now_unix_ms,
-                    result: RunResult::Completed,
-                };
-                // 既存の記録より古ければ書かない（`fandhe_device::background_task` 契約「実行記録は
-                // 時刻の新しい方を残す」）。
-                let write_failed = write_record_if_newer(task.storage.as_ref(), &record).is_err();
-                pending.fired_write_failed = Some(write_failed);
-            }
+        if let Some(pending) = inner.pending_replacement.as_mut()
+            && pending.generation == generation
+            && pending.fired_write_failed.is_none()
+            && !newer_fired
+        {
+            let record = RunRecord {
+                ran_at_unix_ms: now_unix_ms,
+                result: RunResult::Completed,
+            };
+            // 既存の記録より古ければ書かない（本 crate の `contract.rs` 契約「実行記録は
+            // 時刻の新しい方を残す」）。
+            let write_failed = write_record_if_newer(task.storage.as_ref(), &record).is_err();
+            pending.fired_write_failed = Some(write_failed);
         }
         // それ以外（キャンセル済み・さらに前の世代）の発火は捨てる。
         return;
@@ -302,12 +303,12 @@ fn on_fired(task: &MacBackgroundTask, generation: u64, now_unix_ms: u64) {
     }
 }
 
-/// プロセス static（`device/background_task.rs::implementation` が構築した
+/// プロセス static（`driver.rs::platform_background_task` が構築した
 /// 唯一のインスタンスを保持する。発火コールバックは FFI 境界を越えて届くため
 /// `Arc` 経由でしか参照できない、`apple_biometric.rs` の `g_*` static と同じ必要性）。
 static INSTANCE: OnceLock<Arc<MacBackgroundTask>> = OnceLock::new();
 
-/// `device/background_task.rs::implementation` から 1 度だけ呼ばれ、以後の発火
+/// `driver.rs::platform_background_task` から 1 度だけ呼ばれ、以後の発火
 /// コールバックが参照する static を確定させる。
 pub(crate) fn install(task: Arc<MacBackgroundTask>) -> Arc<MacBackgroundTask> {
     INSTANCE.get_or_init(|| task).clone()
@@ -317,7 +318,7 @@ pub(crate) fn install(task: Arc<MacBackgroundTask>) -> Arc<MacBackgroundTask> {
 /// コメント参照）。[`INSTANCE`] が未設定（`install` 未呼び出し）の間に届いた場合は
 /// 何もしない（構築前に発火することはない契約だが、防御的に無視する）。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_background_task_fired(generation: u64) {
     let Some(task) = INSTANCE.get() else {
         return;
@@ -332,18 +333,18 @@ extern "C" fn fandhe_rust_background_task_fired(generation: u64) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Mutex as StdMutex;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     #[derive(Default)]
     struct MemStorage(StdMutex<Option<Vec<u8>>>);
 
     impl Storage for MemStorage {
-        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, DeviceError> {
+        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, fandhe_device::DeviceError> {
             Ok(self.0.lock().expect("lock は成功する").clone())
         }
 
-        fn write(&self, _key: &str, bytes: &[u8]) -> Result<(), DeviceError> {
+        fn write(&self, _key: &str, bytes: &[u8]) -> Result<(), fandhe_device::DeviceError> {
             *self.0.lock().expect("lock は成功する") = Some(bytes.to_vec());
             Ok(())
         }
@@ -352,12 +353,12 @@ mod tests {
     struct FailingWriteStorage;
 
     impl Storage for FailingWriteStorage {
-        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, DeviceError> {
+        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, fandhe_device::DeviceError> {
             Ok(None)
         }
 
-        fn write(&self, _key: &str, _bytes: &[u8]) -> Result<(), DeviceError> {
-            Err(DeviceError::Internal("write failure"))
+        fn write(&self, _key: &str, _bytes: &[u8]) -> Result<(), fandhe_device::DeviceError> {
+            Err(fandhe_device::DeviceError::Internal("write failure"))
         }
     }
 
@@ -526,13 +527,13 @@ mod tests {
     }
 
     impl Storage for FailOnceStorage {
-        fn read(&self, key: &str) -> Result<Option<Vec<u8>>, DeviceError> {
+        fn read(&self, key: &str) -> Result<Option<Vec<u8>>, fandhe_device::DeviceError> {
             self.inner.read(key)
         }
 
-        fn write(&self, key: &str, bytes: &[u8]) -> Result<(), DeviceError> {
+        fn write(&self, key: &str, bytes: &[u8]) -> Result<(), fandhe_device::DeviceError> {
             if self.writes.fetch_add(1, Ordering::SeqCst) == 0 {
-                return Err(DeviceError::Internal("write failure"));
+                return Err(fandhe_device::DeviceError::Internal("write failure"));
             }
             self.inner.write(key, bytes)
         }
@@ -622,10 +623,10 @@ mod tests {
     #[test]
     fn older_fire_does_not_overwrite_newer_saved_record() {
         // 既に新しい時刻の記録があるとき、古い時刻の発火で巻き戻さない
-        // （`fandhe_device::background_task` 契約「実行記録は時刻の新しい方を残す」、
+        // （本 crate の `contract.rs` 契約「実行記録は時刻の新しい方を残す」、
         // PR #1053 codex 指摘）。
         let storage: Arc<dyn Storage> = Arc::new(MemStorage::default());
-        fandhe_device::background_task::write_record(
+        crate::contract::write_record(
             storage.as_ref(),
             &RunRecord {
                 ran_at_unix_ms: 2_000,

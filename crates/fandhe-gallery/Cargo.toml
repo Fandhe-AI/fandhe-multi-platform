@@ -27,6 +27,7 @@ device = [
   "dep:fandhe-cap-ar",
   "dep:fandhe-cap-audio-devices",
   "dep:fandhe-cap-audio-session",
+  "dep:fandhe-cap-background-task",
   "dep:fandhe-cap-biometric-auth",
   "dep:fandhe-cap-ble-peripheral",
   "dep:fandhe-cap-bluetooth-classic",
@@ -203,6 +204,7 @@ fandhe-cap-app-progress-attention = { path = "../fandhe-cap-app-progress-attenti
 fandhe-cap-ar = { path = "../fandhe-cap-ar", optional = true }
 fandhe-cap-audio-devices = { path = "../fandhe-cap-audio-devices", optional = true }
 fandhe-cap-audio-session = { path = "../fandhe-cap-audio-session", optional = true }
+fandhe-cap-background-task = { path = "../fandhe-cap-background-task", optional = true }
 fandhe-cap-biometric-auth = { path = "../fandhe-cap-biometric-auth", optional = true }
 fandhe-cap-ble-peripheral = { path = "../fandhe-cap-ble-peripheral", optional = true }
 fandhe-cap-bluetooth-classic = { path = "../fandhe-cap-bluetooth-classic", optional = true }

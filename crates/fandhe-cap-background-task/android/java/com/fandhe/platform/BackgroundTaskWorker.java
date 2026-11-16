@@ -1,13 +1,13 @@
 // Issue #1046: WorkManager の `OneTimeWorkRequest` から起動される Worker。
-// `MainActivity.backgroundTaskSchedule()` が `enqueueUniqueWork(...,
+// `BackgroundTaskHelper.schedule(Context)` が `enqueueUniqueWork(...,
 // ExistingWorkPolicy.REPLACE, ...)` で予約する唯一の Worker クラス。
 //
 // プロセスが冷えた状態（Activity も fandhe_gallery の cdylib も動いていない）で
 // 起動されうるため、`android_main` 前提の JNI 経路
 // （`crate::android::android_app()`）は使えない。本クラスは Rust 側
-// `fandhe_device::background_task::RECORD_KEY`/`encode_record` と同じ形式・保存先
+// `fandhe_cap_background_task::RECORD_KEY`/`encode_record` と同じ形式・保存先
 // （`getFilesDir()` 直下）へ直接書き込む
-// （crates/fandhe-egui-proxy/src/device/android_background_task.rs モジュール doc
+// （crates/fandhe-cap-background-task/src/android.rs モジュール doc
 // 「記録を書く主体」参照）。
 package com.fandhe.platform;
 
@@ -23,7 +23,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 public final class BackgroundTaskWorker extends Worker {
-    // Rust 側 `fandhe_device::background_task::RECORD_KEY`
+    // Rust 側 `fandhe_cap_background_task::RECORD_KEY`
     // （"background-task.last-run"）を `fandhe_device::storage` の非公開
     // `encode_key`（各バイトを小文字 16 進 2 桁）で符号化した固定値（SSOT は
     // Rust 側。`android_background_task.rs` の `record_file_name_matches_fs_storage_encoding`
@@ -35,13 +35,13 @@ public final class BackgroundTaskWorker extends Worker {
     // 同じ名前空間分離の考え方（通常ファイルと衝突しないサブディレクトリに置く）。
     private static final String TMP_SUBDIR = ".fandhe-tmp";
 
-    // `fandhe_device::background_task::encode_record` が書く JSON の `version` 値。
+    // `fandhe_cap_background_task::encode_record` が書く JSON の `version` 値。
     private static final int RECORD_VERSION = 1;
 
     // 既存記録の時刻比較から rename までを、同じプロセス内で並行する Worker 同士で
     // 直列化する（REPLACE で置き換え前後の Worker が重なったとき、遅れて保存を終えた
     // 古い方が新しい記録を上書きしないようにする。PR #1052 codex・Bugbot 指摘、
-    // `fandhe_device::background_task` 契約「実行記録は時刻の新しい方を残す」）。
+    // `fandhe_cap_background_task` 契約「実行記録は時刻の新しい方を残す」）。
     private static final Object RECORD_LOCK = new Object();
 
     public BackgroundTaskWorker(@NonNull Context context, @NonNull WorkerParameters params) {
@@ -124,7 +124,7 @@ public final class BackgroundTaskWorker extends Worker {
         }
     }
 
-    // `fandhe_device::background_task::decode_record` と同じ検証（version が
+    // `fandhe_cap_background_task::decode_record` と同じ検証（version が
     // RECORD_VERSION、ranAtUnixMs が 0 以上の整数、result が completed / expired）を
     // 通った記録の時刻を返す。通らなければ null（読めない記録として扱う）。
     private static Long decodeRanAt(byte[] bytes) {

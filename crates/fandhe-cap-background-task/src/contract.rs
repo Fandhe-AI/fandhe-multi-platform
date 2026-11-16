@@ -44,7 +44,7 @@
 //!   プロセス再起動後や取り消し後は `NotScheduled` を返してよい。実行結果そのものは
 //!   [`BackgroundTask::last_run`] が永続化する
 
-use crate::DeviceError;
+use crate::error::BackgroundTaskError;
 
 /// 予約状態（[`BackgroundTask::state`] の戻り値）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,7 +61,7 @@ pub enum ScheduleState {
 /// OS の実行可能時間切れを検知できる実装が使う想定。macOS 実装は `Completed` のみを
 /// 書き込む。Android（`WorkManager`、Issue #1046）の `Worker.doWork()` は即座に
 /// 記録を書いて終わるため停止による中断の余地がほぼ無く、同様に `Completed` のみを
-/// 書き込む（`device/android_background_task.rs` モジュール doc 参照）。
+/// 書き込む（`android.rs` モジュール doc 参照）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunResult {
     /// 処理が完了した。
@@ -82,13 +82,13 @@ pub struct RunRecord {
 /// バックグラウンド処理の契約（モジュール doc の「契約」節参照）。
 pub trait BackgroundTask: Send + Sync {
     /// 処理を 1 件予約する。既に予約済みなら置き換える（二重予約は置き換え契約）。
-    fn schedule(&self) -> Result<(), DeviceError>;
+    fn schedule(&self) -> Result<(), BackgroundTaskError>;
     /// 予約を取り消す。未予約でも `Ok(())`（べき等契約）。
-    fn cancel(&self) -> Result<(), DeviceError>;
+    fn cancel(&self) -> Result<(), BackgroundTaskError>;
     /// 現在の予約状態を返す。
-    fn state(&self) -> Result<ScheduleState, DeviceError>;
+    fn state(&self) -> Result<ScheduleState, BackgroundTaskError>;
     /// 最後に保存された実行記録を返す（3 値の契約はモジュール doc 参照）。
-    fn last_run(&self) -> Result<Option<RunRecord>, DeviceError>;
+    fn last_run(&self) -> Result<Option<RunRecord>, BackgroundTaskError>;
 }
 
 /// 対応不可プラットフォーム用（初期化失敗時のフォールバックも含む）。常に
@@ -96,20 +96,20 @@ pub trait BackgroundTask: Send + Sync {
 pub struct UnsupportedBackgroundTask;
 
 impl BackgroundTask for UnsupportedBackgroundTask {
-    fn schedule(&self) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("background task"))
+    fn schedule(&self) -> Result<(), BackgroundTaskError> {
+        Err(BackgroundTaskError::Unsupported("background task"))
     }
 
-    fn cancel(&self) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("background task"))
+    fn cancel(&self) -> Result<(), BackgroundTaskError> {
+        Err(BackgroundTaskError::Unsupported("background task"))
     }
 
-    fn state(&self) -> Result<ScheduleState, DeviceError> {
-        Err(DeviceError::Unsupported("background task"))
+    fn state(&self) -> Result<ScheduleState, BackgroundTaskError> {
+        Err(BackgroundTaskError::Unsupported("background task"))
     }
 
-    fn last_run(&self) -> Result<Option<RunRecord>, DeviceError> {
-        Err(DeviceError::Unsupported("background task"))
+    fn last_run(&self) -> Result<Option<RunRecord>, BackgroundTaskError> {
+        Err(BackgroundTaskError::Unsupported("background task"))
     }
 }
 
@@ -142,10 +142,10 @@ pub fn encode_record(record: &RunRecord) -> Vec<u8> {
 }
 
 /// [`encode_record`] の逆変換。未知の `version`・未知の `result`・型不一致はすべて
-/// `Err(DeviceError::Internal("background task record"))` にする（壊れた値を
+/// `Err(BackgroundTaskError::Internal("background task record"))` にする（壊れた値を
 /// 「未実行」として成功へ畳まない、モジュール doc「last_run の 3 値」参照）。
-pub fn decode_record(bytes: &[u8]) -> Result<RunRecord, DeviceError> {
-    const ERR: DeviceError = DeviceError::Internal("background task record");
+pub fn decode_record(bytes: &[u8]) -> Result<RunRecord, BackgroundTaskError> {
+    const ERR: BackgroundTaskError = BackgroundTaskError::Internal("background task record");
 
     let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| ERR)?;
     let version = value.get("version").and_then(serde_json::Value::as_u64);
@@ -167,21 +167,21 @@ pub fn decode_record(bytes: &[u8]) -> Result<RunRecord, DeviceError> {
     })
 }
 
-/// [`Storage`](crate::storage::Storage) 経由で [`RunRecord`] を保存する薄い補助関数
+/// [`Storage`](fandhe_device::storage::Storage) 経由で [`RunRecord`] を保存する薄い補助関数
 /// （各 OS 実装が共用する、モジュール doc 参照）。
 pub fn write_record(
-    storage: &dyn crate::storage::Storage,
+    storage: &dyn fandhe_device::storage::Storage,
     record: &RunRecord,
-) -> Result<(), DeviceError> {
-    storage.write(RECORD_KEY, &encode_record(record))
+) -> Result<(), BackgroundTaskError> {
+    Ok(storage.write(RECORD_KEY, &encode_record(record))?)
 }
 
-/// [`Storage`](crate::storage::Storage) 経由で [`RunRecord`] を読み出す薄い補助関数。
+/// [`Storage`](fandhe_device::storage::Storage) 経由で [`RunRecord`] を読み出す薄い補助関数。
 /// キーが無ければ `Ok(None)`（未実行）、読み出し・形式解釈に失敗すれば `Err`
 /// （未実行と混同しない、モジュール doc「last_run の 3 値」参照）。
 pub fn read_record(
-    storage: &dyn crate::storage::Storage,
-) -> Result<Option<RunRecord>, DeviceError> {
+    storage: &dyn fandhe_device::storage::Storage,
+) -> Result<Option<RunRecord>, BackgroundTaskError> {
     match storage.read(RECORD_KEY)? {
         None => Ok(None),
         Some(bytes) => decode_record(&bytes).map(Some),
@@ -201,9 +201,9 @@ pub fn read_record(
 /// プロセス間ロックは持たない（PR #1049 で一度入れたロックが取得失敗時の扱い等の
 /// 指摘を重ねたため撤去した経緯がある）。
 pub fn write_record_if_newer(
-    storage: &dyn crate::storage::Storage,
+    storage: &dyn fandhe_device::storage::Storage,
     record: &RunRecord,
-) -> Result<(), DeviceError> {
+) -> Result<(), BackgroundTaskError> {
     // 保存層の読み出しエラー（一時的な I/O 失敗等）は既存の新しい記録を確認できない
     // ため `Err` で返す。上書きして回復するのは、読めたが形式が壊れている場合だけ
     // （PR #1053 codex 指摘）。
@@ -219,7 +219,7 @@ pub fn write_record_if_newer(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::Storage;
+    use fandhe_device::storage::Storage;
     use std::sync::Mutex;
 
     #[test]
@@ -227,25 +227,25 @@ mod tests {
         let t = UnsupportedBackgroundTask;
         assert!(matches!(
             t.schedule(),
-            Err(DeviceError::Unsupported("background task"))
+            Err(BackgroundTaskError::Unsupported("background task"))
         ));
         assert!(matches!(
             t.cancel(),
-            Err(DeviceError::Unsupported("background task"))
+            Err(BackgroundTaskError::Unsupported("background task"))
         ));
         assert!(matches!(
             t.state(),
-            Err(DeviceError::Unsupported("background task"))
+            Err(BackgroundTaskError::Unsupported("background task"))
         ));
         assert!(matches!(
             t.last_run(),
-            Err(DeviceError::Unsupported("background task"))
+            Err(BackgroundTaskError::Unsupported("background task"))
         ));
     }
 
     #[test]
     fn record_key_passes_validate_key() {
-        assert!(crate::storage::validate_key(RECORD_KEY).is_ok());
+        assert!(fandhe_device::storage::validate_key(RECORD_KEY).is_ok());
     }
 
     #[test]
@@ -309,16 +309,16 @@ mod tests {
         assert!(decode_record(&bytes).is_err());
     }
 
-    /// インメモリ `Storage`（`fandhe-egui-proxy::device::tests::MemStorage` と同型）。
+    /// インメモリ `Storage`（`fandhe-cap-local-storage-kv` の driver のテスト `MemStorage` と同型）。
     #[derive(Default)]
     struct MemStorage(Mutex<Option<Vec<u8>>>);
 
     impl Storage for MemStorage {
-        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, DeviceError> {
+        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, fandhe_device::DeviceError> {
             Ok(self.0.lock().expect("lock は成功する").clone())
         }
 
-        fn write(&self, _key: &str, bytes: &[u8]) -> Result<(), DeviceError> {
+        fn write(&self, _key: &str, bytes: &[u8]) -> Result<(), fandhe_device::DeviceError> {
             *self.0.lock().expect("lock は成功する") = Some(bytes.to_vec());
             Ok(())
         }
@@ -327,12 +327,12 @@ mod tests {
     struct ErrOnReadStorage;
 
     impl Storage for ErrOnReadStorage {
-        fn read(&self, key: &str) -> Result<Option<Vec<u8>>, DeviceError> {
-            Err(DeviceError::InvalidKey(key.to_string()))
+        fn read(&self, key: &str) -> Result<Option<Vec<u8>>, fandhe_device::DeviceError> {
+            Err(fandhe_device::DeviceError::InvalidKey(key.to_string()))
         }
 
-        fn write(&self, key: &str, _bytes: &[u8]) -> Result<(), DeviceError> {
-            Err(DeviceError::InvalidKey(key.to_string()))
+        fn write(&self, key: &str, _bytes: &[u8]) -> Result<(), fandhe_device::DeviceError> {
+            Err(fandhe_device::DeviceError::InvalidKey(key.to_string()))
         }
     }
 
@@ -431,10 +431,10 @@ mod tests {
         // 読み出しだけ失敗し書き込みは成功する保存層（一時的な I/O 失敗）。
         struct ReadErrWriteOk(Mutex<bool>);
         impl Storage for ReadErrWriteOk {
-            fn read(&self, key: &str) -> Result<Option<Vec<u8>>, DeviceError> {
-                Err(DeviceError::InvalidKey(key.to_string()))
+            fn read(&self, key: &str) -> Result<Option<Vec<u8>>, fandhe_device::DeviceError> {
+                Err(fandhe_device::DeviceError::InvalidKey(key.to_string()))
             }
-            fn write(&self, _key: &str, _bytes: &[u8]) -> Result<(), DeviceError> {
+            fn write(&self, _key: &str, _bytes: &[u8]) -> Result<(), fandhe_device::DeviceError> {
                 *self.0.lock().expect("lock は成功する") = true;
                 Ok(())
             }

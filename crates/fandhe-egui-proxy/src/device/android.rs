@@ -14,18 +14,7 @@ use std::time::{Duration, Instant};
 use fandhe_device::file_picker::sanitize_picked_name;
 use fandhe_device::file_picker::{PickedFile, MAX_FILE_BYTES};
 use fandhe_device::tts::Tts;
-use fandhe_device::{DataDir, DeviceError};
-
-/// アプリ内部ストレージのパス（`getFilesDir()` 相当）を返す。`android-activity` の
-/// `AndroidApp::internal_data_path()` が `GameActivity.internalDataPath` を返す
-/// （Issue #750 実装計画の一次情報確認済み）ため、JNI を書かずに済む。
-/// `crate::android::android_app()` が `None`（`android_main` 未実行、通常到達しない）
-/// または OS 側の取得自体が失敗した場合は `None` を返す。
-pub fn data_dir() -> Option<DataDir> {
-    crate::android::android_app()?
-        .internal_data_path()
-        .map(DataDir)
-}
+use fandhe_device::DeviceError;
 
 /// JNI 呼び出し中のエラーを一時的にまとめる内部専用の型。`jni::errors::Error` から
 /// `From` 変換できる必要がある（`JavaVM::attach_current_thread` の型制約）が、
