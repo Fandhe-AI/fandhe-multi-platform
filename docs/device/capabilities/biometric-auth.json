@@ -39,7 +39,7 @@
       "api": "LocalAuthentication（`LAContext`、Touch ID）",
       "perm": "Info.plist は不要（`LAContext.canEvaluatePolicy` で可否判定）",
       "url": "https://developer.apple.com/documentation/localauthentication",
-      "note": "実装済み（旧#906）。`LAPolicyDeviceOwnerAuthenticationWithBiometrics` 固定でパスコードへのフォールバックは使わない。結果は認証した/キャンセル/使えない/失敗の 4 値で、`LAError` → 結果の表は Rust 側 `outcome_from_reply` に一本化（ユニットテストで固定）。認証の成否以外（生体データ・識別子）は保持しない。自動運転セッションはヘッドレス環境（`screencapture` が黒画面を返す）で Touch ID 操作・目視確認ができず未実施。Mac 実機での目視確認は人間確認待ち",
+      "note": "実装済み（旧#906）。`LAPolicyDeviceOwnerAuthenticationWithBiometrics` 固定でパスコードへのフォールバックは使わない。結果は認証した/キャンセル/使えない/失敗の 4 値で、`LAError` → 結果の表は Rust 側 `outcome_from_reply` に一本化（ユニットテストで固定）。`Cancelled` は利用者の操作（`userCancel`・`userFallback`）だけ。OS・アプリ起因の取り消し（`systemCancel`・`appCancel`）は `Err(Internal)`（Android の中断と同じ）。認証の成否以外（生体データ・識別子）は保持しない。自動運転セッションはヘッドレス環境（`screencapture` が黒画面を返す）で Touch ID 操作・目視確認ができず未実施。Mac 実機での目視確認は人間確認待ち",
       "sourceName": [
         "生体認証"
       ],
@@ -52,7 +52,7 @@
       "api": "WinRT（`Windows.Security.Credentials.UI.UserConsentVerifier`、Windows Hello）",
       "perm": "なし（`CheckAvailabilityAsync` で可否判定）",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.security.credentials.ui.userconsentverifier",
-      "note": "実装済み（旧#907）。`IUserConsentVerifierInterop::RequestVerificationForWindowAsync` でメインウィンドウ（`fandhe_platform_windows::window()` の HWND）に束縛して Windows Hello を出し、`IAsyncOperation` の完了ハンドラから pull 型 bridge へ結果を置く（旧#906 macOS と同型）。`UserConsentVerificationResult` → 4 値の表は `outcome_from_verification` に一本化（ユニットテストで固定）。未知値・`AsyncStatus` の Canceled/Error は失敗側。`CheckAvailabilityAsync` は別途呼ばない（検証結果が可否状態を返すため）。`windows-future` は lock 済み推移依存の昇格で新規パッケージ無し。認証の成否以外は保持しない。ローカルに msvc が無く x86_64-pc-windows-gnu の型検査のみで、unpackaged 実機での到達可否・Windows 実機確認は未了（到達不能と判明した場合は done を取り下げる）。**既知の制約**: `RequestVerificationForWindowAsync` は Windows Hello の統合認証 UI で、利用者が生体ではなく PIN で完了しても同じ成功（`Verified`）を返す（WinRT 側に生体限定のオプションが無いため。参照: https://learn.microsoft.com/en-us/windows/win32/api/userconsentverifierinterop/nf-userconsentverifierinterop-iuserconsentverifierinterop-requestverificationforwindowasync ）。macOS/iOS の生体限定ポリシーと異なり、Windows の「認証した」は PIN を含む端末所有者認証を意味する",
+      "note": "実装済み（旧#907）。`IUserConsentVerifierInterop::RequestVerificationForWindowAsync` でメインウィンドウ（`fandhe_platform_windows::window()` の HWND）に束縛して Windows Hello を出し、`IAsyncOperation` の完了ハンドラから pull 型 bridge へ結果を置く（旧#906 macOS と同型）。`UserConsentVerificationResult` → 4 値の表は `outcome_from_verification` に一本化（ユニットテストで固定）。`Canceled` は利用者が認証 UI を閉じた場合で `Cancelled`（OS 起因の取り消しを表す値は無い）。未知値・`AsyncStatus` の Canceled/Error は失敗側。`CheckAvailabilityAsync` は別途呼ばない（検証結果が可否状態を返すため）。`windows-future` は lock 済み推移依存の昇格で新規パッケージ無し。認証の成否以外は保持しない。ローカルに msvc が無く x86_64-pc-windows-gnu の型検査のみで、unpackaged 実機での到達可否・Windows 実機確認は未了（到達不能と判明した場合は done を取り下げる）。**既知の制約**: `RequestVerificationForWindowAsync` は Windows Hello の統合認証 UI で、利用者が生体ではなく PIN で完了しても同じ成功（`Verified`）を返す（WinRT 側に生体限定のオプションが無いため。参照: https://learn.microsoft.com/en-us/windows/win32/api/userconsentverifierinterop/nf-userconsentverifierinterop-iuserconsentverifierinterop-requestverificationforwindowasync ）。macOS/iOS の生体限定ポリシーと異なり、Windows の「認証した」は PIN を含む端末所有者認証を意味する",
       "sourceName": [
         "生体認証"
       ],

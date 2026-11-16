@@ -81,8 +81,8 @@ fn to_outcome(
 /// |---|---|---|
 /// | -2 | `userCancel` | `Cancelled` |
 /// | -3 | `userFallback`（パスコードフォールバックは不使用のため到達時もキャンセル扱い） | `Cancelled` |
-/// | -4 | `systemCancel` | `Cancelled` |
-/// | -9 | `appCancel` | `Cancelled` |
+/// | -4 | `systemCancel`（別アプリが前面に出る等、OS 起因。利用者の操作ではない） | `Err(Internal)` |
+/// | -9 | `appCancel`（認証中に `invalidate` が呼ばれた等、アプリ起因。利用者の操作ではない） | `Err(Internal)` |
 /// | -5 | `passcodeNotSet` | `Unavailable` |
 /// | -6 | `biometryNotAvailable` | `Unavailable` |
 /// | -7 | `biometryNotEnrolled` | `Unavailable` |
@@ -103,7 +103,9 @@ pub(crate) fn outcome_from_reply(
         return Err(BiometricAuthError::Internal("biometric outcome"));
     }
     match la_code {
-        -2 | -3 | -4 | -9 => Ok(DeviceAuthOutcome::Cancelled),
+        -2 | -3 => Ok(DeviceAuthOutcome::Cancelled),
+        // OS・アプリ起因の取り消し。契約（`Cancelled` は利用者の操作だけ）に合わせ、Android の中断と同じく `Internal` にする。
+        -4 | -9 => Err(BiometricAuthError::Internal("biometric interrupted")),
         -7..=-5 => Ok(DeviceAuthOutcome::Unavailable),
         -1 | -8 => Ok(DeviceAuthOutcome::Failed),
         _ => Err(BiometricAuthError::Internal("biometric outcome")),
@@ -134,7 +136,7 @@ pub(crate) fn outcome_from_reply(
 /// | code | 意味（`UserConsentVerificationResult`） | 写像 |
 /// |---|---|---|
 /// | 0 | `Verified`（生体または PIN） | `Ok(Authenticated)` |
-/// | 6 | `Canceled` | `Ok(Cancelled)` |
+/// | 6 | `Canceled`（利用者が認証 UI を閉じた。OS 起因の取り消しは列挙値に無く、`AsyncStatus::Canceled` は完了ハンドラ側で `Err(Internal)`） | `Ok(Cancelled)` |
 /// | 1 | `DeviceNotPresent` | `Ok(Unavailable)` |
 /// | 2 | `NotConfiguredForUser` | `Ok(Unavailable)` |
 /// | 3 | `DisabledByPolicy` | `Ok(Unavailable)` |
@@ -651,11 +653,27 @@ mod tests {
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     #[test]
     fn outcome_from_reply_maps_cancel_codes() {
-        for code in [-2, -3, -4, -9] {
+        // 利用者の操作（userCancel・userFallback）だけが `Cancelled`。
+        for code in [-2, -3] {
             assert!(
                 matches!(
                     outcome_from_reply(false, code),
                     Ok(DeviceAuthOutcome::Cancelled)
+                ),
+                "code={code}"
+            );
+        }
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[test]
+    fn outcome_from_reply_maps_os_initiated_cancel_to_interrupted() {
+        // systemCancel・appCancel は利用者の操作ではないので `Cancelled` に写さない。
+        for code in [-4, -9] {
+            assert!(
+                matches!(
+                    outcome_from_reply(false, code),
+                    Err(BiometricAuthError::Internal("biometric interrupted"))
                 ),
                 "code={code}"
             );
