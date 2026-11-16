@@ -2,12 +2,12 @@
 name: windows-testing-performance
 description: >
   Windows アプリ開発 (WinUI 3 / Windows App SDK) のテスト・性能・アクセシビリティ・スレッド。
-  MSTest, xUnit, NUnit, WinAppDriver, Appium, Playwright, WebView2 テスト, CI, WACK,
-  MSIX サイドローディング, version adaptive。LoggingChannel / ETW, WPT, WPA, プロファイリング,
-  GC, 起動性能, XAML 最適化, ListView/GridView 仮想化。UI Automation, AutomationProperties,
-  automation peers, キーボード操作性, ハイコントラスト, Narrator。DispatcherQueue,
-  DispatcherQueueTimer, WinRT 非同期パターン, async/await, ConfigureAwait, スレッドプール, STA/MTA,
-  デッドロック回避, バックグラウンドタスク。
+  MSTest, xUnit, NUnit, WinAppDriver, Appium, WebView2 テスト, WACK,
+  winapp ui, AI 支援テスト, リリース前テスト, MSIX サイドローディング。LoggingChannel / ETW, プロファイリング,
+  起動性能, XAML 最適化, ListView/GridView 仮想化。UI Automation, AutomationProperties,
+  ハイコントラスト, Narrator。DispatcherQueue,
+  DispatcherQueueTimer, async/await, ConfigureAwait, STA/MTA,
+  デッドロック回避。
 user-invocable: false
 ---
 
@@ -44,6 +44,8 @@ skills/windows-testing-performance/
       static-analysis-dotnet-cpp.md
       telemetry-crash-reporting.md
       version-adaptive-apps.md
+      test-before-you-ship.md
+      ai-assisted-testing.md
     performance/
       README.md
       planning-for-performance.md
@@ -123,6 +125,7 @@ skills/windows-testing-performance/
 | MSTest / xUnit / NUnit で単体テストを書きたい | testing | [references/testing/README.md](references/testing/README.md) |
 | WinAppDriver / Appium / Playwright で UI テストを自動化したい | testing | [references/testing/README.md](references/testing/README.md) |
 | WACK 認定・MSIX サイドローディング・CI でのテスト実行を設定したい | testing | [references/testing/README.md](references/testing/README.md) |
+| リリース前テストの手順（クリーン環境・a11y・WACK・UI 自動化）、AI エージェント + `winapp ui` でのテストをしたい | testing | [references/testing/README.md](references/testing/README.md) |
 | 起動時間・メモリ・GC・XAML レイアウトを最適化したい | performance | [references/performance/README.md](references/performance/README.md) |
 | WPT/WPA/Visual Studio Profiler でプロファイリングしたい | performance | [references/performance/README.md](references/performance/README.md) |
 | ListView / GridView の仮想化・データ読み込みを最適化したい | performance | [references/performance/README.md](references/performance/README.md) |
