@@ -7,7 +7,7 @@
 //! [`UnsupportedCarDisplay`]（`Unsupported`）。Android Automotive OS・複数画面・操作（タップ）・
 //! 地図やメディアなど車載向けの別カテゴリは扱わない。
 //!
-//! 実装は後続の機能 PR（`fandhe-egui-proxy` の `device/android_car_display.rs`）で入れる。
+//! 実装は `android.rs`（Android）にある。
 //! 文言はプロセス内の表示元（Java の static）へ置き、車載画面（`CarAppService` が作る `Screen`）が
 //! そこを読んで描画する。共通コアの画面は文言を添字の候補としてだけ扱い、ログ・`Debug` に出さない。
 //!
@@ -44,7 +44,7 @@
 //! 並行性（契約表 11）: `set` は画面側で高々 1 件、`state` は Poller が高々 1 件で世代により古い
 //! 完了を捨てる。どちらも OS の応答を待たずに UI を止めない。
 
-use crate::DeviceError;
+use crate::error::CarDisplayError;
 
 /// 渡せるテキストの最大文字数（`char` 数）。車載画面の 1 行表示の目安。Rust 側だけが正。
 pub const MAX_TEXT_CHARS: usize = 40;
@@ -61,37 +61,39 @@ pub enum CarDisplayState {
 /// 車載ディスプレイの契約（モジュール doc の「契約」節）。
 pub trait CarDisplay: Send + Sync {
     /// 文言を表示元へ置き、出ていれば再描画を要求する。入力は [`validate_text`] を通す。
-    fn set_text(&self, text: &str) -> Result<(), DeviceError>;
+    fn set_text(&self, text: &str) -> Result<(), CarDisplayError>;
     /// 車載画面が出ているかを返す。
-    fn state(&self) -> Result<CarDisplayState, DeviceError>;
+    fn state(&self) -> Result<CarDisplayState, CarDisplayError>;
 }
 
 /// 対象外 OS・初期化不能時のフォールバック。
 pub struct UnsupportedCarDisplay;
 
 impl CarDisplay for UnsupportedCarDisplay {
-    fn set_text(&self, _text: &str) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("car_display"))
+    fn set_text(&self, _text: &str) -> Result<(), CarDisplayError> {
+        Err(CarDisplayError::Unsupported)
     }
 
-    fn state(&self) -> Result<CarDisplayState, DeviceError> {
-        Err(DeviceError::Unsupported("car_display"))
+    fn state(&self) -> Result<CarDisplayState, CarDisplayError> {
+        Err(CarDisplayError::Unsupported)
     }
 }
 
 /// 入力が空でない 1 行かつ [`MAX_TEXT_CHARS`] 文字以内かを検証する（各 OS 実装が JNI の手前で呼ぶ）。
-pub fn validate_text(text: &str) -> Result<(), DeviceError> {
+pub fn validate_text(text: &str) -> Result<(), CarDisplayError> {
     if text.is_empty() {
-        return Err(DeviceError::InvalidInput("car_display text is empty"));
+        return Err(CarDisplayError::InvalidInput("car_display text is empty"));
     }
     if text
         .chars()
         .any(|c| c.is_control() || matches!(c, '\u{2028}' | '\u{2029}'))
     {
-        return Err(DeviceError::InvalidInput("car_display text has newline"));
+        return Err(CarDisplayError::InvalidInput(
+            "car_display text has newline",
+        ));
     }
     if text.chars().count() > MAX_TEXT_CHARS {
-        return Err(DeviceError::InvalidInput("car_display text too long"));
+        return Err(CarDisplayError::InvalidInput("car_display text too long"));
     }
     Ok(())
 }
@@ -101,7 +103,7 @@ mod tests {
     use super::*;
 
     fn invalid(s: &str) -> bool {
-        matches!(validate_text(s), Err(DeviceError::InvalidInput(_)))
+        matches!(validate_text(s), Err(CarDisplayError::InvalidInput(_)))
     }
 
     #[test]
@@ -135,11 +137,11 @@ mod tests {
     fn unsupported_is_error_for_both_methods() {
         assert!(matches!(
             UnsupportedCarDisplay.set_text("x"),
-            Err(DeviceError::Unsupported("car_display"))
+            Err(CarDisplayError::Unsupported)
         ));
         assert!(matches!(
             UnsupportedCarDisplay.state(),
-            Err(DeviceError::Unsupported("car_display"))
+            Err(CarDisplayError::Unsupported)
         ));
     }
 }

@@ -244,7 +244,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "car_display_show" => fandhe_core::screens::car_display_show::current_screen,
-    fandhe_egui_proxy::device::car_display::car_display_show_effect,
+    fandhe_cap_car_display::car_display_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ble_scan" => fandhe_core::screens::ble_scan::current_screen,

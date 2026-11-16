@@ -1,10 +1,10 @@
 //! Phase 11 の拡充ループ（親 #152、Issue #1116）型サンプル「車載ディスプレイ」の effect ドライバ。
 //! `fandhe_core::screens::car_display_show`（端末依存ゼロ）の `pending` 要求を観測して
-//! `fandhe_device::car_display::CarDisplay::set_text` を呼び、車載画面が出ているかを
+//! `crate::contract::CarDisplay::set_text` を呼び、車載画面が出ているかを
 //! [`POLL_INTERVAL`] ごとに `state` で読んで `CompletionSender` 経由で返す
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる）。
 //!
-//! 実装の選択: Android は [`super::android_car_display`]（Car App Library 実装、#1117）、
+//! 実装の選択: Android は [`crate::android`]（Car App Library 実装、#1117）、
 //! 他 OS は `UnsupportedCarDisplay` 固定（iOS の CarPlay は承認待ちで dispatch に入れない）。
 //!
 //! # 並行性
@@ -19,16 +19,16 @@
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use fandhe_core::screens::car_display_show::{
-    apply_unsupported, finish_set, finish_state, mark_dispatched, take_request, CarDisplayRequest,
-    CarDisplayShowState, StateOutcome, CANDIDATES, UNAVAILABLE_MARKER,
-};
 #[cfg(not(target_os = "android"))]
-use fandhe_device::car_display::UnsupportedCarDisplay;
-use fandhe_device::car_display::{CarDisplay, CarDisplayState};
-use fandhe_device::DeviceError;
+use crate::contract::UnsupportedCarDisplay;
+use crate::contract::{CarDisplay, CarDisplayState};
+use crate::error::CarDisplayError;
+use fandhe_core::screens::car_display_show::{
+    CANDIDATES, CarDisplayRequest, CarDisplayShowState, StateOutcome, UNAVAILABLE_MARKER,
+    apply_unsupported, finish_set, finish_state, mark_dispatched, take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 車載画面の表示状態を読み直す間隔。表示の遅れはこの間隔ぶん許容する（trait doc の守らない範囲）。
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
@@ -59,13 +59,16 @@ impl Poller {
     }
 }
 
-/// 現在の OS の実装（Android は `android_car_display`、他は `Unsupported` 固定）。
-fn implementation() -> &'static Arc<dyn CarDisplay> {
+/// 現在のプラットフォームに応じた `CarDisplay` 実装を返す（プロセスで 1 個）。
+///
+/// Android は Car App Library 実装、他 OS は `Unsupported` 固定。画面の状態型に依存しない入口で、
+/// フレームワークの外のアプリもこれで OS 実装を取得できる（`docs/architecture/consumer-app-structure.md` §8.2）。
+pub fn platform_car_display() -> &'static Arc<dyn CarDisplay> {
     static INSTANCE: OnceLock<Arc<dyn CarDisplay>> = OnceLock::new();
     INSTANCE.get_or_init(|| {
         #[cfg(target_os = "android")]
         {
-            super::android_car_display::implementation()
+            crate::android::implementation()
         }
         #[cfg(not(target_os = "android"))]
         {
@@ -76,9 +79,9 @@ fn implementation() -> &'static Arc<dyn CarDisplay> {
 
 /// `Unsupported` は画面側が判定する固定文言へ、それ以外は `Display` のみ転送する
 /// （入力値・内部構造を漏らさない、security.md A09）。
-fn to_message(e: DeviceError) -> String {
+fn to_message(e: CarDisplayError) -> String {
     match e {
-        DeviceError::Unsupported(_) => UNAVAILABLE_MARKER.to_string(),
+        CarDisplayError::Unsupported => UNAVAILABLE_MARKER.to_string(),
         other => other.to_string(),
     }
 }
@@ -103,7 +106,7 @@ fn drive_set(
         }
     };
     let Some(text) = CANDIDATES.get(index) else {
-        finish(Err(to_message(DeviceError::InvalidInput(
+        finish(Err(to_message(CarDisplayError::InvalidInput(
             "car_display index",
         ))));
         return;
@@ -115,7 +118,7 @@ fn drive_set(
         .spawn(move || worker_finish(display.set_text(text).map_err(to_message)));
     if spawned.is_err() {
         // 起動できなければ失敗として確定する（成功を装わない）。
-        finish(Err(to_message(DeviceError::Internal("car_display"))));
+        finish(Err(to_message(CarDisplayError::Internal)));
     }
 }
 
@@ -160,12 +163,7 @@ fn drive_state(
             move || finish_read(poller, &tx, generation, display.state())
         });
     if spawned.is_err() {
-        finish_read(
-            poller,
-            &tx,
-            generation,
-            Err(DeviceError::Internal("car_display")),
-        );
+        finish_read(poller, &tx, generation, Err(CarDisplayError::Internal));
     }
 }
 
@@ -174,7 +172,7 @@ fn finish_read(
     poller: &Poller,
     sender: &CompletionSender<CarDisplayShowState>,
     generation: u64,
-    result: Result<CarDisplayState, DeviceError>,
+    result: Result<CarDisplayState, CarDisplayError>,
 ) {
     {
         let mut inner = match poller.inner.lock() {
@@ -188,7 +186,7 @@ fn finish_read(
         Ok(CarDisplayState::Showing) => StateOutcome::Showing,
         Ok(CarDisplayState::NotShowing) => StateOutcome::NotShowing,
         // 非対応は結果が変わらないため 1 回だけ送る。再描画は予約しない。
-        Err(DeviceError::Unsupported(_)) => {
+        Err(CarDisplayError::Unsupported) => {
             let _ = sender.send(Box::new(apply_unsupported));
             return;
         }
@@ -207,7 +205,7 @@ pub fn car_display_show_effect(
     sender: &CompletionSender<CarDisplayShowState>,
 ) {
     static POLLER: Poller = Poller::new();
-    let display = implementation();
+    let display = platform_car_display();
     drive_set(state, sender, display);
     drive_state(state, sender, display, &POLLER, Instant::now());
 }
@@ -215,18 +213,25 @@ pub fn car_display_show_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::Completion;
     use fandhe_core::screens::car_display_show::{
-        current_screen, display_state_text, shown_text, status_text, ACCEPTED_STATUS,
+        ACCEPTED_STATUS, current_screen, display_state_text, shown_text, status_text,
     };
+    use fandhe_runtime::Completion;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::mpsc::{channel, Receiver, Sender};
+    use std::sync::mpsc::{Receiver, Sender, channel};
 
     type St = CarDisplayShowState;
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
     fn sender_with_channel() -> (CompletionSender<St>, Receiver<Completion<St>>) {
         let (tx, rx) = channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     fn drain_wait(rx: &Receiver<Completion<St>>, state: &mut St, want: usize) -> usize {
@@ -260,14 +265,14 @@ mod tests {
     struct Scripted {
         sets: Arc<AtomicUsize>,
         reads: Arc<AtomicUsize>,
-        states: Mutex<Vec<Result<CarDisplayState, DeviceError>>>,
+        states: Mutex<Vec<Result<CarDisplayState, CarDisplayError>>>,
     }
     impl CarDisplay for Scripted {
-        fn set_text(&self, _: &str) -> Result<(), DeviceError> {
+        fn set_text(&self, _: &str) -> Result<(), CarDisplayError> {
             self.sets.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
-        fn state(&self) -> Result<CarDisplayState, DeviceError> {
+        fn state(&self) -> Result<CarDisplayState, CarDisplayError> {
             self.reads.fetch_add(1, Ordering::SeqCst);
             let mut v = self.states.lock().unwrap();
             if v.len() > 1 {
@@ -279,16 +284,16 @@ mod tests {
     }
 
     fn clone_result(
-        r: &Result<CarDisplayState, DeviceError>,
-    ) -> Result<CarDisplayState, DeviceError> {
+        r: &Result<CarDisplayState, CarDisplayError>,
+    ) -> Result<CarDisplayState, CarDisplayError> {
         match r {
             Ok(s) => Ok(*s),
-            Err(_) => Err(DeviceError::Internal("car_display")),
+            Err(_) => Err(CarDisplayError::Internal),
         }
     }
 
     fn scripted(
-        states: Vec<Result<CarDisplayState, DeviceError>>,
+        states: Vec<Result<CarDisplayState, CarDisplayError>>,
     ) -> (Arc<dyn CarDisplay>, Arc<AtomicUsize>, Arc<AtomicUsize>) {
         let sets = Arc::new(AtomicUsize::new(0));
         let reads = Arc::new(AtomicUsize::new(0));
@@ -381,7 +386,7 @@ mod tests {
     #[test]
     fn internal_error_is_not_not_showing_and_recovers() {
         let (display, _, _) = scripted(vec![
-            Err(DeviceError::Internal("car_display")),
+            Err(CarDisplayError::Internal),
             Ok(CarDisplayState::Showing),
         ]);
         let (tx, rx) = sender_with_channel();
@@ -430,10 +435,10 @@ mod tests {
         gate: Mutex<Receiver<()>>,
     }
     impl CarDisplay for Blocking {
-        fn set_text(&self, _: &str) -> Result<(), DeviceError> {
+        fn set_text(&self, _: &str) -> Result<(), CarDisplayError> {
             Ok(())
         }
-        fn state(&self) -> Result<CarDisplayState, DeviceError> {
+        fn state(&self) -> Result<CarDisplayState, CarDisplayError> {
             self.reads.fetch_add(1, Ordering::SeqCst);
             let _ = self
                 .gate

@@ -19,9 +19,9 @@ import androidx.lifecycle.LifecycleOwner;
 // 行の本文だけ共通コアの文言に差し替える（テンプレート数の上限に数えられない、公式）。
 // 文言と「現在出ている Screen」は MainActivity ではなくプロセス内 static に置く。Activity が
 // 作り直されても失われず、MainActivity が無くても（ホストがこのサービスを起こしても）動く。
-// Rust の `android_car_display.rs` が MainActivity 経由で `setText` / `isShowing` を呼ぶ。
+// Rust の `android.rs` が `with_activity_class` で `setText` / `isShowing`（static）を呼ぶ。
 // 文言はログ・例外に出さない。切り離し時はこのクラスごと削除する。
-final class CarDisplayScreen extends Screen {
+public final class CarDisplayScreen extends Screen {
     private static final Object LOCK = new Object();
     // null は未設定。
     private static String text;
@@ -63,7 +63,7 @@ final class CarDisplayScreen extends Screen {
     }
 
     // 文言を置き、車載画面が出ていれば main で再描画を頼む。出ていなくても成功（受け付けまで）。
-    static void setText(String t) {
+    public static void setText(String t) {
         synchronized (LOCK) {
             text = t;
         }
@@ -83,7 +83,7 @@ final class CarDisplayScreen extends Screen {
         });
     }
 
-    static boolean isShowing() {
+    public static boolean isShowing() {
         synchronized (LOCK) {
             return showing != null;
         }

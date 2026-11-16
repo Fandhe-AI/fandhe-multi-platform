@@ -667,8 +667,7 @@
         </service>
         <!-- Issue #1117: 車載ディスプレイ（Android Auto）。ホストが bind するため exported="true" が必要で、
              接続元は CarDisplayService.createHostValidator で絞る。uses-permission は不要。
-             切り離し時にこの service・meta-data 2 つ・res/xml/automotive_app_desc.xml・
-             strings.xml の car_display_*・Java 2 ファイルを削除する。 -->
+             切り離し時にこの service・meta-data 2 つと `crates/fandhe-cap-car-display/` を削除する。 -->
         <service
             android:name="com.fandhe.platform.CarDisplayService"
             android:exported="true">

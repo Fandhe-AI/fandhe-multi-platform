@@ -13,8 +13,7 @@ import androidx.car.app.validation.HostValidator;
 // `<service>` で宣言され、Android Auto のホストが bind する。exported のため接続元は
 // `createHostValidator` で絞る（debuggable だけ全ホストを許し、それ以外は同梱の許可リスト）。
 // 文言の受け渡しは MainActivity とは独立したプロセス内 static（`CarDisplayScreen`）で行う。
-// 切り離し時は Manifest の service・meta-data 2 つ・res/xml/automotive_app_desc.xml・
-// strings.xml の car_display_*・このクラスと CarDisplayScreen・MainActivity の受け口 2 本を削除する。
+// 切り離しは機能 crate（`crates/fandhe-cap-car-display`）ごと削除する。
 public final class CarDisplayService extends CarAppService {
     @NonNull
     @Override

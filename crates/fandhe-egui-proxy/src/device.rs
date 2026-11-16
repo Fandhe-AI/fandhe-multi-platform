@@ -39,11 +39,6 @@ pub mod android_background_task;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_background_upload;
-/// Issue #1117: Android 向け車載ディスプレイ（Car App Library の Service/Screen を JNI 経由で操作する）。
-/// `device/car_display.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_car_display;
 /// Issue #1279: Android 向けディープリンク（App Links）受信（https の `ACTION_VIEW` を JNI で受ける）。
 /// `device/deep_link.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -237,9 +232,6 @@ pub mod background_task;
 pub mod background_upload;
 /// Phase 11（端末機能の拡充ループ、親 #116、Issue #557）: 画像内のバーコード・QR 読み取りの effect ドライバ。
 pub mod barcode_scan;
-/// Phase 11 の拡充ループ（親 #152、Issue #1116）: 車載ディスプレイの effect ドライバ。
-/// Android は Car App Library 実装（#1117）、他 OS は `UnsupportedCarDisplay` 固定。
-pub mod car_display;
 /// Phase 11 の拡充ループ（親 #153、Issue #1278）: ディープリンク受信の effect ドライバ
 /// （Android 分岐はスタブ、他 OS は `UnsupportedDeepLink` 固定）。
 pub mod deep_link;

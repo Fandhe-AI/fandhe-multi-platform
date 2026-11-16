@@ -33,8 +33,6 @@ pub mod barcode_scan;
 /// `fandhe-web-dom` が共有する純関数で、機能の契約は `fandhe-cap-camera-preview-stream` が持つ（Issue #812 / #1329、
 /// consumer-app-structure.md §8）。
 pub mod camera_preview_stream;
-/// Phase 11（端末機能の拡充ループ、親 #152、Issue #1116）: 車載ディスプレイの 1 行テキスト。
-pub mod car_display;
 /// Phase 11（端末機能の拡充ループ、親 #1154、Issue #1404）: 方位（コンパス）。
 pub mod compass;
 /// Phase 11（端末機能の拡充ループ、親 #153、Issue #1278）: ディープリンク（Universal Links / App Links）の受信。

@@ -36,6 +36,7 @@ device = [
   "dep:fandhe-cap-camera-capture",
   "dep:fandhe-cap-camera-preview-stream",
   "dep:fandhe-cap-capture-protection",
+  "dep:fandhe-cap-car-display",
   "dep:fandhe-cap-clipboard",
   "dep:fandhe-cap-color-picker",
   "dep:fandhe-cap-companion-device",
@@ -205,6 +206,7 @@ fandhe-cap-call-ui = { path = "../fandhe-cap-call-ui", optional = true }
 fandhe-cap-camera-capture = { path = "../fandhe-cap-camera-capture", optional = true }
 fandhe-cap-camera-preview-stream = { path = "../fandhe-cap-camera-preview-stream", optional = true }
 fandhe-cap-capture-protection = { path = "../fandhe-cap-capture-protection", optional = true }
+fandhe-cap-car-display = { path = "../fandhe-cap-car-display", optional = true }
 fandhe-cap-clipboard = { path = "../fandhe-cap-clipboard", optional = true }
 fandhe-cap-color-picker = { path = "../fandhe-cap-color-picker", optional = true }
 fandhe-cap-companion-device = { path = "../fandhe-cap-companion-device", optional = true }
