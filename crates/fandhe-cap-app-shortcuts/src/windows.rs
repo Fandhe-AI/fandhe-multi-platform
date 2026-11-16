@@ -64,7 +64,6 @@ mod win {
     impl AppShortcuts for WindowsAppShortcuts {
         #[allow(unsafe_code)]
         fn install(&self, spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError> {
-            spec.validate()?;
             // COM 初期化はこのガードが生存する間だけ有効（COM オブジェクトより先に宣言し最後に解放）。
             let _com = ComInit::new()
                 .map_err(|_| AppShortcutsError::Internal("app_shortcuts com init"))?;

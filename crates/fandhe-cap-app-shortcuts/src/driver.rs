@@ -27,7 +27,8 @@ use std::time::Duration;
     test
 ))]
 use crate::contract::UnsupportedAppShortcuts;
-use crate::contract::{AppShortcuts, InstallCell, InstallOutcome, ShortcutSpec};
+use crate::contract::{AppShortcuts, InstallCell, InstallOutcome, Registration, ShortcutSpec};
+use crate::error::AppShortcutsError;
 use fandhe_core::screens::url_scheme_show::{
     SHORTCUT_TITLE, SHORTCUT_URL, ShortcutStatus, UrlSchemeShowState, apply_shortcut_status,
 };
@@ -51,7 +52,24 @@ static CELL: InstallCell = InstallCell::new();
 
 /// 現在の OS の実装（macOS は Dock メニュー、iOS は Info.plist の宣言、Android は動的ショートカット、
 /// Windows はジャンプリスト、他は `Unsupported`）。
+///
+/// 返す実装は [`ShortcutSpec::validate`] を通してから OS 実装へ委譲する（入口はここ 1 か所。非対応 OS でも検査が先）。
 pub fn platform_app_shortcuts() -> &'static dyn AppShortcuts {
+    static VALIDATED: std::sync::OnceLock<Validated> = std::sync::OnceLock::new();
+    VALIDATED.get_or_init(|| Validated(os_implementation()))
+}
+
+/// 検査してから委譲する薄い wrapper。
+struct Validated(&'static dyn AppShortcuts);
+
+impl AppShortcuts for Validated {
+    fn install(&self, spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError> {
+        spec.validate()?;
+        self.0.install(spec)
+    }
+}
+
+fn os_implementation() -> &'static dyn AppShortcuts {
     #[cfg(target_os = "macos")]
     {
         crate::macos::implementation()
@@ -287,6 +305,18 @@ mod tests {
         let manifest = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
         assert!(manifest.contains(&format!("\"{SHORTCUT_URL}\"")));
         assert!(manifest.contains(&format!("\"{SHORTCUT_TITLE}\"")));
+    }
+
+    #[test]
+    fn entrance_validates_before_delegating_even_when_unsupported() {
+        let bad = ShortcutSpec {
+            title: "t",
+            url: "x://y\"z",
+        };
+        assert!(matches!(
+            platform_app_shortcuts().install(&bad),
+            Err(AppShortcutsError::InvalidInput(_))
+        ));
     }
 
     #[test]

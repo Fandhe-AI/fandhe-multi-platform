@@ -5,7 +5,7 @@
 //! 登録は Info.plist の `UIApplicationShortcutItems`（静的）だけで、OS がインストール時に行う。
 //! 受信は scene delegate（`ios/fandhe_ios_scene.m`）→ 通知 → `fandhe-cap-url-scheme` の `UrlInbox`
 //! で、新しい受け口は持たない。表示されたかはアプリから確かめられないため `Declared` を返し、
-//! `Installed` は返さない（嘘の成功を避ける）。`spec` は入力検査だけに使い、OS へは渡さない
+//! `Installed` は返さない（嘘の成功を避ける）。`spec` は使わず（検査は入口 `platform_app_shortcuts` の wrapper が済ませる）、OS へも渡さない
 //! （実際に出る項目は Info.plist の宣言の値で、`spec` との一致は呼び出し側が保つ）。
 //! 守らない範囲: 他アプリが同じ URL を送った場合との区別、表示数の上限（OS 次第）、
 //! 項目の動的な書き換え。
@@ -16,8 +16,7 @@ use crate::error::AppShortcutsError;
 struct IosAppShortcuts;
 
 impl AppShortcuts for IosAppShortcuts {
-    fn install(&self, spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError> {
-        spec.validate()?;
+    fn install(&self, _spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError> {
         Ok(Registration::Declared)
     }
 }

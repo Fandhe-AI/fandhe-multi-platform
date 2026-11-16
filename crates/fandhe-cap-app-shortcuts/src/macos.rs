@@ -56,7 +56,6 @@ struct MacosAppShortcuts;
 #[cfg(target_os = "macos")]
 impl AppShortcuts for MacosAppShortcuts {
     fn install(&self, spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError> {
-        spec.validate()?;
         // SAFETY: `spec` の 2 本の `&str` は本呼び出しの間生きており、`.m` は同期でコピーするだけ。
         #[allow(unsafe_code)]
         let status = unsafe {

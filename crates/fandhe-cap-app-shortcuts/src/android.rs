@@ -92,7 +92,6 @@ impl AndroidAppShortcuts {
 #[cfg(target_os = "android")]
 impl AppShortcuts for AndroidAppShortcuts {
     fn install(&self, spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError> {
-        spec.validate()?;
         match self.call_install(spec) {
             Some(code) => registration_from_code(code),
             None => Err(AppShortcutsError::Internal("app_shortcuts install")),

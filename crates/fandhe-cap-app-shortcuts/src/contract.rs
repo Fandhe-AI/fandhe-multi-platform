@@ -56,7 +56,7 @@ pub const MAX_URL_BYTES: usize = 2048;
 
 impl ShortcutSpec<'_> {
     /// 入力検査（全 OS 実装が `install` の先頭で通す、唯一の場所）。外部アプリの値が起動引数（Windows のタスク）・
-    /// JNI・C ABI へ渡るため、空・長すぎる値・制御文字、URL の `"` と空白・scheme の欠落を `InvalidInput` で拒否する。
+    /// JNI・C ABI へ渡るため、空・長すぎる値・制御文字、URL の `"`・`\`（`CommandLineToArgvW` の規則で閉じ引用符を壊す）・空白・scheme の欠落を `InvalidInput` で拒否する。
     pub fn validate(&self) -> Result<(), AppShortcutsError> {
         let bad = AppShortcutsError::InvalidInput("app_shortcuts spec");
         if self.title.is_empty()
@@ -76,7 +76,7 @@ impl ShortcutSpec<'_> {
             || self
                 .url
                 .chars()
-                .any(|c| c.is_control() || c.is_whitespace() || c == '"')
+                .any(|c| c.is_control() || c.is_whitespace() || c == '"' || c == '\\')
         {
             return Err(bad);
         }
@@ -87,10 +87,11 @@ impl ShortcutSpec<'_> {
 /// ショートカットを OS に登録する抽象。各 OS 実装は本 crate が持つ。
 pub trait AppShortcuts: Send + Sync {
     /// ショートカット 1 件を登録する。契約はモジュール doc 参照。`spec` は [`ShortcutSpec::validate`] を通らなければ
-    /// `InvalidInput`（OS は呼ばない）。
+    /// `InvalidInput`（OS は呼ばない）。検査は入口 [`platform_app_shortcuts`](crate::platform_app_shortcuts) が返す実装が先に行い、
+    /// 非対応 OS でも検査が `Unsupported` より先（不正な値は `InvalidInput`）。各 OS 実装は検査しない。
     ///
     /// iOS は実際に出る項目が Info.plist の静的宣言（`Cargo.toml` の `info-plist`）の値で、`spec` は OS へ渡さず
-    /// 検査だけに使い、宣言との一致も照合しない（`Registration::Declared` を返す）。
+    /// 使わず、宣言との一致も照合しない（`Registration::Declared` を返す）。
     fn install(&self, spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError>;
 }
 
@@ -252,6 +253,7 @@ mod tests {
             ("t", "1x://y"),
             ("t", "x://y\" --evil"),
             ("t", "x://y z"),
+            ("t", "x://y\\"),
             ("t", "x://y\u{7}"),
         ] {
             assert!(!ok(t, u), "{t:?} {u:?}");
