@@ -595,6 +595,10 @@
             android:authorities="${applicationId}.fandhe.wifi-info"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.LanDiscoveryLifecycle"
+            android:authorities="${applicationId}.fandhe.lan-discovery"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.ActivityRecognitionLifecycle"
             android:authorities="${applicationId}.fandhe.activity-recognition"
             android:exported="false" />

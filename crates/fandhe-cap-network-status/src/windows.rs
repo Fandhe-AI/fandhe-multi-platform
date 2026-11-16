@@ -1,5 +1,5 @@
 //! Windows 向けネットワーク接続状態実装（Issue #1282、親 #1130）。
-//! `device/network_status.rs::implementation` の Windows 経路から呼ばれ、WinRT
+//! `driver.rs::platform_network_status` の Windows 経路から呼ばれ、WinRT
 //! `Windows.Networking.Connectivity.NetworkInformation` を UI スレッドで同期に読む
 //! （1 秒に 1 回。変化通知 `NetworkStatusChanged` は購読しない）。
 //!
@@ -22,11 +22,11 @@
 //! 既知の天井: unpackaged exe での動作は実機未確認（#1273）。ローカルに MSVC が無く
 //! 型検査は `x86_64-pc-windows-gnu` のみ。
 
-use fandhe_device::network_status::ConnectionKind;
+use crate::contract::ConnectionKind;
 #[cfg(target_os = "windows")]
-use fandhe_device::network_status::{NetworkSnapshot, NetworkStatus};
+use crate::contract::{NetworkSnapshot, NetworkStatus};
 #[cfg(target_os = "windows")]
-use fandhe_device::DeviceError;
+use crate::error::NetworkStatusError;
 
 /// `GetInternetConnectionProfile` の失敗が「プロファイル無し（null）」か。
 fn profile_absent(code: i32) -> bool {
@@ -75,7 +75,7 @@ pub(crate) struct WindowsNetworkStatus;
 
 #[cfg(target_os = "windows")]
 impl NetworkStatus for WindowsNetworkStatus {
-    fn read(&self) -> Result<NetworkSnapshot, DeviceError> {
+    fn read(&self) -> Result<NetworkSnapshot, NetworkStatusError> {
         use windows::Networking::Connectivity::NetworkInformation;
 
         let profile = match NetworkInformation::GetInternetConnectionProfile() {
@@ -85,7 +85,7 @@ impl NetworkStatus for WindowsNetworkStatus {
                 // 接続レベルを読めなかったプロファイルがあれば、経路が無いとは言えないので
                 // 「接続なし」と断定せず失敗にする（取得失敗を接続なしへ畳まない）。
                 let list = NetworkInformation::GetConnectionProfiles()
-                    .map_err(|_| DeviceError::Internal("network_status profiles"))?;
+                    .map_err(|_| NetworkStatusError::Internal("network_status profiles"))?;
                 let mut level_failed = false;
                 let mut found = None;
                 for p in list {
@@ -101,16 +101,16 @@ impl NetworkStatus for WindowsNetworkStatus {
                 match found {
                     Some(p) => p,
                     None if level_failed => {
-                        return Err(DeviceError::Internal("network_status level"))
+                        return Err(NetworkStatusError::Internal("network_status level"));
                     }
                     None => return Ok(NetworkSnapshot::Offline),
                 }
             }
-            Err(_) => return Err(DeviceError::Internal("network_status profile")),
+            Err(_) => return Err(NetworkStatusError::Internal("network_status profile")),
         };
         let level = profile
             .GetNetworkConnectivityLevel()
-            .map_err(|_| DeviceError::Internal("network_status level"))?;
+            .map_err(|_| NetworkStatusError::Internal("network_status level"))?;
         if !connection_from_level(level.0) {
             return Ok(NetworkSnapshot::Offline);
         }

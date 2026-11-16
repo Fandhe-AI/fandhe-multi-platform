@@ -1,6 +1,6 @@
 //! 地図表示（Phase 11 の拡充ループ、親 #85、Issue #273）の契約。
-//! 決まった地点の静止画を 1 枚取得して `crate::Image`（RGBA）で返す。ライブ地図・ズーム・パン・
-//! 注釈は扱わない。`fandhe-egui-proxy` の effect ドライバ（`device/map_view.rs`）が
+//! 決まった地点の静止画を 1 枚取得して `fandhe_device::Image`（RGBA）で返す。ライブ地図・ズーム・パン・
+//! 注釈は扱わない。本 crate の effect ドライバ（`driver.rs`）が
 //! [`MapSnapshotter`] を呼び、共通コアの画面（`fandhe_core::screens::map_view_show`）へ結果を渡す。
 //!
 //! # 結果の種類（契約表 10）
@@ -18,7 +18,8 @@
 //! 守らない: タイルの内容と鮮度、Apple 側のレート制限、複数プロセス、背景にいる間の取得
 //! （期限切れの失敗になる）、オンラインなのに空タイルがエラー無しで返る場合（既知の天井）。
 
-use crate::{DeviceError, Image};
+use crate::error::MapViewError;
+use fandhe_device::Image;
 
 /// 取得範囲の下限（メートル）。
 pub const MIN_SPAN_M: f64 = 100.0;
@@ -36,7 +37,7 @@ pub struct MapRegion {
 impl MapRegion {
     /// 有限値・緯度 -90..=90・経度 -180..=180・範囲 100 m..=1,000 km を検証する。
     /// 外れたら `InvalidInput("map_view region")`（変換・丸めの前に検証する）。
-    pub fn new(center_lat: f64, center_lon: f64, span_m: f64) -> Result<Self, DeviceError> {
+    pub fn new(center_lat: f64, center_lon: f64, span_m: f64) -> Result<Self, MapViewError> {
         let ok = center_lat.is_finite()
             && center_lon.is_finite()
             && span_m.is_finite()
@@ -50,7 +51,7 @@ impl MapRegion {
                 span_m,
             })
         } else {
-            Err(DeviceError::InvalidInput("map_view region"))
+            Err(MapViewError::InvalidInput("map_view region"))
         }
     }
 
@@ -77,15 +78,15 @@ pub fn build_snapshot(
     width: u32,
     height: u32,
     rgba: Vec<u8>,
-) -> Result<Image, DeviceError> {
+) -> Result<Image, MapViewError> {
     if width == 0 || height == 0 || (width, height) != requested {
-        return Err(DeviceError::InvalidImageSize(width, height));
+        return Err(MapViewError::InvalidImageSize(width, height));
     }
     let expected = (width as usize)
         .checked_mul(height as usize)
         .and_then(|n| n.checked_mul(4));
     if expected != Some(rgba.len()) {
-        return Err(DeviceError::InvalidInput("map_view pixels"));
+        return Err(MapViewError::InvalidInput("map_view pixels"));
     }
     Ok(Image {
         width,
@@ -102,7 +103,7 @@ pub trait MapSnapshotter: Send + Sync {
         request_id: u64,
         region: MapRegion,
         size_px: (u32, u32),
-    ) -> Result<(), DeviceError>;
+    ) -> Result<(), MapViewError>;
 
     /// 進行中の要求を取り消す。`request_id` が進行中のものと違えば何もしない。
     fn cancel(&self, request_id: u64);
@@ -113,8 +114,8 @@ pub trait MapSnapshotter: Send + Sync {
 pub struct UnsupportedMapSnapshotter;
 
 impl MapSnapshotter for UnsupportedMapSnapshotter {
-    fn start(&self, _: u64, _: MapRegion, _: (u32, u32)) -> Result<(), DeviceError> {
-        Err(DeviceError::Unsupported("map_view"))
+    fn start(&self, _: u64, _: MapRegion, _: (u32, u32)) -> Result<(), MapViewError> {
+        Err(MapViewError::Unsupported)
     }
 
     fn cancel(&self, _: u64) {}
@@ -139,7 +140,7 @@ mod tests {
         ] {
             assert!(matches!(
                 MapRegion::new(a, b, c),
-                Err(DeviceError::InvalidInput(_))
+                Err(MapViewError::InvalidInput(_))
             ));
         }
     }
@@ -158,15 +159,15 @@ mod tests {
         assert!(build_snapshot((2, 2), 2, 2, px(2, 2)).is_ok());
         assert!(matches!(
             build_snapshot((0, 2), 0, 2, vec![]),
-            Err(DeviceError::InvalidImageSize(0, 2))
+            Err(MapViewError::InvalidImageSize(0, 2))
         ));
         assert!(matches!(
             build_snapshot((2, 2), 3, 2, px(3, 2)),
-            Err(DeviceError::InvalidImageSize(3, 2))
+            Err(MapViewError::InvalidImageSize(3, 2))
         ));
         assert!(matches!(
             build_snapshot((2, 2), 2, 2, vec![0; 3]),
-            Err(DeviceError::InvalidInput(_))
+            Err(MapViewError::InvalidInput(_))
         ));
     }
 
@@ -175,7 +176,7 @@ mod tests {
         let r = MapRegion::new(35.0, 139.0, 500.0).unwrap();
         assert!(matches!(
             UnsupportedMapSnapshotter.start(1, r, (4, 4)),
-            Err(DeviceError::Unsupported("map_view"))
+            Err(MapViewError::Unsupported)
         ));
     }
 }

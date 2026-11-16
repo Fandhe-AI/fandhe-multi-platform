@@ -75,9 +75,6 @@ fn build() {
     // `apple/fandhe_apple_photo_library.m`（Issue #1254 macOS + #1255 iOS）も macOS 分岐と共用する。
     compile_apple_photo_library();
 
-    // `apple/fandhe_apple_map_view.m`（Issue #273 macOS + #274 iOS）も macOS 分岐と共用する。
-    compile_apple_map_view();
-
     // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）も macOS 分岐と
     // 共用する。
     compile_apple_mic_record();
@@ -86,9 +83,6 @@ fn build() {
     // macOS 分岐と共用する。
     compile_apple_speech_recognition();
 
-    // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
-    // （b-ios は build.rs を触らずに済む）。Network をリンクする。
-    compile_apple_lan_discovery();
     // `apple/fandhe_apple_local_peer.m`（Issue #511 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。MultipeerConnectivity をリンクする。
     compile_apple_local_peer();
@@ -123,8 +117,6 @@ fn build() {
     compile_ios_pen_stylus();
     // `ios/fandhe_ios_web_auth_session.m`（Issue #532）。iOS 分岐のみ。
     compile_ios_web_auth_session();
-    // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
-    compile_apple_network_status();
     // `apple/fandhe_apple_picture_in_picture.m`（Issue #365）。macOS 分岐と共用する。AVKit を使う。
     compile_apple_picture_in_picture();
     // `apple/fandhe_apple_background_download.m`（Issue #390）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
@@ -160,15 +152,6 @@ fn compile_apple_photo_library() {
     compile_objc(
         "apple/fandhe_apple_photo_library.m",
         &["Foundation", "Photos"],
-    );
-}
-
-/// `apple/fandhe_apple_map_view.m` を `cc` でコンパイルし MapKit / CoreGraphics をリンクする
-/// （Issue #273 macOS・#274 iOS。両分岐から呼ぶ）。
-fn compile_apple_map_view() {
-    compile_objc(
-        "apple/fandhe_apple_map_view.m",
-        &[ui_framework(), "CoreGraphics", "Foundation", "MapKit"],
     );
 }
 
@@ -217,23 +200,6 @@ fn compile_apple_image_recognition() {
     compile_objc(
         "apple/fandhe_apple_image_recognition.m",
         &["Foundation", "Vision"],
-    );
-}
-
-/// （Issue #1282 macOS、#1283 iOS 共用）。
-fn compile_apple_network_status() {
-    compile_objc(
-        "apple/fandhe_apple_network_status.m",
-        &["Foundation", "Network"],
-    );
-}
-
-/// `apple/fandhe_apple_lan_discovery.m` を `cc` でコンパイルし Network をリンクする
-/// （Issue #486 macOS・親 #109 の b-ios で iOS も共用）。dns_sd は libSystem に含まれる。
-fn compile_apple_lan_discovery() {
-    compile_objc(
-        "apple/fandhe_apple_lan_discovery.m",
-        &["Foundation", "Network"],
     );
 }
 
@@ -455,7 +421,6 @@ fn build_macos() {
 
     compile_apple_location();
     compile_apple_photo_library();
-    compile_apple_map_view();
 
     // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）は iOS 分岐と
     // 共用する。
@@ -465,9 +430,6 @@ fn build_macos() {
     // iOS 分岐と共用する。
     compile_apple_speech_recognition();
 
-    // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
-    // （b-ios は build.rs を触らずに済む）。Network をリンクする。
-    compile_apple_lan_discovery();
     // `apple/fandhe_apple_local_peer.m`（Issue #511 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。MultipeerConnectivity をリンクする。
     compile_apple_local_peer();
@@ -477,8 +439,6 @@ fn build_macos() {
     compile_apple_barcode_scan();
     // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
     compile_apple_spotlight_index();
-    // `apple/fandhe_apple_network_status.m`（Issue #1282）。iOS 分岐と共用する。
-    compile_apple_network_status();
     // `macos/fandhe_macos_background_task.m`（Issue #1043）は macOS 専用（doc 参照）。
     compile_macos_background_task();
     // `macos/fandhe_macos_url_scheme.m`（Issue #1215）も macOS 専用。

@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #1130、Issue #1282）「ネットワーク接続状態」の effect ドライバ。
-//! `fandhe_device::network_status::NetworkStatus` を一定間隔で読み、結果を
+//! `crate::contract::NetworkStatus` を一定間隔で読み、結果を
 //! `fandhe_core::screens::network_status_show`（端末依存ゼロ）へ注入する
 //! （`registry.rs` の `effect` 区画から毎フレーム同期に呼ばれる）。
 //!
@@ -7,52 +7,51 @@
 //! 読まず残り時間で再描画を予約する。読んだら次回の再描画を必ず予約し（入力が無いと egui が
 //! 描画せずポーリングが止まる、契約表 4）、状態が変わらなければ送信を省略する。
 //!
-//! dispatch（[`implementation`]）は全対象 OS の最終形。iOS は
+//! dispatch（[`platform_network_status`]）は全対象 OS の最終形。iOS は
 //! `ios_network_status.rs`（Apple 共用実装）を返し、Android は `android_network_status.rs`
 //! （`ConnectivityManager`、#1284）を返す。Web は `fandhe-web-dom` 側（#1285）。
 
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use fandhe_core::screens::network_status_show::{
-    apply_read, KindView, NetworkStatusShowState, ReadFailure, Reading,
-};
 #[cfg(not(any(
     target_os = "windows",
     target_os = "macos",
     target_os = "ios",
     target_os = "android"
 )))]
-use fandhe_device::network_status::UnsupportedNetworkStatus;
-use fandhe_device::network_status::{
-    ConnectionKind, NetworkSnapshot, NetworkStatus, READ_INTERVAL,
+use crate::contract::UnsupportedNetworkStatus;
+use crate::contract::{ConnectionKind, NetworkSnapshot, NetworkStatus, READ_INTERVAL};
+use crate::error::NetworkStatusError;
+use fandhe_core::screens::network_status_show::{
+    KindView, NetworkStatusShowState, ReadFailure, Reading, apply_read,
 };
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた実装を返す（プロセスで 1 個。macOS の monitor を
-/// 二重に作らないため `OnceLock` で保持する）。
-pub(crate) fn implementation() -> Arc<dyn NetworkStatus> {
+/// 二重に作らないため `OnceLock` で保持する）。入口は状態型に依存しないため、画面の外のアプリや
+/// 他の機能 crate（map-view・lan-discovery）も使う。
+pub fn platform_network_status() -> Arc<dyn NetworkStatus> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn NetworkStatus>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "windows")]
             {
-                Arc::new(super::windows_network_status::WindowsNetworkStatus)
+                Arc::new(crate::windows::WindowsNetworkStatus)
             }
             #[cfg(target_os = "macos")]
             {
-                Arc::new(super::apple_network_status::AppleNetworkStatus)
+                Arc::new(crate::apple::AppleNetworkStatus)
             }
             #[cfg(target_os = "ios")]
             {
-                super::ios_network_status::implementation()
+                crate::ios::implementation()
             }
             #[cfg(target_os = "android")]
             {
-                super::android_network_status::implementation()
+                crate::android::implementation()
             }
             #[cfg(not(any(
                 target_os = "windows",
@@ -79,7 +78,7 @@ fn to_kind(k: ConnectionKind) -> KindView {
 
 /// 契約の結果を画面の入力へ写す。失敗は固定文言へ畳み、OS 固有値を画面へ漏らさない
 /// （security.md A09）。
-fn to_result(r: Result<NetworkSnapshot, DeviceError>) -> Result<Reading, ReadFailure> {
+fn to_result(r: Result<NetworkSnapshot, NetworkStatusError>) -> Result<Reading, ReadFailure> {
     match r {
         Ok(NetworkSnapshot::Online { kind, metered }) => Ok(Reading::Online {
             kind: to_kind(kind),
@@ -87,7 +86,7 @@ fn to_result(r: Result<NetworkSnapshot, DeviceError>) -> Result<Reading, ReadFai
         }),
         Ok(NetworkSnapshot::Offline) => Ok(Reading::Offline),
         Ok(NetworkSnapshot::Unknown) => Ok(Reading::Unknown),
-        Err(DeviceError::Unsupported(_)) => Err(ReadFailure::Unsupported),
+        Err(NetworkStatusError::Unsupported(_)) => Err(ReadFailure::Unsupported),
         Err(_) => Err(ReadFailure::Failed("接続状態の取得".to_string())),
     }
 }
@@ -136,7 +135,7 @@ pub fn network_status_show_effect(
     drive(
         state,
         sender,
-        implementation().as_ref(),
+        platform_network_status().as_ref(),
         Instant::now(),
         &mut last,
     );
@@ -145,27 +144,33 @@ pub fn network_status_show_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::network_status_show::{connection_text, NetworkView};
-    use fandhe_device::network_status::UnsupportedNetworkStatus as Unsupported;
+    use crate::contract::UnsupportedNetworkStatus as Unsupported;
+    use fandhe_core::screens::network_status_show::{NetworkView, connection_text};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
     fn sender_with_channel() -> (
         CompletionSender<NetworkStatusShowState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<NetworkStatusShowState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<NetworkStatusShowState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     struct Fake {
-        result: Result<NetworkSnapshot, DeviceError>,
+        result: Result<NetworkSnapshot, NetworkStatusError>,
         reads: AtomicUsize,
     }
 
     impl Fake {
-        fn new(result: Result<NetworkSnapshot, DeviceError>) -> Self {
+        fn new(result: Result<NetworkSnapshot, NetworkStatusError>) -> Self {
             Self {
                 result,
                 reads: AtomicUsize::new(0),
@@ -174,12 +179,12 @@ mod tests {
     }
 
     impl NetworkStatus for Fake {
-        fn read(&self) -> Result<NetworkSnapshot, DeviceError> {
+        fn read(&self) -> Result<NetworkSnapshot, NetworkStatusError> {
             self.reads.fetch_add(1, Ordering::SeqCst);
             match &self.result {
                 Ok(s) => Ok(*s),
-                Err(DeviceError::Unsupported(n)) => Err(DeviceError::Unsupported(n)),
-                Err(_) => Err(DeviceError::Internal("x")),
+                Err(NetworkStatusError::Unsupported(n)) => Err(NetworkStatusError::Unsupported(n)),
+                Err(_) => Err(NetworkStatusError::Internal("x")),
             }
         }
     }
@@ -192,7 +197,7 @@ mod tests {
     }
 
     fn apply_all(
-        rx: &std::sync::mpsc::Receiver<crate::app::Completion<NetworkStatusShowState>>,
+        rx: &std::sync::mpsc::Receiver<fandhe_runtime::Completion<NetworkStatusShowState>>,
         s: &mut NetworkStatusShowState,
     ) {
         while let Ok(c) = rx.try_recv() {
@@ -239,8 +244,8 @@ mod tests {
     #[test]
     fn failures_never_become_online() {
         for r in [
-            Err(DeviceError::Unsupported("network_status")),
-            Err(DeviceError::Internal("x")),
+            Err(NetworkStatusError::Unsupported("network_status")),
+            Err(NetworkStatusError::Internal("x")),
         ] {
             let (tx, rx) = sender_with_channel();
             let fake = Fake::new(r);
@@ -263,7 +268,7 @@ mod tests {
         let mut last = None;
         drive(&state, &tx, &Fake::new(Ok(wifi())), t0, &mut last);
         apply_all(&rx, &mut state);
-        let failing = Fake::new(Err(DeviceError::Internal("x")));
+        let failing = Fake::new(Err(NetworkStatusError::Internal("x")));
         drive(&state, &tx, &failing, t0 + READ_INTERVAL, &mut last);
         apply_all(&rx, &mut state);
         assert!(!matches!(state.view, NetworkView::Online { .. }));

@@ -1,10 +1,10 @@
 //! ネットワーク接続状態の契約（Issue #1282、親 #1130）。接続の有無・種別・従量制を
-//! 画面に出すための橋渡しで、`fandhe-egui-proxy` の `device/network_status.rs` が
+//! 画面に出すための橋渡しで、本 crate の `driver.rs` が
 //! 間隔つきで [`NetworkStatus::read`] を呼ぶ（pull 型。OS の変化通知は購読しない）。
 //!
 //! # 契約
 //!
-//! - 結果は [`NetworkSnapshot`]（接続あり / 接続なし / 不明）か `DeviceError`
+//! - 結果は [`NetworkSnapshot`]（接続あり / 接続なし / 不明）か `NetworkStatusError`
 //!   （`Unsupported` / `Internal` のみ。新しい失敗 enum は作らない）
 //! - 取得できないとき「接続あり」と偽らない。最初の値が届く前・OS が判定不能は
 //!   [`NetworkSnapshot::Unknown`]（`device-bridge-contracts.md`「6. 嘘の成功」）
@@ -14,7 +14,7 @@
 //!   接続なし・不明のとき種別と従量制は持たない（型で不正な組合せを作れない）
 //! - **三値**: 本機能には利用者操作のキャンセル・権限ダイアログ・入力が無い。結果は
 //!   「読めた（Online / Offline / Unknown）」「非対応」「失敗」の 3 種で、失敗は
-//!   `DeviceError::Internal`、非対応は `DeviceError::Unsupported`
+//!   `NetworkStatusError::Internal`、非対応は `NetworkStatusError::Unsupported`
 //! - 値（インターフェース情報・HRESULT 等）をログへ出さない
 //!
 //! # 守る範囲と守らない範囲
@@ -26,9 +26,9 @@
 
 use std::time::Duration;
 
-use crate::DeviceError;
+use crate::error::NetworkStatusError;
 
-/// 画面側が OS を読み直す間隔。`fandhe-egui-proxy` と `fandhe-web-dom` が共有する唯一の値。
+/// 画面側が OS を読み直す間隔。本 crate の driver と `fandhe-web-dom` が共有する唯一の値。
 pub const READ_INTERVAL: Duration = Duration::from_secs(1);
 
 /// 接続種別。判定できない環境は [`ConnectionKind::Unknown`]。
@@ -65,7 +65,7 @@ pub enum NetworkSnapshot {
 /// 接続状態を 1 回読む。UI スレッドで同期に呼ばれるため短時間で戻ること。
 pub trait NetworkStatus: Send + Sync {
     /// 現在の接続状態を返す。最後に届いた値を、切断後も返し続けてはならない。
-    fn read(&self) -> Result<NetworkSnapshot, DeviceError>;
+    fn read(&self) -> Result<NetworkSnapshot, NetworkStatusError>;
 }
 
 /// 常に非対応を返す実装（対応 OS 以外・未実装 OS の dispatch 先）。
@@ -73,8 +73,8 @@ pub trait NetworkStatus: Send + Sync {
 pub struct UnsupportedNetworkStatus;
 
 impl NetworkStatus for UnsupportedNetworkStatus {
-    fn read(&self) -> Result<NetworkSnapshot, DeviceError> {
-        Err(DeviceError::Unsupported("network_status"))
+    fn read(&self) -> Result<NetworkSnapshot, NetworkStatusError> {
+        Err(NetworkStatusError::Unsupported("network_status"))
     }
 }
 
@@ -85,6 +85,9 @@ mod tests {
     #[test]
     fn unsupported_never_reports_online() {
         let r = UnsupportedNetworkStatus.read();
-        assert!(matches!(r, Err(DeviceError::Unsupported("network_status"))));
+        assert!(matches!(
+            r,
+            Err(NetworkStatusError::Unsupported("network_status"))
+        ));
     }
 }

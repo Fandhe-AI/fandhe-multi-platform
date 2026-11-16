@@ -1,11 +1,11 @@
 //! Phase 11（親 #85）型サンプル「地図表示」（Issue #273）の effect ドライバ。
 //! `fandhe_core::screens::map_view_show`（端末依存ゼロ）の要求を観測し、地点を
-//! `fandhe_device::map_view::MapRegion` で検証してから OS の地図スナップショットへ渡し、
+//! `crate::contract::MapRegion` で検証してから OS の地図スナップショットへ渡し、
 //! 結果を `CompletionSender` 経由で返す（`screens/registry.rs` の `effect` 区画から呼ばれる契約）。
-//! 契約と守る範囲は `fandhe_device::map_view` のモジュール doc を参照。
+//! 契約と守る範囲は `crate::contract` のモジュール doc を参照。
 //!
 //! OS 別の置き場:
-//! - macOS: `apple_map_view.rs` + `apple/fandhe_apple_map_view.m`（#273）。コールバック型のため
+//! - macOS: `apple.rs` + `apple/fandhe_apple_map_view.m`（#273）。コールバック型のため
 //!   pull 型 [`bridge`]（`RequestSlot` の facade）で毎フレーム [`drive_callback`] が結果を反映する
 //! - iOS: 同じ `.m` の iOS 分岐（Issue #274。macOS と実装を共用）
 //! - それ以外: `UnsupportedMapSnapshotter` を同期に呼んで「非対応」を表示する
@@ -13,15 +13,15 @@
 //! 期限（[`SNAPSHOT_DEADLINE`]）は `start` を呼んだ時刻を起点に単調時計で測り、切れたら
 //! 失敗で確定する。確定後に届いた結果は `RequestSlot` の first-wins と id 照合で捨てる。
 
-use fandhe_core::screens::map_view_show::{
-    finish, mark_loading, take_request, MapOutcome, MapViewShowState, MAP_HEIGHT_PX, MAP_WIDTH_PX,
-    PRESETS,
-};
+use crate::contract::MapRegion;
+use crate::error::MapViewError;
 use fandhe_core::RgbaPixels;
-use fandhe_device::map_view::MapRegion;
-use fandhe_device::DeviceError;
+use fandhe_core::screens::map_view_show::{
+    MAP_HEIGHT_PX, MAP_WIDTH_PX, MapOutcome, MapViewShowState, PRESETS, finish, mark_loading,
+    take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 取得にかける最大時間。
 #[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
@@ -41,10 +41,10 @@ fn is_expired(
 }
 
 /// 地点の添字から検証済みの範囲を作る。
-fn region_for(preset: usize) -> Result<MapRegion, DeviceError> {
+fn region_for(preset: usize) -> Result<MapRegion, MapViewError> {
     let p = PRESETS
         .get(preset)
-        .ok_or(DeviceError::InvalidInput("map_view region"))?;
+        .ok_or(MapViewError::InvalidInput("map_view region"))?;
     MapRegion::new(p.center_lat, p.center_lon, p.span_m)
 }
 
@@ -60,27 +60,27 @@ fn region_for(preset: usize) -> Result<MapRegion, DeviceError> {
 /// | 5 | main スレッド以外から呼ばれた | `Internal("map_view thread")` |
 /// | 他 | 未知 | `Internal("map_view outcome")` |
 #[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
-pub(crate) fn outcome_from_apple_code(code: i32) -> Result<(), DeviceError> {
+pub(crate) fn outcome_from_apple_code(code: i32) -> Result<(), MapViewError> {
     match code {
         0 => Ok(()),
-        1 => Err(DeviceError::Unsupported("map_view")),
-        2 => Err(DeviceError::Disabled("map_view network")),
-        3 => Err(DeviceError::Internal("map_view mapkit")),
-        4 => Err(DeviceError::Internal("map_view image")),
-        5 => Err(DeviceError::Internal("map_view thread")),
-        _ => Err(DeviceError::Internal("map_view outcome")),
+        1 => Err(MapViewError::Unsupported),
+        2 => Err(MapViewError::Disabled("map_view network")),
+        3 => Err(MapViewError::Internal("map_view mapkit")),
+        4 => Err(MapViewError::Internal("map_view image")),
+        5 => Err(MapViewError::Internal("map_view thread")),
+        _ => Err(MapViewError::Internal("map_view outcome")),
     }
 }
 
-/// `DeviceError` を画面用の結果へ写像する。内部構造は出さず固定文言だけにする
+/// `MapViewError` を画面用の結果へ写像する。内部構造は出さず固定文言だけにする
 /// （security.md A09）。
-fn to_outcome(result: Result<fandhe_device::Image, DeviceError>) -> Result<MapOutcome, String> {
+fn to_outcome(result: Result<fandhe_device::Image, MapViewError>) -> Result<MapOutcome, String> {
     match result {
         Ok(img) => RgbaPixels::new(img.width, img.height, img.rgba)
             .map(MapOutcome::Shown)
             .ok_or_else(|| "画像が不正です".to_string()),
-        Err(DeviceError::Disabled(_)) => Ok(MapOutcome::Offline),
-        Err(DeviceError::Unsupported(_)) => Ok(MapOutcome::Unsupported),
+        Err(MapViewError::Disabled(_)) => Ok(MapOutcome::Offline),
+        Err(MapViewError::Unsupported) => Ok(MapOutcome::Unsupported),
         Err(_) => Err("OS の地図取得に失敗しました".to_string()),
     }
 }
@@ -88,10 +88,10 @@ fn to_outcome(result: Result<fandhe_device::Image, DeviceError>) -> Result<MapOu
 /// OS 側コールバックとの橋渡し（macOS / iOS、pull 型、`RequestSlot` の facade）。
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub(crate) mod bridge {
+    use crate::error::MapViewError;
     use fandhe_core::screens::map_view_show::MapOutcome;
-    use fandhe_device::DeviceError;
 
-    use crate::device::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::RequestSlot;
 
     pub(crate) type Outcome = Result<MapOutcome, String>;
 
@@ -106,7 +106,7 @@ pub(crate) mod bridge {
     /// 捨てて `false`（先に届いたものだけを採る）。
     pub(crate) fn deliver(
         request_id: u64,
-        result: Result<fandhe_device::Image, DeviceError>,
+        result: Result<fandhe_device::Image, MapViewError>,
     ) -> bool {
         SLOT.deliver(request_id, super::to_outcome(result))
     }
@@ -120,11 +120,11 @@ pub(crate) mod bridge {
         height: u32,
     ) -> bool {
         let result = super::outcome_from_apple_code(code).and_then(|()| {
-            fandhe_device::map_view::build_snapshot(
+            crate::contract::build_snapshot(
                 super::SIZE_PX,
                 width,
                 height,
-                rgba.ok_or(DeviceError::Internal("map_view image"))?,
+                rgba.ok_or(MapViewError::Internal("map_view image"))?,
             )
         });
         deliver(request_id, result)
@@ -136,8 +136,16 @@ pub(crate) mod bridge {
 static STARTED: std::sync::Mutex<Option<(u64, std::time::Instant)>> = std::sync::Mutex::new(None);
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-fn snapshotter() -> &'static dyn fandhe_device::map_view::MapSnapshotter {
-    super::apple_map_view::snapshotter()
+fn snapshotter() -> &'static dyn crate::contract::MapSnapshotter {
+    platform_map_view()
+}
+
+/// 画面の状態型に依存しない入口。macOS・iOS は MapKit の実装、それ以外は `Unsupported` 固定（Web は対象外）。
+pub fn platform_map_view() -> &'static dyn crate::contract::MapSnapshotter {
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    return crate::apple::snapshotter();
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    return &crate::contract::UnsupportedMapSnapshotter;
 }
 
 /// 期限切れなら OS へ取り消しを伝えて失敗で確定する。待機中のフレームごとに呼ばれる。
@@ -147,14 +155,14 @@ fn expire_if_needed(request_id: u64, now: std::time::Instant) {
     let Some((id, at)) = started else { return };
     if id == request_id && is_expired(at, now, SNAPSHOT_DEADLINE) {
         snapshotter().cancel(request_id);
-        bridge::deliver(request_id, Err(DeviceError::Internal("map_view timeout")));
+        bridge::deliver(request_id, Err(MapViewError::Internal("map_view timeout")));
     }
 }
 
 /// 要求を OS へ渡す。失敗はその場で `bridge::deliver` する。
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 fn start_request(request_id: u64, preset: usize) {
-    use fandhe_device::network_status::NetworkSnapshot;
+    use fandhe_cap_network_status::NetworkSnapshot;
 
     let region = match region_for(preset) {
         Ok(r) => r,
@@ -165,10 +173,10 @@ fn start_request(request_id: u64, preset: usize) {
     };
     // オフラインと分かっていれば OS を呼ばない。判定不能・失敗は止めずに進める。
     if matches!(
-        super::network_status::implementation().read(),
+        fandhe_cap_network_status::platform_network_status().read(),
         Ok(NetworkSnapshot::Offline)
     ) {
-        bridge::deliver(request_id, Err(DeviceError::Disabled("map_view network")));
+        bridge::deliver(request_id, Err(MapViewError::Disabled("map_view network")));
         return;
     }
     // 起点は呼び出しの開始時刻。結果が先に届く場合に備えて start より前に記録する。
@@ -195,7 +203,7 @@ fn drive_callback(state: &MapViewShowState, sender: &CompletionSender<MapViewSho
         return;
     }
     let generation = state.generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         &bridge::SLOT,
         sender,
         |request_id| expire_if_needed(request_id, std::time::Instant::now()),
@@ -219,12 +227,12 @@ pub fn map_view_show_effect(state: &MapViewShowState, sender: &CompletionSender<
 
 /// 同期経路（macOS / iOS 以外）: 地点を検証してから [`MapSnapshotter`] を呼ぶ。
 ///
-/// [`MapSnapshotter`]: fandhe_device::map_view::MapSnapshotter
+/// [`MapSnapshotter`]: crate::contract::MapSnapshotter
 #[cfg(not(any(target_os = "macos", target_os = "ios")))]
 fn drive(
     state: &MapViewShowState,
     sender: &CompletionSender<MapViewShowState>,
-    snapshotter: &dyn fandhe_device::map_view::MapSnapshotter,
+    snapshotter: &dyn crate::contract::MapSnapshotter,
 ) {
     let Some(req) = take_request(state) else {
         return;
@@ -233,7 +241,7 @@ fn drive(
     // 結果は届かないため `start` の `Err` がそのまま完了になる。`Ok` は画像が無いので失敗に倒す。
     let result = region_for(req.preset).and_then(|r| {
         snapshotter.start(0, r, SIZE_PX)?;
-        Err(DeviceError::Internal("map_view image"))
+        Err(MapViewError::Internal("map_view image"))
     });
     let outcome = to_outcome(result);
     let generation = req.generation;
@@ -245,11 +253,7 @@ fn drive(
 /// `registry.rs` から配線される effect ドライバ（macOS / iOS 以外）。
 #[cfg(not(any(target_os = "macos", target_os = "ios")))]
 pub fn map_view_show_effect(state: &MapViewShowState, sender: &CompletionSender<MapViewShowState>) {
-    drive(
-        state,
-        sender,
-        &fandhe_device::map_view::UnsupportedMapSnapshotter,
-    );
+    drive(state, sender, &crate::contract::UnsupportedMapSnapshotter);
 }
 
 #[cfg(test)]
@@ -263,16 +267,16 @@ mod tests {
         assert!(outcome_from_apple_code(0).is_ok());
         assert!(matches!(
             outcome_from_apple_code(1),
-            Err(DeviceError::Unsupported("map_view"))
+            Err(MapViewError::Unsupported)
         ));
         assert!(matches!(
             outcome_from_apple_code(2),
-            Err(DeviceError::Disabled("map_view network"))
+            Err(MapViewError::Disabled("map_view network"))
         ));
         for code in [3, 4, 5, 6, -1, i32::MAX] {
             assert!(matches!(
                 outcome_from_apple_code(code),
-                Err(DeviceError::Internal(_))
+                Err(MapViewError::Internal(_))
             ));
         }
     }
@@ -289,14 +293,14 @@ mod tests {
             Ok(MapOutcome::Shown(_))
         ));
         assert_eq!(
-            to_outcome(Err(DeviceError::Disabled("map_view network"))),
+            to_outcome(Err(MapViewError::Disabled("map_view network"))),
             Ok(MapOutcome::Offline)
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::Unsupported("map_view"))),
+            to_outcome(Err(MapViewError::Unsupported)),
             Ok(MapOutcome::Unsupported)
         );
-        assert!(to_outcome(Err(DeviceError::Internal("map_view timeout"))).is_err());
+        assert!(to_outcome(Err(MapViewError::Internal("map_view timeout"))).is_err());
         assert!(to_outcome(Ok(img(0, 2, 0))).is_err());
         assert!(to_outcome(Ok(img(2, 2, 3))).is_err());
     }
@@ -319,22 +323,26 @@ mod tests {
         assert!(region_for(PRESETS.len()).is_err());
     }
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    #[allow(dead_code)] // 非対応 OS の同期経路のテストだけが使う
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     #[cfg(not(any(target_os = "macos", target_os = "ios")))]
     mod sync_path {
         use super::*;
-        use fandhe_core::screens::map_view_show::{request, MapPhase};
+        use fandhe_core::screens::map_view_show::{MapPhase, request};
 
         #[test]
         fn unsupported_is_shown_and_never_a_map() {
             let mut s = MapViewShowState::default();
             request(&mut s, 0);
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = crate::app::egui_sender(tx, egui::Context::default());
-            drive(
-                &s,
-                &sender,
-                &fandhe_device::map_view::UnsupportedMapSnapshotter,
-            );
+            let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
+            drive(&s, &sender, &crate::contract::UnsupportedMapSnapshotter);
             while let Ok(apply) = rx.try_recv() {
                 apply(&mut s);
             }
@@ -367,7 +375,7 @@ mod bridge_tests {
         // 期限切れで確定した後に届いた成功は捨てる。
         assert!(bridge::deliver(
             id,
-            Err(DeviceError::Internal("map_view timeout"))
+            Err(MapViewError::Internal("map_view timeout"))
         ));
         assert!(!bridge::deliver_rgba(
             id,

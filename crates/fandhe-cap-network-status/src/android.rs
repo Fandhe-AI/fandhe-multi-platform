@@ -1,7 +1,7 @@
 //! Android 向けネットワーク接続状態実装（Issue #1282 で枠、#1284 で実装）。
-//! `device/network_status.rs::implementation` の Android 経路から呼ばれ、
+//! `driver.rs::platform_network_status` の Android 経路から呼ばれ、
 //! `ConnectivityManager` / `NetworkCapabilities` を読む Java 側
-//! `MainActivity.networkStatusRead`（`NetworkStatusHelper`）を JNI で橋渡しする。
+//! `NetworkStatusHelper.read` を JNI の static 呼び出しで橋渡しする。
 //!
 //! # 同期 pull（変化通知は購読しない）
 //!
@@ -27,8 +27,8 @@
 //! 守らない: インターネット到達性（`VALIDATED` は見ない）、変化の反映遅れ（最大 1 秒）、
 //! `TEMPORARILY_NOT_METERED`（API 30）。
 
-use fandhe_device::network_status::{ConnectionKind, NetworkSnapshot};
-use fandhe_device::DeviceError;
+use crate::contract::{ConnectionKind, NetworkSnapshot};
+use crate::error::NetworkStatusError;
 
 const FAILED_MSG: &str = "network_status";
 const PRESENT: i32 = 1;
@@ -39,15 +39,15 @@ const ETHERNET: i32 = 1 << 4;
 const KNOWN_BITS: i32 = PRESENT | NOT_METERED | WIFI | CELLULAR | ETHERNET;
 
 /// Java が返した結果コードを接続状態へ写す純関数（ホストの `cargo test` で固定する）。
-fn snapshot_from_code(code: i32) -> Result<NetworkSnapshot, DeviceError> {
+fn snapshot_from_code(code: i32) -> Result<NetworkSnapshot, NetworkStatusError> {
     if code < 0 {
-        return Err(DeviceError::Internal(FAILED_MSG));
+        return Err(NetworkStatusError::Internal(FAILED_MSG));
     }
     if code == 0 {
         return Ok(NetworkSnapshot::Offline);
     }
     if code & PRESENT == 0 || code & !KNOWN_BITS != 0 {
-        return Err(DeviceError::Internal(FAILED_MSG));
+        return Err(NetworkStatusError::Internal(FAILED_MSG));
     }
     let kind = if code & WIFI != 0 {
         ConnectionKind::Wifi
@@ -68,7 +68,7 @@ fn snapshot_from_code(code: i32) -> Result<NetworkSnapshot, DeviceError> {
 use std::sync::Arc;
 
 #[cfg(target_os = "android")]
-use fandhe_device::network_status::NetworkStatus;
+use crate::contract::NetworkStatus;
 
 /// Android 実装（`MainActivity.networkStatusRead` を同期で呼ぶ）。
 #[cfg(target_os = "android")]
@@ -76,24 +76,21 @@ struct AndroidNetworkStatus;
 
 #[cfg(target_os = "android")]
 impl AndroidNetworkStatus {
-    /// `MainActivity.networkStatusRead()` を呼ぶ。Activity 未確立・JNI 失敗は `None`。
-    /// 2 箇所の `unsafe` は `android_background_task.rs::call_schedule` と同じ根拠・同じ形。
-    #[allow(unsafe_code)]
+    /// `NetworkStatusHelper.read(Context)` を static 呼び出しする。Activity 未確立・JNI 失敗は `None`。
+    /// JavaVM と Activity の取得は `with_activity_class` が持つため、ここに `unsafe` は無い。
     fn call_read(&self) -> Option<i32> {
-        let app = crate::android::android_app()?;
-        // SAFETY: `call_schedule` と同一の根拠。`app.vm_as_ptr()` は android-activity が管理する
-        // 有効な `JavaVM*` で、`android_app()` は最新の `AndroidApp` を返す。
-        let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-        vm.attach_current_thread(
-            |env: &mut jni::Env| -> Result<i32, super::android::JniCallFailed> {
-                let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-                // SAFETY: `call_schedule` と同一の根拠。`Cast` は所有権を持たず delete しない。
-                let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-                let value = env.call_method(
-                    &activity,
-                    jni::jni_str!("networkStatusRead"),
-                    jni::jni_sig!(() -> int),
-                    &[],
+        use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+        use jni::objects::JValue;
+        let app = android_app()?;
+        with_activity_class(
+            &app,
+            jni::jni_str!("com.fandhe.platform.NetworkStatusHelper"),
+            |env, activity, class| -> Result<i32, JniCallFailed> {
+                let value = env.call_static_method(
+                    class,
+                    jni::jni_str!("read"),
+                    jni::jni_sig!((android.content.Context) -> int),
+                    &[JValue::Object(activity)],
                 )?;
                 Ok(value.i()?)
             },
@@ -104,9 +101,11 @@ impl AndroidNetworkStatus {
 
 #[cfg(target_os = "android")]
 impl NetworkStatus for AndroidNetworkStatus {
-    fn read(&self) -> Result<NetworkSnapshot, DeviceError> {
+    fn read(&self) -> Result<NetworkSnapshot, NetworkStatusError> {
         // Activity 未確立は「非対応」ではなく一時的な失敗（Android は対応 OS）。
-        let code = self.call_read().ok_or(DeviceError::Internal(FAILED_MSG))?;
+        let code = self
+            .call_read()
+            .ok_or(NetworkStatusError::Internal(FAILED_MSG))?;
         snapshot_from_code(code)
     }
 }
@@ -128,8 +127,8 @@ mod tests {
         }
     }
 
-    fn is_internal(r: Result<NetworkSnapshot, DeviceError>) -> bool {
-        matches!(r, Err(DeviceError::Internal(_)))
+    fn is_internal(r: Result<NetworkSnapshot, NetworkStatusError>) -> bool {
+        matches!(r, Err(NetworkStatusError::Internal(_)))
     }
 
     #[test]

@@ -1,5 +1,6 @@
 package com.fandhe.platform;
 
+import android.app.Activity;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.nsd.NsdManager;
@@ -16,11 +17,16 @@ import androidx.lifecycle.Lifecycle;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.util.ArrayDeque;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 // LAN のサービス探索（mDNS / Bonjour、Issue #489、親 #109）の Android 実装ヘルパー。
-// MainActivity から生成・委譲される（Rust の `device/android_lan_discovery.rs` が
-// `MainActivity.requestLanDiscovery` を JNI で呼び、結果を native 2 本で返す）。
+// Rust の `fandhe-cap-lan-discovery/src/android.rs` が static の `request(Activity, long, int)` を JNI で呼び、
+// 結果を native 2 本で返す。Activity のライフサイクルへは `LanDiscoveryLifecycle`（非公開 ContentProvider、
+// `FeatureLifecycleProvider` 継承）が `attach` / `onPause` / `detach` で知らせる。Activity ごとの helper は
+// `HELPERS` に持つ（JNI スレッドと UI スレッドの両方から触るので同期化し、Activity が GC されれば項目も消える）。
 //
 // 並行性: 状態を触る経路は main looper 1 本（`requestLanDiscovery` は post、NSD の各コールバックも
 // API 33 未満は内部スレッドで届くため main へ post し直す）。ロックは持たない。
@@ -74,22 +80,43 @@ final class LanDiscoveryHelper {
     // API 31 以下は Wi-Fi が mDNS 応答を捨てるため探索の間だけ保持する（空リストの嘘の成功を防ぐ）。
     private WifiManager.MulticastLock multicastLock;
 
-    LanDiscoveryHelper(ComponentActivity activity) {
+    private static final Map<Activity, LanDiscoveryHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    private LanDiscoveryHelper(ComponentActivity activity) {
         this.activity = activity;
     }
 
-    // JNI スレッドから呼ばれる。
-    void request(final long id, int durationMs) {
+    // Activity の生成時（`LanDiscoveryLifecycle` から、UI スレッド）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new LanDiscoveryHelper(activity));
+    }
+
+    // Activity の前面離脱時（同上。`Activity.onPause()` の中、つまり `super.onPause()` の内側で届く）。
+    static void pause(ComponentActivity activity) {
+        LanDiscoveryHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.interrupt();
+        }
+    }
+
+    // Activity の破棄時（同上）。保留中の探索を中断して破棄する。
+    static void detach(ComponentActivity activity) {
+        LanDiscoveryHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.interrupt();
+        }
+    }
+
+    // JNI スレッドから呼ばれる。helper が無い（生成前・破棄後）ときは結果が来ないまま待たせず、失敗で確定する。
+    static void request(Activity activity, final long id, int durationMs) {
+        final LanDiscoveryHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            nativeOnLanFinished(id, CODE_OTHER);
+            return;
+        }
         final long deadline = SystemClock.uptimeMillis() + durationMs;
-        handler.post(() -> start(id, deadline));
-    }
-
-    void onPause() {
-        interrupt();
-    }
-
-    void onDestroy() {
-        interrupt();
+        helper.handler.post(() -> helper.start(id, deadline));
     }
 
     private void interrupt() {

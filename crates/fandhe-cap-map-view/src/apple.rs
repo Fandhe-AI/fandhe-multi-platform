@@ -1,19 +1,19 @@
 //! macOS / iOS 向け地図スナップショット実装（Issue #273 macOS・#274 iOS）。
-//! `device/map_view.rs` の macOS / iOS 経路から呼ばれ、MapKit 実装
-//! （`apple/fandhe_apple_map_view.m`、`build.rs` が feature `device` 有効時のみコンパイル・
+//! `driver.rs` の macOS / iOS 経路から呼ばれ、MapKit 実装
+//! （`apple/fandhe_apple_map_view.m`、本 crate の `build.rs` がコンパイル・
 //! リンクする）を `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` はこのモジュールの extern 宣言と
-//! 受け口に閉じ `// SAFETY:` で契約を明記する（`apple_photo_library.rs` と同型、coding-rust.md の
+//! 受け口に閉じ `// SAFETY:` で契約を明記する（`fandhe-cap-photo-library` の apple.rs と同型、coding-rust.md の
 //! FFI 例外規定準拠）。
 //!
-//! `.m` 側の完了から [`fandhe_rust_map_view_outcome`] が呼ばれ、`device/map_view::bridge` へ
-//! 結果を置く（pull 型）。結果コード → 結果の写像は `device/map_view.rs::outcome_from_apple_code`
+//! `.m` 側の完了から [`fandhe_rust_map_view_outcome`] が呼ばれ、`driver::bridge` へ
+//! 結果を置く（pull 型）。結果コード → 結果の写像は `driver.rs::outcome_from_apple_code`
 //! に一本化する。座標・画素はログへ出力しない（security.md A09）。
 //!
 //! iOS ではコールバックが egui の `update` 外から来るので、結果を置いた直後に
 //! `ios::request_repaint` で次フレームを起こす（契約表 4）。
 
-use fandhe_device::map_view::{MapRegion, MapSnapshotter};
-use fandhe_device::DeviceError;
+use crate::contract::{MapRegion, MapSnapshotter};
+use crate::error::MapViewError;
 
 // SAFETY: `apple/fandhe_apple_map_view.m` が定義する C ABI。契約は `.m` 冒頭コメントと
 // 下記 `start` のコメントに集約する。
@@ -47,7 +47,7 @@ impl MapSnapshotter for AppleMapSnapshotter {
         request_id: u64,
         region: MapRegion,
         size_px: (u32, u32),
-    ) -> Result<(), DeviceError> {
+    ) -> Result<(), MapViewError> {
         // SAFETY: 引数はすべて値渡しのプリミティブで、ポインタを渡さない。座標は
         // `MapRegion::new` が検証済み。`.m` 側は main スレッド以外なら副作用なく 5 を返す。
         let code = unsafe {
@@ -60,7 +60,7 @@ impl MapSnapshotter for AppleMapSnapshotter {
                 size_px.1,
             )
         };
-        super::map_view::outcome_from_apple_code(code)
+        crate::driver::outcome_from_apple_code(code)
     }
 
     #[allow(unsafe_code)]
@@ -71,10 +71,10 @@ impl MapSnapshotter for AppleMapSnapshotter {
 }
 
 /// `.m` 側の完了から呼ばれる `extern "C"` 関数。コードの解釈は
-/// `device/map_view.rs::outcome_from_apple_code`。`ptr` は呼び出しの間だけ有効で、所有権は
+/// `driver.rs::outcome_from_apple_code`。`ptr` は呼び出しの間だけ有効で、所有権は
 /// 移らない（解放関数は公開しない）。画素は検査を通ったときだけ呼び出しの中でコピーする。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_map_view_outcome(
     request_id: u64,
     code: i32,
@@ -99,7 +99,7 @@ extern "C" fn fandhe_rust_map_view_outcome(
     } else {
         None
     };
-    super::map_view::bridge::deliver_rgba(request_id, code, rgba, width, height);
+    crate::driver::bridge::deliver_rgba(request_id, code, rgba, width, height);
     #[cfg(target_os = "ios")]
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }

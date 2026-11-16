@@ -2,8 +2,8 @@
 //! ドライバ。`fandhe_core::screens::lan_discover`（端末依存ゼロ）の要求を観測し、結果を
 //! `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約の SSOT は `fandhe_device::lan_discovery`（`_http._tcp`・10 秒・上限 50 件・
-//! `normalize_services`・`decode_code`）。`device/bluetooth_le.rs` と同型の pull 型。
+//! 契約の SSOT は `crate::contract`（`_http._tcp`・10 秒・上限 50 件・
+//! `normalize_services`・`decode_code`）。`fandhe-cap-bluetooth-le` の driver と同型の pull 型。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
 //! （`device.rs` モジュール doc と同じ理由）。
@@ -18,7 +18,7 @@
 //!
 //! # OS ごとの `present`
 //!
-//! 4 OS とも `present(request_id, duration) -> Result<(), DeviceError>` の同じ形で、後続の OS 実装は
+//! 4 OS とも `present(request_id, duration) -> Result<(), LanDiscoveryError>` の同じ形で、後続の OS 実装は
 //! 自分のモジュールの中身だけを埋め、本ファイルの dispatch には触らない。
 //! - macOS・iOS: `apple_lan_discovery`（`nw_browser` と dns_sd。iOS は `ios_lan_discovery` が委譲）
 //! - Android: `android_lan_discovery`（`NsdManager` と Java 側 `LanDiscoveryHelper`。窓は main Handler が閉じる）
@@ -27,7 +27,7 @@
 //! # 期限・終了
 //!
 //! 期限は `BROWSE_DURATION_MS` だけ（OS 側へ渡して一致させる、同 3 節）。画面離脱はプロセス終了と
-//! 同義のため、[`stop_shared_discovery`] を `device::shutdown` から呼んで探索を止める。再要求は
+//! 同義のため、[`stop_shared_discovery`] を `fandhe-gallery` の終了フックから呼んで探索を止める。再要求は
 //! 古いセッションを置き換え、古い request_id の結果は照合して捨てる。Android は停止が
 //! Activity のライフサイクルで完結するため分岐を持たない。
 //!
@@ -44,20 +44,20 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use fandhe_core::screens::lan_discover::{
-    finish_browse, mark_browsing, take_request, LanDiscoverState, LanError, LanRow,
-};
 #[cfg(not(any(
     target_os = "ios",
     target_os = "macos",
     target_os = "windows",
     target_os = "android"
 )))]
-use fandhe_device::lan_discovery::LanDiscovery;
-use fandhe_device::lan_discovery::{normalize_services, LanService};
-use fandhe_device::DeviceError;
+use crate::contract::LanDiscovery;
+use crate::contract::{LanService, normalize_services};
+use crate::error::LanDiscoveryError;
+use fandhe_core::screens::lan_discover::{
+    LanDiscoverState, LanError, LanRow, finish_browse, mark_browsing, take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 観測バッファに溜める名前数の上限。応答の洪水でメモリが膨らむのを防ぐ
 /// （最終的な件数上限は `finish` 時の `normalize_services` が `MAX_SERVICES` で切る）。
@@ -68,11 +68,11 @@ use crate::app::CompletionSender;
 )]
 const MAX_OBSERVED: usize = 256;
 
-/// 契約の `Result<Vec<LanService>, DeviceError>` を画面用へ写す（種別は 1 対 1、
+/// 契約の `Result<Vec<LanService>, LanDiscoveryError>` を画面用へ写す（種別は 1 対 1、
 /// その他は `Display` 文言のみ。内部構造は出さない、security.md A09）。
 /// `Cancelled` は契約上返らないため `Other` に写す。
 pub(crate) fn to_core(
-    result: Result<Vec<LanService>, DeviceError>,
+    result: Result<Vec<LanService>, LanDiscoveryError>,
 ) -> Result<Vec<LanRow>, LanError> {
     match result {
         Ok(services) => Ok(services
@@ -83,9 +83,9 @@ pub(crate) fn to_core(
                 port: s.port,
             })
             .collect()),
-        Err(DeviceError::PermissionDenied(_)) => Err(LanError::PermissionDenied),
-        Err(DeviceError::Disabled(_)) => Err(LanError::Disabled),
-        Err(DeviceError::Unsupported(_)) => Err(LanError::Unsupported),
+        Err(LanDiscoveryError::PermissionDenied(_)) => Err(LanError::PermissionDenied),
+        Err(LanDiscoveryError::Disabled(_)) => Err(LanError::Disabled),
+        Err(LanDiscoveryError::Unsupported(_)) => Err(LanError::Unsupported),
         Err(other) => Err(LanError::Other(other.to_string())),
     }
 }
@@ -158,8 +158,8 @@ impl Observer {
     pub(crate) fn finish(
         &self,
         request_id: u64,
-        result: Result<(), DeviceError>,
-    ) -> Option<Result<Vec<LanService>, DeviceError>> {
+        result: Result<(), LanDiscoveryError>,
+    ) -> Option<Result<Vec<LanService>, LanDiscoveryError>> {
         let mut guard = self.lock();
         if guard.as_ref().is_none_or(|(id, _)| *id != request_id) {
             return None;
@@ -188,7 +188,7 @@ pub(crate) static OBSERVED: Observer = Observer::new();
     )),
     allow(dead_code)
 )]
-pub(crate) fn finish(request_id: u64, result: Result<(), DeviceError>) {
+pub(crate) fn finish(request_id: u64, result: Result<(), LanDiscoveryError>) {
     if let Some(r) = OBSERVED.finish(request_id, result) {
         bridge::deliver(request_id, r);
     }
@@ -205,11 +205,11 @@ pub(crate) fn finish(request_id: u64, result: Result<(), DeviceError>) {
     allow(dead_code)
 )]
 pub(crate) mod bridge {
+    use crate::contract::LanService;
+    use crate::error::LanDiscoveryError;
     use fandhe_core::screens::lan_discover::{LanError, LanRow};
-    use fandhe_device::lan_discovery::LanService;
-    use fandhe_device::DeviceError;
 
-    use crate::device::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::RequestSlot;
 
     pub(crate) type Outcome = Result<Vec<LanRow>, LanError>;
 
@@ -220,7 +220,10 @@ pub(crate) mod bridge {
     }
 
     /// `request_id` 不一致・既に結果ありは捨てて `false`。
-    pub(crate) fn deliver(request_id: u64, result: Result<Vec<LanService>, DeviceError>) -> bool {
+    pub(crate) fn deliver(
+        request_id: u64,
+        result: Result<Vec<LanService>, LanDiscoveryError>,
+    ) -> bool {
         SLOT.deliver(request_id, super::to_core(result))
     }
 }
@@ -241,15 +244,15 @@ fn drive_callback(state: &LanDiscoverState, sender: &CompletionSender<LanDiscove
 
         let request_id = bridge::begin();
         OBSERVED.begin(request_id);
-        let duration = Duration::from_millis(fandhe_device::lan_discovery::BROWSE_DURATION_MS);
+        let duration = Duration::from_millis(crate::contract::BROWSE_DURATION_MS);
         #[cfg(target_os = "macos")]
-        let started = super::apple_lan_discovery::present(request_id, duration);
+        let started = crate::apple::present(request_id, duration);
         #[cfg(target_os = "ios")]
-        let started = super::ios_lan_discovery::present(request_id, duration);
+        let started = crate::ios::present(request_id, duration);
         #[cfg(target_os = "android")]
-        let started = super::android_lan_discovery::present(request_id, duration);
+        let started = crate::android::present(request_id, duration);
         #[cfg(target_os = "windows")]
-        let started = super::windows_lan_discovery::present(request_id, duration);
+        let started = crate::windows::present(request_id, duration);
         if let Err(e) = started {
             // 依頼自体が同期的に失敗した（コールバックは二度と来ない）。
             finish(request_id, Err(e));
@@ -261,7 +264,7 @@ fn drive_callback(state: &LanDiscoverState, sender: &CompletionSender<LanDiscove
         return;
     }
     let generation = state.generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         &bridge::SLOT,
         sender,
         |_request_id| {},
@@ -310,45 +313,58 @@ pub fn lan_discover_effect(state: &LanDiscoverState, sender: &CompletionSender<L
         target_os = "android"
     ))]
     drive_callback(state, sender);
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    #[allow(dead_code)] // 非対応 OS の同期経路のテストだけが使う
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     #[cfg(not(any(
         target_os = "ios",
         target_os = "macos",
         target_os = "windows",
         target_os = "android"
     )))]
-    drive(
-        state,
-        sender,
-        &fandhe_device::lan_discovery::UnsupportedLanDiscovery,
-    );
+    drive(state, sender, &crate::contract::UnsupportedLanDiscovery);
 }
 
-/// Activity 再生成時に旧要求の保留を捨てる（`android.rs::android_main` から呼ばれる。
+/// Activity 再生成時に旧要求の保留を捨てる（`fandhe-gallery` の `android_main` から呼ばれる。
 /// Java 側の追跡は Activity インスタンスのフィールドで、再生成で一緒に消える）。
 #[cfg(target_os = "android")]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     bridge::SLOT.reset();
     OBSERVED.clear();
 }
 
-/// アプリ終了時に進行中の探索を止める（`device::shutdown` から呼ばれる）。
+/// 画面の状態型に依存しない入口。LAN 探索は結果が OS のスレッドから非同期に届く（`OBSERVED` の観測と
+/// `finish` の 1 回の完了通知）ため、結果が届くまで塞ぐ同期の [`LanDiscovery`] 実装は提供しない。
+/// 画面の外のアプリが探索するなら [`lan_discover_effect`] の経路を使う。ここは同期 trait 経由の呼び出しに
+/// 対して「未対応」を正直に返す（成功の 0 件にしない）。
+// ponytail: 同期 trait の実装は要求が出たら足す（`OBSERVED.finish` を待つワーカーが要る）。
+pub fn platform_lan_discovery() -> Box<dyn crate::contract::LanDiscovery> {
+    Box::new(crate::contract::UnsupportedLanDiscovery)
+}
+
+/// アプリ終了時に進行中の探索を止める（`fandhe-gallery` の終了フック（`shutdown()`）から呼ばれる）。
 /// Rust 側のロックを握ったまま OS 側の停止を呼ばない（OS 側コールバックが同じロックを取るため、
 /// `device-bridge-contracts.md` 11 節）。
 pub fn stop_shared_discovery() {
     OBSERVED.clear();
     #[cfg(any(target_os = "ios", target_os = "macos"))]
-    super::apple_lan_discovery::stop();
+    crate::apple::stop();
     #[cfg(target_os = "windows")]
-    super::windows_lan_discovery::stop_shared();
+    crate::windows::stop_shared();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::lan_discover::{start_browse, LanPhase};
-    use fandhe_device::lan_discovery::{
-        decode_code, parse_addr, LanDiscovery, UnsupportedLanDiscovery, MAX_SERVICES,
+    use crate::contract::{
+        LanDiscovery, MAX_SERVICES, UnsupportedLanDiscovery, decode_code, parse_addr,
     };
+    use fandhe_core::screens::lan_discover::{LanPhase, start_browse};
 
     fn svc(name: &str, addr: Option<&str>, port: Option<u16>) -> LanService {
         LanService {
@@ -361,23 +377,23 @@ mod tests {
     #[test]
     fn to_core_maps_each_error_kind_distinctly() {
         assert_eq!(
-            to_core(Err(DeviceError::PermissionDenied("x"))),
+            to_core(Err(LanDiscoveryError::PermissionDenied("x"))),
             Err(LanError::PermissionDenied)
         );
         assert_eq!(
-            to_core(Err(DeviceError::Disabled("x"))),
+            to_core(Err(LanDiscoveryError::Disabled("x"))),
             Err(LanError::Disabled)
         );
         assert_eq!(
-            to_core(Err(DeviceError::Unsupported("x"))),
+            to_core(Err(LanDiscoveryError::Unsupported("x"))),
             Err(LanError::Unsupported)
         );
         assert!(matches!(
-            to_core(Err(DeviceError::Cancelled("x"))),
+            to_core(Err(LanDiscoveryError::Cancelled("x"))),
             Err(LanError::Other(_))
         ));
         assert!(matches!(
-            to_core(Err(DeviceError::Internal("x"))),
+            to_core(Err(LanDiscoveryError::Internal("x"))),
             Err(LanError::Other(_))
         ));
         assert_eq!(to_core(Ok(vec![])), Ok(vec![]));
@@ -424,8 +440,8 @@ mod tests {
         let o = Observer::new();
         o.begin(1);
         o.observe(1, svc("a", None, None));
-        let r = o.finish(1, Err(DeviceError::Disabled("x"))).unwrap();
-        assert!(matches!(r, Err(DeviceError::Disabled(_))));
+        let r = o.finish(1, Err(LanDiscoveryError::Disabled("x"))).unwrap();
+        assert!(matches!(r, Err(LanDiscoveryError::Disabled(_))));
         assert_eq!(
             to_core(r),
             Err(LanError::Disabled),
@@ -473,9 +489,8 @@ mod tests {
     )))]
     #[test]
     fn unsupported_os_shows_unsupported_not_empty() {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = crate::app::egui_sender(tx, ctx);
+        let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
         let mut state = LanDiscoverState::default();
         start_browse(&mut state);
         lan_discover_effect(&state, &sender);

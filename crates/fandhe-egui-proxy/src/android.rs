@@ -106,10 +106,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // 同じ理由）。
     #[cfg(feature = "device")]
     crate::device::speech_recognition::reset_pending_tracking();
-    // Issue #486: `lan_discovery::bridge::SLOT` / `OBSERVED` も同じ理由でプロセス static のため、
-    // Activity 再生成をまたいで残る旧要求の保留をここで捨てる。
-    #[cfg(feature = "device")]
-    crate::device::lan_discovery::reset_pending_tracking();
     // Issue #511: `local_peer::bridge::SLOT` / `PENDING` も同じ理由でプロセス static のため捨てる。
     #[cfg(feature = "device")]
     crate::device::local_peer::reset_pending_tracking();

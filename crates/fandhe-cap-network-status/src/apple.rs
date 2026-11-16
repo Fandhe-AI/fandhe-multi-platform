@@ -1,5 +1,5 @@
 //! macOS / iOS 向けネットワーク接続状態実装（Issue #1282、iOS は #1283）。
-//! `device/network_status.rs::implementation` の macOS 経路と、iOS 経路
+//! `driver.rs::platform_network_status` の macOS 経路と、iOS 経路
 //! （`ios_network_status.rs` が返す）から呼ばれ、`apple/fandhe_apple_network_status.m`
 //! （`NWPathMonitor`、`build.rs` が feature `device` 有効時にコンパイル）を C ABI で呼ぶ。
 //! `unsafe` は引数なし・戻り値 int のみの FFI 1 箇所と、`.m` から呼ばれる受け口 1 つに閉じる。
@@ -7,7 +7,7 @@
 //! # 再描画（契約表 4）
 //!
 //! `NWPathMonitor` の update handler は値（atomic）を更新した直後に
-//! [`fandhe_rust_network_status_changed`] を呼ぶ。iOS ではここで `crate::ios::request_repaint`
+//! [`fandhe_rust_network_status_changed`] を呼ぶ。iOS ではここで `fandhe_runtime::request_repaint`
 //! を呼び次フレームを起こす（入力が無いと egui が描画せず表示が止まるため）。呼び出しは path
 //! 変化時だけで、再描画の嵐にはならない。macOS は event loop 側に再描画の経路があるため何もしない。
 //! 読み取りは `dispatch_once` と atomic load だけでスレッド安全かつ UI を要しないので、
@@ -21,10 +21,10 @@
 #![cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-use fandhe_device::network_status::NetworkStatus;
-use fandhe_device::network_status::{ConnectionKind, NetworkSnapshot};
+use crate::contract::NetworkStatus;
+use crate::contract::{ConnectionKind, NetworkSnapshot};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-use fandhe_device::DeviceError;
+use crate::error::NetworkStatusError;
 
 /// `.m` が詰めた値を契約の値へ戻す純関数（ホストの `cargo test` で検査する）。
 fn snapshot_from_packed(packed: i32) -> NetworkSnapshot {
@@ -71,7 +71,7 @@ pub(crate) struct AppleNetworkStatus;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 impl NetworkStatus for AppleNetworkStatus {
     #[allow(unsafe_code)]
-    fn read(&self) -> Result<NetworkSnapshot, DeviceError> {
+    fn read(&self) -> Result<NetworkSnapshot, NetworkStatusError> {
         // SAFETY: 上記 extern 宣言のとおり、副作用は `.m` 内の static 初期化と atomic 読み取りのみ。
         let packed = unsafe { fandhe_apple_network_status_read() };
         Ok(snapshot_from_packed(packed))
@@ -83,10 +83,10 @@ impl NetworkStatus for AppleNetworkStatus {
 /// `dispatch_sync` はしない（デッドロックしない、契約表 11）。panic しない。
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_network_status_changed() {
     #[cfg(target_os = "ios")]
-    crate::ios::request_repaint();
+    fandhe_runtime::request_repaint();
 }
 
 #[cfg(test)]

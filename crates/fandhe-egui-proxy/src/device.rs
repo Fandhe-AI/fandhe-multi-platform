@@ -68,10 +68,6 @@ pub mod android_health_data;
 /// `device/image_recognition.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_image_recognition;
-/// Issue #489: Android 向け LAN のサービス探索（`NsdManager`。Java 側は `LanDiscoveryHelper`、親 #109 の b-android）。
-/// `device/lan_discovery.rs` の Android 経路から呼ばれる。
-#[cfg(target_os = "android")]
-pub mod android_lan_discovery;
 /// Issue #511: Android 向け近くの端末との直接通信実装。
 /// `device/local_peer.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
@@ -81,11 +77,6 @@ pub mod android_local_peer;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_music_library;
-/// Issue #1284: Android 向けネットワーク接続状態実装（`ConnectivityManager` を JNI で読む）。
-/// `device/network_status.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_network_status;
 /// Issue #1131（親 #114）: Android 向け決済シート（Google Pay API、TEST 環境）の実装。
 /// `device/payment_request.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -168,11 +159,6 @@ pub mod apple_file_association;
 /// macOS 経路と `ios_image_recognition` から呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_image_recognition;
-/// Issue #486 macOS: LAN のサービス探索実装（`apple/fandhe_apple_lan_discovery.m` を呼ぶ C ABI ラッパー）。
-/// `device/lan_discovery.rs` の macOS 経路と、b-ios が委譲する `ios_lan_discovery` から呼ばれる。
-/// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_lan_discovery;
 /// Issue #511 macOS: 近くの端末との直接通信実装（`apple/fandhe_apple_local_peer.m` を呼ぶ C ABI ラッパー）。
 /// `device/local_peer.rs` の macOS 経路と、`ios_local_peer`（Issue #512）の委譲から呼ばれる。
 /// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
@@ -182,21 +168,11 @@ pub mod apple_local_peer;
 /// を呼ぶ C ABI ラッパー）。`device/location.rs` の Apple cfg 分岐から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_location;
-/// Issue #273（macOS）/ #274（iOS）: macOS / iOS 向け地図スナップショット実装
-/// （`apple/fandhe_apple_map_view.m` を呼ぶ C ABI ラッパー。iOS も同じ実装を共用）。
-/// `device/map_view.rs` の macOS / iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_map_view;
 /// Issue #954（macOS）/ #956（iOS）: iOS / macOS 向けマイク録音実装（`apple/
 /// fandhe_apple_mic_record.m` を呼ぶ C ABI ラッパー）。`device/mic_record.rs` の
 /// iOS/macOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_mic_record;
-/// Issue #1282: macOS / iOS 向けネットワーク接続状態（`apple/fandhe_apple_network_status.m` を
-/// 呼ぶ C ABI ラッパー）。`device/network_status.rs` の macOS / iOS 経路から呼ばれる。
-/// 純関数をホストの `cargo test` で検査するため cfg に `test` を含める（FFI 部分は macOS 限定）。
-#[cfg(any(target_os = "ios", target_os = "macos", test))]
-pub mod apple_network_status;
 /// Issue #1254（macOS）/ #1255（iOS）: iOS / macOS 向け写真ライブラリ保存実装
 /// （`apple/fandhe_apple_photo_library.m` を呼ぶ C ABI ラッパー。iOS は実装済み）。
 /// `device/photo_save.rs` の iOS / macOS 経路から呼ばれる。
@@ -305,10 +281,6 @@ pub mod ios_health_data;
 /// Issue #1252: iOS 向け文字認識（PHPicker + Vision）の effect ドライバ。
 #[cfg(target_os = "ios")]
 pub mod ios_image_recognition;
-/// Issue #488: iOS 向け LAN のサービス探索（`apple_lan_discovery` へ委譲する）。
-/// `device/lan_discovery.rs` の iOS 経路から呼ばれる。
-#[cfg(target_os = "ios")]
-pub mod ios_lan_discovery;
 /// Issue #512: iOS 向け近くの端末との直接通信（親 #110、`apple_local_peer` へ委譲する）。
 /// `device/local_peer.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -317,11 +289,6 @@ pub mod ios_local_peer;
 /// C ABI ラッパー）。`device/music_library.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_music_library;
-/// Issue #1283: iOS 向けネットワーク接続状態実装（`apple_network_status` を返す）。
-/// `device/network_status.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_network_status;
 /// Issue #356: iOS 向けペン・筆圧入力実装（`ios/fandhe_ios_pen_stylus.m` の観測専用
 /// `UIGestureRecognizer` が値を置く C ABI ラッパー）。`device/pen_stylus.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -355,9 +322,6 @@ pub mod ios_spotlight_index;
 /// `ASWebAuthenticationSession` を呼ぶ C ABI ラッパー）。`device/web_auth_session.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_web_auth_session;
-/// Phase 11 の拡充ループ（親 #109、Issue #486）: LAN のサービス探索の effect ドライバ
-/// （macOS・iOS / Android 実装、Windows は `DnsServiceBrowse`、他 OS は `UnsupportedLanDiscovery` 固定。Web は対象外）。
-pub mod lan_discovery;
 /// Phase 11 の拡充ループ（親 #110、Issue #511）: 近くの端末との直接通信の effect ドライバ
 /// （macOS・iOS / Android 実装、他 OS は `UnsupportedLocalPeer` 固定）。
 pub mod local_peer;
@@ -404,9 +368,6 @@ pub mod macos_web_auth_session;
 /// C ABI ラッパー）。`device/window_management.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_window_management;
-/// Phase 11 の拡充ループ（親 #85、Issue #273）: 地図表示の effect ドライバ（macOS / iOS は
-/// pull 型 `bridge`、他 OS は `UnsupportedMapSnapshotter` 固定）。
-pub mod map_view;
 /// Phase 11 の拡充ループ（親 #953、Issue #954・#955・#956・#957）: マイク録音の
 /// effect ドライバ（macOS/iOS/Windows/Android 実装、他 OS は `UnsupportedMicRecorder`
 /// 固定）。
@@ -415,10 +376,6 @@ pub mod mic_record;
 /// Windows・Android は #483・#485 の担当、他 OS は `UnsupportedMusicLibrary` 固定。
 /// Web は対象外）。
 pub mod music_library;
-/// Phase 11 の拡充ループ（親 #1130、Issue #1282）: ネットワーク接続状態の effect ドライバ
-/// （Windows / macOS / iOS 実装、Android は #1284、他 OS は
-/// `UnsupportedNetworkStatus` 固定。Web は `fandhe-web-dom`）。
-pub mod network_status;
 /// Phase 11 の拡充ループ（親 #114、Issue #541・#1130）: 決済シートの effect ドライバ（Android は
 /// pull 型 bridge、他のネイティブは `UnsupportedPaymentSheet` 固定の同期経路。dispatch は最終形。
 /// Web は `fandhe-web-dom`）。
@@ -513,10 +470,6 @@ pub mod windows_file_association;
 /// `device/image_recognition.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_image_recognition;
-/// Issue #487: Windows 向け LAN のサービス探索（Win32 `DnsServiceBrowse`。親 #109 の windows の子）。
-/// `device/lan_discovery.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_lan_discovery;
 /// Issue #955: Windows 向けマイク録音実装（WinRT `MediaCapture` ラッパー）。
 /// `device/mic_record.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
@@ -527,11 +480,6 @@ pub mod windows_mic_record;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_music_library;
-/// Issue #1282: Windows 向けネットワーク接続状態実装（WinRT `NetworkInformation` ラッパー）。
-/// `device/network_status.rs` の Windows 経路から呼ばれる。写像の純関数はホストの
-/// `cargo test` で検査するため cfg を付けず、WinRT 呼び出しだけをモジュール内に閉じる。
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_network_status;
 /// Issue #359: Windows 向けペン・筆圧入力実装（`SetWindowSubclass` の観測専用サブクラスが
 /// `WM_POINTER*` から値を置く）。`device/pen_stylus.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
@@ -585,7 +533,6 @@ use fandhe_device::{storage::Storage, DeviceError};
 pub fn shutdown() {
     tts::stop_shared_tts();
     location::stop_shared_location();
-    lan_discovery::stop_shared_discovery();
     local_peer::stop_shared_exchange();
     picture_in_picture::shutdown();
     web_auth_session::shutdown();

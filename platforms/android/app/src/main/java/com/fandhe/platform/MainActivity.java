@@ -338,13 +338,6 @@ public class MainActivity extends GameActivity {
     }
 
 
-    // LAN のサービス探索（Issue #489）。実装は `LanDiscoveryHelper`。Rust の `android_lan_discovery.rs` が JNI で呼ぶ。
-    private final LanDiscoveryHelper lanDiscoveryHelper = new LanDiscoveryHelper(this);
-
-    void requestLanDiscovery(long requestId, int durationMs) {
-        lanDiscoveryHelper.request(requestId, durationMs);
-    }
-
     // 近くの端末との直接通信（Issue #513）。実装は `LocalPeerHelper`（許可ランチャーを STARTED 前に登録）。
     // Rust の `android_local_peer.rs` が JNI で呼ぶ。
     private final LocalPeerHelper localPeerHelper = new LocalPeerHelper(this);
@@ -1257,7 +1250,6 @@ public class MainActivity extends GameActivity {
         activityResumed = false;
         penStylusHelper.onPause();
         webAuthSessionHelper.onPause();
-        lanDiscoveryHelper.onPause();
         localPeerHelper.onPause();
         // 「使用中のみ」の権限のため、バックグラウンドでは測位しない（Issue #890）。
         if (locationManager != null) {
@@ -2622,12 +2614,6 @@ public class MainActivity extends GameActivity {
         }
     }
 
-    // Rust 側（`AndroidNetworkStatus::call_read`、JNI 署名 `()I`）から 1 秒間隔で呼ばれる
-    // 同期メソッド（Issue #1284）。結果コードの意味は `NetworkStatusHelper` を参照。
-    private int networkStatusRead() {
-        return NetworkStatusHelper.read(getApplicationContext());
-    }
-
     // Rust 側（`AndroidAppShortcuts::call_install`、JNI 署名 `(Ljava/lang/String;Ljava/lang/String;)I`）
     // からワーカースレッドで呼ばれる同期メソッド（Issue #426）。結果コードは `AppShortcutsHelper` を参照。
     private int appShortcutsInstall(String label, String url) {
@@ -2653,7 +2639,6 @@ public class MainActivity extends GameActivity {
         super.onDestroy();
         paymentRequestHelper.onDestroy();
         healthDataHelper.onDestroy();
-        lanDiscoveryHelper.onDestroy();
         localPeerHelper.onDestroy();
         musicLibraryHelper.onDestroy();
         pictureInPictureHelper.onDestroy();

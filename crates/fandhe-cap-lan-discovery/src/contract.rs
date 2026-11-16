@@ -7,7 +7,7 @@
 //! iOS / Android / macOS / Windows。Web は公開 API が無く対象外。
 //!
 //! BLE スキャン（`bluetooth_le`）と同じ「固定窓の探索」で、窓が閉じたら一覧を 1 回だけ返す。
-//! 継続配信はしない。request/response 型のため、橋渡し層（`fandhe-egui-proxy` の `device/`）は
+//! 継続配信はしない。request/response 型のため、橋渡し層（本 crate の `driver.rs`）は
 //! `RequestSlot` で要求追跡を行う前提。各 OS 実装が集めた生の結果は [`normalize_services`] で
 //! 契約の形（同名まとめ・名前昇順・件数上限）に整える。後続の OS 実装（Windows・iOS・Android）も
 //! この契約のまま実装できる。
@@ -51,7 +51,7 @@
 use std::collections::HashMap;
 use std::net::IpAddr;
 
-use crate::DeviceError;
+use crate::error::LanDiscoveryError;
 
 /// 探索するサービス種別（固定。任意の種別は受けない）。
 pub const SERVICE_TYPE: &str = "_http._tcp";
@@ -76,15 +76,15 @@ pub struct LanService {
 /// LAN のサービス探索の契約（モジュール doc の「契約」節）。
 pub trait LanDiscovery: Send + Sync {
     /// 約 [`BROWSE_DURATION_MS`] 探索して [`normalize_services`] 済みの一覧を返す。
-    fn browse(&self) -> Result<Vec<LanService>, DeviceError>;
+    fn browse(&self) -> Result<Vec<LanService>, LanDiscoveryError>;
 }
 
 /// 対象外 OS・初期化失敗時のフォールバック。ダミーの成功実装へは倒さない。
 pub struct UnsupportedLanDiscovery;
 
 impl LanDiscovery for UnsupportedLanDiscovery {
-    fn browse(&self) -> Result<Vec<LanService>, DeviceError> {
-        Err(DeviceError::Unsupported("lan_discovery"))
+    fn browse(&self) -> Result<Vec<LanService>, LanDiscoveryError> {
+        Err(LanDiscoveryError::Unsupported("lan_discovery"))
     }
 }
 
@@ -155,28 +155,28 @@ pub fn service_from_raw(name: Option<String>, addr: Option<&str>, port: i32) -> 
 /// | 5 | 種別が未宣言（NoAuth） | `Internal` |
 /// | 6 | その他（Android の開始失敗など） | `Internal` |
 /// | それ以外 | 未知 | `Internal` |
-pub fn decode_code(code: i32) -> Result<(), DeviceError> {
+pub fn decode_code(code: i32) -> Result<(), LanDiscoveryError> {
     const F: &str = "lan_discovery";
     match code {
         0 => Ok(()),
-        1 => Err(DeviceError::PermissionDenied(F)),
-        2 => Err(DeviceError::Disabled(F)),
-        3 => Err(DeviceError::Unsupported(F)),
-        4 => Err(DeviceError::Internal("lan_discovery interrupted")),
-        5 => Err(DeviceError::Internal("lan_discovery not declared")),
-        _ => Err(DeviceError::Internal("lan_discovery outcome")),
+        1 => Err(LanDiscoveryError::PermissionDenied(F)),
+        2 => Err(LanDiscoveryError::Disabled(F)),
+        3 => Err(LanDiscoveryError::Unsupported(F)),
+        4 => Err(LanDiscoveryError::Internal("lan_discovery interrupted")),
+        5 => Err(LanDiscoveryError::Internal("lan_discovery not declared")),
+        _ => Err(LanDiscoveryError::Internal("lan_discovery outcome")),
     }
 }
 
 /// Windows `DnsServiceBrowse` のコールバックが渡すステータス → 契約のエラー。
 /// 5（`ERROR_ACCESS_DENIED`）→ 許可なし、50 / 120（`ERROR_NOT_SUPPORTED` /
 /// `ERROR_CALL_NOT_IMPLEMENTED`）→ 非対応、それ以外 → 内部エラー。数値は画面・ログへ出さない。
-pub fn error_from_dns_status(status: u32) -> DeviceError {
+pub fn error_from_dns_status(status: u32) -> LanDiscoveryError {
     const F: &str = "lan_discovery";
     match status {
-        5 => DeviceError::PermissionDenied(F),
-        50 | 120 => DeviceError::Unsupported(F),
-        _ => DeviceError::Internal("lan_discovery dns status"),
+        5 => LanDiscoveryError::PermissionDenied(F),
+        50 | 120 => LanDiscoveryError::Unsupported(F),
+        _ => LanDiscoveryError::Internal("lan_discovery dns status"),
     }
 }
 
@@ -320,12 +320,21 @@ mod tests {
         assert!(decode_code(0).is_ok());
         assert!(matches!(
             decode_code(1),
-            Err(DeviceError::PermissionDenied(_))
+            Err(LanDiscoveryError::PermissionDenied(_))
         ));
-        assert!(matches!(decode_code(2), Err(DeviceError::Disabled(_))));
-        assert!(matches!(decode_code(3), Err(DeviceError::Unsupported(_))));
+        assert!(matches!(
+            decode_code(2),
+            Err(LanDiscoveryError::Disabled(_))
+        ));
+        assert!(matches!(
+            decode_code(3),
+            Err(LanDiscoveryError::Unsupported(_))
+        ));
         for c in [4, 5, 99, -1] {
-            assert!(matches!(decode_code(c), Err(DeviceError::Internal(_))));
+            assert!(matches!(
+                decode_code(c),
+                Err(LanDiscoveryError::Internal(_))
+            ));
         }
     }
 
@@ -348,7 +357,7 @@ mod tests {
     fn unsupported_browse_is_error_not_empty() {
         assert!(matches!(
             UnsupportedLanDiscovery.browse(),
-            Err(DeviceError::Unsupported("lan_discovery"))
+            Err(LanDiscoveryError::Unsupported("lan_discovery"))
         ));
     }
 
@@ -402,16 +411,19 @@ mod tests {
     fn dns_status_table() {
         assert!(matches!(
             error_from_dns_status(5),
-            DeviceError::PermissionDenied(_)
+            LanDiscoveryError::PermissionDenied(_)
         ));
         for c in [50, 120] {
             assert!(matches!(
                 error_from_dns_status(c),
-                DeviceError::Unsupported(_)
+                LanDiscoveryError::Unsupported(_)
             ));
         }
         for c in [1, 1223, 9506] {
-            assert!(matches!(error_from_dns_status(c), DeviceError::Internal(_)));
+            assert!(matches!(
+                error_from_dns_status(c),
+                LanDiscoveryError::Internal(_)
+            ));
         }
     }
 }

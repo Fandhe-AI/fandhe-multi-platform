@@ -6,7 +6,7 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 
 // ネットワーク接続状態画面（Issue #1284）の Android 実装ヘルパー。
-// Rust の `device/android_network_status.rs` が `MainActivity.networkStatusRead` 経由で
+// Rust の `fandhe-cap-network-status` の `android.rs` が JNI の static 呼び出しで
 // 1 秒間隔に同期で呼ぶ。判定ロジックは Rust 側の `snapshot_from_code`（ホストの
 // `cargo test` で検査）に寄せ、ここは OS の事実を int のビットに詰めて返すだけにする。
 // コールバック登録・要求 id・保留状態を持たないため、Activity 再生成で破棄すべき要求は無い。
@@ -24,8 +24,9 @@ final class NetworkStatusHelper {
 
     // 戻り値: FAILED = 取得失敗、OFFLINE = アクティブなネットワーク無し、
     // それ以外 = PRESENT に各ビットを足した値。接続詳細はログへ出さない。
-    static int read(Context context) {
+    static int read(Context activity) {
         try {
+            Context context = activity.getApplicationContext();
             ConnectivityManager cm = context.getSystemService(ConnectivityManager.class);
             if (cm == null) {
                 return FAILED;

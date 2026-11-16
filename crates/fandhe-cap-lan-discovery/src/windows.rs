@@ -1,16 +1,16 @@
 //! Windows 向け LAN のサービス探索（mDNS / DNS-SD）実装（Issue #487。親 #109 の windows の子）。
 //!
-//! 呼び出し元: `device/lan_discovery.rs` の Windows 経路が [`present`] を呼び、終了時に
-//! [`stop_shared`] を呼ぶ。結果は同ファイルの `OBSERVED`（request_id 照合つき）へ足し、完了は
-//! `finish` へ渡す。契約の SSOT は `fandhe_device::lan_discovery`。
+//! 呼び出し元: `driver.rs` の Windows 経路が [`present`] を呼び、終了時に
+//! [`stop_shared`] を呼ぶ。結果は`driver.rs` の `OBSERVED`（request_id 照合つき）へ足し、完了は
+//! `finish` へ渡す。契約の SSOT は `crate::contract`。
 //!
 //! # 流れ（ワーカースレッド上で同期的に）
 //!
-//! 1. 未接続（`WindowsNetworkStatus` が `Offline`）なら `Disabled`。読めなかった場合は未接続に
+//! 1. 未接続（network-status の機能 crate が `Offline`）なら `Disabled`。読めなかった場合は未接続に
 //!    畳まず探索へ進む
 //! 2. Win32 `DnsServiceBrowse`（`_http._tcp.local`、全インタフェース）を開始する。結果は OS の
 //!    スレッドプールから [`on_browse`] へ届き、同じ応答に含まれる PTR / SRV / A / AAAA を
-//!    `fandhe_device::lan_discovery::link_dns_records` で結んで `OBSERVED` へ足す
+//!    `crate::contract::link_dns_records` で結んで `OBSERVED` へ足す
 //! 3. 呼び出しの開始を起点に単調時計で `duration` 待つ（停止・置換なら中断として `Internal`、
 //!    OS の失敗通知ならそのエラー）
 //! 4. **全経路で** `DnsServiceBrowseCancel` を呼んでから `finish` を一度だけ呼ぶ
@@ -30,24 +30,21 @@
 
 use std::ffi::c_void;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use std::sync::{mpsc, Mutex, OnceLock};
+use std::sync::{Mutex, OnceLock, mpsc};
 use std::time::{Duration, Instant};
 
-use fandhe_device::lan_discovery::{
-    error_from_dns_status, link_dns_records, DnsRecord, SERVICE_TYPE,
-};
-use fandhe_device::network_status::{NetworkSnapshot, NetworkStatus};
-use fandhe_device::DeviceError;
-use windows::core::{PCWSTR, PWSTR};
+use crate::contract::{DnsRecord, SERVICE_TYPE, error_from_dns_status, link_dns_records};
+use crate::error::LanDiscoveryError;
+use fandhe_cap_network_status::{NetworkSnapshot, platform_network_status};
 use windows::Win32::Foundation::{DNS_REQUEST_PENDING, ERROR_CANCELLED};
 use windows::Win32::NetworkManagement::Dns::{
-    DnsFree, DnsFreeRecordList, DnsServiceBrowse, DnsServiceBrowseCancel,
     DNS_QUERY_REQUEST_VERSION1, DNS_RECORDW, DNS_SERVICE_BROWSE_REQUEST,
-    DNS_SERVICE_BROWSE_REQUEST_0, DNS_SERVICE_CANCEL,
+    DNS_SERVICE_BROWSE_REQUEST_0, DNS_SERVICE_CANCEL, DnsFree, DnsFreeRecordList, DnsServiceBrowse,
+    DnsServiceBrowseCancel,
 };
+use windows::core::{PCWSTR, PWSTR};
 
-use super::lan_discovery::{finish, OBSERVED};
-use super::windows_network_status::WindowsNetworkStatus;
+use crate::driver::{OBSERVED, finish};
 
 const TYPE_A: u16 = 1;
 const TYPE_PTR: u16 = 12;
@@ -57,9 +54,15 @@ const TYPE_SRV: u16 = 33;
 /// 専用ワーカーへの指令。開始・置換・停止・OS の失敗通知をすべてこの 1 本の列に流し、
 /// 到着順に処理する（取り消し済みの要求は OS の探索を開始しない）。
 enum Cmd {
-    Start { request_id: u64, deadline: Instant },
+    Start {
+        request_id: u64,
+        deadline: Instant,
+    },
     Stop,
-    Failed { request_id: u64, err: DeviceError },
+    Failed {
+        request_id: u64,
+        err: LanDiscoveryError,
+    },
 }
 
 /// ワーカーへの送信口（初回の `present` で専用スレッドを起動する）。
@@ -68,31 +71,31 @@ static TX: Mutex<Option<mpsc::Sender<Cmd>>> = Mutex::new(None);
 /// `_http._tcp.local` の NUL 終端 UTF-16。OS へ渡す QueryName は `'static` を保つ。
 static QUERY: OnceLock<Vec<u16>> = OnceLock::new();
 
-fn send(cmd: Cmd) -> Result<(), DeviceError> {
+fn send(cmd: Cmd) -> Result<(), LanDiscoveryError> {
     let mut tx = TX.lock().unwrap_or_else(|e| e.into_inner());
     if tx.is_none() {
         let (t, rx) = mpsc::channel();
         std::thread::Builder::new()
             .name("lan-discovery".into())
             .spawn(move || worker(rx))
-            .map_err(|_| DeviceError::Internal("lan_discovery present"))?;
+            .map_err(|_| LanDiscoveryError::Internal("lan_discovery present"))?;
         *tx = Some(t);
     }
     let sent = tx.as_ref().is_some_and(|t| t.send(cmd).is_ok());
     if !sent {
         *tx = None;
-        return Err(DeviceError::Internal("lan_discovery present"));
+        return Err(LanDiscoveryError::Internal("lan_discovery present"));
     }
     Ok(())
 }
 
-fn interrupted() -> DeviceError {
-    DeviceError::Internal("lan_discovery interrupted")
+fn interrupted() -> LanDiscoveryError {
+    LanDiscoveryError::Internal("lan_discovery interrupted")
 }
 
-/// `device/lan_discovery.rs::drive_callback` から呼ばれる。指令を積んで即座に返る。
+/// `driver.rs::drive_callback` から呼ばれる。指令を積んで即座に返る。
 /// 進行中の探索があればワーカーが停止して置き換える（古い結果は request_id 照合で捨てる）。
-pub(crate) fn present(request_id: u64, duration: Duration) -> Result<(), DeviceError> {
+pub(crate) fn present(request_id: u64, duration: Duration) -> Result<(), LanDiscoveryError> {
     // 期限の起点は呼び出しの開始（単調時計）。
     let deadline = Instant::now() + duration;
     send(Cmd::Start {
@@ -155,13 +158,16 @@ fn run_browse(
     deadline: Instant,
     rx: &mpsc::Receiver<Cmd>,
     next: &mut Option<(u64, Instant)>,
-) -> Result<(), DeviceError> {
+) -> Result<(), LanDiscoveryError> {
     // 未接続だけ Disabled。読めなかったときは探索へ進む（未接続に畳まない）。
-    if matches!(WindowsNetworkStatus.read(), Ok(NetworkSnapshot::Offline)) {
-        return Err(DeviceError::Disabled("lan_discovery"));
+    if matches!(
+        platform_network_status().read(),
+        Ok(NetworkSnapshot::Offline)
+    ) {
+        return Err(LanDiscoveryError::Disabled("lan_discovery"));
     }
     let context =
-        usize::try_from(request_id).map_err(|_| DeviceError::Internal("lan_discovery id"))?;
+        usize::try_from(request_id).map_err(|_| LanDiscoveryError::Internal("lan_discovery id"))?;
     let query = QUERY.get_or_init(|| {
         format!("{SERVICE_TYPE}.local")
             .encode_utf16()

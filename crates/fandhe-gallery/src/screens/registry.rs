@@ -176,7 +176,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "map_view_show" => fandhe_core::screens::map_view_show::current_screen,
-    fandhe_egui_proxy::device::map_view::map_view_show_effect,
+    fandhe_cap_map_view::map_view_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "photo_save" => fandhe_core::screens::photo_save::current_screen,
@@ -256,7 +256,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "lan_discover" => fandhe_core::screens::lan_discover::current_screen,
-    fandhe_egui_proxy::device::lan_discovery::lan_discover_effect,
+    fandhe_cap_lan_discovery::lan_discover_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "peer_connect" => fandhe_core::screens::peer_connect::current_screen,
@@ -416,7 +416,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "network_status_show" => fandhe_core::screens::network_status_show::current_screen,
-    fandhe_egui_proxy::device::network_status::network_status_show_effect,
+    fandhe_cap_network_status::network_status_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pen_draw" => fandhe_core::screens::pen_draw::current_screen,

@@ -212,6 +212,9 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // 以前は egui-proxy の `android::run` が呼んでいた。機能 crate を egui-proxy が知らないようにするため移した）。
     #[cfg(feature = "device")]
     fandhe_cap_document_scan::reset_pending_tracking();
+    // LAN のサービス探索の保留中の要求も破棄する（プロセス static の旧要求を再生成後へ持ち越さない。`fandhe_cap_lan_discovery::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_lan_discovery::reset_pending_tracking();
     // 機械学習推論の処理済み世代も破棄する。画面状態は再生成で generation 0 に戻るため、残すと次の
     // 「推論する」が飲み込まれる（`fandhe_cap_ml_inference::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
@@ -377,6 +380,8 @@ fn shutdown() {
     fandhe_cap_system_tray::stop_shared_system_tray();
     fandhe_cap_global_hotkey::shutdown();
     fandhe_cap_midi::shutdown();
+    // LAN のサービス探索の停止（Rust 側のロックを握らずに OS 側を止める）。
+    fandhe_cap_lan_discovery::stop_shared_discovery();
     fandhe_cap_media_cast::shutdown();
     fandhe_cap_serial_port::shutdown();
     fandhe_cap_audio_session::shutdown();
