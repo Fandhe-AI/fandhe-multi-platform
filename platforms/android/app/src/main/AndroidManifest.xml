@@ -391,6 +391,46 @@
              実体は各機能 crate の android/java（FeatureLifecycleProvider 継承）。宣言は各 crate の Cargo.toml と
              完全に一致させる（cargo-fandhe の突き合わせテストが確かめる）。切り離し時に対応する crate ごと削除する。 -->
         <provider
+            android:name="com.fandhe.platform.MediaPlaybackLifecycle"
+            android:authorities="${applicationId}.fandhe.media-playback"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.NowPlayingLifecycle"
+            android:authorities="${applicationId}.fandhe.now-playing-controls"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.NotificationLifecycle"
+            android:authorities="${applicationId}.fandhe.notification"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.BluetoothClassicLifecycle"
+            android:authorities="${applicationId}.fandhe.bluetooth-classic"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.BlePeripheralLifecycle"
+            android:authorities="${applicationId}.fandhe.ble-peripheral"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.BluetoothLeLifecycle"
+            android:authorities="${applicationId}.fandhe.bluetooth-le"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.CompassLifecycle"
+            android:authorities="${applicationId}.fandhe.compass-heading"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.EnvironmentSensorsLifecycle"
+            android:authorities="${applicationId}.fandhe.environment-sensors"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.TiltMotionLifecycle"
+            android:authorities="${applicationId}.fandhe.tilt-motion"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.MotionRawSensorsLifecycle"
+            android:authorities="${applicationId}.fandhe.motion-raw-sensors"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.CameraCaptureLifecycle"
             android:authorities="${applicationId}.fandhe.camera-capture"
             android:exported="false" />

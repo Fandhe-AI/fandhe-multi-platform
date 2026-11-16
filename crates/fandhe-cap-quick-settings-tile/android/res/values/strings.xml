@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- クイック設定タイル（Issue #720）の表示名。fandhe_core の
+     `screens::quick_settings_tile_show::TILE_LABEL` と一致させる。機能 crate 側の資源で、アプリの strings.xml には置かない。 -->
+<resources>
+    <string name="quick_settings_tile_label">Fandhe カウント</string>
+</resources>

@@ -16,7 +16,7 @@
 //! 守る: 1 プロセス 1 回の登録（`InstallCell`）、COM の失敗を成功にしないこと、途中失敗時の
 //! `AbortList` による後始末、HRESULT・パス・URL をエラー文言へ出さないこと。
 //! 守らない: 画面を一度開くまで項目が出ない、終了後もタスクが残る、exe を動かすと古いパスのまま残り
-//! 次に画面を開くと置き換わる、他アプリから同じ URL が来た場合と区別しない、`windows_notification` が
+//! 次に画面を開くと置き換わる、他アプリから同じ URL が来た場合と区別しない、`fandhe-cap-notification`（Windows）が
 //! 途中で明示の AUMID を付けたプロセスではジャンプリストが出なくなることがある（#413 で確かめる）、
 //! ポーリング間隔ぶんの反映遅れ。
 //!
@@ -50,7 +50,7 @@ mod win {
         DestinationList, EnumerableObjectCollection, ICustomDestinationList, IShellLinkW, ShellLink,
     };
 
-    use super::super::windows_notification::lpwstr_variant;
+    use fandhe_platform_windows::lpwstr_variant;
     use fandhe_platform_windows::ComInit;
 
     const FAILED: DeviceError = DeviceError::Internal("app_shortcuts jump list");
@@ -92,7 +92,7 @@ mod win {
                     link.SetArguments(&HSTRING::from(super::task_arguments(SHORTCUT_URL)))?;
                     link.SetIconLocation(&exe_h, 0)?;
                     let store: IPropertyStore = link.cast()?;
-                    let title = lpwstr_variant(SHORTCUT_TITLE, "app_shortcuts jump list")
+                    let title = lpwstr_variant(SHORTCUT_TITLE)
                         .map_err(|_| windows::core::Error::from(E_FAIL))?;
                     store.SetValue(&PKEY_Title, &title)?;
                     store.Commit()?;

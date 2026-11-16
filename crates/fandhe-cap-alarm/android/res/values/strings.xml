@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- アラーム（Issue #1078）の通知チャンネル名と通知文。機能 crate 側の資源で、アプリの strings.xml には置かない。 -->
+<resources>
+    <string name="alarm_channel_name">アラーム</string>
+    <string name="alarm_notification_title">Fandhe のアラーム</string>
+    <string name="alarm_notification_text">予約した時刻になりました</string>
+</resources>

@@ -16,7 +16,7 @@
       ],
       "detail": "できている（未確認、スキャンのみ。接続は対象外）",
       "implStatus": "実装済み（スキャンのみ。実機目視は人間確認待ち）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_bluetooth_le.m + crates/fandhe-egui-proxy/src/device/apple_bluetooth_le.rs + crates/fandhe-egui-proxy/src/device/bluetooth_le.rs + crates/fandhe-device/src/bluetooth_le.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue 旧#1061"
+      "impl": "crates/fandhe-cap-bluetooth-le/apple/fandhe_apple_bluetooth_le.m + crates/fandhe-cap-bluetooth-le/src/apple.rs + crates/fandhe-cap-bluetooth-le/src/driver.rs + crates/fandhe-cap-bluetooth-le/src/contract.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue 旧#1061"
     },
     "android": {
       "status": "done",
@@ -29,7 +29,7 @@
       ],
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + platforms/android/app/src/main/AndroidManifest.xml + crates/fandhe-egui-proxy/src/device/android.rs + crates/fandhe-egui-proxy/src/device/bluetooth_le.rs + crates/fandhe-device/src/bluetooth_le.rs、Issue 旧#1062"
+      "impl": "crates/fandhe-cap-bluetooth-le/src/android.rs + crates/fandhe-cap-bluetooth-le/android/java/com/fandhe/platform/BluetoothLeHelper.java + crates/fandhe-cap-bluetooth-le/android/java/com/fandhe/platform/BluetoothLeLifecycle.java + platforms/android/app/src/main/AndroidManifest.xml + crates/fandhe-cap-bluetooth-le/src/driver.rs + crates/fandhe-cap-bluetooth-le/src/contract.rs、Issue 旧#1062"
     },
     "macos": {
       "status": "done",
@@ -42,7 +42,7 @@
       ],
       "detail": "できている（実機、スキャンのみ。接続は対象外）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_bluetooth_le.m + crates/fandhe-egui-proxy/src/device/apple_bluetooth_le.rs + crates/fandhe-egui-proxy/src/device/bluetooth_le.rs + crates/fandhe-device/src/bluetooth_le.rs、Issue 旧#1060",
+      "impl": "crates/fandhe-cap-bluetooth-le/apple/fandhe_apple_bluetooth_le.m + crates/fandhe-cap-bluetooth-le/src/apple.rs + crates/fandhe-cap-bluetooth-le/src/driver.rs + crates/fandhe-cap-bluetooth-le/src/contract.rs、Issue 旧#1060",
       "verified": true
     },
     "windows": {
@@ -56,7 +56,7 @@
       ],
       "detail": "できている（未確認、スキャンのみ。接続は対象外）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_bluetooth_le.rs + crates/fandhe-egui-proxy/src/device/bluetooth_le.rs + crates/fandhe-device/src/bluetooth_le.rs、Issue 旧#1060"
+      "impl": "crates/fandhe-cap-bluetooth-le/src/windows.rs + crates/fandhe-cap-bluetooth-le/src/driver.rs + crates/fandhe-cap-bluetooth-le/src/contract.rs、Issue 旧#1060"
     },
     "web": {
       "status": "done",

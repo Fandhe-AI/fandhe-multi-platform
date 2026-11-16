@@ -65,7 +65,7 @@ pub enum ScanPhase {
     Scanning,
 }
 
-/// 一覧の 1 行（`fandhe_device::bluetooth_le::BleDevice` に対応する画面用の型。
+/// 一覧の 1 行（`fandhe_cap_bluetooth_le::BleDevice` に対応する画面用の型。
 /// `fandhe-core` は `fandhe-device` に依存しないため、写像は proxy 側の責務）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BleRow {

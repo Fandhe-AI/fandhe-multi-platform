@@ -31,10 +31,10 @@
 //!
 //! センサー値・例外の name / message は DOM・ログへ出さない（security.md A09）。
 
-use fandhe_core::screens::motion_raw_sensors_show::{RawFailureView, RawReadingView, RawUnitView};
-use fandhe_device::motion_raw_sensors::{
+use fandhe_cap_motion_raw_sensors::{
     validate_reading, RawKind, RawReading, RawSensorFailure, RawUnit,
 };
+use fandhe_core::screens::motion_raw_sensors_show::{RawFailureView, RawReadingView, RawUnitView};
 
 /// `rotationRate` の 3 成分から角速度を作る。1 つでも null、または非有限なら値なし。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -162,11 +162,11 @@ mod web {
     use std::collections::HashMap;
     use std::rc::Rc;
 
+    use fandhe_cap_motion_raw_sensors::{RawReading, RawSensorFailure, READ_INTERVAL};
     use fandhe_core::screens::motion_raw_sensors_show::{
         apply_failure, apply_reading, row_text, MotionRawSensorsShowState, RawKindView,
         RawReadingView,
     };
-    use fandhe_device::motion_raw_sensors::{RawReading, RawSensorFailure, READ_INTERVAL};
     use js_sys::{Function, Promise, Reflect};
     use wasm_bindgen::prelude::*;
     use wasm_bindgen_futures::JsFuture;

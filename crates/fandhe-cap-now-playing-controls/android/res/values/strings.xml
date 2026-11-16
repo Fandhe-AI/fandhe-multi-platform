@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ロック画面・OS のメディア操作（Issue #383）の通知チャンネル名。機能 crate 側の資源で、アプリの strings.xml には置かない。 -->
+<resources>
+    <string name="now_playing_channel_name">再生中</string>
+</resources>

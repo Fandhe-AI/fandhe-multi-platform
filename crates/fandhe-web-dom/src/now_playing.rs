@@ -35,8 +35,8 @@
 //! Chrome が短いメディア（素材は 5 秒）に通知を出さない場合があること、位置表示（`setPositionState`）、
 //! `Loading` に入る前の既定動作、egui-proxy の wasm canvas 経路。
 
+use fandhe_cap_now_playing_controls::OsMediaCommand;
 use fandhe_core::screens::audio_play::OsCommand;
-use fandhe_device::now_playing::OsMediaCommand;
 
 /// `MediaSession.playbackState` の値。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -74,11 +74,11 @@ pub(crate) use web::{release_mount, sync};
 mod web {
     use std::cell::RefCell;
 
+    use fandhe_cap_now_playing_controls::{OsMediaCommand, SharedOsCommand, DEMO_TITLE};
     use fandhe_core::screens::audio_play::{
         apply_os_command, os_media_cleared, set_os_media_status, AudioPhase, AudioPlayState,
         OsMediaStatus,
     };
-    use fandhe_device::now_playing::{OsMediaCommand, SharedOsCommand, DEMO_TITLE};
     use js_sys::{Array, Function, Object, Reflect};
     use wasm_bindgen::prelude::*;
 

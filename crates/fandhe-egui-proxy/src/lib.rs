@@ -42,7 +42,7 @@
 //! `unsafe` は呼び出し 1 関数に閉じ、`// SAFETY:` で HWND の生存根拠を明記する
 //! （Android/iOS/macOS と同型の FFI 例外、coding-rust.md 準拠）。Issue #907 で `device/windows_biometric.rs`
 //! （`IUserConsentVerifierInterop::RequestVerificationForWindowAsync` 1 呼び出し）も
-//! 同じ緩和へ相乗りした。Issue #1033 で `device/windows_notification.rs`
+//! 同じ緩和へ相乗りした。Issue #1033 で `fandhe-cap-notification` の `windows.rs`
 //! （スタートメニューへ `.lnk` を作って AUMID を登録する `IShellLinkW`/
 //! `IPropertyStore`/`IPersistFile` 系の呼び出し）も同じ緩和へ相乗りした。
 //! Windows の `CoInitializeEx` ガードと HWND の保持は Issue #1184 で `fandhe-platform-windows` へ移した。

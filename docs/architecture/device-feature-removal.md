@@ -40,12 +40,10 @@ Phase 8（親 #752）は端末機能 3 型（ローカル保存 → HTTP → カ
    - camera-capture の Android 配線: `MainActivity.java` に残るものは無い（#1257 で除いた）。Activity への参加は
      機能 crate の `CameraCaptureLifecycle`（非公開 provider）なので、`AndroidManifest.xml` の `<provider>` 1 件を
      crate ごと削除すればよい
-   - `crates/fandhe-egui-proxy/src/device/tilt.rs` の `gravity_to_tilt`（Issue #831）・
-     `crates/fandhe-egui-proxy/src/device/android.rs` の `nativeOnMotionChanged` JNI
-     エクスポートを削除する（`shared_motion`/`drive` 等ターゲット非依存の部分は残置）
-   - `MainActivity.java` の `sensorManager`/`motionSensor` フィールド・`motionListener`・
-     `nativeOnMotionChanged` native 宣言・`onResume`/`onPause` 内のセンサ登録/解除を
-     削除する（Issue #831）
+   - 傾きセンサ（Issue #831）: 機能 crate `crates/fandhe-cap-tilt-motion/` へ移した（#1331）。`MainActivity.java` には何も残らない
+     （`sensorManager`・`motionListener`・`nativeOnMotionChanged` は `TiltMotionHelper` が持つ）。切り離しは crate の依存を外すだけでよい
+     （Manifest の `TiltMotionLifecycle` provider は `cargo fandhe gen` が宣言から出す）。`fandhe-gallery` の画面ゲート
+     （`set_screen_active`）の呼び出しと no-op スタブも合わせて削除する
    - ゲームコントローラ（親 #932、Issue #935・#1303）: 機能 crate `crates/fandhe-cap-gamepad/` へ移した。
      `MainActivity.java` には何も残らない。切り離しは crate の依存を外すだけでよい
      （Manifest の `GamepadLifecycle` provider は `cargo fandhe gen` が宣言から出す）
