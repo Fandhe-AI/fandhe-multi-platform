@@ -123,10 +123,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // 旧要求の遅延完了を id 不一致で無視させる（`device::photo_save::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::photo_save::reset_pending_tracking();
-    // Issue #534: `web_auth_session::bridge` の `ACTIVE`（デモサーバー）と `SLOT` も同様に破棄する。
-    // 残ると次の要求が開けなくなる（`device::android_web_auth_session::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::android_web_auth_session::reset_pending_tracking();
     // Issue #325: `print::bridge::SLOT` も同様に破棄する（Activity 再生成で印刷の保留は復元しない）。
     #[cfg(feature = "device")]
     crate::device::print::reset_pending_tracking();
@@ -134,10 +130,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // （`device::picture_in_picture::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::picture_in_picture::reset_pending_tracking();
-    // Issue #560: OS の検索への登録の処理済み世代も破棄する（理由は translation と同じ。
-    // `device::spotlight_index::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::spotlight_index::reset_pending_tracking();
     // Issue #1130: 決済シートの保留中の要求を破棄し、旧 request_id の完了を不一致で捨てさせる。
     #[cfg(feature = "device")]
     crate::device::payment_request::reset_pending_tracking();
@@ -378,43 +370,6 @@ fn read_debug_proxy_app_property() -> String {
 #[cfg(not(feature = "debug-proxy-app"))]
 fn read_debug_proxy_app_property() -> String {
     String::new()
-}
-
-/// `device` feature 無効ビルド向けの `nativeOnUrlSchemeReceived` no-op フォールバック
-/// （Issue #1218）。`MainActivity.java` は feature を知らず `onCreate` / `onNewIntent` から
-/// 必ず呼ぶため、スタブが無いと feature 無効ビルドで `UnsatisfiedLinkError` になる。
-/// 引数の並びは Java 宣言・`device/android_url_scheme.rs` の実体と 3 か所で一致させる。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
-/// シンボル名は JNI 命名規約上の固定名（`nativeOnMotionChanged` と同じ根拠）。
-#[cfg(not(feature = "device"))]
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnUrlSchemeReceived(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    _url: *mut core::ffi::c_void,
-) {
-}
-
-/// `device` feature 無効ビルド向けの `nativeOnDeepLinkReceived` no-op フォールバック
-/// （Issue #1279）。`MainActivity` が feature を知らず https の `ACTION_VIEW` で
-/// `DeepLinkHelper.deliver` を呼ぶため、スタブが無いと feature 無効ビルドで
-/// `UnsatisfiedLinkError` になる。署名は Java 宣言・`device/android_deep_link.rs` の実体と
-/// 3 か所で一致させる。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
-/// シンボル名は JNI 命名規約上の固定名（`nativeOnUrlSchemeReceived` と同じ根拠）。
-#[cfg(not(feature = "device"))]
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_DeepLinkHelper_nativeOnDeepLinkReceived(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    _url: *mut core::ffi::c_void,
-) {
 }
 
 // `nativeOnLocationChanged`/`nativeOnLocationFailure`（Issue #890）は上記

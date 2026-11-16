@@ -4,8 +4,8 @@
 //! （`screens/mod.rs` の `pub mod file_association_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS から届いたファイルの検査・保持は
-//! `fandhe_device::file_association`、スナップショットを本モジュールへ注入するのは
-//! `fandhe-egui-proxy` の effect ドライバ（`device/file_association.rs`）の責務。
+//! `fandhe_cap_file_association`、スナップショットを本モジュールへ注入するのは
+//! `fandhe-egui-proxy` の effect ドライバ（`crates/fandhe-cap-file-association/src/driver.rs`）の責務。
 //! Web のエントリポイント（`fandhe-web-dom`）も [`apply_snapshot`] 等を同じ形で呼ぶ。
 //!
 //! 全 OS 分の状態・文言をここに持つ。Windows はアプリ側の宣言だけでは関連付けを
@@ -22,7 +22,7 @@ pub use crate::screens::url_scheme_show::{
 };
 use crate::{Screen, WidgetId};
 
-/// 開けなかった理由（`fandhe_device::file_association::OpenFailure` に対応。device を
+/// 開けなかった理由（`fandhe_cap_file_association::OpenFailure` に対応。device を
 /// import しないので画面側で定義する）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpenFailureKind {

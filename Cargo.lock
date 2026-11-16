@@ -1156,6 +1156,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-app-shortcuts"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-url-scheme",
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-ar"
 version = "0.2.0"
 dependencies = [
@@ -1186,6 +1201,34 @@ name = "fandhe-cap-audio-session"
 version = "0.2.0"
 dependencies = [
  "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-background-download"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-background-upload"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
  "fandhe-platform-android",
  "fandhe-platform-apple",
  "fandhe-runtime",
@@ -1392,6 +1435,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-deep-link"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-device-identifier"
 version = "0.2.0"
 dependencies = [
@@ -1516,6 +1571,21 @@ dependencies = [
  "fandhe-device",
  "fandhe-platform-apple",
  "fandhe-runtime",
+]
+
+[[package]]
+name = "fandhe-cap-file-association"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-url-scheme",
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -2259,6 +2329,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-spotlight-index"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-url-scheme",
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-system-accent-color"
 version = "0.2.0"
 dependencies = [
@@ -2317,6 +2400,20 @@ dependencies = [
  "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-url-scheme"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -2408,6 +2505,21 @@ dependencies = [
  "fandhe-platform-apple",
  "fandhe-runtime",
  "image",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-web-auth-session"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
  "windows 0.61.3",
@@ -2516,9 +2628,12 @@ dependencies = [
  "fandhe-cap-app-badge",
  "fandhe-cap-app-lifecycle",
  "fandhe-cap-app-progress-attention",
+ "fandhe-cap-app-shortcuts",
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
  "fandhe-cap-audio-session",
+ "fandhe-cap-background-download",
+ "fandhe-cap-background-upload",
  "fandhe-cap-biometric-auth",
  "fandhe-cap-ble-peripheral",
  "fandhe-cap-bluetooth-classic",
@@ -2534,6 +2649,7 @@ dependencies = [
  "fandhe-cap-compass-heading",
  "fandhe-cap-compose-mail-sms",
  "fandhe-cap-contacts",
+ "fandhe-cap-deep-link",
  "fandhe-cap-device-identifier",
  "fandhe-cap-device-info",
  "fandhe-cap-digital-credentials",
@@ -2544,6 +2660,7 @@ dependencies = [
  "fandhe-cap-environment-sensors",
  "fandhe-cap-external-app-launch",
  "fandhe-cap-eye-dropper",
+ "fandhe-cap-file-association",
  "fandhe-cap-file-preview",
  "fandhe-cap-file-provider",
  "fandhe-cap-file-watch",
@@ -2601,11 +2718,13 @@ dependencies = [
  "fandhe-cap-smart-home",
  "fandhe-cap-sound-classification",
  "fandhe-cap-spell-check",
+ "fandhe-cap-spotlight-index",
  "fandhe-cap-system-accent-color",
  "fandhe-cap-system-sound",
  "fandhe-cap-system-tray",
  "fandhe-cap-tilt-motion",
  "fandhe-cap-translation",
+ "fandhe-cap-url-scheme",
  "fandhe-cap-usb-device",
  "fandhe-cap-user-idle",
  "fandhe-cap-uwb-ranging",
@@ -2613,6 +2732,7 @@ dependencies = [
  "fandhe-cap-video-transcode",
  "fandhe-cap-volume-control",
  "fandhe-cap-wallpaper-set",
+ "fandhe-cap-web-auth-session",
  "fandhe-cap-wifi-connect",
  "fandhe-cap-wifi-info",
  "fandhe-core",
@@ -2717,6 +2837,7 @@ dependencies = [
  "fandhe-cap-app-lifecycle",
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
+ "fandhe-cap-background-download",
  "fandhe-cap-bluetooth-le",
  "fandhe-cap-camera-preview-stream",
  "fandhe-cap-color-picker",
@@ -2727,6 +2848,7 @@ dependencies = [
  "fandhe-cap-display-refresh-hdr",
  "fandhe-cap-dynamic-type",
  "fandhe-cap-external-app-launch",
+ "fandhe-cap-file-association",
  "fandhe-cap-file-watch",
  "fandhe-cap-flashlight",
  "fandhe-cap-foldable-posture",

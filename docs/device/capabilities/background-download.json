@@ -16,7 +16,7 @@
       ],
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#380）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_background_download.rs + crates/fandhe-egui-proxy/src/device/apple_background_download.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_background_download.m + crates/fandhe-platform-apple/ios/fandhe_ios_app_delegate.m + crates/fandhe-egui-proxy/src/device/background_download.rs + crates/fandhe-core/src/screens/background_download.rs + crates/fandhe-device/src/background_download.rs、Issue #391",
+      "impl": "crates/fandhe-cap-background-download/src/ios.rs + crates/fandhe-cap-background-download/src/apple.rs + crates/fandhe-cap-background-download/apple/fandhe_apple_background_download.m + crates/fandhe-platform-apple/ios/fandhe_ios_app_delegate.m + crates/fandhe-cap-background-download/src/driver.rs + crates/fandhe-core/src/screens/background_download.rs + crates/fandhe-cap-background-download/src/contract.rs、Issue #391",
       "note": "実装済み（#391）。macOS と共用の background `NSURLSession`。転送は OS の別プロセスが行い、アプリが suspend されても続く。OS が完了でアプリを背景起動したときは `handleEventsForBackgroundURLSession` を共通層の application delegate（`fandhe-platform-apple`、#1325）が受けて identifier の完全一致で download の受け手（`fandhe_apple_bgdl_register_events` で登録）へ渡し、同じ identifier の session を作り直して、イベントを配り終えてから completion handler を 1 回だけ返す。守る範囲: 1 プロセス内の順序、世代による古い通知の破棄、嘘の成功の禁止、背景起動の完了通知を 1 回だけ返すこと。守らない範囲: 利用者がマルチタスク画面から終了すると OS が転送を取り消す、背景で失敗した理由と前回の完了表示は再起動で失われる、起動直後の再接続（非同期）を待たずに開始を受け付けるのでその間の開始は前の転送の置き換えになる（列挙待ちは macOS のみ）、複数プロセス。実機での背景完了・再起動後の再接続は未確認（#380）"
     },
     "android": {
@@ -27,7 +27,7 @@
       "note": "実装済み（#392）。固定 URL の小さなファイル 1 つを `DownloadManager` に依頼し、待機・転送中・完了（サイズ）・取り消し・失敗を出す。pull 型の同期 JNI で、ダウンロード id は `SharedPreferences` に保存し、状態は OS の行から読む。結果は取り消し・行が消えた転送（取り消し扱い）と、HTTP エラー・0 バイト・保存失敗・接続失敗（失敗）を分ける。保存先はアプリ専用の外部領域の固定名 1 ファイルで、開始と取り消しで消す。転送の持ち主は OS なので Activity の作り直しでは取り消さない。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、開始失敗と取り消しでファイルと id を残さない。守らない範囲: 再起動後の完了・失敗表示は失われる、リダイレクト先を再検証できない、`check_url` が通す私設 IPv4 への平文は OS 側で失敗し「HTTP 400」と出ることがある、接続できない間は転送中のままになりうる、複数プロセス。実機での正常系・サーバー停止・取り消し・アプリ終了後も続くか（`adb reverse tcp:8787 tcp:8787`）は #380 で確かめる",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#380）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_background_download.rs + platforms/android/app/src/main/java/com/fandhe/platform/BackgroundDownloadHelper.java + platforms/android/app/src/main/res/xml/network_security_config.xml + crates/fandhe-egui-proxy/src/device/background_download.rs + crates/fandhe-core/src/screens/background_download.rs + crates/fandhe-device/src/background_download.rs、Issue #392"
+      "impl": "crates/fandhe-cap-background-download/src/android.rs + crates/fandhe-cap-background-download/android/java/com/fandhe/platform/BackgroundDownloadHelper.java + platforms/android/app/src/main/res/xml/network_security_config.xml + crates/fandhe-cap-background-download/src/driver.rs + crates/fandhe-core/src/screens/background_download.rs + crates/fandhe-cap-background-download/src/contract.rs、Issue #392"
     },
     "macos": {
       "status": "done",
@@ -36,7 +36,7 @@
       "url": "https://developer.apple.com/documentation/foundation/urlsessionconfiguration/background(withidentifier:)",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#380）",
-      "impl": "crates/fandhe-egui-proxy/src/device/apple_background_download.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_background_download.m + crates/fandhe-egui-proxy/src/device/background_download.rs + crates/fandhe-core/src/screens/background_download.rs + crates/fandhe-device/src/background_download.rs、Issue #390",
+      "impl": "crates/fandhe-cap-background-download/src/apple.rs + crates/fandhe-cap-background-download/apple/fandhe_apple_background_download.m + crates/fandhe-cap-background-download/src/driver.rs + crates/fandhe-core/src/screens/background_download.rs + crates/fandhe-cap-background-download/src/contract.rs、Issue #390",
       "note": "実装済み（#390）。固定 URL の小さなファイル 1 つを OS に依頼し、待機・転送中・完了（サイズ）・取り消し・失敗を出す。結果は取り消し（失敗にしない）と HTTP エラー・0 バイト・許可外のリダイレクト先（失敗）を分ける。守る範囲: 1 プロセス内の順序、世代による古い通知の破棄、嘘の成功の禁止、大きさの上限 8 MiB（超えたら失敗）、開始時に前の世代を止めること。守らない範囲: 背景で失敗した理由と前回の完了表示は再起動で失われる、接続できない間は OS が待ち続け転送中のままになりうる、複数プロセス。アプリ終了後も転送が続くかは #380 の Mac 目視で確かめる"
     },
     "windows": {
@@ -49,7 +49,7 @@
       ],
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#380）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_background_download.rs + crates/fandhe-egui-proxy/src/device/background_download.rs + crates/fandhe-core/src/screens/background_download.rs + crates/fandhe-device/src/background_download.rs、Issue #394",
+      "impl": "crates/fandhe-cap-background-download/src/windows.rs + crates/fandhe-cap-background-download/src/driver.rs + crates/fandhe-core/src/screens/background_download.rs + crates/fandhe-cap-background-download/src/contract.rs、Issue #394",
       "note": "実装済み（#394）。専用ワーカー 1 本が BITS のジョブを持ち、500ms ごとに状態を読む。保存先は `%LOCALAPPDATA%` 配下の固定名 1 ファイルで、リダイレクトは BITS 側で拒否する。開始したユーザーがログオンしている間はアプリが終了しても続き、再起動後は表示名で自分のジョブを拾い直す。`Complete()` を呼ぶまでファイルは使えない。守る範囲: 1 プロセス内の順序、嘘の成功の禁止。守らない範囲: 背景で失敗した理由は再起動で失われる、接続できない間は BITS が再試行を続け転送中のままになりうる、ログオフ中は止まる、複数プロセス。127.0.0.1 の確認用サーバーで BITS が動くか、アプリ終了後も続くかは #380 の Windows 実機確認で確かめる。`BackgroundDownloader` は「Background transfers require package identity; unpackaged apps cannot use this API.」（Microsoft の文書）"
     },
     "web": {
@@ -61,7 +61,7 @@
       "note": "実装済み（#393）。専用の Service Worker と専用 scope で `backgroundFetch.fetch` を呼び、同一オリジンの小さなファイル 1 つを依頼する。結果と本文は Cache Storage に置き、取り消し（失敗にしない）・HTTP エラー・0 バイト・保存ファイル欠落・許可外の最終 URL（失敗）を分ける。守る範囲: 1 マウント内の順序、世代による古い完了の破棄、嘘の成功の禁止。守らない範囲: 複数タブ、再起動後の完了理由の正確さ、ブラウザ UI から取り消したときの反映の時間差。タブを閉じても続くか、Firefox・Safari の非対応表示、シークレットは #380 の目視で確かめる。進捗と取り消しはブラウザの UI にも出る",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実ブラウザ確認待ち（#380）",
-      "impl": "crates/fandhe-web-dom/src/background_download.rs + crates/fandhe-web-dom/web/background-download-sw.js + crates/fandhe-core/src/screens/background_download.rs + crates/fandhe-device/src/background_download.rs、Issue #393"
+      "impl": "crates/fandhe-web-dom/src/background_download.rs + crates/fandhe-web-dom/web/background-download-sw.js + crates/fandhe-core/src/screens/background_download.rs + crates/fandhe-cap-background-download/src/contract.rs、Issue #393"
     }
   },
   "note": "iOS / macOS は background URLSession、Android は DownloadManager、Windows は BITS、Web は Background Fetch。http-get（既存 id）は前面での GET 1 回で、本機能はアプリが終了しても OS が続ける転送。background-task（既存 id）は短時間の処理で、転送そのものは OS に任せる点が違う。今回の範囲: 固定 URL の小さなファイル 1 つの転送を OS へ依頼し、待機・転送中（受信バイト数）・完了（サイズ）・取り消し・失敗を画面に出す。保存先はアプリのキャッシュに固定名で 1 ファイル（画面に絶対パスは出さない）。確認はローカルのサーバーで行い、外部 URL は既定値に入れない。再開・複数ファイル・一時停止は扱わない。守る範囲は 1 プロセス内の順序と嘘の成功の禁止で、再起動後の結果の保持と複数プロセスは守らない"

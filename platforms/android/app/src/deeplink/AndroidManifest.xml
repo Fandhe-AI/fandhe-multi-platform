@@ -4,7 +4,7 @@
   FANDHE_ANDROID_DEEP_LINK_HOST を設定されたときだけ、この manifest を main に重ねる
   （未設定なら filter を出さない。host なしの https 宣言は全 https リンクを受けてしまうため）。
   ${fandheDeepLinkHost} は同じ環境変数の値（形式検査済み）。path は絞らない。
-  受信した URL の検査は Rust 側（fandhe_device::deep_link）に一本化している。
+  受信した URL の検査は Rust 側（fandhe_cap_deep_link）に一本化している。
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>

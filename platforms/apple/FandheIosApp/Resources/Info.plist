@@ -29,7 +29,7 @@
   （background session の転送と背景起動には不要）。
 
   CFBundleURLTypes（Issue #1217）: カスタム URL scheme `fandhe://` を受けるために宣言する
-  （受信側は `crates/fandhe-egui-proxy/ios/fandhe_ios_url_scheme.m`）。起動側
+  （受信側は `crates/fandhe-cap-url-scheme/ios/fandhe_ios_url_scheme.m`）。起動側
   （`UIApplication openURL:`）は範囲外のため `LSApplicationQueriesSchemes` は足さない
   （security.md A05）。
 
@@ -44,12 +44,12 @@
   「宣言済み」と出す。type は URL としてそのまま `UrlInbox` へ渡す（受信側は
   `crates/fandhe-platform-apple/ios/fandhe_ios_scene.m`）。type・title は
   `crates/fandhe-core/src/screens/url_scheme_show.rs` の `SHORTCUT_URL`・`SHORTCUT_TITLE` と
-  揃え、ホストのテスト（`device/ios_app_shortcuts.rs`）で照合する。アイコンは付けない。
+  揃え、ホストのテスト（`crates/fandhe-cap-app-shortcuts/src/ios.rs`）で照合する。アイコンは付けない。
 
   CFBundleDocumentTypes・LSSupportsOpeningDocumentsInPlace（Issue #417）: 型サンプル「ファイルの
   関連付け」が `.txt`（`public.plain-text`）を受けるために宣言する。`LSHandlerRank=Alternate` で
   既定アプリを奪わない。`LSSupportsOpeningDocumentsInPlace=false` のため OS が `Documents/Inbox/`
-  へコピーして渡し、受信側（`crates/fandhe-egui-proxy/apple/fandhe_apple_file_association.m`）が
+  へコピーして渡し、受信側（`crates/fandhe-cap-file-association/apple/fandhe_apple_file_association.m`）が
   読んだ後にそのコピーを消す。`UIFileSharingEnabled` は足さない（Documents を Files に公開しない）。
 
   NSCameraUsageDescription（Phase 8 / Issue #751、AR 表示は Issue #308、書類スキャンは Issue #748、動画の撮影は Issue #822）:

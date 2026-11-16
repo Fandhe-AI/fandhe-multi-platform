@@ -4,8 +4,8 @@
 //! （`screens/mod.rs` の `pub mod deep_link_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS から届いた URL の検査・保持は
-//! `fandhe_device::deep_link`、スナップショットを本モジュールへ注入するのは
-//! `fandhe-egui-proxy` の effect ドライバ（`device/deep_link.rs`）の責務。
+//! `fandhe_cap_deep_link`、スナップショットを本モジュールへ注入するのは
+//! `fandhe-egui-proxy` の effect ドライバ（`crates/fandhe-cap-deep-link/src/driver.rs`）の責務。
 //!
 //! OS 固有の操作 UI は置かない。リンクの検証も既定の設定も OS が持ち、アプリから登録・解除
 //! する操作が無いため（url-scheme の Windows にある登録ボタンに当たるものが不要）。

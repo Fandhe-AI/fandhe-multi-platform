@@ -27,6 +27,11 @@ fandhe-core = { path = "../fandhe-core" }
 # fandhe-egui-proxy と同様の関係）の依存であり、共通コアとの一方向性は崩さない
 # （coding-rust.md 準拠）。
 fandhe-device = { path = "../fandhe-device" }
+# Issue #1333: ファイルの関連付け・バックグラウンドダウンロードの契約（`FileInbox`・`accepts`・`DownloadStatus` など）の正本。
+# Web 実装本体は本クレートに残る。wasm32 では `fandhe-core`・`fandhe-device`・`fandhe-runtime`・`thiserror` しか引かない
+# （Windows の url-scheme 依存・OS 実装は cfg で外れる）。
+fandhe-cap-file-association = { path = "../fandhe-cap-file-association" }
+fandhe-cap-background-download = { path = "../fandhe-cap-background-download" }
 # Issue #1173: 共有の受け取りの契約（`ShareInbox`・`validate_text`）の正本。wasm32 では
 # `fandhe-core`・`fandhe-runtime`・`thiserror` しか引かない（Android/macOS の実装は cfg で外れる）。
 fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive" }

@@ -9,7 +9,7 @@
 // キャンセルは無い操作。失敗を成功にしない。OS のエラー文言・URL はログに出さない。
 // 守らない範囲: ショートカット App・Siri 側の表示と候補の出方、アプリ未起動の間の状態。
 // 定数は Rust 側 fandhe_core::screens::url_scheme_show の INTENT_URL / INTENT_TITLE と一致させる
-// （fandhe-egui-proxy の device/url_scheme.rs のテストが検査）。
+// （crates/fandhe-cap-url-scheme/src/driver.rs のテストが検査）。
 import AppIntents
 import AppKit
 

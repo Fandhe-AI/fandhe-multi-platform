@@ -72,7 +72,7 @@ fn store_state(raw: i32) -> bool {
 ///
 /// # Safety
 /// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` は JNI 命名規約上の固定シンボル名で、
-/// `device/android_url_scheme.rs` の同種エクスポートと同じ根拠。
+/// `crates/fandhe-cap-url-scheme/src/android.rs` の同種エクスポートと同じ根拠。
 #[cfg(all(target_os = "android", feature = "device"))]
 #[allow(unsafe_code)]
 #[no_mangle]

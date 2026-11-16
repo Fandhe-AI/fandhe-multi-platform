@@ -199,15 +199,15 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 
 | 機能 | 理由 | 解消の見込み |
 |------|------|--------------|
-| background-download | 未移行の iOS AppDelegate（`ios/fandhe_ios_url_scheme.m`）が `fandhe_apple_bgdl_handle_events` を呼ぶ | iOS の AppDelegate イベントを配る口の設計が先、または url-scheme・background-upload と同時に移す。口は #1325 で入った（§16） |
-| app-shortcuts | macOS の `.m` が egui-proxy の `fandhe_rust_url_scheme_received` を呼ぶ。Windows は `windows_url_scheme` と `windows_notification::lpwstr_variant` を使う。iOS は `fandhe_ios_scene.m` に埋まっている | url-scheme と同時に移す。口は #1325 で入った（§16） |
-| file-association | `windows_url_scheme` の内部（`win::`・`map_registry_error`）を使う。iOS・macOS は url_scheme の `.m` が受け口 | url-scheme と同時に移す。口は #1325 で入った（§16） |
-| spotlight-index | driver が `url_scheme::platform_url_scheme()` を使い、apple の `.m` が `fandhe_rust_url_scheme_received` を呼ぶ | url-scheme と同時に移す。口は #1325 で入った（§16） |
+| background-download | 未移行の iOS AppDelegate（`ios/fandhe_ios_url_scheme.m`）が `fandhe_apple_bgdl_handle_events` を呼ぶ | iOS の AppDelegate イベントを配る口の設計が先、または url-scheme・background-upload と同時に移す。口は #1325 で入った（§16）（第 13 束 #1333 で移した、§23） |
+| app-shortcuts | macOS の `.m` が egui-proxy の `fandhe_rust_url_scheme_received` を呼ぶ。Windows は `windows_url_scheme` と `windows_notification::lpwstr_variant` を使う。iOS は `fandhe_ios_scene.m` に埋まっている | url-scheme と同時に移す。口は #1325 で入った（§16）（第 13 束 #1333 で移した、§23） |
+| file-association | `windows_url_scheme` の内部（`win::`・`map_registry_error`）を使う。iOS・macOS は url_scheme の `.m` が受け口 | url-scheme と同時に移す。口は #1325 で入った（§16）（第 13 束 #1333 で移した、§23） |
+| spotlight-index | driver が `url_scheme::platform_url_scheme()` を使い、apple の `.m` が `fandhe_rust_url_scheme_received` を呼ぶ | url-scheme と同時に移す。口は #1325 で入った（§16）（第 13 束 #1333 で移した、§23） |
 | barcode-scan | `photo_pick::implementation`・`ios::present_photo_picker`・`image_recognition::precheck` を使う。photo-picker 側も barcode_scan の参照で止まっていて循環している | photo-picker・image-recognition と同じ PR で移す |
 | lan-discovery | apple の `.m` が `fandhe_apple_network_status_read` を、Windows が `windows_network_status` を使う。network-status も `map_view.rs` が OS 実装を使うため移せない | network-status・map-view と同時に移す |
 | wifi-info | 未移行の wifi-connect の Windows 実装（`windows_wifi_connect.rs`）が `windows_wifi_info::radio_off` を使う | wifi-connect と同時に移す（第 9 束 #1329 で移した） |
 | local-peer-connect | `NEARBY_WIFI_DEVICES` の `usesPermissionFlags="neverForLocation"` を宣言の `Permission`（name・max-sdk のみ）で表せず、`cargo-fandhe` の `tests/gen.rs` が通らない | 宣言に権限フラグを足してから |
-| web-auth-session | Android は `MainActivity.onNewIntent` が `WebAuthSessionHelper.onNewIntent` を先に呼び、url-scheme の受信箱へ流さない分岐を持つ（provider に onNewIntent の口が無い）。Windows は `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を使う | Activity の Intent を配る口の設計が先。`open_url` は #1192 で `fandhe-platform-windows` へ上げた。口は #1325 で入った（§16） |
+| web-auth-session | Android は `MainActivity.onNewIntent` が `WebAuthSessionHelper.onNewIntent` を先に呼び、url-scheme の受信箱へ流さない分岐を持つ（provider に onNewIntent の口が無い）。Windows は `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を使う | Activity の Intent を配る口の設計が先。`open_url` は #1192 で `fandhe-platform-windows` へ上げた。口は #1325 で入った（§16）（第 13 束 #1333 で移した、§23） |
 | payment-request | Google Pay の `<application>` 直下の `meta-data`（`com.google.android.gms.wallet.api.enabled`）を宣言で表せない（`meta-data` はコンポーネント単位だけ） | 宣言に application の meta-data を足してから |
 | music-library | Android が許可ランチャーと `onDestroy` を持つ（provider と JNI エクスポートが要る）。Windows の `windows_photo_library::known_folder` を `fandhe-platform-windows` へ上げる共通層の変更も要る | 共通層の先行変更とあわせて別の周で |
 | translation | Android がランチャーと `onDestroy`・`reset_pending_tracking` を持ち、Apple は Swift の薄層（`links` と `import_link_args`）が要る | 別の周で |
@@ -253,7 +253,7 @@ per-app-language・screen-brightness・spell-check・geocoding-search の 9 機�
 | launch-at-login | Windows 実装が未移行の `windows_compose_mail_sms::open_url` を使う（`open_url` は #1192 で `fandhe-platform-windows` へ上げた） | 再公開を共通層への参照に付け替えて移せる （第 8 束 #1193 で障害が解消。次の周で移せる）（第 9 束 #1329 で移した） |
 | autofill-otp | iOS の受け口 `fandhe_ios_text_input_set_one_time_code_hint` が、描画層の IME 橋渡し（`fandhe-egui-proxy/ios/fandhe_ios_text_input.m`）の入力欄 static に埋まっていて切り離せない | 入力欄のヒントを渡す口を描画層に設計してから（口は #1326 で入った。§17） |
 | game-center | 全 OS が `possible` で実装も `impl` も無く、移すものが無い | 実装時に最初から crate で作る |
-| app-intents | macOS の実装が url-scheme の受け口（`device/url_scheme.rs`・`FandheWidgetHost`）そのもので、独自のモジュールが無い | url-scheme と同時に扱う。口は #1325 で入った（§16） |
+| app-intents | macOS の実装が url-scheme の受け口（`device/url_scheme.rs`・`FandheWidgetHost`）そのもので、独自のモジュールが無い | url-scheme と同時に扱う。口は #1325 で入った（§16）（第 13 束 #1333 で移した、§23） |
 
 ## 12. ゲームパッド（#1303）で出た型
 
@@ -331,7 +331,7 @@ device-identifier は第 1 束で移行済みで、本束では確かめただ�
 | 機能 | 理由 | 解消の見込み |
 |------|------|--------------|
 | age-range | 全 OS が `possible` で実装も `impl` も無く、移すものが無い（game-center と同じ扱い） | 実装するときに最初から crate で作る |
-| background-upload | 未移行の iOS AppDelegate（`ios/fandhe_ios_url_scheme.m` の `handleEventsForBackgroundURLSession`）が転送先として `fandhe_apple_background_upload.m` に結びついている（background-download と同じ止まり方） | AppDelegate のイベントを配る口を設計した後、または url-scheme・background-download と同時に移す。口は #1325 で入った（§16） |
+| background-upload | 未移行の iOS AppDelegate（`ios/fandhe_ios_url_scheme.m` の `handleEventsForBackgroundURLSession`）が転送先として `fandhe_apple_background_upload.m` に結びついている（background-download と同じ止まり方） | AppDelegate のイベントを配る口を設計した後、または url-scheme・background-download と同時に移す。口は #1325 で入った（§16）（第 13 束 #1333 で移した、§23） |
 | motion-raw-sensors | (1) Windows 実装が未移行の `windows_environment_sensors::ensure_minimize_watcher` を使い、ウォッチャー側も `windows_motion_raw_sensors::note_minimized` / `note_restored` を呼び返していて、双方向に結びついている。(2) iOS の `ios/fandhe_ios_motion_raw_sensors.m` が、未移行の tilt-motion の `ios/fandhe_ios_motion.m` が定義する共有の `CMMotionManager`（`fandhe_ios_shared_motion_manager` など）を extern で使う | (1) environment-sensors と同じ PR で移す。または最小化の通知を配る口を `fandhe-platform-windows` に置いてから。(2) tilt-motion・environment-sensors と同じ PR で移す。manager を `fandhe-platform-apple` へ上げると CoreMotion が全アプリにリンクされ、未選択機能の混入検査（#1178）の趣旨に反するため上げない （第 11 束 #1331 で移した、§20） |
 ## 14. 第 6 束（#1191）で出た型と後回しの機能
 
@@ -367,7 +367,7 @@ wifi-connect・volume-control・sleep-lock-events の 8 機能を移した。残
 | ble-peripheral | Android の Helper が `onStop` に参加する（同上）。`reset_pending_tracking` と `device::shutdown` もある | Started / Stopped の口の後 （第 11 束 #1331 で移した、§20） |
 | health-data | `HealthPermissionsRationaleActivity` を指す `<activity-alias>` を、宣言の `ComponentKind`（activity / service / receiver / provider）で表せない | 宣言に activity-alias を足してから |
 | car-display | `<application>` 直下の `meta-data` 2 件を宣言で表せない（payment-request と同じ） | 宣言に application の meta-data を足してから |
-| deep-link | Android の振り分けが `MainActivity.deliverUrlIntent`（url-scheme の受け口）に埋まっている。`url_scheme::UrlInbox` も使う | url-scheme と同時に移す（Intent を配る口の設計が先）。口は #1325 で入った（§16） |
+| deep-link | Android の振り分けが `MainActivity.deliverUrlIntent`（url-scheme の受け口）に埋まっている。`url_scheme::UrlInbox` も使う | url-scheme と同時に移す（Intent を配る口の設計が先）。口は #1325 で入った（§16）（第 13 束 #1333 で移した、§23） |
 | camera-preview-stream | 未移行の video-capture の Windows 実装が `windows_camera_preview_stream::{spawn, spawn_action}` を使う | 第 7 束（#1192）で `spawn` が共通層（`fandhe_platform_windows::winrt_async`）へ上がり、障害が解消した。次の周で移せる（第 9 束 #1329 で移した） |
 | open-in-shell | 未移行の recent-documents が driver の `open_in_shell::prepare_sample_file_in` と、Windows の `windows_open_in_shell::to_win32_path` を使う | recent-documents と同じ PR で移す （第 8 束 #1193 で recent-documents と同時に移した） |
 
@@ -580,3 +580,39 @@ notification・alarm・device-info・quick-settings-tile・media-playback・now-
 | `OsascriptNotifier`（notification） | 契約の trait と検証から OS 実装を分け、`src/macos.rs` へ移す。ホストの `cargo test` で純関数・子プロセスの挙動を検証できるよう、cfg は `any(target_os = "macos", test)` のまま |
 | `AlarmHelper` の起動 Intent | `MainActivity.class` を直接参照せず、`getLaunchIntentForPackage` を使う。取れなければ予約を作らず失敗にする |
 | 後回しの解消 | §9・§10・§11・§14 の後回し表のうち、device-info・now-playing-controls・compass-heading・environment-sensors・bluetooth-classic・motion-raw-sensors・quick-settings-tile・alarm・ble-peripheral を本束で移した。残りの notification・bluetooth-le・media-playback・tilt-motion は後回し表に載っていなかった機能 |
+
+## 23. 第 13 束（#1333）で出た型
+
+第 13 束（url-scheme・deep-link・app-intents・app-shortcuts・file-association・spotlight-index・background-download・background-upload・
+web-auth-session）で、URL・Intent・背景転送の完了を受ける 9 機能を移した（app-intents は独自のモジュールが無く、`impl` を url-scheme の
+`driver.rs` と `FandheWidgetHost` へ付け替えただけ。crate は作らない。§15 の ar-camera-view と同じ扱い）。
+受け口は #1325（§16）の `deliverIntents`・`fandhe_ios_app_events.h`・`fandhe_ios_register_background_session`・`fandhe_ios_app_delegate_install` を使った。
+はじめて出た型と、その扱いは次のとおり。
+
+| 型 | 扱い |
+|----|------|
+| 受信箱の部品を複数機能が共有する（url-scheme） | OS に触れない部品（`UrlInbox`・`InboxSnapshot`・`ReceivedUrl`・`SCHEME`・`WEB_SCHEME`・`MAX_URL_BYTES`・`validate_url`）だけを `fandhe-device::url_scheme` に残し、`fandhe-cap-url-scheme` の `contract` が `pub use` で再公開する。`UrlScheme` trait と `UnsupportedUrlScheme` は機能 crate へ移した。deep-link・web-auth-session・in-app-browser・Web 実装は `fandhe-device` を直接使い、url-scheme の crate へ依存しない（`fandhe` scheme の宣言が混ざらない） |
+| 受信箱を読む・受け口を呼ぶ機能（spotlight-index・app-shortcuts） | url-scheme の crate へ依存する（機能 crate 同士の依存、§8）。spotlight-index は driver が `platform_url_scheme()` を読み、`.m` が `fandhe_rust_url_scheme_received` を呼ぶ。app-shortcuts は macOS の `.m` が同じ関数を呼ぶ（macOS だけの依存）。`.m` が参照する記号は、依存先の公開関数（`register`）を `const _: fn() = …` で実際に参照して、リンクから落ちないようにする。url-scheme の driver からは app-shortcuts を呼ばない |
+| 2 つの機能 crate を組み合わせる effect（`url_scheme_show`） | `fandhe-gallery` の `screens/registry.rs` が「url-scheme の effect → app-shortcuts の effect」の順で呼ぶ関数を持つ（§21 の audio_play と同じ） |
+| Windows の単一インスタンス転送を共有する 2 機能（url-scheme・file-association） | 調停（名前付き mutex・named pipe・生コマンドライン照合・種別バイトの多重化）は url-scheme が持つ。file-association は Windows だけ url-scheme に依存し、ファイル起動の解釈（目印の引数・検査・受け口・パスの上限）を `fandhe_cap_url_scheme::windows::register_file_route`（`FileRoute`）で 1 度だけ渡す。url-scheme は file-association へ依存しない。`fandhe-gallery` の `main` が `fandhe_cap_file_association::windows::register_route()` を `startup` より前に呼ぶ。経路が無いと（file-association を選ばないアプリ）ファイル起動は解釈されず、pipe の `F` 種別は拒否になる（成功にしない）。レジストリの部品（`open_key`・`set_value`・`utf16_bytes`・`wide`・`KeyGuard`）は公開し、失敗は `RegistryError`（Win32 コード）で返して各機能が自分の失敗型へ写す |
+| `Http` / `Io` を持つ失敗型（background-download・background-upload） | `fandhe_device::http::check_url` の失敗（`DeviceError::Http`）と Windows の保存先操作の `std::io::Error` を、失敗型の `Http(String)`・`Io(String)` へ写す（`From` を実装）。表示文言は移行前と同じ書き出しで、テストで固定する。`String` を持つため `Copy` は外した |
+| `MainActivity.deliverUrlIntent`・`onNewIntent`（`setIntent` を含む）・起動時の URL 配送 | 3 機能（url-scheme・deep-link・web-auth-session）が移ったため `MainActivity` から消した。各機能の Lifecycle が `deliverIntents`（url-scheme・deep-link）か `addOnNewIntentListener`（web-auth-session）で受ける。`UrlSchemeHelper.deliver` は https（deep-link）と `fandhe://web-auth`（web-auth-session）を除いて受信箱へ渡す。他機能の Java へは依存せず、同じ条件を持つ（機能 crate 同士を Java で結ばない）。`setIntent` を呼ばなくなるが、`MainActivity` に `getIntent()` の利用者は残っていない |
+| Helper を static の入口にする機能（app-shortcuts・spotlight-index・background-download） | Context だけを使うため provider は作らない（§20 の secure-credential と同じ）。第 1 引数は `Context`（先頭で `getApplicationContext()`）。app-shortcuts の起動 Intent は `getLaunchIntentForPackage` の component で、取れなければ登録せず失敗にする |
+| Helper を `HELPERS` + Lifecycle にする機能（web-auth-session・background-upload） | web-auth-session は `onHostCreated` で `attach`（`addOnNewIntentListener` を足す）、`onHostResumed`・`onHostPaused` で状態を進め、`onHostDestroyed` で `detach` する。要求が Helper に届かない（生成前・破棄後）ときは受理せず失敗で確定する（`requestStart` は `false`）。background-upload は `onHostCreated` で `attach` し、合図が要る状態なら LiveData の登録をし直す。`Activity.onCreate` の `super` の中で届くため、従来の「`super.onCreate` の後」との前後だけが違う（登録は冪等） |
+| `awaitOperation` の写し | background-task（`MainActivity.awaitOperation`、#1347 で `BackgroundTaskHelper` へ移る）と background-upload が同じ内容を使う。background-upload の `BackgroundUploadHelper` に private の写しを持たせ、`MainActivity` の定義は background-task 側の PR が消す。WorkManager の共通部品が要る機能が 3 つ目になったとき一本化する |
+| iOS・macOS の通知名 | file-association・spotlight-index の `.m` が持っていた文字列リテラル（`@"FandheSceneOpenURLNotification"` など）を、`fandhe_ios_app_events.h` の定数へ付け替えた（#1325 で積んだ残件） |
+| 宣言に載せたもの | iOS・macOS の `CFBundleURLTypes`（url-scheme。`CFBundleURLName` はアプリの bundle id に依存するため書かない）、`CFBundleDocumentTypes`・`LSSupportsOpeningDocumentsInPlace`（file-association）、`UIApplicationShortcutItems`（app-shortcuts の iOS）、framework（`CoreSpotlight`・`AuthenticationServices`）、Android の `fandhe` scheme の VIEW の intent-filter（url-scheme・web-auth-session が同じ宣言を持ち、統合規則で 1 つ）、provider（`UrlSchemeLifecycle`・`DeepLinkLifecycle`・`WebAuthSessionLifecycle`・`BackgroundUploadLifecycle`）、`gradle`（`androidx.browser`・`androidx.work`）、`INTERNET` |
+
+### 既知の制約・利用者の責務
+
+- Web manifest の `shortcuts`・`file_handlers` は基礎 manifest（`fandhe-web-dom/web/manifest.webmanifest`）に残る。宣言の許可リスト（`WEB_MANIFEST_MEMBERS`）は広げない
+- deep-link の `autoVerify` 付き https の intent-filter（ホストは確認用ドメインに依存）は flavor の `platforms/android/app/src/deeplink/AndroidManifest.xml` に残る。crate doc に利用者の責務として書いた
+- 通信先の制限（iOS の ATS `NSAllowsLocalNetworking`・Android の `network_security_config.xml`）は、background-download・background-upload を選んだアプリが自分の設定に書く（宣言に載せない）
+- Web の実装本体（`url_scheme`・`file_association`・`background_download`）は `fandhe-web-dom` に残り、契約だけを機能 crate から使う（§8）
+
+### 対象外
+
+- Windows の単一インスタンスの転送を `fandhe-platform-windows` の口へ一般化すること（使うのは 2 機能だけ。他に使う機能が出たら上げる）
+- macOS の Apple Event・Windows の起動引数を受ける共通の口
+- Web manifest の `shortcuts`・`file_handlers` を機能の宣言へ移すこと
+- 旧構造の撤去（#1194）、iOS・Android の実機確認（人間担当。URL 起動・App Links・背景転送の relaunch・Web 認証のコールバック・ショートカット・Spotlight）

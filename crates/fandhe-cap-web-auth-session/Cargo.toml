@@ -1,0 +1,63 @@
+[package]
+name = "fandhe-cap-web-auth-session"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の web-auth-session の機能 crate（契約・OS 別実装・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 検査（`url_scheme::MAX_URL_BYTES`・`SCHEME`）と `passkey::base64url_*`。他機能と共有するため fandhe-device に残る。
+fandhe-device = { path = "../fandhe-device" }
+# 完了通知の送り口（CompletionSender）・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+jni = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+# 既定ブラウザで認可ページを開く（`ShellExecuteW`）。共通層の `open_url` を使う。
+fandhe-platform-windows = { path = "../fandhe-platform-windows" }
+# PKCE の乱数・SHA-256（`BCryptGenRandom` / `BCryptHash`）。
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
+
+[build-dependencies]
+# iOS・macOS の ObjC を build.rs でコンパイルする helper。通常のビルドには cc を持ち込まない。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+# 機能宣言（capability-declaration.md）。権限・usage description・framework は手で足す（cargo fandhe check が検証する）。
+[package.metadata.fandhe]
+id = "web-auth-session"
+
+[package.metadata.fandhe.ios]
+frameworks = ["AuthenticationServices"]
+
+[package.metadata.fandhe.macos]
+frameworks = ["AuthenticationServices"]
+
+[package.metadata.fandhe.android]
+java = ["android/java"]
+# Custom Tabs（`CustomTabsIntent`）。
+gradle = ["androidx.browser:browser:1.8.0"]
+# url-scheme と同じ filter（統合規則で内容が同じなら 1 つ）。`fandhe://web-auth/callback` を受ける。
+# ブラウザからのコールバックは `singleTask` の `onNewIntent` へ来る。
+main-activity-intent-filters = [
+  { actions = ["android.intent.action.VIEW"], categories = ["android.intent.category.DEFAULT", "android.intent.category.BROWSABLE"], data = [{ scheme = "fandhe" }] },
+]
+
+# Activity のライフサイクルへ参加する非公開 provider（FeatureLifecycleProvider、fandhe-platform-android）。
+# Manifest の同じ要素と完全に一致させる（cargo-fandhe の突き合わせテストが確かめる）。
+[[package.metadata.fandhe.android.components]]
+kind = "provider"
+name = "com.fandhe.platform.WebAuthSessionLifecycle"
+exported = false
+attributes = { authorities = "${applicationId}.fandhe.web-auth-session" }
+
+[lints]
+workspace = true

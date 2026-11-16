@@ -29,6 +29,20 @@ fn audio_play_effect(
     fandhe_cap_now_playing_controls::sync_audio_play(state, sender);
 }
 
+/// `url_scheme_show` 画面の effect。URL の受信（`fandhe-cap-url-scheme`）の後で、OS のアプリショートカット
+/// （`fandhe-cap-app-shortcuts`）の登録結果を同じ画面へ渡す。2 機能の crate は driver で結ばない
+/// （url-scheme だけを選ぶアプリへ app-shortcuts を持ち込まないため）。合成は最終成果物の責務で、ここに置く。
+#[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+fn url_scheme_show_effect(
+    state: &fandhe_core::screens::url_scheme_show::UrlSchemeShowState,
+    sender: &fandhe_runtime::CompletionSender<
+        fandhe_core::screens::url_scheme_show::UrlSchemeShowState,
+    >,
+) {
+    fandhe_cap_url_scheme::url_scheme_show_effect(state, sender);
+    fandhe_cap_app_shortcuts::drive_app_shortcuts(state, sender);
+}
+
 generated_screens! {
     "schema_example" => fandhe_core::screens::schema_example_fixture::todo_screen,
     "form" => fandhe_core::screens::form::form_screen,
@@ -160,7 +174,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "web_auth_session_demo" => fandhe_core::screens::web_auth_session_demo::current_screen,
-    fandhe_egui_proxy::device::web_auth_session::web_auth_session_demo_effect,
+    fandhe_cap_web_auth_session::web_auth_session_demo_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "print_page" => fandhe_core::screens::print_page::current_screen,
@@ -288,11 +302,11 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "background_download" => fandhe_core::screens::background_download::current_screen,
-    fandhe_egui_proxy::device::background_download::background_download_effect,
+    fandhe_cap_background_download::background_download_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "background_upload" => fandhe_core::screens::background_upload::current_screen,
-    fandhe_egui_proxy::device::background_upload::background_upload_effect,
+    fandhe_cap_background_upload::background_upload_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pip_show" => fandhe_core::screens::pip_show::current_screen,
@@ -568,7 +582,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "spotlight_index" => fandhe_core::screens::spotlight_index::current_screen,
-    fandhe_egui_proxy::device::spotlight_index::spotlight_index_effect,
+    fandhe_cap_spotlight_index::spotlight_index_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "quick_settings_tile_show" => fandhe_core::screens::quick_settings_tile_show::current_screen,
@@ -580,11 +594,11 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "url_scheme_show" => fandhe_core::screens::url_scheme_show::current_screen,
-    fandhe_egui_proxy::device::url_scheme::url_scheme_show_effect,
+    url_scheme_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "deep_link_show" => fandhe_core::screens::deep_link_show::current_screen,
-    fandhe_egui_proxy::device::deep_link::deep_link_show_effect,
+    fandhe_cap_deep_link::deep_link_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_preview" => fandhe_core::screens::file_preview_show::current_screen,
@@ -592,7 +606,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_association_show" => fandhe_core::screens::file_association_show::current_screen,
-    fandhe_egui_proxy::device::file_association::file_association_show_effect,
+    fandhe_cap_file_association::file_association_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "capture_protection_show" => fandhe_core::screens::capture_protection_show::current_screen,

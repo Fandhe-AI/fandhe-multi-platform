@@ -176,6 +176,36 @@ extern "system" fn Java_com_fandhe_platform_EnvironmentSensorsHelper_nativeOnFor
 ) {
 }
 
+/// `device` feature 無効ビルド向けの `nativeOnUrlSchemeReceived`・`nativeOnDeepLinkReceived` no-op フォールバック（#1218・#1279、#1333）。
+/// `UrlSchemeLifecycle`・`DeepLinkLifecycle` は feature を知らず、`ACTION_VIEW` のたびに `UrlSchemeHelper.deliver`・
+/// `DeepLinkHelper.deliver` を呼ぶため、実体を持つ `fandhe-cap-url-scheme`・`fandhe-cap-deep-link`（`device` 有効時のみ依存）が無いと
+/// `UnsatisfiedLinkError` になる。実体との二重定義を避けるため cfg は `device` 無効のときだけ。署名は Java 宣言・実体と一致
+/// （`(String) -> void`）。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
+/// シンボル名は JNI 命名規約上の固定名。
+#[cfg(all(target_os = "android", not(feature = "device")))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_UrlSchemeHelper_nativeOnUrlSchemeReceived(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _url: *mut core::ffi::c_void,
+) {
+}
+
+/// [`Java_com_fandhe_platform_UrlSchemeHelper_nativeOnUrlSchemeReceived`] と同じ根拠の no-op（deep-link）。
+#[cfg(all(target_os = "android", not(feature = "device")))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_DeepLinkHelper_nativeOnDeepLinkReceived(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _url: *mut core::ffi::c_void,
+) {
+}
+
 /// Android アプリのエントリポイント（計測専用ビルド）。
 ///
 /// `android-activity`（GameActivity 方式）がライブラリロード後にこのシンボル名を検索して呼ぶ
@@ -334,6 +364,13 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // アプリ内ブラウザの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない。`fandhe_cap_in_app_browser::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_in_app_browser::reset_pending_tracking();
+    // Web 認証セッションの `ACTIVE`（デモサーバー）と `SLOT` も破棄する。残ると次の要求が開けなくなる
+    // （`fandhe_cap_web_auth_session::reset_pending_tracking` doc 参照。Java 側は新しい Helper が NONE から始まり対になる）。
+    #[cfg(feature = "device")]
+    fandhe_cap_web_auth_session::reset_pending_tracking();
+    // OS の検索への登録の処理済み世代も破棄する（理由は translation と同じ。`fandhe_cap_spotlight_index::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_spotlight_index::reset_pending_tracking();
     // ドラッグ & ドロップの集約器もプロセス static のため再生成をまたいで残る。進行中のセッション・未適用イベントを
     // 新しい画面状態を作る前に捨てる（`fandhe_cap_drag_drop::reset_sessions` doc 参照。以前は egui-proxy の `run` が呼んでいた）。
     #[cfg(feature = "device")]
@@ -365,6 +402,8 @@ pub fn register_teardown_hooks() {
 #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
 fn shutdown() {
     fandhe_egui_proxy::device::shutdown();
+    // 進行中の Web 認証（デモサーバーと OS のセッション）を閉じる。
+    fandhe_cap_web_auth_session::shutdown();
     // 再生（media-playback）→ OS のメディア操作（now-playing-controls）の順に止め、どちらも audio_session より前に置く。
     fandhe_cap_media_playback::shutdown();
     fandhe_cap_now_playing_controls::shutdown();

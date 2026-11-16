@@ -527,6 +527,22 @@
             android:authorities="${applicationId}.fandhe.share-receive"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.UrlSchemeLifecycle"
+            android:authorities="${applicationId}.fandhe.url-scheme"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.DeepLinkLifecycle"
+            android:authorities="${applicationId}.fandhe.deep-link"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.WebAuthSessionLifecycle"
+            android:authorities="${applicationId}.fandhe.web-auth-session"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.BackgroundUploadLifecycle"
+            android:authorities="${applicationId}.fandhe.background-upload"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.AppBadgeLifecycle"
             android:authorities="${applicationId}.fandhe.app-badge"
             android:exported="false" />

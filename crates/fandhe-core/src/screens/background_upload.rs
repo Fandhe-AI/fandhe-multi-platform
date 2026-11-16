@@ -4,7 +4,7 @@
 //! （`screens/mod.rs` の `pub mod background_upload;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは `fandhe-egui-proxy` の
-//! effect ドライバ（`device/background_upload.rs`）が [`take_request`] で要求を観測し
+//! effect ドライバ（`crates/fandhe-cap-background-upload/src/driver.rs`）が [`take_request`] で要求を観測し
 //! [`finish_action`] で結果を注入する（`background_download.rs` と同型の状態機械）。全 OS 分の文言と
 //! 状態の型はここに置き、OS ごとの子 issue はこの画面を触らない。
 //!
@@ -67,7 +67,7 @@ pub enum Phase {
     InFlight,
 }
 
-/// 失敗理由の表示用写像（`fandhe_device::background_upload::UploadFailure` と対応。
+/// 失敗理由の表示用写像（`fandhe_cap_background_upload::UploadFailure` と対応。
 /// `fandhe-core` は `fandhe-device` に依存しないので写像は proxy 側の責務）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FailureView {
