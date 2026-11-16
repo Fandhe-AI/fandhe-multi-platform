@@ -1,0 +1,105 @@
+//! Windows 向け生体認証実装（Issue #907）。`device/biometric_auth.rs` の Windows 経路
+//! から呼ばれ、WinRT `UserConsentVerifier`（Windows Hello）を
+//! `IUserConsentVerifierInterop`（`Win32_System_WinRT`）経由でウィンドウ束縛して呼ぶ
+//! （`fandhe-cap-share-sheet/src/windows.rs` と同じ「子プロセス方式は自分のウィンドウを持てず使えないため、
+//! FFI・`unsafe` を持てる本クレート側から直接 `windows` クレートを叩く」判断、
+//! `lib.rs` の Windows `deny(unsafe_code)` 緩和・coding-rust.md の FFI 例外規定準拠）。
+//!
+//! `unsafe` は [`present`] 内の `RequestVerificationForWindowAsync` 呼び出し 1 箇所に
+//! 閉じる（`// SAFETY:` を呼び出し直前に付与）。
+//!
+//! 認証理由・`HRESULT`・`UserConsentVerificationResult` の生値をログへ出力しない
+//! （security.md A09）。`BiometricAuthError::Internal` は固定ラベルのみを持つ
+//! （`fandhe-cap-share-sheet/src/windows.rs` と同じ方針）。
+//!
+//! # 完了の受け取り方（`IAsyncOperation`、コールバック型）
+//!
+//! `RequestVerificationForWindowAsync` は `IAsyncOperation<UserConsentVerificationResult>`
+//! を返す非同期 API で、Windows Hello の認証ダイアログは別プロセスの UI のため
+//! `.get()` で同期待ちせず `SetCompleted` にハンドラを登録する
+//! （UI スレッドをブロックしない）。完了はスレッドプール側スレッドで届くため、結果は
+//! `crate::driver::bridge::deliver`（`Mutex` 保護）へ置くだけにし、画面への反映は
+//! `biometric_auth::drive_callback` の毎フレームポーリングに任せる
+//! （`device/share.rs` の `.m` 側コールバックと同じ構造）。
+//!
+//! `IAsyncOperation` は完了ハンドラが呼ばれる前にドロップされないよう、
+//! プロセス全体の [`HELD`] へ保持する（次回 [`present`] で前回分を置き換える）。
+//!
+//! `CheckAvailabilityAsync` は別途呼ばない（実装計画の設計判断 3 参照）:
+//! `UserConsentVerificationResult` 自体が `DeviceNotPresent`/`NotConfiguredForUser`/
+//! `DisabledByPolicy`/`DeviceBusy` を返すため可否判定はそこで吸収できる。
+//!
+//! `Verified`（`outcome_from_verification` の code 0）は生体一致に限らず PIN 等の
+//! Windows Hello 端末所有者認証でも返る既知の制約（`biometric_auth::outcome_from_verification`
+//! の doc 参照）。
+
+use std::sync::Mutex;
+
+use windows::Security::Credentials::UI::{UserConsentVerificationResult, UserConsentVerifier};
+use windows::Win32::System::WinRT::IUserConsentVerifierInterop;
+use windows::core::HSTRING;
+// `windows` 0.61.3 は `IAsyncOperation`/`AsyncOperationCompletedHandler`/`AsyncStatus` を
+// `windows::Foundation` へ再エクスポートしていない（`windows-future` 側にのみ存在）ため、
+// ルート Cargo.toml の直接依存から取る（同モジュールのコメント参照）。
+use windows_future::{AsyncOperationCompletedHandler, AsyncStatus, IAsyncOperation};
+
+use crate::error::BiometricAuthError;
+
+use crate::driver::{bridge, outcome_from_verification};
+
+/// 直近の `present` が発行した `IAsyncOperation`（完了ハンドラが呼ばれる前にドロップされないよう保持する。
+/// 次回 `present` で置き換わる）。`present` は画面の effect（UI スレッド）と公開入口
+/// （`platform_biometric_auth` を呼ぶワーカー）の両方から呼ばれるため、スレッドローカルではなく
+/// プロセス全体の `Mutex` に置く（ワーカー終了で operation が落ちない・どのスレッドからでも置き換えられる）。
+///
+/// 要求 id と組で持つ。古い要求の `present` が遅れて届いても、新しい要求の operation を上書きしない
+/// （id が自分より新しい保持があれば自分の operation を保持せず捨てる）。
+type Held = (u64, IAsyncOperation<UserConsentVerificationResult>);
+static HELD: Mutex<Option<Held>> = Mutex::new(None);
+
+/// `device/biometric_auth.rs` の Windows 経路から呼ばれる。`request_id` は
+/// `crate::driver::bridge::begin` が払い出したプロセス内一意な ID
+/// （`bridge::deliver` の照合キー）。同期的に失敗した場合は `Err` を返し、
+/// 呼び出し元が `bridge::deliver` する（完了ハンドラは二度と呼ばれないため）。
+#[allow(unsafe_code)]
+pub(crate) fn present(request_id: u64, reason: &str) -> Result<(), BiometricAuthError> {
+    let hwnd = fandhe_platform_windows::window()
+        .ok_or(BiometricAuthError::Internal("biometric window"))?;
+    let interop: IUserConsentVerifierInterop =
+        windows::core::factory::<UserConsentVerifier, IUserConsentVerifierInterop>()
+            .map_err(|_| BiometricAuthError::Internal("biometric factory"))?;
+
+    // SAFETY: `hwnd` は `fandhe_platform_windows::window()`（`remember_window` が
+    // `eframe::CreationContext` から得た HWND、`ProxyApp` の生存中はウィンドウも
+    // 生存する）を経由した有効なハンドルで、`interop` は上で取得した有効な COM
+    // ポインタ（`fandhe-cap-share-sheet の windows::present` と同じ安全性根拠）。
+    let op: IAsyncOperation<UserConsentVerificationResult> =
+        unsafe { interop.RequestVerificationForWindowAsync(hwnd, &HSTRING::from(reason)) }
+            .map_err(|_| BiometricAuthError::Internal("biometric present"))?;
+
+    op.SetCompleted(&AsyncOperationCompletedHandler::new(move |op, status| {
+        let result = match (op.ok(), status) {
+            (Ok(op), AsyncStatus::Completed) => op
+                .GetResults()
+                .map_err(|_| BiometricAuthError::Internal("biometric outcome"))
+                .and_then(|r: UserConsentVerificationResult| outcome_from_verification(r.0)),
+            // キャンセル・エラー・未知のステータスはすべて失敗側へ倒す
+            // （偽の成功を作らない、モジュール doc 参照）。
+            _ => Err(BiometricAuthError::Internal("biometric outcome")),
+        };
+        bridge::deliver(request_id, result);
+        // 完了済みの自分の operation を手放す（新しい要求の保持は触らない）。
+        let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());
+        if held.as_ref().is_some_and(|(id, _)| *id == request_id) {
+            *held = None;
+        }
+        Ok(())
+    }))
+    .map_err(|_| BiometricAuthError::Internal("biometric completed"))?;
+
+    let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());
+    if held.as_ref().is_none_or(|(id, _)| *id <= request_id) {
+        *held = Some((request_id, op));
+    }
+    Ok(())
+}

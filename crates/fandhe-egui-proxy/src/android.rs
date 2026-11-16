@@ -107,14 +107,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // geofence 画面の状態も再生成で未登録へ戻るため、static 側の登録もまとめて破棄する。
     #[cfg(feature = "device")]
     crate::device::geofence::reset_register_tracking();
-    // Issue #908 codex-review 指摘（PR #917）: `biometric_auth::bridge::PENDING` も
-    // プロセス static のため、上記 `location` と同じ理由で Activity 再生成をまたいで
-    // 残る。新しい画面 `BiometricCheckState::default()`（`Idle`）を構築する前に
-    // ここで捨て、再生成前に開始した認証が後から完了しても黙って失われず、以後
-    // 確実に「未接続」（次の操作からやり直し）として扱われるようにする
-    // （`device::biometric_auth::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::biometric_auth::reset_pending_tracking();
     // Issue #957: `mic_record::bridge::SLOT`/`STARTED_REQUEST_ID` も同じ理由で
     // プロセス static のため Activity 再生成をまたいで残る。新しい画面
     // `MicRecordState::default()`（`Idle`）を構築する前にここで捨て、再生成前に
@@ -182,10 +174,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // Issue #325: `print::bridge::SLOT` も同様に破棄する（Activity 再生成で印刷の保留は復元しない）。
     #[cfg(feature = "device")]
     crate::device::print::reset_pending_tracking();
-    // Issue #1222: `contact_pick::bridge::SLOT` も同様。連絡先選択の契約は「復元せず破棄」
-    // （`fandhe_device::contact_picker` モジュール doc）なので、旧要求の遅延完了を id 不一致で無視させる。
-    #[cfg(feature = "device")]
-    crate::device::contact_pick::reset_pending_tracking();
     // Issue #267: 音声再生も同様。画面状態が generation 0 に戻るため、処理済み世代を捨て再生を止める
     // （`device::media_playback::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
@@ -198,10 +186,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // （`device::picture_in_picture::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::picture_in_picture::reset_pending_tracking();
-    // Issue #535: 端末内翻訳の処理済み世代も破棄する（理由は on_device_llm と同じ。
-    // `device::translation::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::translation::reset_pending_tracking();
     // Issue #560: OS の検索への登録の処理済み世代も破棄する（理由は translation と同じ。
     // `device::spotlight_index::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

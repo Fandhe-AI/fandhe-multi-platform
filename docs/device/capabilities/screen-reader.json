@@ -16,7 +16,7 @@
         "VoiceOver 読み上げ"
       ],
       "implStatus": "**未達（上流待ち）**。`accesskit` のコア型は iOS でも参照可能だが、`egui-winit` が要求する `accesskit_winit`（現行 0.29 系。最新 egui 0.35.0 でも 0.32.0）が iOS 対応版（0.33.0 以降）に未到達のため、`null.rs`（no-op）アダプタへフォールバックし AX ツリーが OS へ一切公開されない",
-      "impl": "`crates/fandhe-egui-proxy/Cargo.toml` の accesskit 関連コメント"
+      "impl": "`crates/fandhe-render-egui/Cargo.toml`（ios 分岐の accesskit 関連コメント）"
     },
     "android": {
       "status": "done",

@@ -14,7 +14,7 @@
       "note": "実装済み（#536、macOS と共用）。固定の日本語文を ja → en に 1 回訳す。iOS 26 未満は Unsupported。言語パックが未導入・取得中なら失敗として出し、ダウンロードは始めない。期限は 30 秒（Rust のドライバだけが持つ）。背景遷移で期限を過ぎたら期限切れで確定する。守る範囲は 1 プロセス内の順序・嘘の成功の禁止・資源の解放で、期限後も OS 側の翻訳が走り切ることは守らない。iOS 実機の確認は #529 で行う",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#529）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_translation.rs + crates/fandhe-egui-proxy/src/device/apple_translation.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_translation.swift + crates/fandhe-egui-proxy/src/device/translation.rs + crates/fandhe-core/src/screens/translation.rs + crates/fandhe-device/src/translation.rs、Issue #536"
+      "impl": "crates/fandhe-cap-translation/src/ios.rs + crates/fandhe-cap-translation/src/apple.rs + crates/fandhe-cap-translation/apple/fandhe_apple_translation.swift + crates/fandhe-cap-translation/src/driver.rs + crates/fandhe-core/src/screens/translation.rs + crates/fandhe-cap-translation/src/contract.rs、Issue #536"
     },
     "android": {
       "status": "done",
@@ -24,7 +24,7 @@
       "note": "実装済み（#537）。固定の日本語文を ja → en に 1 回訳す。API 31 未満・翻訳サービスなしは Unsupported、言語の組み合わせ非対応は失敗、言語パック未導入・取得中も失敗として出し、ダウンロードは始めない。端末によって翻訳サービスの有無が違う。期限は 30 秒（Rust のドライバだけが持つ）。Activity 再生成で保留中の要求を中断扱いで破棄する。守る範囲は 1 プロセス内の順序・嘘の成功の禁止・資源の解放で、期限後も OS 側の翻訳が走り切ることは守らない。Android 実機の確認は #529 で行う",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#529）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_translation.rs + platforms/android/app/src/main/java/com/fandhe/platform/TranslationHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/translation.rs + crates/fandhe-core/src/screens/translation.rs + crates/fandhe-device/src/translation.rs、Issue #537"
+      "impl": "crates/fandhe-cap-translation/src/android.rs + crates/fandhe-cap-translation/android/java/com/fandhe/platform/TranslationHelper.java + crates/fandhe-cap-translation/android/java/com/fandhe/platform/TranslationLifecycle.java + crates/fandhe-cap-translation/src/driver.rs + crates/fandhe-core/src/screens/translation.rs + crates/fandhe-cap-translation/src/contract.rs、Issue #537"
     },
     "macos": {
       "status": "done",
@@ -34,7 +34,7 @@
       "note": "固定の日本語文を ja → en に 1 回訳す（元言語は必須で自動判定しない）。macOS 26 未満は Unsupported。言語パックが未導入・取得中なら失敗として出し、ダウンロードは始めない。期限は 30 秒（Rust のドライバだけが持つ）。守る範囲は 1 プロセス内の順序・嘘の成功の禁止・資源の解放で、期限後も OS 側の翻訳が走り切ることは守らない。Mac の目視は #529 で行う",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#529）",
-      "impl": "crates/fandhe-egui-proxy/src/device/apple_translation.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_translation.swift + crates/fandhe-egui-proxy/src/device/translation.rs + crates/fandhe-core/src/screens/translation.rs + crates/fandhe-device/src/translation.rs、Issue #535"
+      "impl": "crates/fandhe-cap-translation/src/apple.rs + crates/fandhe-cap-translation/apple/fandhe_apple_translation.swift + crates/fandhe-cap-translation/src/driver.rs + crates/fandhe-core/src/screens/translation.rs + crates/fandhe-cap-translation/src/contract.rs、Issue #535"
     },
     "windows": {
       "status": "no",
@@ -52,7 +52,7 @@
       "safari": "非対応（`Translator` が無いので Unsupported）",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実ブラウザでの確認は確認用 issue #529 で追う",
-      "impl": "crates/fandhe-web-dom/src/translation.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/translation.rs + crates/fandhe-device/src/translation.rs、Issue #539"
+      "impl": "crates/fandhe-web-dom/src/translation.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/translation.rs + crates/fandhe-cap-translation/src/contract.rs、Issue #539"
     }
   },
   "note": "nlp（OS 内蔵の言語解析）との違い: 本機能は文章を別の言語へ変換する。今回の範囲: 固定の日本語文を英語へ訳して画面に出すだけ。言語パックの未取得時は『未取得』を出し、成功にしない。"

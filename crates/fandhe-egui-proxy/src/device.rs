@@ -178,12 +178,6 @@ pub mod android_screen_orientation;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_spotlight_index;
-/// Issue #537（親 #115）: Android 向け端末内翻訳実装（`android.view.translation`）。
-/// `device/translation.rs` の Android 経路から呼ばれる。JNI の本体はモジュール内側の
-/// `cfg(target_os = "android")` に閉じ、純関数をホストでテストできるよう cfg は `any(android, test)`。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_translation;
 /// Issue #1218: Android 向けカスタム URL scheme 受信実装（Java 側 `MainActivity` の
 /// `onCreate` / `onNewIntent` から JNI で呼ばれる）。`device/url_scheme.rs::
 /// platform_url_scheme` の Android 経路から使われる。
@@ -214,10 +208,6 @@ pub mod apple_background_upload;
 /// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_barcode_scan;
-/// Issue #906: iOS / macOS 向け生体認証実装（`apple/fandhe_apple_biometric.m` を呼ぶ
-/// C ABI ラッパー）。`device/biometric_auth.rs` の macOS/iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_biometric;
 /// Issue #778 macOS・Issue #779 iOS: BLE の周辺機器役実装（`apple/fandhe_apple_ble_peripheral.m` を
 /// 呼ぶ C ABI ラッパー）。`device/ble_peripheral.rs` の macOS 経路と、委譲する
 /// `ios_ble_peripheral`（iOS）から呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
@@ -227,10 +217,6 @@ pub mod apple_ble_peripheral;
 /// 呼ぶ C ABI ラッパー）。`device/bluetooth_le.rs` の iOS / macOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_bluetooth_le;
-/// Issue #1220 macOS + #1221 iOS: 連絡先選択実装（`apple/fandhe_apple_contact_picker.m` を
-/// 呼ぶ C ABI ラッパー）。`device/contact_pick.rs` の Apple 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_contact_picker;
 /// Issue #416: macOS / iOS 向けファイルの関連付け受信（`apple/fandhe_apple_file_association.m` の
 /// Apple Event `kAEOpenDocuments` ハンドラから呼ばれる C ABI ラッパー）。`device/file_association.rs::platform` の
 /// macOS 経路と `main.rs`（登録）から使われる。iOS は b-ios が埋めるまで受け口だけがある。
@@ -295,11 +281,6 @@ pub mod apple_picture_in_picture;
 /// `cfg(test)` でも有効にする。
 #[cfg(any(target_os = "macos", test))]
 pub mod apple_quick_settings_tile;
-/// Issue #922・#924: iOS / macOS 向け資格情報保存実装（`apple/
-/// fandhe_apple_secure_credential.m` を呼ぶ C ABI ラッパー）。`device/
-/// secure_credential.rs` の iOS/macOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_secure_credential;
 /// Issue #1024（macOS）/ #1025（iOS）: iOS / macOS 向け音声認識実装（`apple/
 /// fandhe_apple_speech_recognition.m` を呼ぶ C ABI ラッパー）。`device/
 /// speech_recognition.rs` の iOS/macOS 経路から呼ばれる。
@@ -310,11 +291,6 @@ pub mod apple_speech_recognition;
 /// iOS 経路（#561 で `ios_spotlight_index` 経由）から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_spotlight_index;
-/// Issue #535 macOS・#536 iOS: 端末内翻訳実装（`apple/fandhe_apple_translation.swift` を呼ぶ
-/// C ABI ラッパー）。`device/translation.rs` の macOS 経路と、iOS 経路（#536 で `ios_translation`
-/// 経由）から呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_translation;
 /// Issue #1215・#1217: macOS / iOS 向けカスタム URL scheme 受信（`macos/fandhe_macos_url_scheme.m`
 /// の Apple Event ハンドラ、`ios/fandhe_ios_url_scheme.m` の delegate から呼ばれる C ABI
 /// ラッパー）。`device/url_scheme.rs::platform_url_scheme` の macOS・iOS 経路と
@@ -336,9 +312,6 @@ pub mod background_task;
 pub mod background_upload;
 /// Phase 11（端末機能の拡充ループ、親 #116、Issue #557）: 画像内のバーコード・QR 読み取りの effect ドライバ。
 pub mod barcode_scan;
-/// Phase 11 の拡充ループ（親 #905、Issue #906/#907/#908）: 生体認証の effect ドライバ
-/// （macOS/iOS/Android/Windows 実装）。
-pub mod biometric_auth;
 /// Phase 11 の拡充ループ（親 #164、Issue #778）: BLE の周辺機器役の effect ドライバ
 /// （macOS・iOS・Windows 実装。Android は骨格で #1123 が実装。他 OS は
 /// `UnsupportedBlePeripheral` 固定）。
@@ -355,10 +328,6 @@ pub mod car_display;
 /// Issue #1404（親 #1154）: 方位（コンパス）の effect ドライバ（Windows・iOS・Android 実装、
 /// 他 OS は `UnsupportedCompass` 固定。Web は `fandhe-web-dom`）。
 pub mod compass;
-/// Phase 11 の拡充ループ（親 #1117、Issue #1220・#1221・#1222）: 連絡先選択の effect ドライバ
-/// （macOS / iOS / Android は pull 型 `bridge`、他 OS は兄弟 issue が入るまで
-/// `UnsupportedContactPicker` 固定）。
-pub mod contact_pick;
 /// Phase 11 の拡充ループ（親 #153、Issue #1278）: ディープリンク受信の effect ドライバ
 /// （Android 分岐はスタブ、他 OS は `UnsupportedDeepLink` 固定）。
 pub mod deep_link;
@@ -518,9 +487,6 @@ pub mod ios_screen_orientation;
 /// `device/spotlight_index.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_spotlight_index;
-/// Issue #536: iOS 向け端末内翻訳実装（macOS と共用の `AppleTextTranslator` を返す）。`device/translation.rs` の iOS 経路から呼ばれる。
-#[cfg(target_os = "ios")]
-pub mod ios_translation;
 /// Issue #532: iOS 向け Web 認証セッション実装（`ios/fandhe_ios_web_auth_session.m` の
 /// `ASWebAuthenticationSession` を呼ぶ C ABI ラッパー）。`device/web_auth_session.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -662,9 +628,6 @@ pub mod safe_area_insets;
 /// （iOS は #656、Android は #657 が埋めるスタブ、Web は #658 の `fandhe-web-dom`、
 /// 他 OS は `UnsupportedScreenOrientation` 固定）。
 pub mod screen_orientation;
-/// Phase 11 の拡充ループ（親 #921、Issue #922・#924）: 資格情報保存の effect
-/// ドライバ（macOS/iOS/Android 実装、Windows は #923）。
-pub mod secure_credential;
 /// Phase 11 の拡充ループ（親 #1023、Issue #1024・#1025）: 音声認識の effect ドライバ
 /// （macOS/iOS/Windows/Android 実装、Android/Web は兄弟 issue）。
 pub mod speech_recognition;
@@ -672,10 +635,6 @@ pub mod speech_recognition;
 /// Android 実装、他 OS は `UnsupportedSpotlightIndex` 固定）。
 pub mod spotlight_index;
 pub mod tilt;
-/// Phase 11 の拡充ループ（親 #115、Issue #535）: 端末内翻訳の effect ドライバ（macOS 実装、
-/// iOS・Android も実装済み（#536・#537）、他 OS は `UnsupportedTextTranslator` 固定。Web は
-/// `fandhe-web-dom` が持つ）。
-pub mod translation;
 /// Phase 11 の拡充ループ型サンプル「TSV 読み込み」（親 #979、Issue #980）: `device/
 /// file_pick.rs` のライフサイクル処理（`PickHooks`/`drive_with`/`drive_mobile_with`）と
 /// `bridge` を共有する effect ドライバ。
@@ -718,10 +677,6 @@ pub mod windows_background_download;
 /// `dead_code` を許容する。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_background_task;
-/// Issue #907: Windows 向け生体認証実装（`IUserConsentVerifierInterop` 経由の
-/// Windows Hello ラッパー）。`device/biometric_auth.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_biometric;
 /// Issue #1101: Windows 向け BLE の周辺機器役（WinRT `GattServiceProvider`）。
 /// `device/ble_peripheral.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
@@ -813,10 +768,6 @@ pub mod windows_photo_library;
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_print;
-/// Issue #923: Windows 向け資格情報保存実装（WinRT `PasswordVault` ラッパー）。
-/// `device/secure_credential.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_secure_credential;
 /// Issue #1024: Windows 向け音声認識実装（WinRT `SpeechRecognizer` ラッパー）。
 /// `device/speech_recognition.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]

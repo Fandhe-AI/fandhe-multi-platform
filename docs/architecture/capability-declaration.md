@@ -56,6 +56,7 @@ info-plist = { NSExtension = { NSExtensionPointIdentifier = "com.apple.widgetkit
 permissions = [{ name = "android.permission.NFC" }]  # 任意で max-sdk・flags（例 flags = ["neverForLocation"]）
 main-activity-attributes = { supportsPictureInPicture = "true" }  # 書けるキーは許可リストのみ
 application-meta-data = [{ name = "com.google.android.gms.wallet.api.enabled", value = "true" }]  # resource = "@xml/..." も可
+queries = [{ actions = ["android.intent.action.TTS_SERVICE"] }]  # <queries> の <intent>（action だけ）
 features = [{ name = "android.hardware.nfc.hce", required = false }]
 gradle = ["com.google.android.gms:play-services-mlkit-document-scanner:16.0.0"]
 java = ["android/java"]
@@ -113,6 +114,7 @@ params = { text = "share_text", url = "share_url" }
 | `java`・`res` | ソースとリソースのディレクトリ | crate からの相対パス |
 | `main-activity-intent-filters` | 既存の MainActivity への追記 | |
 | `main-activity-attributes` | MainActivity の開始タグの属性 | 書けるのは `supportsPictureInPicture` だけ（許可リスト） |
+| `queries` | `<queries>` の `<intent>`（Android 11 以降のパッケージ可視性） | `actions` は 1 件以上のドット区切りの識別子。各 action が別々の `<intent>` になり、`<uses-feature>` の後・`<application>` の前に名前順で出す。`<package>`・`categories`・`data` は書けない |
 | `application-meta-data` | `<application>` 直下の `<meta-data>` | `resource`（`@` 始まり）か `value` の一方。コンポーネントの後に `name` 順で出す |
 | `components` | `<activity>`・`<activity-alias>`・`<service>`・`<receiver>`・`<provider>` | `exported` は省略不可。`attributes` は他の `android:*` 属性。`activity-alias` は `target-activity` が必須で、alias は対象の後に出す |
 | `windows.identity` | パッケージ ID | 生成は #1208 |
@@ -125,6 +127,7 @@ params = { text = "share_text", url = "share_url" }
 - `permissions` を文字列でなくテーブルにしたのは、`maxSdkVersion` 付きの権限が実在し、後から形を変えると破壊的変更になるためです
 - `required`・`exported` を省略不可にするのは、Android の暗黙の既定値による端末の除外や意図しない公開を防ぐためです
 - `flags` を enum にするのは、綴り間違いを `check` で落とすためです。Android がフラグを足し、使う機能が出たら足します
+- `queries` を action だけに限るのは、`<package>` や `QUERY_ALL_PACKAGES` で端末のアプリ一覧が見えると、不要なパッケージ可視性を依存 crate が広げられるためです。tts・音声認識のように、エンジンやサービスの検出に要る action だけを書きます
 - `main-activity-attributes` を許可リストにするのは、MainActivity がアプリ本体の入口で、`exported`・`launchMode`・`taskAffinity`・`permission` などを依存 crate が書き換えると、起動不能やタスク乗っ取りにつながるためです。`web.manifest` と同じ形で、要る機能が出たら足します
 - alias の対象を同じ宣言内に限るのは、別機能の Activity を指すと、その機能を選ばないアプリで Manifest が壊れるためです。`target-activity` を専用の欄にしたのは、必須・参照先の検査・出力順の制御に使うためです
 
@@ -163,6 +166,7 @@ params = { text = "share_text", url = "share_url" }
 | `features` | `name` で統合。`required` はどちらかが true なら true |
 | `info-plist`・`entitlements` | 同じ値は 1 つ。配列は和集合（出現順）。オブジェクトは再帰。それ以外の不一致はエラー |
 | `components`・`extensions`・`application-meta-data` | `name` で統合。内容が同じなら 1 つ、違えばエラー |
+| `queries` | action の集合として統合。重複は 1 件 |
 | `main-activity-attributes` | キーごとに統合。同値なら 1 つ、違えばエラー |
 | `main-activity-intent-filters` | 内容が同じなら 1 つ |
 | `java`・`res`・`sources` | 統合しない。crate ごとに集める。同名リソースの衝突は Gradle のマージに任せる |
@@ -304,4 +308,4 @@ cargo fandhe verify-scope --catalog <全機能を含む Cargo.toml> \
 - 観測ファイルの集め方は `scripts/audit/verify-capability-scope.sh` が担います（aapt2・codesign・otool・plutil。Gradle の依存ツリーは任意）
 - 判定ロジックは `cargo test -p cargo-fandhe` で守ります。実成果物への実行は CI の必須経路には載せていません
 
-範囲外: 権限の `flags`（権限名が対象で、フラグ名は他の権限にも正当に現れる）、`main-activity-attributes`、`main-activity-intent-filters`（他 library の manifest にも正当に現れるため。漏れは機能のコンポーネント名で検出します）、Windows の identity（#1208）、AAB の直接検査。
+範囲外: `queries`（統合後の Manifest には他 library 由来の同じ action が正当に現れうる）、権限の `flags`（権限名が対象で、フラグ名は他の権限にも正当に現れる）、`main-activity-attributes`、`main-activity-intent-filters`（他 library の manifest にも正当に現れるため。漏れは機能のコンポーネント名で検出します）、Windows の identity（#1208）、AAB の直接検査。

@@ -79,14 +79,6 @@ fn build() {
 
     compile_apple_location();
 
-    // `apple/fandhe_apple_biometric.m`（Issue #906）も macOS 分岐と共用する。
-    compile_apple_biometric();
-    compile_apple_contact_picker();
-
-    // `apple/fandhe_apple_secure_credential.m`（Issue #922・#924）は macOS 分岐と
-    // 共用する。
-    compile_apple_secure_credential();
-
     // `apple/fandhe_apple_photo_library.m`（Issue #1254 macOS + #1255 iOS）も macOS 分岐と共用する。
     compile_apple_photo_library();
 
@@ -117,8 +109,6 @@ fn build() {
     compile_apple_image_recognition();
     // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
     compile_apple_barcode_scan();
-    // `apple/fandhe_apple_translation.swift`（Issue #535 macOS + #536 iOS）も共用する。
-    compile_apple_translation();
     // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
     compile_apple_spotlight_index();
 
@@ -177,20 +167,6 @@ fn compile_apple_location() {
     compile_objc("apple/fandhe_apple_location.m", &["CoreLocation"]);
 }
 
-/// `apple/fandhe_apple_biometric.m` を `cc` でコンパイルし LocalAuthentication を
-/// リンクする（iOS・macOS 双方の feature `device` 分岐から呼ばれる共通処理、Issue #906）。
-fn compile_apple_biometric() {
-    compile_objc("apple/fandhe_apple_biometric.m", &["LocalAuthentication"]);
-}
-
-/// `apple/fandhe_apple_contact_picker.m` を `cc` でコンパイルし Contacts / ContactsUI をリンクする（Issue #1220 macOS + #1221 iOS）。
-fn compile_apple_contact_picker() {
-    compile_objc(
-        "apple/fandhe_apple_contact_picker.m",
-        &[ui_framework(), "Contacts", "ContactsUI"],
-    );
-}
-
 /// `apple/fandhe_apple_spotlight_index.m` を `cc` でコンパイルし CoreSpotlight をリンクする
 /// （Issue #560 macOS・#561 iOS。両分岐から呼ぶ）。
 fn compile_apple_spotlight_index() {
@@ -219,16 +195,6 @@ fn compile_apple_map_view() {
     compile_objc(
         "apple/fandhe_apple_map_view.m",
         &[ui_framework(), "CoreGraphics", "Foundation", "MapKit"],
-    );
-}
-
-/// `apple/fandhe_apple_secure_credential.m` を `cc` でコンパイルし Security を
-/// リンクする（Issue #922・#924）。iOS・macOS 双方の feature `device` 分岐から
-/// 呼ばれる共通処理（doc 参照）。
-fn compile_apple_secure_credential() {
-    compile_objc(
-        "apple/fandhe_apple_secure_credential.m",
-        &["Foundation", "Security"],
     );
 }
 
@@ -278,20 +244,6 @@ fn compile_apple_image_recognition() {
         "apple/fandhe_apple_image_recognition.m",
         &["Foundation", "Vision"],
     );
-}
-
-/// 端末内翻訳の Swift 薄層 `apple/fandhe_apple_translation.swift`（Issue #535 macOS、iOS は #536）。
-/// Translation を弱リンクする。macOS・iOS の両分岐から呼ぶ。
-fn compile_apple_translation() {
-    compile_swift(&SwiftLib {
-        srcs: &["apple/fandhe_apple_translation.swift"],
-        lib: "fandhe_apple_translation",
-        module: "FandheTranslationBridge",
-        framework: "Translation",
-        weak: true,
-        require_env: "FANDHE_REQUIRE_TRANSLATION",
-        tag: "translation",
-    });
 }
 
 /// アラーム・正確な時刻の予約の Swift 薄層 `ios/fandhe_ios_alarm.swift`（Issue #1077）。
@@ -638,9 +590,6 @@ fn build_macos() {
     }
 
     compile_apple_location();
-    compile_apple_biometric();
-    compile_apple_contact_picker();
-    compile_apple_secure_credential();
     compile_apple_photo_library();
     compile_apple_map_view();
 
@@ -666,7 +615,6 @@ fn build_macos() {
     compile_apple_image_recognition();
     // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
     compile_apple_barcode_scan();
-    compile_apple_translation();
     // `apple/fandhe_apple_spotlight_index.m`（Issue #560 macOS + #561 iOS）も共用する。
     compile_apple_spotlight_index();
     // `apple/fandhe_apple_network_status.m`（Issue #1282）。iOS 分岐と共用する。

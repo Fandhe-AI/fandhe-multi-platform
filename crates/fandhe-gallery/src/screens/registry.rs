@@ -59,7 +59,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "contact_pick" => fandhe_core::screens::contact_pick::current_screen,
-    fandhe_egui_proxy::device::contact_pick::contact_pick_effect,
+    fandhe_cap_contacts::contact_pick_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "eye_dropper" => fandhe_core::screens::eye_dropper_pick::current_screen,
@@ -83,7 +83,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "biometric_check" => fandhe_core::screens::biometric_check::current_screen,
-    fandhe_egui_proxy::device::biometric_auth::biometric_check_effect,
+    fandhe_cap_biometric_auth::biometric_check_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "calendar_add" => fandhe_core::screens::calendar_add::current_screen,
@@ -179,7 +179,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "credential_vault" => fandhe_core::screens::credential_vault::current_screen,
-    fandhe_egui_proxy::device::secure_credential::credential_vault_effect,
+    fandhe_cap_secure_credential::credential_vault_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "serial_port_show" => fandhe_core::screens::serial_port_show::current_screen,
@@ -547,7 +547,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "translation" => fandhe_core::screens::translation::current_screen,
-    fandhe_egui_proxy::device::translation::translation_effect,
+    fandhe_cap_translation::translation_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "spell_check" => fandhe_core::screens::spell_check::current_screen,

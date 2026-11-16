@@ -75,7 +75,6 @@ import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
 import android.provider.CalendarContract;
-import android.provider.ContactsContract;
 import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
 import android.speech.RecognitionListener;
@@ -94,15 +93,11 @@ import android.view.accessibility.AccessibilityManager;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.biometric.BiometricManager;
-import androidx.biometric.BiometricPrompt;
 import androidx.core.app.NotificationChannelCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.location.LocationManagerCompat;
-import androidx.security.crypto.EncryptedSharedPreferences;
-import androidx.security.crypto.MasterKey;
 import androidx.work.ExistingWorkPolicy;
 import androidx.work.OneTimeWorkRequest;
 import androidx.work.WorkManager;
@@ -113,7 +108,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
@@ -196,17 +190,6 @@ public class MainActivity extends GameActivity {
             long requestId, int code, String name, int fd);
 
     // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
-    // （Issue #1222、Phase 11 型サンプル「連絡先選択」の Android 経路。`nativeOnPhotoPickerResult`
-    // と同型の pull 型）。
-    // requestId: `requestContactPick(long)` が受け取った値をそのまま返す（Rust 側 `bridge` が
-    // 現在の要求と照合し、Activity 再生成後の遅延到着は黙って捨てる）。
-    // code: 0=選択（name が有効）／1=キャンセル／3=失敗（`launch()` 例外・連絡先アプリ無し・
-    // 読み取り失敗・名前なしを一律ここへ畳む。インテント経由に権限拒否は無く 2 は送らない）。
-    // name: 選ばれた連絡先の表示名のみ。ログには出さない。
-    private static native void nativeOnContactPickerResult(
-            long requestId, int code, String name);
-
-    // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
     // （Issue #890、Phase 11 型サンプル「位置情報」の Android 経路に限り追加。
     // Phase 8 の feature `device` 切り離し時に削除する）。継続 push 型
     // （`fandhe_device::location::SharedLocation` 契約）のため requestId を持たない。
@@ -267,13 +250,6 @@ public class MainActivity extends GameActivity {
     // （`android_main`）が再生成のたびに受け皿を捨てるため、再生成をまたいで届いた結果は
     // Rust 側の id 照合で捨てられる。
     private static final RequestTracker photoPickRequest = new RequestTracker();
-    private static final RequestTracker contactPickRequest = new RequestTracker();
-    // 連絡先アプリを開いてから結果コールバックが来るまで true（Issue #1222）。static なので
-    // Activity 再生成をまたいで残り、旧ピッカーの結果が新インスタンスへ届くまで新しい起動を断る。
-    // 断らないと、再生成後に始めた要求 B の id を旧要求 A の結果が消費して B の成功に見える
-    // （`CameraCaptureHelper` の `awaitingCameraResult` と同じ理由）。読み書きは UI スレッドだけで行う。
-    private static boolean contactPickerOpen = false;
-
     // 変換前の元データに許す上限（バイト）。Rust 側 `MAX_PHOTO_BYTES` と揃える。
     private static final long PHOTO_MAX_BYTES = 8L * 1024 * 1024;
     // 変換前に許す画像の長辺（画素）。Rust 側 `MAX_PHOTO_SIDE` と揃える。
@@ -282,32 +258,6 @@ public class MainActivity extends GameActivity {
     private static final long PHOTO_MAX_PIXELS = 64L * 1024 * 1024;
     // JPEG へ変換するときの長辺の目標（画素）。これ以下になるまで `inSampleSize` で縮める。
     private static final int PHOTO_CONVERT_SIDE = 4096;
-
-    // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
-    // （Issue #908、Phase 11 型サンプル「生体認証」の Android 経路）。`BiometricAuth`
-    // trait は通らない（`device/biometric_auth.rs` モジュール doc の
-    // 「macOS/iOS/Android は pull 型 bridge」参照）。code の意味（本ファイルが SSOT、
-    // Rust 側 `outcome_from_android_code` の doc と対）:
-    // 0=認証した／1=キャンセル／2=使えない（未登録・非対応等）／3=失敗（不一致・
-    // ロックアウト等）／4=内部エラー（提示依頼自体の失敗）。
-    private static native void nativeOnBiometricResult(long requestId, int code);
-
-    // 上記 code 定数（`biometricCallback`/`requestBiometric` からも参照するため）。
-    private static final int BIOMETRIC_RESULT_AUTHENTICATED = 0;
-    private static final int BIOMETRIC_RESULT_CANCELLED = 1;
-    private static final int BIOMETRIC_RESULT_UNAVAILABLE = 2;
-    private static final int BIOMETRIC_RESULT_FAILED = 3;
-    private static final int BIOMETRIC_RESULT_INTERNAL_ERROR = 4;
-
-    // コールバック時に requestId を思い出すためだけの唯一の static（`shareRequest`
-    // と同じ理由。Activity 再生成を跨いで生存する必要がある。`BiometricPrompt` は
-    // `onCreate` で新インスタンスごとに作り直すが（下記 `biometricPrompt` 参照）、
-    // 公式ガイダンス上、内部 Fragment 経由で旧インスタンスへの提示結果が新
-    // インスタンスの callback へ再接続される契約のため、static であれば正しく
-    // 反映される。プロセス死では `RequestTracker.NONE` に戻るため死後の再配送は
-    // 無視される（`filePickRequest` と同じ理屈）。UI スレッドのみで読み書きするため
-    // 追加の同期は不要。
-    private static final RequestTracker biometricRequest = new RequestTracker();
 
     // ローカル通知（Issue #1006、Phase 11 型サンプル「通知」の Android 経路）。Rust 側
     // `device/notification.rs::bridge` と pull 型で橋渡しする（`biometricRequest`/
@@ -343,17 +293,6 @@ public class MainActivity extends GameActivity {
 
     void cancelHealthDataRead(long requestId) {
         healthDataHelper.cancel(requestId);
-    }
-
-    // 端末内翻訳（Issue #537）。実装は `TranslationHelper`。Rust の `android_translation.rs` が JNI で呼ぶ。
-    private final TranslationHelper translationHelper = new TranslationHelper(this);
-
-    void requestTranslation(long requestId, String text, String source, String target) {
-        translationHelper.request(requestId, text, source, target);
-    }
-
-    void cancelTranslation(long requestId) {
-        translationHelper.cancel(requestId);
     }
 
     // 音楽ライブラリ画面（Issue #485）。実装は `MusicLibraryHelper`（許可ランチャーを STARTED 前に登録）。
@@ -996,26 +935,6 @@ public class MainActivity extends GameActivity {
                 new Thread(() -> deliverPickedPhoto(requestId, uri), "fandhe-photo-pick").start();
             });
 
-    // 連絡先選択（Issue #1222）。`PickContact` は `ACTION_PICK`（`Contacts.CONTENT_TYPE`）で
-    // 連絡先アプリを開く。選んだ 1 件の URI 読み取り権限だけが委譲されるため `READ_CONTACTS`
-    // は不要。Activity 再生成後に旧要求の結果が配送されても、`take()` が NONE なら捨て、
-    // そうでなくても Rust 側の id 照合で捨てられる（`pickPhoto` と同じ理由）。
-    private final ActivityResultLauncher<Void> pickContact =
-            getActivityResultRegistry().register("fandhe:MainActivity:6", this, new ActivityResultContracts.PickContact(), uri -> {
-                contactPickerOpen = false;
-                long requestId = contactPickRequest.take();
-                if (requestId == RequestTracker.NONE) {
-                    return;
-                }
-                if (uri == null) {
-                    nativeOnContactPickerResult(requestId, 1, null);
-                    return;
-                }
-                // ContentResolver の読み取りを UI スレッドでやらない。
-                new Thread(() -> deliverPickedContact(requestId, uri), "fandhe-contact-pick")
-                        .start();
-            });
-
     // 測位の開始・停止を UI スレッド上の resumed 状態と一致させるための可視性フラグ
     // （codex-review P1 指摘、PR #894）。`requestLocationUpdates()` は Rust スレッドから
     // JNI 経由で呼ばれ `runOnUiThread` へ開始要求を積むが、その Runnable の実行前に
@@ -1359,70 +1278,6 @@ public class MainActivity extends GameActivity {
     // volatile 不要）の先頭で検査して、破棄後の要求はエラーで完了させる。
     private boolean ttsActivityDestroyed;
 
-    // `BiometricPrompt` はインスタンスフィールド（内部で `FragmentActivity` の
-    // `FragmentManager` に紐づく Fragment を使うため、Activity 再生成のたびに
-    // `onCreate` で作り直す必要がある。作り直しても `biometricRequest`/
-    // `biometricCallback` の組で結果が再接続される、`biometricRequest` doc 参照）。
-    private BiometricPrompt biometricPrompt;
-
-    // `biometricPrompt` 生成時に渡す唯一のコールバックインスタンス。先頭で
-    // `biometricRequest` を読んで `RequestTracker.NONE` なら無視する（first-wins。
-    // 二重通知防止）。
-    // `onAuthenticationFailed`（不一致・プロンプト継続）は最終結果にしない
-    // （実装計画 §4 参照）。
-    private final BiometricPrompt.AuthenticationCallback biometricCallback =
-            new BiometricPrompt.AuthenticationCallback() {
-                @Override
-                public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result) {
-                    long id = biometricRequest.take();
-                    if (id == RequestTracker.NONE) {
-                        return;
-                    }
-                    nativeOnBiometricResult(id, BIOMETRIC_RESULT_AUTHENTICATED);
-                }
-
-                @Override
-                public void onAuthenticationError(int errorCode, CharSequence errString) {
-                    long id = biometricRequest.take();
-                    if (id == RequestTracker.NONE) {
-                        return;
-                    }
-                    // errString はログへ出さない（画面へ渡す情報も結果コードのみに
-                    // 絞る、security.md A09）。
-                    nativeOnBiometricResult(id, biometricErrorToResultCode(errorCode));
-                }
-
-                @Override
-                public void onAuthenticationFailed() {
-                    // 不一致（プロンプト継続）。最終結果は Succeeded/Error 側で確定する
-                    // ため、ここでは何もしない（実装計画 §4 参照）。
-                }
-            };
-
-    // `BiometricPrompt.ERROR_*` → `nativeOnBiometricResult` の code への写像
-    // （本ファイルがこの表の SSOT、`device/biometric_auth.rs::outcome_from_android_code`
-    // の doc 参照）。未知のコード（TIMEOUT/UNABLE_TO_PROCESS/NO_SPACE/VENDOR 等）は
-    // 失敗側へ倒す（偽のキャンセル・偽の成功を作らない）。
-    private static int biometricErrorToResultCode(int errorCode) {
-        switch (errorCode) {
-            case BiometricPrompt.ERROR_USER_CANCELED:
-            case BiometricPrompt.ERROR_NEGATIVE_BUTTON:
-            case BiometricPrompt.ERROR_CANCELED:
-                return BIOMETRIC_RESULT_CANCELLED;
-            case BiometricPrompt.ERROR_LOCKOUT:
-            case BiometricPrompt.ERROR_LOCKOUT_PERMANENT:
-                return BIOMETRIC_RESULT_FAILED;
-            case BiometricPrompt.ERROR_NO_BIOMETRICS:
-            case BiometricPrompt.ERROR_HW_NOT_PRESENT:
-            case BiometricPrompt.ERROR_HW_UNAVAILABLE:
-            case BiometricPrompt.ERROR_SECURITY_UPDATE_REQUIRED:
-            case BiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL:
-                return BIOMETRIC_RESULT_UNAVAILABLE;
-            default:
-                return BIOMETRIC_RESULT_FAILED;
-        }
-    }
-
     // カスタム URL scheme 受信（Issue #1218）。`onCreate` / `onNewIntent` から
     // `deliverUrlIntent` が呼ぶ。実体は `crates/fandhe-egui-proxy/src/device/
     // android_url_scheme.rs`（feature `device` 無効時の no-op は `android.rs`）。JNI 署名は
@@ -1507,23 +1362,6 @@ public class MainActivity extends GameActivity {
             deliverUrlIntent(getIntent());
         }
 
-        // `onCreate` のたびに作り直す（`biometricPrompt` doc 参照）。
-        biometricPrompt = new BiometricPrompt(this, ContextCompat.getMainExecutor(this), biometricCallback);
-
-        // Rust 側 `android_main` は `biometric_auth::bridge::reset()` で保留中の要求を
-        // 無条件に捨て、新しい画面状態（`BiometricCheckState::default()` = `Idle`）を
-        // 作り直す（codex-review 指摘、PR #917）。`biometricRequest` は static のため
-        // Activity 再生成をまたいで残り、`biometricPrompt` も `FragmentManager` 経由で
-        // 旧認証操作へ再接続され得るため、放置すると新しい `biometricPrompt` の上に
-        // 「宛先を失った」認証が動き続けてしまう。ここで明示的に打ち切り、対になる
-        // Rust 側の破棄と揃える。`cancelAuthentication()` は `onAuthenticationError`
-        // （`ERROR_CANCELED`）を呼ぶため `biometricRequest` は通常のコールバック経路で
-        // `RequestTracker.NONE` に戻る（結果は Rust 側が既に破棄済みのため無視される、
-        // no-op）。
-        if (biometricRequest.current() != RequestTracker.NONE) {
-            biometricPrompt.cancelAuthentication();
-        }
-
         // ローカル通知（Issue #1006）: `notificationRequest` は static のため Activity
         // 再生成をまたいで残るが、権限ダイアログ待ち中に破棄された要求の宛先は失われる。
         // 保留中の要求をここで捨て、Rust 側 `android_main` の `notification::
@@ -1549,12 +1387,6 @@ public class MainActivity extends GameActivity {
         // 対で「宛先を失った」要求を残さない（`micRecordRequest` と同じ位置づけ、
         // 順序非依存）。
         speechRequest.take();
-
-        // 連絡先選択（Issue #1222）: Rust 側 `android_main` の `contact_pick::
-        // reset_pending_tracking()` と対で、保留中の要求 id を捨てる。旧ピッカーの結果は
-        // 新インスタンスへ届き得るが、id が NONE なので捨てられる。`contactPickerOpen` は
-        // その結果が届くまで true のまま残し、新しい起動を断る。
-        contactPickRequest.take();
 
         sensorManager = getSystemService(SensorManager.class);
         if (sensorManager != null) {
@@ -2344,49 +2176,6 @@ public class MainActivity extends GameActivity {
         });
     }
 
-    // Rust 側 `device/contact_pick.rs`（Android 分岐）から JNI 経由で呼ばれる（Issue #1222、
-    // 署名 `(J)V`）。即時 return・結果は `nativeOnContactPickerResult`。権限・依存は追加しない。
-    private void requestContactPick(long requestId) {
-        runOnUiThread(() -> {
-            // 再生成前に開いた連絡先アプリの結果がまだ届いていない。その結果がこの要求の id を
-            // 消費しないよう、起動せずに失敗で返す（`contactPickerOpen` doc 参照）。
-            if (contactPickerOpen) {
-                nativeOnContactPickerResult(requestId, 3, null);
-                return;
-            }
-            contactPickRequest.track(requestId);
-            contactPickerOpen = true;
-            try {
-                pickContact.launch(null);
-            } catch (RuntimeException e) {
-                // 連絡先アプリ無し（ActivityNotFoundException）等。コールバックが来ない経路なので
-                // ここで一度だけ通知する。
-                contactPickerOpen = false;
-                contactPickRequest.take();
-                nativeOnContactPickerResult(requestId, 3, null);
-            }
-        });
-    }
-
-    // 選ばれた連絡先の表示名だけを読んで Rust へ渡す（ワーカースレッド）。projection は
-    // DISPLAY_NAME の固定 1 列、selection は使わない。Uri・名前・例外メッセージはログへ出さない（A09）。
-    private void deliverPickedContact(long requestId, Uri uri) {
-        String name = null;
-        try (Cursor c = getContentResolver().query(
-                uri, new String[] {ContactsContract.Contacts.DISPLAY_NAME}, null, null, null)) {
-            if (c != null && c.moveToFirst()) {
-                name = c.getString(0);
-            }
-        } catch (RuntimeException e) {
-            name = null;
-        }
-        if (name == null) {
-            nativeOnContactPickerResult(requestId, 3, null);
-        } else {
-            nativeOnContactPickerResult(requestId, 0, name);
-        }
-    }
-
     // 選ばれた写真を Rust へ渡す（ワーカースレッド）。JPEG / PNG は fd をそのまま渡し、それ以外
     // （HEIC・GIF・WebP 等。Rust の復号器は JPEG / PNG のみ）は JPEG の一時ファイルへ変換して
     // 渡す。MIME は OS の自己申告で、最終的な形式判定は Rust 側 `validate_photo` が行う。
@@ -2542,56 +2331,6 @@ public class MainActivity extends GameActivity {
                 out.delete();
             }
         }
-    }
-
-    // Rust 側 bridge モジュール（`device/biometric_auth.rs`）の `present`（Android
-    // 分岐）から JNI 経由で呼ばれる（Issue #908）。`requestShare` と同じ「即時
-    // return・結果は非同期通知」の形。`reason` は Rust 側 `validate_reason`（空・NUL
-    // 拒否）を通した非空文字列の契約。表示にのみ使い、ログへ出さない
-    // （security.md A03/A09）。
-    private void requestBiometric(long requestId, String reason) {
-        biometricRequest.track(requestId);
-        runOnUiThread(() -> {
-            // `isFinishing()`/`isDestroyed()` は破棄処理中しか検出できず、
-            // `onSaveInstanceState` 済み（state-save 後）の resumed でない状態は
-            // すり抜ける（codex-review P1 指摘 / cursor Bugbot 指摘、PR #917）。
-            // state-save 後に `BiometricPrompt.authenticate` を呼ぶと
-            // `IllegalStateException` を送出せず例外・コールバックとも無しで
-            // 打ち切られるため、catch でも回収できず Rust 側は `Authenticating`
-            // のままポーリングし続けてしまう。`activityResumed` は `onPause`
-            // （`onSaveInstanceState` より必ず先に走る、API 28 以降の
-            // 「onStop 後に onSaveInstanceState」順でも同様）で false に落ちる
-            // ため、ここで見れば state-save 後の呼び出しを確実に弾ける
-            // （測位の resumed ゲートと同型、本ファイル `onPause`/`onResume` 参照）。
-            if (isFinishing() || isDestroyed() || !activityResumed) {
-                biometricRequest.take();
-                nativeOnBiometricResult(requestId, BIOMETRIC_RESULT_INTERNAL_ERROR);
-                return;
-            }
-            if (BiometricManager.from(this).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                    != BiometricManager.BIOMETRIC_SUCCESS) {
-                // 未登録・非対応ハードウェア・OS 側要件未達等（可否判定の失敗を
-                // 「認証した」にしない）。
-                biometricRequest.take();
-                nativeOnBiometricResult(requestId, BIOMETRIC_RESULT_UNAVAILABLE);
-                return;
-            }
-            try {
-                BiometricPrompt.PromptInfo promptInfo = new BiometricPrompt.PromptInfo.Builder()
-                        .setTitle(reason)
-                        .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                        // `DEVICE_CREDENTIAL` を許可しないため negative button は必須
-                        // （OS 標準文字列を使い新規リソースは足さない）。
-                        .setNegativeButtonText(getString(android.R.string.cancel))
-                        .build();
-                biometricPrompt.authenticate(promptInfo);
-            } catch (RuntimeException e) {
-                // 提示依頼自体が例外を送出した場合（`requestShare` の `launch()` 例外と
-                // 同型）。コールバックは二度と来ないため、ここで直接内部エラーを通知する。
-                biometricRequest.take();
-                nativeOnBiometricResult(requestId, BIOMETRIC_RESULT_INTERNAL_ERROR);
-            }
-        });
     }
 
     // Rust 側 bridge モジュール（`device/mic_record.rs`）の `present`（Android 分岐）から
@@ -3468,120 +3207,6 @@ public class MainActivity extends GameActivity {
         return AlarmHelper.state(getApplicationContext());
     }
 
-    // 資格情報保存（Issue #924）の op 定数。Rust 側 `device/android.rs::
-    // AndroidSecureCredential::request` の同名定数と対で決める契約。
-    private static final int SECURE_CREDENTIAL_OP_STORE = 0;
-    private static final int SECURE_CREDENTIAL_OP_LOAD = 1;
-    private static final int SECURE_CREDENTIAL_OP_DELETE = 2;
-
-    // `EncryptedSharedPreferences` の保存ファイル名（固定）。
-    private static final String SECURE_CREDENTIAL_FILE = "fandhe_secure_credential";
-
-    // 保存値に付ける固定プレフィックス。`EncryptedSharedPreferences.getDecryptedObject`
-    // （androidx.security:security-crypto の内部実装）は復号後の文字列が `"__NULL__"`
-    // と一致すると null 番兵として扱い、`getString` の戻り値を強制的に null にする
-    // （codex-review 指摘、PR #931）。値が偶然この文字列と一致すると LOAD が `Ok(None)`
-    // になり Rust 側の「無い」と区別が付かなくなるため、任意の値が番兵と衝突しない
-    // 可逆表現として全値にこのプレフィックスを付けて保存する。
-    private static final String SECURE_CREDENTIAL_VALUE_PREFIX = "v1:";
-
-    // 保存直前に呼ぶ。プレフィックスを付けるだけの純粋関数（テスト容易性のため分離）。
-    private static String encodeSecureCredentialValue(String value) {
-        return SECURE_CREDENTIAL_VALUE_PREFIX + value;
-    }
-
-    // 読み出し直後に呼ぶ。プレフィックスを検証して外す。プレフィックスが無い値は
-    // 想定外（このプレフィックス方式導入前の値、または外部からの改変）のため
-    // 「破損」として `null` ではなく例外で失敗させる。呼び出し元でそのまま
-    // `Ok(None)` として扱われる（＝「無い」と誤認される）ことを防ぐ。
-    private static String decodeSecureCredentialValue(String stored) {
-        if (!stored.startsWith(SECURE_CREDENTIAL_VALUE_PREFIX)) {
-            throw new IllegalStateException("secure credential unavailable");
-        }
-        return stored.substring(SECURE_CREDENTIAL_VALUE_PREFIX.length());
-    }
-
-    // 遅延生成した `EncryptedSharedPreferences` インスタンス。Activity 再生成
-    // （設定変更等）を跨いで生き残るよう `static` に保持し、初回生成時の
-    // Keystore 初期化コストを 1 回に抑える。`securePrefs()` の `synchronized`
-    // が並行アクセス（複数の背景スレッドからの同時要求）に対する排他を担う。
-    private static SharedPreferences securePrefsInstance;
-
-    // `securePrefsInstance` を遅延生成して返す。呼び出しは Rust 側の背景スレッド
-    // （`device/secure_credential.rs::drive` が `std::thread::spawn` した先、
-    // UI スレッドではない）から到達するため、生成中のブロッキング（Keystore
-    // 初期化）は画面を固めない。
-    //
-    // `res/xml/data_extraction_rules.xml` の除外設定が効かない経路（旧 OS・
-    // 未対応の OEM 実装等）で万一 `fandhe_secure_credential.xml` だけが復元された
-    // 場合、Keystore に対応する鍵が無いため `EncryptedSharedPreferences.create` は
-    // `GeneralSecurityException`/`IOException` を投げる。この例外は
-    // `secureCredentialRequest` の catch 節で `IllegalStateException` に変換され
-    // Rust 側は `Err` として扱う契約のため、偽の成功（`Ok`）にはならない。
-    private static synchronized SharedPreferences securePrefs(Context context)
-            throws GeneralSecurityException, IOException {
-        if (securePrefsInstance == null) {
-            MasterKey masterKey =
-                    new MasterKey.Builder(context)
-                            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                            .build();
-            securePrefsInstance =
-                    EncryptedSharedPreferences.create(
-                            context,
-                            SECURE_CREDENTIAL_FILE,
-                            masterKey,
-                            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM);
-        }
-        return securePrefsInstance;
-    }
-
-    // Rust 側（`device/android.rs::AndroidSecureCredential::request`、Issue #924）から
-    // JNI 経由で呼ばれる同期メソッド。`op` は上記 3 定数のいずれか。
-    // 戻り値: STORE/DELETE は常に null。LOAD はヒット時の値、無い場合は null。
-    // 内部エラー（Keystore/暗号化失敗等）は `IllegalStateException`（固定文言、
-    // 値を含めない）を投げる。Rust 側はこの例外を `exception_clear` するだけで
-    // 文言を読まない契約（security.md A09、秘密値・例外メッセージをログに残さない）。
-    //
-    // `EncryptedSharedPreferences`（androidx.security:security-crypto）は
-    // 1.1.0-alpha07 で全 API が deprecated 済み（Android Keystore 直接利用が
-    // 推奨）だが、動作はするため Issue #924 の明示要件どおり採用する
-    // （Keystore 直接実装への置き換えはスコープ外、PR 本文参照）。
-    @SuppressWarnings("deprecation")
-    private String secureCredentialRequest(int op, String key, String value) {
-        // pref キーは `"fandhe." + key`（Apple Keychain 実装の `kSecAttrAccount`
-        // 接頭辞規約と同じ）。`key` は Rust 側 `validate_key` で検証済み
-        // （英数字・`.`/`_`/`-` のみ）のためそのまま連結してよい。
-        String prefKey = "fandhe." + key;
-        try {
-            SharedPreferences prefs = securePrefs(getApplicationContext());
-            switch (op) {
-                case SECURE_CREDENTIAL_OP_STORE:
-                    // `commit()`（同期）を使う。`apply()` は非同期のため、直後の
-                    // LOAD 要求で未反映になりうる（Rust 側は往復を保証しない契約）。
-                    if (!prefs.edit()
-                            .putString(prefKey, encodeSecureCredentialValue(value))
-                            .commit()) {
-                        throw new IllegalStateException("secure credential unavailable");
-                    }
-                    return null;
-                case SECURE_CREDENTIAL_OP_LOAD:
-                    String stored = prefs.getString(prefKey, null);
-                    return stored == null ? null : decodeSecureCredentialValue(stored);
-                case SECURE_CREDENTIAL_OP_DELETE:
-                    // キーが無くても `remove().commit()` は成功する（冪等）。
-                    if (!prefs.edit().remove(prefKey).commit()) {
-                        throw new IllegalStateException("secure credential unavailable");
-                    }
-                    return null;
-                default:
-                    throw new IllegalStateException("secure credential unavailable");
-            }
-        } catch (GeneralSecurityException | IOException | RuntimeException e) {
-            throw new IllegalStateException("secure credential unavailable");
-        }
-    }
-
     // バックグラウンド処理（Issue #1046）。`WorkManager` の一意名。予約の実体
     // （記録の書き込み）は `BackgroundTaskWorker` が `getFilesDir()` 直下へ直接行う
     // （Rust 側 JNI 呼び出しは `schedule`/`cancel`/`state` の橋渡しのみ、
@@ -3680,7 +3305,6 @@ public class MainActivity extends GameActivity {
         super.onDestroy();
         paymentRequestHelper.onDestroy();
         healthDataHelper.onDestroy();
-        translationHelper.onDestroy();
         lanDiscoveryHelper.onDestroy();
         localPeerHelper.onDestroy();
         bluetoothClassicHelper.onDestroy();

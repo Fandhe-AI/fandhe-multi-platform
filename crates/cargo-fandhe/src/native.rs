@@ -345,6 +345,16 @@ fn android_manifest(m: &AndroidMerged, lib: &str) -> Result<String, String> {
             xml_attr("required", &req.to_string())
         ));
     }
+    if !m.queries.is_empty() {
+        o.push_str("    <queries>\n");
+        for a in &m.queries {
+            o.push_str(&format!(
+                "        <intent>\n            <action{} />\n        </intent>\n",
+                xml_attr("name", a)
+            ));
+        }
+        o.push_str("    </queries>\n");
+    }
     {
         o.push_str("    <application>\n");
         // 許可リスト外のキーは殻の属性との二重出力や公開範囲の変更になるので、`merge` を直接呼ぶ経路でも拒否する。
