@@ -216,9 +216,11 @@ pub(crate) mod bridge {
     /// 完了を確定済みではなく実際に取りこぼす点が違う）。ここで [`SLOT`] を
     /// 丸ごと捨て、以後届く旧 `request_id` の [`deliver`] を `request_id` 不一致で
     /// 確実に無視させる。対になる後始末として Java 側
-    /// （`BiometricAuthLifecycle.attach`）は保留中の `BiometricPrompt` を
-    /// `cancelAuthentication()` で明示的に閉じる。両者の呼び出し順に依存しない
-    /// （[`deliver`] の照合はどちらが先でも安全）。
+    /// （`BiometricAuthHelper.attach`）は旧要求の id を引き継ぎ、`BiometricPrompt` を
+    /// `cancelAuthentication()` で閉じて OS の終了通知を待つ（その間の新しい要求は内部エラーで返る）。
+    /// 旧要求の待ち手はここで `Internal("biometric superseded")` として戻り、OS の結果が先に届いても
+    /// 再生成由来の終了は中断（`Internal`）であり利用者のキャンセル（`Cancelled`）には写らない。
+    /// 両者の呼び出し順に依存しない（[`deliver`] の照合はどちらが先でも安全）。
     ///
     /// 呼び出し元（`android::android_main`）は Android にのみ存在するため、それ以外の
     /// ターゲット（macOS/Windows の host 上の `cargo test`）では未使用になるが、
@@ -472,6 +474,7 @@ pub fn reset_pending_tracking() {
 /// | 2 | 使えない（未登録・非対応ハードウェア等、`Unavailable`） |
 /// | 3 | 失敗（不一致・ロックアウト等、`Failed`） |
 /// | 4 | 内部エラー（提示依頼自体の失敗、`Err(Internal("biometric present"))`） |
+/// | 5 | 中断（Activity の破棄・再生成で prompt が閉じられた。利用者のキャンセルではない。`Err(Internal("biometric interrupted"))`） |
 /// | それ以外 | 未知（`Err(Internal("biometric outcome"))`） |
 ///
 /// 呼び出し元（`android.rs::Java_..._nativeOnBiometricResult`）は Android にのみ
@@ -490,6 +493,7 @@ pub(crate) fn outcome_from_android_code(
         2 => Ok(DeviceAuthOutcome::Unavailable),
         3 => Ok(DeviceAuthOutcome::Failed),
         4 => Err(BiometricAuthError::Internal("biometric present")),
+        5 => Err(BiometricAuthError::Internal("biometric interrupted")),
         _ => Err(BiometricAuthError::Internal("biometric outcome")),
     }
 }
@@ -765,7 +769,11 @@ mod tests {
             outcome_from_android_code(4),
             Err(BiometricAuthError::Internal("biometric present"))
         ));
-        for code in [5, -1] {
+        assert!(matches!(
+            outcome_from_android_code(5),
+            Err(BiometricAuthError::Internal("biometric interrupted"))
+        ));
+        for code in [6, -1] {
             assert!(
                 matches!(
                     outcome_from_android_code(code),

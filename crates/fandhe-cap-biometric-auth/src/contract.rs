@@ -48,6 +48,11 @@ pub trait BiometricAuth: Send + Sync {
     /// この端末で生体認証を使えるか（未登録・非搭載を区別しない可否判定のみ）。
     fn available(&self) -> Result<bool, BiometricAuthError>;
     /// OS の認証 UI を 1 回出す。固定タイムアウトを掛けない。
+    ///
+    /// `Cancelled` は利用者の操作（キャンセル・否定ボタン）だけ。認証 UI が利用者の操作なしに閉じられたとき
+    /// （Android で Activity が破棄・再生成された、後から始めた要求に置き換えられた）は `Err(Internal)` で返る。
+    /// 各要求の結果は 1 度だけ確定し、先行する認証 UI の結果が後続の要求の結果になることはない
+    /// （Android は先行の認証 UI が OS の通知で閉じ終わるまで後続を `Err(Internal)` で断る）。
     fn authenticate(&self, reason: &str) -> Result<AuthOutcome, BiometricAuthError>;
 }
 

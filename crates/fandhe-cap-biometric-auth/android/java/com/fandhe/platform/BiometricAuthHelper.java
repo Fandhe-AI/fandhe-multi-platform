@@ -17,13 +17,26 @@ import java.util.WeakHashMap;
 //
 // code の意味（本ファイルが SSOT、Rust 側 `outcome_from_android_code` の doc と対）:
 // 0 = 認証した / 1 = キャンセル / 2 = 使えない（未登録・非対応等）/ 3 = 失敗（不一致・ロックアウト等）/
-// 4 = 内部エラー（提示依頼自体の失敗・helper 無し・FragmentActivity でない）。
+// 4 = 内部エラー（提示依頼自体の失敗・helper 無し・FragmentActivity でない）/
+// 5 = 中断（Activity の破棄・再生成で OS が prompt を閉じた。利用者のキャンセルではない。Rust 側は `Err(Internal)`）。
 //
-// 要求 id は static（`shareRequest` と同じ理由。Activity 再生成を跨いで生存する必要がある）。`BiometricPrompt` は
-// `FragmentActivity` の `FragmentManager` に紐づくためインスタンスごとに `attach`（onCreate）で作り直す。
-// 公式ガイダンス上、内部 Fragment 経由で旧インスタンスへの提示結果が新インスタンスの callback へ再接続される契約のため、
-// 要求 id が static であれば正しく反映される。プロセス死では `RequestTracker.NONE` に戻るため死後の再配送は無視される。
-// UI スレッドのみで読み書きするため追加の同期は不要。
+// 要求 id は static（Activity 再生成を跨いで生存する必要がある）。`BiometricPrompt` は `FragmentActivity` の
+// `FragmentManager` に紐づくためインスタンスごとに `attach`（onCreate）で作り直す。
+//
+// 再生成と prompt（androidx.biometric 1.1.0 のソースで確認。根拠はコミット本文）:
+// - 認証中の prompt は設定変更をまたいで生き残る（`BiometricPrompt` クラス doc）。結果の宛先は `BiometricViewModel`
+//   （`ViewModelProvider(activity)`＝設定変更をまたぐ）が持つ client callback で、`BiometricPrompt` の生成のたびに最新の
+//   インスタンスへ差し替わり、結果は届ける時点でその時の callback を読む。つまり再生成後は旧 prompt の結果が新 helper の
+//   callback へ来る。結果に prompt の識別子は付かない。
+// - `cancelAuthentication()` は client に `ERROR_CANCELED` を届ける契約（`BiometricFragment.cancelAuthentication` の doc）。
+//   OS の結果は main executor へ post されるため非同期。callback が届く時点で `BiometricFragment.dismiss()` は済んでいる。
+// このため、旧 prompt の終了（OS の callback）を待たずに次の要求を通すと、旧 prompt の結果が次の要求の結果になる。
+// 方針は「prompt の終了を OS の callback で観測するまで `biometricRequest` を空けない」。再生成の `detach` は確定せず
+// （`isChangingConfigurations()`）、新 helper が `attach` で旧要求の id を引き継いで `cancelAuthentication()` を依頼し、
+// OS の `ERROR_CANCELED` を受けて 1 度だけ確定する。その間に来た次の要求は内部エラーで返す（偽の成功を作らない）。
+// 再生成を伴わない破棄では prompt の宛先ごと消えるため、`detach` が中断（5）で確定する。
+//
+// UI スレッドで読み書きする。`promptId`・`interrupted` は JNI を呼ぶスレッド（`request`）からも読むため volatile。
 //
 // 前面判定: `BiometricPrompt.authenticate` は `onSaveInstanceState` 済み（state-save 後）に呼ぶと例外もコールバックも
 // 無しで打ち切られる（codex-review P1 指摘、PR #917）。`resumed` は `onHostResumed` で true、`onHostPaused` で false にする
@@ -37,6 +50,7 @@ final class BiometricAuthHelper {
     private static final int BIOMETRIC_RESULT_UNAVAILABLE = 2;
     private static final int BIOMETRIC_RESULT_FAILED = 3;
     private static final int BIOMETRIC_RESULT_INTERNAL_ERROR = 4;
+    private static final int BIOMETRIC_RESULT_INTERRUPTED = 5;
 
     private static final RequestTracker biometricRequest = new RequestTracker();
 
@@ -44,14 +58,17 @@ final class BiometricAuthHelper {
     // `FragmentActivity` でないとき（想定外）は null。要求は内部エラーで確定する。
     private final BiometricPrompt biometricPrompt;
     private boolean resumed;
-    // この helper が prompt を出した要求の id（UI スレッドで `present` が設定）。callback はこの id を照合付きで確定する。
-    // prompt を出していない helper（`attach` で作り直した直後）では `NONE` のため、旧 prompt の遅れて届く
-    // `ERROR_CANCELED` は no-op になり、後続の要求 B の id を横取りしない。
-    private long promptId = RequestTracker.NONE;
+    // この helper が結果を確定する責任を持つ要求の id。`request` が `tryTrack` に成功した直後に設定する（`present` 前の
+    // 破棄でも `detach` が確定できる）。再生成後の新 helper は `attach` で旧要求の id を引き継ぐ。callback はこの id を
+    // 照合付きで確定するので、破棄された helper へ遅れて届く結果は、後続の別の要求を確定させない
+    // （要求 id は Rust が単調に採番し再利用しない）。
+    private volatile long promptId = RequestTracker.NONE;
+    // `attach` で引き継いだ旧要求に `cancelAuthentication()` を依頼済みか。true の間に届く `ERROR_CANCELED` は
+    // 利用者のキャンセルではなく中断（5）として報告する（契約表 類型 10）。
+    private volatile boolean interrupted;
 
-    // `biometricPrompt` 生成時に渡す唯一のコールバックインスタンス。先頭で `biometricRequest` を読んで
-    // `RequestTracker.NONE` なら無視する（first-wins。二重通知防止）。`onAuthenticationFailed`（不一致・プロンプト継続）は
-    // 最終結果にしない。
+    // `biometricPrompt` 生成時に渡す唯一のコールバックインスタンス。`finish` が id を照合して 1 度だけ確定する
+    // （first-wins。二重通知防止）。`onAuthenticationFailed`（不一致・プロンプト継続）は最終結果にしない。
     private final BiometricPrompt.AuthenticationCallback biometricCallback =
             new BiometricPrompt.AuthenticationCallback() {
                 @Override
@@ -62,7 +79,11 @@ final class BiometricAuthHelper {
                 @Override
                 public void onAuthenticationError(int errorCode, CharSequence errString) {
                     // errString はログへ出さない（画面へ渡す情報も結果コードのみに絞る、security.md A09）。
-                    finish(biometricErrorToResultCode(errorCode));
+                    int code = biometricErrorToResultCode(errorCode);
+                    if (interrupted && errorCode == BiometricPrompt.ERROR_CANCELED) {
+                        code = BIOMETRIC_RESULT_INTERRUPTED;
+                    }
+                    finish(code);
                 }
 
                 @Override
@@ -71,11 +92,12 @@ final class BiometricAuthHelper {
                 }
             };
 
-    // この helper の prompt の id が今も待っている要求のときだけ結果を 1 度届ける（first-wins）。
+    // この helper の要求が今も待っている要求のときだけ結果を 1 度届ける（first-wins）。
     // 旧要求の遅延到着・破棄時の解放との二重通知は `complete` が false を返して no-op になる。
     private void finish(int code) {
         long id = promptId;
         if (id != RequestTracker.NONE && biometricRequest.complete(id)) {
+            interrupted = false;
             nativeOnBiometricResult(id, code);
         }
     }
@@ -107,32 +129,38 @@ final class BiometricAuthHelper {
 
     static void attach(ComponentActivity activity) {
         BiometricAuthHelper helper = new BiometricAuthHelper(activity);
-        // Rust 側 `android_main` は `bridge::reset()` で保留中の要求を無条件に捨て、新しい画面状態（`Idle`）を作り直す
-        // （codex-review 指摘、PR #917）。`biometricRequest` は static のため Activity 再生成をまたいで残り、
-        // `BiometricPrompt` も `FragmentManager` 経由で旧認証操作へ再接続され得るため、放置すると新しい prompt の上に
-        // 「宛先を失った」認証が動き続けてしまう。ここで明示的に打ち切り、対になる Rust 側の破棄と揃える。
-        // `cancelAuthentication()` は `onAuthenticationError`（`ERROR_CANCELED`）を呼ぶため `biometricRequest` は通常の
-        // コールバック経路で `NONE` に戻る（結果は Rust 側が既に破棄済みのため無視される）。
-        if (helper.biometricPrompt != null && biometricRequest.current() != RequestTracker.NONE) {
-            helper.biometricPrompt.cancelAuthentication();
-            // 新しい helper の prompt では cancel が no-op になり得る。id を残すと以降の tryTrack が失敗し続けるため確実に解放する。
-            biometricRequest.take();
+        // 再生成の直前に出た要求が OS に残っている（`detach` は再生成では確定しない）。その prompt は設定変更をまたいで
+        // 生き残り、結果はこの helper の callback へ来る（クラス冒頭のコメント）。Rust 側 `android_main` は
+        // `reset_pending_tracking()` で待ち手を捨てて新しい `Idle` を作るため、宛先の無い prompt を閉じる。
+        // id を引き継いで OS の終了通知（`ERROR_CANCELED`）を待ち、それまで `biometricRequest` は空けない。
+        // 空けると、後続の要求の結果に旧 prompt の結果が混ざる（利用者が旧 prompt を通すと次の要求が成功する）。
+        long inFlight = biometricRequest.current();
+        if (helper.biometricPrompt != null && inFlight != RequestTracker.NONE) {
+            helper.promptId = inFlight;
+            helper.interruptPrompt();
         }
         synchronized (BiometricAuthHelper.class) {
             HELPERS.put(activity, helper);
         }
     }
 
-    // Activity 破棄。再生成が無い finish だけだと `android_main` が走らず Rust 側の破棄も起きず、OS が
-    // `ERROR_CANCELED` を返す保証もないため、この helper が出した追跡中の要求を 1 度だけ中断として届けて待ち手を解放する。
-    // 照合付き `complete` のため、後続 Activity が出した別の要求や、OS の cancel 通知との二重通知にはならない。
+    // 引き継いだ旧 prompt を閉じるよう OS（androidx）へ依頼する。結果は callback が非同期に届ける。UI スレッド。
+    private void interruptPrompt() {
+        interrupted = true;
+        biometricPrompt.cancelAuthentication();
+    }
+
+    // Activity 破棄。再生成（`isChangingConfigurations()`）なら確定しない: prompt は生き残り、新 helper が `attach` で
+    // 引き継ぐ。再生成を伴わない finish では `android_main` が走らず Rust 側の破棄も起きず、prompt の宛先
+    // （`ViewModel` ごと）も消えて OS の通知を保証できないため、この helper の要求を中断（5）として 1 度だけ確定し、
+    // 待ち手を解放する。照合付き `complete` のため、後続 Activity の別の要求や、遅れて届く OS の通知との二重通知にはならない。
     static void detach(Activity activity) {
         BiometricAuthHelper helper;
         synchronized (BiometricAuthHelper.class) {
             helper = HELPERS.remove(activity);
         }
-        if (helper != null) {
-            helper.finish(BIOMETRIC_RESULT_CANCELLED);
+        if (helper != null && !activity.isChangingConfigurations()) {
+            helper.finish(BIOMETRIC_RESULT_INTERRUPTED);
         }
     }
 
@@ -163,10 +191,20 @@ final class BiometricAuthHelper {
             return;
         }
         // 進行中の認証があれば新しい要求は拒否する（id を上書きすると旧認証の完了が新要求の成功になる）。
+        // 再生成で引き継いだ旧 prompt が残っているなら、`attach` の依頼が届いていない場合に備えて閉じ直しを依頼する
+        // （終了は OS の callback で観測し、ここでは空けない）。
         if (!biometricRequest.tryTrack(requestId)) {
+            if (helper.interrupted) {
+                activity.runOnUiThread(() -> {
+                    if (helper.interrupted) {
+                        helper.biometricPrompt.cancelAuthentication();
+                    }
+                });
+            }
             nativeOnBiometricResult(requestId, BIOMETRIC_RESULT_INTERNAL_ERROR);
             return;
         }
+        helper.promptId = requestId;
         activity.runOnUiThread(() -> helper.present(requestId, reason));
     }
 
@@ -186,7 +224,6 @@ final class BiometricAuthHelper {
             nativeOnBiometricResult(requestId, BIOMETRIC_RESULT_UNAVAILABLE);
             return;
         }
-        promptId = requestId;
         try {
             BiometricPrompt.PromptInfo promptInfo = new BiometricPrompt.PromptInfo.Builder()
                     .setTitle(reason)
