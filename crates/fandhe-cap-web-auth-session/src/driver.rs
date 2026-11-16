@@ -300,6 +300,8 @@ fn abandon_screen_request(imp: &dyn WebAuthSession, request_id: u64) {
 
 /// 毎フレームの処理（テストから任意の実装を差し込めるよう切り出す）。
 ///
+/// 描画層が毎フレーム完了を反映してから effect を呼ぶ順序（`fandhe-runtime` の `Renderer` の doc）を前提にする。
+///
 /// 画面の状態は Activity の再生成で `default()` へ戻るが、`SLOT`・`ACTIVE` は static のため残る。呼び出し側の掃除
 /// （`reset_pending_tracking` 等）には頼らず、新しい要求を受けたとき前の画面状態の要求を打ち切って引き継がない
 /// （結果は新しい画面状態へは届けない。公開入口の要求には触れない）。
@@ -340,11 +342,17 @@ fn drive(
         return;
     }
 
+    let mine = SCREEN_OWNER.current();
     if state.phase != Phase::Running {
+        // 完了の反映は毎フレーム先頭で済んでいるので、`Running` でないのに自分の持ち主の印が残っていれば前の画面状態
+        // （Activity 再生成で `Idle` へ戻る前）の要求。OS のセッション・待ち受け・slot・印を回収する
+        // （残すと待ち受けが期限後も生き、`begin_web_auth` が断られ続ける）。
+        if mine != 0 {
+            abandon_screen_request(imp, mine);
+        }
         return;
     }
     // 取り消し・期限は画面自身の要求だけに掛ける（公開入口の要求を巻き込まない）。
-    let mine = SCREEN_OWNER.current();
     if take_cancel(state).is_some() {
         bridge::conclude_with(
             Some(mine),
@@ -389,11 +397,14 @@ fn drive(
 /// `fill_random`・`sha256` を使う）。開始後は [`poll_web_auth`] を呼び続けて結果を 1 度だけ受け取る。
 /// 1 プロセスに 1 要求で、進行中または結果が未取得の要求があるうち（画面の要求を含む）は `Internal` で断る。
 /// OS が UI を開けなかったときは `Err` で、結果は届かない。
+/// Windows はループバックの受け口を呼び出し側が持ち、受けた URL を [`complete_web_auth_loopback`] へ渡す。非対応 OS は `Unsupported`。
 ///
-/// 制約（デモ認可ページ向けの実装）: Android は開く URL を `http://127.0.0.1`、コールバックを `fandhe://web-auth` に固定している
-/// （`WebAuthSessionHelper`）ため、外部アプリの実際の認可サーバーには使えない。Windows も `http://127.0.0.1:` か `https://` に限る。
-/// 実 OAuth 対応（開く URL・コールバックの設定化）は未実装。Windows はループバックの受け口を呼び出し側が持ち、
-/// 受けた URL を [`complete_web_auth_loopback`] へ渡す。非対応 OS は `Unsupported`。
+/// 制約（デモ認可ページ向けの実装）:
+/// - Android は開く URL を `http://127.0.0.1`、コールバックを `fandhe://web-auth` に固定している（`WebAuthSessionHelper`）。
+///   外部アプリの実際の認可サーバーには使えない。`req.redirect` は見ないため、`CustomScheme { fandhe, web-auth/callback }`
+///   以外のリダイレクトは成功せず、期限切れ（`TimedOut`）になる。
+/// - Windows は開く URL を `http://127.0.0.1:` か `https://` に限る（コールバックは呼び出し側のループバック受け口）。
+/// - 実 OAuth 対応（開く URL・コールバックの設定化）は未実装。
 pub fn begin_web_auth(req: AuthRequest) -> Result<u64, WebAuthFailure> {
     begin_external(&*platform_web_auth_session(), req)
 }
@@ -421,7 +432,7 @@ fn begin_external(imp: &dyn WebAuthSession, req: AuthRequest) -> Result<u64, Web
 
 /// [`begin_web_auth`] の結果を取り出す。確定していれば 1 度だけ `Some`（`take_ready` で原子的に取る）、未着・旧 id・取り出し済みは `None`。
 ///
-/// 同じ `request_id` を複数スレッドから並行して呼ばない（取り出せるのは 1 回だけで、期限の確定と取り出しは 1 呼び出し内で順に行う）。
+/// 同じ `request_id` を複数スレッドから並行して呼んでも、結果（失われた場合の `Err` を含む）は 1 つの呼び出しにだけ返り、他は `None`。
 ///
 /// 期限（[`SESSION_TIMEOUT`]、開始から単調時計）の判定はここで行う。超えていれば OS のセッションを閉じ、
 /// `Ok(TimedOut)` を返す。呼び出さない間は期限切れが確定しない。要求が失われた（Activity の終了後に結果が返らず
@@ -430,10 +441,16 @@ pub fn poll_web_auth(request_id: u64) -> Option<Result<WebAuthOutcome, WebAuthFa
     poll_external(&*platform_web_auth_session(), request_id)
 }
 
+/// [`poll_external`] 全体を直列にする。所有者の確認・消失の判定・結果の取り出し・所有者の解放を 1 つの区間にして、
+/// 同じ id を並行して呼んでも結果は 1 つの呼び出しにだけ返る（もう一方は所有者が外れているので `None`）。
+/// 他のロックを持ったままは取らない（最外）。
+static POLL_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn poll_external(
     imp: &dyn WebAuthSession,
     request_id: u64,
 ) -> Option<Result<WebAuthOutcome, WebAuthFailure>> {
+    let _serial = POLL_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     if request_id == 0 || EXTERNAL_OWNER.current() != request_id {
         return None;
     }
@@ -912,6 +929,47 @@ mod tests {
         // 古い要求の遅延コールバックは新しい要求を確定させない。
         bridge::complete_from_os(old_id, Ok(bridge::RawResult::Url(valid_url())));
         assert!(bridge::lock().is_some());
+    }
+
+    #[test]
+    fn idle_screen_state_reclaims_the_previous_states_request() {
+        let _g = serial();
+        let (mut old, fake) = (Harness::new(), Fake::new());
+        screen::start(&mut old.state);
+        old.frame(&fake);
+        let port = bridge::lock()
+            .as_ref()
+            .unwrap()
+            .server
+            .as_ref()
+            .unwrap()
+            .port();
+        // Activity 再生成: 画面状態が Idle に戻る。次のフレームで旧要求を閉じる（開始操作を待たない）。
+        let mut fresh = Harness::new();
+        fresh.frame(&fake);
+        assert!(fake.cancelled.load(Ordering::SeqCst));
+        assert!(bridge::lock().is_none() && bridge::SLOT.snapshot().is_none());
+        assert!(std::net::TcpStream::connect(("127.0.0.1", port)).is_err());
+        assert!(begin_external(&fake, ext_request()).is_ok());
+    }
+
+    #[test]
+    fn concurrent_polls_return_the_result_once() {
+        let _g = serial();
+        let fake = Fake::new();
+        let req = ext_request();
+        let id = begin_external(&fake, req.clone()).unwrap();
+        bridge::complete_from_os(id, Ok(bridge::RawResult::Url(ext_url(&req))));
+        let got = std::thread::scope(|sc| {
+            let hs: Vec<_> = (0..8)
+                .map(|_| sc.spawn(|| poll_external(&fake, id)))
+                .collect();
+            hs.into_iter()
+                .filter_map(|h| h.join().unwrap())
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(got.len(), 1);
+        assert!(matches!(got[0], Ok(WebAuthOutcome::Returned(_))));
     }
 
     #[test]

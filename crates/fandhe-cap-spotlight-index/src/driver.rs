@@ -111,7 +111,9 @@ fn run_worker(
     result.map_err(to_failure)
 }
 
-/// 1 フレームぶんの処理。開いた項目の反映・要求の発送・期限判定・完了の画面反映を行う。
+/// 1 フレームぶんの処理。描画層が毎フレーム完了を反映してから effect を呼ぶ順序（`fandhe-runtime` の `Renderer` の doc）を前提にする。
+///
+/// 開いた項目の反映・要求の発送・期限判定・完了の画面反映を行う。
 fn drive(
     state: &SpotlightIndexState,
     sender: &CompletionSender<SpotlightIndexState>,
@@ -161,6 +163,11 @@ fn drive(
         return;
     }
     if state.phase != Phase::Running {
+        // 完了の反映は毎フレーム先頭で済んでいる。`Running` でないのに保留が残っていれば前の画面状態（再生成前）の分。
+        // 結果を届ける先がないので回収する（次の開始を待たない）。
+        if slot.snapshot().is_some() {
+            slot.reset();
+        }
         return;
     }
     let generation = state.generation;
@@ -438,6 +445,24 @@ mod tests {
         );
         // 前の画面状態が残した保留（発送の見張りなし）は、掃除の呼び出しなしでも捨てて発送し直す。
         assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok());
+    }
+
+    #[test]
+    fn idle_screen_state_reclaims_a_stale_slot() {
+        let (sender, _rx) = channel();
+        let imp = fake(|| Ok(()));
+        let session = Session::default();
+        session.slot.begin();
+        let state = SpotlightIndexState::default();
+        drive(
+            &state,
+            &sender,
+            &imp,
+            &no_url(),
+            &session,
+            Duration::from_secs(30),
+        );
+        assert!(session.slot.snapshot().is_none());
     }
 
     #[test]

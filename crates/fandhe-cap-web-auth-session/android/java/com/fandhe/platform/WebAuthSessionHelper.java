@@ -24,7 +24,8 @@ import java.util.WeakHashMap;
 //
 // 流れ: Custom Tabs で認可ページ（デモは 127.0.0.1）を開く（開けなければ ACTION_VIEW）→ ブラウザが
 // `fandhe://web-auth/callback?...` へ遷移 → 既存の intent-filter + singleTask により
-// `onNewIntent`（Activity が破棄されていたときは起動 Intent）へ届き、`WebAuthSessionLifecycle` の共通層 `deliverIntents` 経由で確定する。url-scheme 受信箱へは流さない（code・state を別画面に出さない。
+// `onNewIntent`（Activity が破棄されていたときは起動 Intent）へ届き、
+// `WebAuthSessionLifecycle` が共通層の `deliverIntents` 経由で確定する。url-scheme 受信箱へは流さない（code・state を別画面に出さない。
 // `UrlSchemeHelper.deliver` が同じ条件で除外する）。コールバックなしで戻った（onPause 後の onResume）はキャンセル。
 // 従来の `MainActivity.onNewIntent` は `setIntent` を呼ばずに返していたため、code を含む intent は残らない（本経路も保持しない）。
 // 期限（300 秒）は Rust 側の単調時計だけが持ち、ここには持たない。
