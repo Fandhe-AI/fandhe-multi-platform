@@ -71,6 +71,19 @@ const BOTH: &str = "\
 permissions = [{ name = \"android.permission.CAMERA\" }]
 ";
 
+const BLE: &str = "\
+[package.metadata.fandhe.android]
+permissions = [{ name = \"android.permission.BLUETOOTH_SCAN\", flags = [\"neverForLocation\"] }]
+";
+const SCAN: &str = "\
+[package.metadata.fandhe.android]
+permissions = [{ name = \"android.permission.BLUETOOTH_SCAN\" }]
+";
+const PIP: &str = "\
+[package.metadata.fandhe.android.main-activity-attributes]
+supportsPictureInPicture = \"true\"
+";
+
 /// `app_deps` はアプリの `[dependencies]` 以降の TOML。ワークスペースの `c/app/Cargo.toml` を返す。
 fn make_ws(tag: &str, app_deps: &str, extra: &[(&str, String)]) -> PathBuf {
     let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("scope-{tag}"));
@@ -81,7 +94,14 @@ fn make_ws(tag: &str, app_deps: &str, extra: &[(&str, String)]) -> PathBuf {
         "[workspace]\nresolver = \"2\"\nmembers = [\"c/*\"]\n",
     )
     .unwrap();
-    for (id, rest) in [("cam", CAM), ("nfc", NFC), ("both", BOTH)] {
+    for (id, rest) in [
+        ("cam", CAM),
+        ("nfc", NFC),
+        ("both", BOTH),
+        ("ble", BLE),
+        ("scan", SCAN),
+        ("pip", PIP),
+    ] {
         let (dir, toml) = cap(id, rest);
         write_crate(&root, &dir, &toml);
     }
@@ -96,9 +116,21 @@ fn make_ws(tag: &str, app_deps: &str, extra: &[(&str, String)]) -> PathBuf {
 
 const SELECT_CAM: &str = "[dependencies]\nfandhe-cap-cam = { path = \"../fandhe-cap-cam\" }\n";
 
+/// aapt2 xmltree の実形式（`A:` 行は `名前(0x…)=値`）。MainActivity は殻が固定で付ける属性だけ。
+const MAIN_ACTIVITY_CLEAN: &str = "\
+      E: activity (line=20)
+        A: http://schemas.android.com/apk/res/android:name(0x01010003)=\"com.fandhe.platform.MainActivity\" (Raw: \"com.fandhe.platform.MainActivity\")
+        A: http://schemas.android.com/apk/res/android:exported(0x01010010)=true
+        A: http://schemas.android.com/apk/res/android:launchMode(0x0101001d)=2
+";
 const ANDROID_CLEAN: &str = "\
-E: uses-permission (name=\"android.permission.CAMERA\")
+      E: uses-permission (line=10)
+        A: http://schemas.android.com/apk/res/android:name(0x01010003)=\"android.permission.CAMERA\" (Raw: \"android.permission.CAMERA\")
 E: uses-permission (name=\"android.permission.INTERNET\")
+      E: activity (line=20)
+        A: http://schemas.android.com/apk/res/android:name(0x01010003)=\"com.fandhe.platform.MainActivity\" (Raw: \"com.fandhe.platform.MainActivity\")
+        A: http://schemas.android.com/apk/res/android:exported(0x01010010)=true
+        A: http://schemas.android.com/apk/res/android:launchMode(0x0101001d)=2
 E: service (name=\"androidx.work.impl.background.systemjob.SystemJobService\")
 +--- com.example:cam-lib:1.0
 +--- androidx.core:core-ktx:1.12.0
@@ -212,10 +244,11 @@ fn empty_observation_fails_and_no_unselected_passes() {
     let m = make_ws("empty", SELECT_CAM, &[]);
     assert!(check("android", &m, "  \n").unwrap_err().contains("空"));
     assert!(check("watch", &m, "x").unwrap_err().contains("未知の OS"));
-    let all = "[dependencies]\nfandhe-cap-cam = { path = \"../fandhe-cap-cam\" }\n\
-               fandhe-cap-nfc = { path = \"../fandhe-cap-nfc\" }\n\
-               fandhe-cap-both = { path = \"../fandhe-cap-both\" }\n";
-    let m = make_ws("all", all, &[]);
+    let m = make_ws(
+        "all",
+        &deps(&["cam", "nfc", "both", "ble", "scan", "pip"]),
+        &[],
+    );
     let r = verify_scope(Some(&m), Some(&m), "android", "").unwrap();
     assert_eq!(r.unselected, 0);
 }
@@ -238,4 +271,128 @@ fn features_enabled_by_another_member_do_not_make_a_feature_reached() {
     )
     .unwrap_err();
     assert!(e.contains("nfc"), "{e}");
+}
+
+fn scan_perm(flags: Option<&str>) -> String {
+    let f = flags.map_or(String::new(), |v| {
+        format!("        A: http://schemas.android.com/apk/res/android:usesPermissionFlags(0x01010644)={v}\n")
+    });
+    format!(
+        "      E: uses-permission (line=30)\n        A: http://schemas.android.com/apk/res/android:name(0x01010003)=\"android.permission.BLUETOOTH_SCAN\" (Raw: \"android.permission.BLUETOOTH_SCAN\")\n{f}"
+    )
+}
+
+fn deps(ids: &[&str]) -> String {
+    let mut s = "[dependencies]\n".to_string();
+    for i in ids {
+        s += &format!("fandhe-cap-{i} = {{ path = \"../fandhe-cap-{i}\" }}\n");
+    }
+    s
+}
+
+#[test]
+fn unselected_permission_flag_fails() {
+    let m = make_ws("flag-leak", &deps(&["cam", "scan"]), &[]);
+    let e = check(
+        "android",
+        &m,
+        &format!("{ANDROID_CLEAN}{}", scan_perm(Some("0x00010000"))),
+    )
+    .unwrap_err();
+    assert!(
+        e.contains("ble")
+            && e.contains("neverForLocation")
+            && e.contains("android.permission.BLUETOOTH_SCAN"),
+        "{e}"
+    );
+    check(
+        "android",
+        &m,
+        &format!("{ANDROID_CLEAN}{}", scan_perm(None)),
+    )
+    .unwrap();
+    // 宣言のどこにも無いビットは「宣言にない」として失敗する。
+    let e = check(
+        "android",
+        &m,
+        &format!("{ANDROID_CLEAN}{}", scan_perm(Some("0x2"))),
+    )
+    .unwrap_err();
+    assert!(e.contains("宣言にありません"), "{e}");
+    let e = check(
+        "android",
+        &m,
+        &format!("{ANDROID_CLEAN}{}", scan_perm(Some("zz"))),
+    )
+    .unwrap_err();
+    assert!(e.contains("読めません"), "{e}");
+}
+
+#[test]
+fn selected_permission_flag_passes() {
+    let m = make_ws("flag-ok", &deps(&["cam", "ble"]), &[]);
+    check(
+        "android",
+        &m,
+        &format!("{ANDROID_CLEAN}{}", scan_perm(Some("0x00010000"))),
+    )
+    .unwrap();
+}
+
+#[test]
+fn main_activity_attribute_follows_declaration() {
+    let with = |v: &str| {
+        ANDROID_CLEAN.replace(
+            "launchMode(0x0101001d)=2\n",
+            &format!("launchMode(0x0101001d)=2\n        A: http://schemas.android.com/apk/res/android:supportsPictureInPicture(0x010104f7)={v}\n"),
+        )
+    };
+    let m = make_ws("pip-leak", SELECT_CAM, &[]);
+    let e = check("android", &m, &with("true")).unwrap_err();
+    assert!(
+        e.contains("pip") && e.contains("supportsPictureInPicture"),
+        "{e}"
+    );
+    let m = make_ws("pip-ok", &deps(&["cam", "pip"]), &[]);
+    check("android", &m, &with("true")).unwrap();
+    let e = check("android", &m, &with("false")).unwrap_err();
+    assert!(e.contains("宣言にありません"), "{e}");
+}
+
+#[test]
+fn missing_main_activity_fails_and_empty_selection_has_no_false_positive() {
+    let m = make_ws("no-main", SELECT_CAM, &[]);
+    let e = check(
+        "android",
+        &m,
+        "E: uses-permission (name=\"android.permission.CAMERA\")\n",
+    )
+    .unwrap_err();
+    assert!(e.contains("MainActivity"), "{e}");
+    // どの機能も選ばない app + クリーンな殻（INTERNET と許可リスト属性なしの MainActivity）。
+    let m = make_ws("none", "[dependencies]\n", &[]);
+    check(
+        "android",
+        &m,
+        &format!(
+            "E: uses-permission (name=\"android.permission.INTERNET\")\n{MAIN_ACTIVITY_CLEAN}"
+        ),
+    )
+    .unwrap();
+}
+
+#[test]
+fn all_selected_passes_even_with_flags_and_attributes() {
+    let m = make_ws(
+        "all-flags",
+        &deps(&["cam", "nfc", "both", "ble", "scan", "pip"]),
+        &[],
+    );
+    let obs = format!("{}{}", scan_perm(Some("0x00010000")), MAIN_ACTIVITY_CLEAN);
+    assert_eq!(
+        verify_scope(Some(&m), Some(&m), "android", &obs)
+            .unwrap()
+            .unselected,
+        0
+    );
 }
