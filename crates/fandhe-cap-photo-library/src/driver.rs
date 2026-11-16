@@ -274,6 +274,13 @@ pub fn photo_save_effect(state: &PhotoSaveState, sender: &CompletionSender<Photo
     drive(state, sender, &crate::contract::UnsupportedPhotoLibrary);
 }
 
+/// `bridge::SLOT` と持ち主の印は static なので、それを触るテストどうしを直列化する（並行に走ると判定が揺れる）。
+#[cfg(all(
+    test,
+    any(target_os = "macos", target_os = "ios", target_os = "android")
+))]
+static SLOT_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -290,6 +297,7 @@ mod tests {
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     #[test]
     fn screen_save_refuses_in_flight_replaces_own_ready_and_keeps_public() {
+        let _g = SLOT_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // 自分の保存が進行中なら断る（取り消せない保存を二重に始めない）。
         let first = SCREEN_OWNER.begin_keeping_foreign(&bridge::SLOT).unwrap();
         assert!(SCREEN_OWNER.begin_keeping_foreign(&bridge::SLOT).is_none());
@@ -399,6 +407,7 @@ mod bridge_tests {
 
     #[test]
     fn stale_request_id_is_dropped_and_second_deliver_ignored() {
+        let _g = SLOT_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let id = bridge::SLOT.begin();
         assert!(!bridge::deliver(id + 1000, Ok(SavedTo::PhotoLibrary)));
         assert!(bridge::SLOT.snapshot().is_some_and(|(_, r)| r.is_none()));
