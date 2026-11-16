@@ -2556,8 +2556,6 @@ public class MainActivity extends GameActivity {
         }
     }
 
-    }
-
     // バックグラウンド処理（Issue #1046）。`WorkManager` の一意名。予約の実体
     // （記録の書き込み）は `BackgroundTaskWorker` が `getFilesDir()` 直下へ直接行う
     // （Rust 側 JNI 呼び出しは `schedule`/`cancel`/`state` の橋渡しのみ、
