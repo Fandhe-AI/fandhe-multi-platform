@@ -102,6 +102,25 @@ impl<O> RequestSlot<O> {
         Some(request_id)
     }
 
+    /// 登録済みの要求の id が `foreign` を満たす（他の持ち主の要求）ときだけ `None`、それ以外は置き換えて登録する。
+    /// 進行中（結果未着）でも、`foreign` を満たさない（自分の分・持ち主のいない残り）なら置き換える。
+    /// 他の持ち主の進行中の要求・未取得の結果を落とさず、自分の再要求は前の要求を置き換える型に使う。
+    /// 判定と登録は同じロックで行う。
+    pub fn begin_unless_foreign(&self, foreign: impl FnOnce(u64) -> bool) -> Option<u64> {
+        let mut pending = self.lock();
+        if let Some(p) = pending.as_ref()
+            && foreign(p.request_id)
+        {
+            return None;
+        }
+        let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
+        *pending = Some(Pending {
+            request_id,
+            ready: None,
+        });
+        Some(request_id)
+    }
+
     /// OS からの結果を置く（任意スレッド）。`request_id` 不一致・未登録（プロセス死後の
     /// 再配送等）・既に結果あり（重複通知）は捨てて `false`。
     pub fn deliver(&self, request_id: u64, outcome: O) -> bool {
@@ -229,6 +248,16 @@ impl SlotOwner {
         Some(request_id)
     }
 
+    /// 自分の再要求は進行中でも未取得の結果でも置き換え、`foreign`（相手方の持ち主）の要求は
+    /// 進行中でも未取得の結果でも `None` で守る。置き換えられた古い要求の完了は `deliver` の id 照合で捨てられる。
+    /// 画面と公開入口が 1 つの slot を共有する機能で、画面側の登録に使う（古い OS 側の処理を止める責務は呼び出し側）。
+    pub fn begin_replacing<O>(&self, slot: &RequestSlot<O>, foreign: &[&SlotOwner]) -> Option<u64> {
+        let request_id =
+            slot.begin_unless_foreign(|id| foreign.iter().any(|o| o.current() == id))?;
+        self.0.store(request_id, Ordering::Release);
+        Some(request_id)
+    }
+
     /// [`SlotOwner::begin`] に加え、自分の分以外（公開入口）の結果が届いて未取得のときも `None`（取り出す前に置き換えて落とさない）。
     /// 自分の分の未取得の結果は置き換える。画面と公開入口が 1 つの slot を共有する pull 型の機能で、画面側の登録に使う。
     pub fn begin_keeping_foreign<O>(&self, slot: &RequestSlot<O>) -> Option<u64> {
@@ -302,6 +331,33 @@ pub fn poll_and_finish_owned<S: 'static, O: Clone + Send + 'static>(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn begin_replacing_replaces_own_in_flight_and_keeps_foreign() {
+        let slot: RequestSlot<u8> = RequestSlot::new();
+        let (screen, public) = (SlotOwner::new(), SlotOwner::new());
+        // 自分の進行中の要求は置き換える。古い id の完了は捨てられる。
+        let first = screen.begin_replacing(&slot, &[&public]).unwrap();
+        let second = screen.begin_replacing(&slot, &[&public]).unwrap();
+        assert_ne!(first, second);
+        assert_eq!(screen.current(), second);
+        assert!(!slot.deliver(first, 1));
+        // 自分の未取得の結果も置き換える。
+        assert!(slot.deliver(second, 2));
+        let third = screen.begin_replacing(&slot, &[&public]).unwrap();
+        assert_ne!(second, third);
+        // 公開入口の進行中の要求・未取得の結果は置き換えない。
+        let p = public.begin(&slot);
+        assert!(p.is_none());
+        slot.clear(third);
+        screen.release(third);
+        let p = public.begin(&slot).unwrap();
+        assert!(screen.begin_replacing(&slot, &[&public]).is_none());
+        assert!(slot.deliver(p, 3));
+        assert!(screen.begin_replacing(&slot, &[&public]).is_none());
+        assert_eq!(slot.take_ready(p), Some(3));
+        assert!(screen.begin_replacing(&slot, &[&public]).is_some());
+    }
+
     #[test]
     fn concurrent_take_ready_returns_some_once() {
         let slot: std::sync::Arc<RequestSlot<u8>> = std::sync::Arc::new(RequestSlot::new());

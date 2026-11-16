@@ -235,8 +235,8 @@ fn drive_callback(state: &LanDiscoverState, sender: &CompletionSender<LanDiscove
     if let Some(request) = take_request(state) {
         let _ = sender.send(Box::new(mark_browsing));
 
-        // 先行（公開入口など）を置き換えず、画面には失敗として返す。
-        let Some(request_id) = SCREEN_OWNER.begin_excluding(&bridge::SLOT, &[&PUBLIC_OWNER]) else {
+        // 公開入口の要求は置き換えず、画面には失敗として返す。画面自身の前の要求は置き換える（古い完了は id 照合で捨てる）。
+        let Some(request_id) = SCREEN_OWNER.begin_replacing(&bridge::SLOT, &[&PUBLIC_OWNER]) else {
             let generation = request.generation;
             let _ = sender.send(Box::new(move |s: &mut LanDiscoverState| {
                 finish_browse(
@@ -611,5 +611,39 @@ mod tests {
             fandhe_core::screens::lan_discover::UNSUPPORTED_ERROR
         );
         assert!(state.rows.is_empty());
+    }
+
+    /// 画面の再検索は自分の前の要求を置き換え、公開入口の未取得の結果は残る。
+    #[cfg(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "android"
+    ))]
+    #[test]
+    fn screen_rebrowse_replaces_own_request_and_keeps_public_result() {
+        // 画面の要求が進行中のまま再検索: 置き換わり、古い id の完了は捨てられる。
+        let first = SCREEN_OWNER
+            .begin_replacing(&bridge::SLOT, &[&PUBLIC_OWNER])
+            .unwrap();
+        let second = SCREEN_OWNER
+            .begin_replacing(&bridge::SLOT, &[&PUBLIC_OWNER])
+            .unwrap();
+        assert_ne!(first, second);
+        assert!(!bridge::deliver(first, Ok(vec![])));
+        bridge::SLOT.clear(second);
+        SCREEN_OWNER.release(second);
+
+        // 公開入口の未取得の結果は、画面の再検索で落とされない。
+        let public = PUBLIC_OWNER
+            .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
+            .unwrap();
+        assert!(bridge::deliver(public, Ok(vec![])));
+        assert!(
+            SCREEN_OWNER
+                .begin_replacing(&bridge::SLOT, &[&PUBLIC_OWNER])
+                .is_none()
+        );
+        assert!(poll_lan_discovery(public).is_some());
     }
 }

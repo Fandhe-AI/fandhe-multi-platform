@@ -183,8 +183,8 @@ fn drive_callback(state: &PhotoSaveState, sender: &CompletionSender<PhotoSaveSta
 
     if let Some(request) = take_request(state) {
         let _ = sender.send(Box::new(mark_saving));
-        // 先行（公開入口など）を置き換えず、画面には失敗として返す。
-        let Some(request_id) = SCREEN_OWNER.begin_excluding(&bridge::SLOT, &[&PUBLIC_OWNER]) else {
+        // 公開入口の要求は置き換えず、画面には失敗として返す。画面自身の前の要求は置き換える（古い完了は id 照合で捨てる）。
+        let Some(request_id) = SCREEN_OWNER.begin_replacing(&bridge::SLOT, &[&PUBLIC_OWNER]) else {
             let generation = request.generation;
             let _ = sender.send(Box::new(move |s: &mut PhotoSaveState| {
                 finish_save(
