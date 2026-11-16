@@ -43,9 +43,12 @@ import java.util.WeakHashMap;
 // Helper が無い Activity（生成前・破棄後）への要求は、結果が来ないまま待たせず RESULT_PRESENT_FAILED で確定する。
 // 破棄は `PrintLifecycle.onHostDestroyed`（`Activity.onDestroy()` の `super` の中）から届く。従来の `MainActivity` は
 // `super.onDestroy()` の前に呼んでいたため、`super` に対する前後だけが違う。
-// ライフサイクル: `request` はインスタンスフィールド。`onDestroy` で結果は届けず破棄し、Rust 側の
-// `reset_pending_tracking()` と id 照合で旧要求を捨てる。破棄後に届く `onFinish` は `complete` が
-// false になり何も送らない。
+// ライフサイクル: `request` はインスタンスフィールド。Activity の破棄で印刷ダイアログは閉じ、結果は再生成後の
+// Activity へ引き継がれない（AOSP `PrintManager.PrintDocumentAdapterDelegate.onActivityDestroyed` が adapter を
+// 手放し、保留中の onLayout / onWrite / onFinish を捨てる）。よって `onDestroy` で追跡中の id があれば
+// RESULT_PRESENT_FAILED を 1 回だけ届け、Rust の `SLOT` を解放する（外部アプリは `reset_pending_tracking()` を
+// 呼ばないため）。破棄後に届く `onFinish` は `complete` が false になり何も送らない。
+// 限界: プロセスごと消えた場合は届かないが、Rust 側の状態も同時に消えるので busy は残らない。
 // 画面の内容の印刷（#1012）は `printImage`。ARGB の int[] を受け、`onWrite` の試行ごとに Bitmap を作って
 // 印刷可能領域へ縦横比を保って描き、必ず recycle する（色は不透明前提。色の正確さは守らない範囲）。
 // ダイアログ・結果の写像・ライフサイクルは文章の印刷と共用する。画素・例外はログに出さない。
@@ -148,8 +151,11 @@ final class PrintHelper {
     // UI スレッド。
     private void onDestroy() {
         handler.removeCallbacksAndMessages(null);
-        request.take();
+        long id = request.take();
         job = null;
+        if (id != RequestTracker.NONE) {
+            nativeOnPrintResult(id, RESULT_PRESENT_FAILED);
+        }
     }
 
     private void finish(long id, int code) {
