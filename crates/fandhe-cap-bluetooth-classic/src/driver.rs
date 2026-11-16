@@ -206,6 +206,14 @@ pub(crate) static OBSERVED: Observer = Observer::new();
 /// 呼び出し元（検索ドライバ・OS 実装）と同じ OS 集合にだけ置く（契約表 7 節）。
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
 pub(crate) fn finish(request_id: u64, result: Result<(), BluetoothClassicError>) {
+    // `present` の中（[`START`] 保持中）で同じスレッドへ同期に届いた完了は、利用者コールバックを
+    // 呼ばず保留する。`begin_and_present` が [`START`] を解放した後に流す（コールバック内の再入で自己デッドロックしない）。
+    // 別スレッドからの完了は [`START`] を持たないので、そのまま流してよい。
+    let deferred = IN_PRESENT.with(|f| f.get());
+    if deferred {
+        DEFERRED.with(|d| d.borrow_mut().push((request_id, result)));
+        return;
+    }
     if let Some(r) = OBSERVED.finish(request_id, result) {
         // 画面を介さない公開入口（[`start_discovery`]）の完了通知があれば、生の結果をそちらへ渡す。
         if let Some(cb) = take_callback(request_id) {
@@ -220,6 +228,15 @@ pub(crate) fn finish(request_id: u64, result: Result<(), BluetoothClassicError>)
 /// 検索結果の受け取り先（[`start_discovery`] が渡す完了通知）。
 pub type DiscoverCallback =
     Box<dyn FnOnce(Result<Vec<ClassicDevice>, BluetoothClassicError>) + Send + 'static>;
+
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
+thread_local! {
+    /// このスレッドが [`START`] を保持して OS の `present` を呼んでいる間だけ true。
+    static IN_PRESENT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// `present` 中に同期で届いた完了（[`finish`] が保留したもの）。
+    static DEFERRED: std::cell::RefCell<Vec<(u64, Result<(), BluetoothClassicError>)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
 
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
 /// 要求の登録（採番・完了通知の置き換え・OS への開始依頼）を 1 本に直列化するロック。
@@ -270,6 +287,22 @@ static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
 /// 古い通知の `Cancelled`、同期失敗の完了）は [`START`] を解放してから呼ぶ（通知内からの再試行で自己デッドロックしない）。
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
 fn begin_and_present(cb: Option<DiscoverCallback>) {
+    begin_and_present_with(cb, |request_id, duration| {
+        #[cfg(target_os = "macos")]
+        return crate::macos::present(request_id, duration);
+        #[cfg(target_os = "windows")]
+        return crate::windows::present(request_id, duration);
+        #[cfg(target_os = "android")]
+        return crate::android::present(request_id, duration);
+    });
+}
+
+/// [`begin_and_present`] の本体。OS への開始依頼を `present` で差し替えられる（同期完了のテスト用）。
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
+fn begin_and_present_with(
+    cb: Option<DiscoverCallback>,
+    present: impl FnOnce(u64, std::time::Duration) -> Result<(), BluetoothClassicError>,
+) {
     use std::time::Duration;
     let screen = cb.is_none();
     let (request_id, old, started) = {
@@ -284,14 +317,15 @@ fn begin_and_present(cb: Option<DiscoverCallback>) {
         };
         OBSERVED.begin(request_id);
         let duration = Duration::from_millis(crate::contract::DISCOVERY_WINDOW_MS);
-        #[cfg(target_os = "macos")]
-        let started = crate::macos::present(request_id, duration);
-        #[cfg(target_os = "windows")]
-        let started = crate::windows::present(request_id, duration);
-        #[cfg(target_os = "android")]
-        let started = crate::android::present(request_id, duration);
+        IN_PRESENT.with(|f| f.set(true));
+        let started = present(request_id, duration);
+        IN_PRESENT.with(|f| f.set(false));
         (request_id, old, started)
     };
+    // `present` 中に同期で届いた完了を、[`START`] 解放後に利用者へ渡す。
+    for (id, r) in DEFERRED.with(|d| std::mem::take(&mut *d.borrow_mut())) {
+        finish(id, r);
+    }
     if let Some((_, old)) = old {
         old(Err(BluetoothClassicError::Cancelled("bluetooth_classic")));
     }
@@ -477,6 +511,31 @@ mod tests {
         DiscoverPhase, PairedPhase, UNSUPPORTED_ERROR, start_discover,
     };
     use std::sync::mpsc;
+
+    /// `present` の中で完了が同期に届いても、利用者コールバックは [`START`] 解放後に走る
+    /// （コールバック内の再入 `begin_and_present` が自己デッドロックしない）。
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
+    #[test]
+    fn sync_completion_in_present_reaches_callback_outside_start_lock() {
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let tx2 = tx.clone();
+            let cb: DiscoverCallback = Box::new(move |_r| {
+                // 再入: [`START`] を保持したままなら、ここで戻らない。
+                begin_and_present_with(None, |_, _| Ok(()));
+                tx2.send(()).unwrap();
+            });
+            begin_and_present_with(Some(cb), |id, _| {
+                finish(id, Ok(()));
+                Ok(())
+            });
+            tx.send(()).unwrap();
+        });
+        for _ in 0..2 {
+            rx.recv_timeout(std::time::Duration::from_secs(5))
+                .expect("コールバックまたは外側の呼び出しが戻らない（自己デッドロック）");
+        }
+    }
 
     fn key(s: &str) -> DeviceKey {
         DeviceKey::new(s).unwrap()
