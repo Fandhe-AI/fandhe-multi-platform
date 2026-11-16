@@ -1468,14 +1468,3 @@ extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnSpeechError(
     super::speech_recognition::bridge::deliver(request_id as u64, outcome);
     crate::android::request_repaint();
 }
-
-/// JNI の文字列を、UTF-16 単位数が `max_units` 以内のときだけ Rust の `String` へ複製する
-/// （null・超過・読み取り失敗は `None`。OS 由来でも信頼境界の外として複製前に弾く）。
-/// `android_lan_discovery` の JNI 入口からも使う。
-pub(crate) fn read_ble_string(
-    env: &mut jni::Env,
-    value: &jni::objects::JString,
-    max_units: i32,
-) -> Option<String> {
-    fandhe_platform_android::read_bounded_string(env, value, max_units)
-}
