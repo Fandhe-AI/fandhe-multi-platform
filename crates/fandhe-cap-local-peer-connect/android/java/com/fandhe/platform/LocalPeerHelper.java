@@ -1,6 +1,7 @@
 package com.fandhe.platform;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -30,13 +31,15 @@ import androidx.lifecycle.Lifecycle;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 // 近くの端末との直接通信（Issue #513、親 #110、Wi-Fi Aware のメッセージのみ）の Android 実装ヘルパー。
-// MainActivity から生成・委譲される（Rust の `device/android_local_peer.rs` が
-// `MainActivity.requestLocalPeer` を JNI で呼び、受信と完了を native 2 本で返す）。
+// `LocalPeerLifecycle`（`FeatureLifecycleProvider` 派生）が Activity ごとに生成・破棄する（Rust の `android.rs` が
+// static の `request` を JNI（`with_activity_class`）で呼び、受信と完了を native 2 本で返す）。
 //
 // 通信: 両端末が同じサービス名で publish（unsolicited）と subscribe（passive）を同時に行い、
 // 発見した相手へ「自分の表示名(15 バイト固定) + 送信文字列」を 1 通送り、受け取った相手へも返信する。
@@ -55,7 +58,7 @@ import java.util.Map;
 // 届いたら onResume まで開始を保留する。再生成後の新インスタンスは空の tracker から始まり、旧 id の
 // 遅延通知は Rust 側 reset_pending_tracking と PENDING の id 照合で捨てられる。
 //
-// 結果コードの SSOT は Rust の `fandhe_device::local_peer::decode_code`。ここは値を合わせるだけ。
+// 結果コードの SSOT は Rust の `contract.rs` の `decode_code`。ここは値を合わせるだけ。
 // 表示名・受信文字列・peerHandle はログへ出さない。
 // 守らない範囲: コア doc のとおり。加えて API 32 以下で位置情報サービスがオフのときの挙動は未確認。
 final class LocalPeerHelper {
@@ -80,7 +83,7 @@ final class LocalPeerHelper {
     private static final int CODE_INTERRUPTED = 4;
     private static final int CODE_OTHER = 6;
 
-    // SSOT は Rust の `fandhe_device::local_peer::SERVICE_TYPE`。
+    // SSOT は Rust の `contract.rs` の `SERVICE_TYPE`。
     private static final String SERVICE_NAME = "fandhe-p2p";
     // 表示名の長さ（`fandhe-` + 8 桁）。Rust の is_valid_peer_name と同じ。
     private static final int NAME_BYTES = 15;
@@ -100,7 +103,7 @@ final class LocalPeerHelper {
     private final ComponentActivity activity;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final RequestTracker request = new RequestTracker();
-    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity のフィールド初期化子で生成する。
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`attach` で生成する。
     private final ActivityResultLauncher<String[]> permissionLauncher;
 
     // 以下は main looper 専用。Aware の型は API 26 未満でクラス解決しないよう Object で持つ。
@@ -124,14 +127,59 @@ final class LocalPeerHelper {
     private Object subscribeSession;
     private BroadcastReceiver receiver;
 
-    LocalPeerHelper(ComponentActivity activity) {
+    // Activity ごとの helper。`LocalPeerLifecycle` が生成（attach）・前景の出入り・破棄（detach）を知らせる。
+    private static final Map<Activity, LocalPeerHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`LocalPeerLifecycle.onHostCreated`
+    // （`Activity.onCreate` の中）から `attach` で生成する。
+    private LocalPeerHelper(ComponentActivity activity) {
         this.activity = activity;
         this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:LocalPeerHelper:1", activity,
                 new ActivityResultContracts.RequestMultiplePermissions(), this::onPermissionResult);
     }
 
-    // JNI スレッドから呼ばれる。
-    void request(final long id, final String ownName, final String outgoing, int windowMs) {
+    // Activity の生成時（`LocalPeerLifecycle` から、UI スレッド）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new LocalPeerHelper(activity));
+    }
+
+    // Activity の破棄時（同上）。進行中の交換を中断（コード 4）して資源を解放する。
+    static void detach(Activity activity) {
+        LocalPeerHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // 前景へ戻ったとき（同上）。許可待ちで保留していた開始を再開する。
+    static void resumed(Activity activity) {
+        LocalPeerHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onResume();
+        }
+    }
+
+    // 背景へ出たとき（同上）。許可ダイアログ待ちを除き、進行中の交換を中断する。
+    static void paused(Activity activity) {
+        LocalPeerHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.onPause();
+        }
+    }
+
+    // Rust から呼ぶ入口（JNI スレッド）。helper が無い（生成前・破棄後）要求は false を返し、Rust が
+    // 失敗で確定する（結果が来ないまま待たせない）。
+    static boolean request(Activity activity, long id, String ownName, String outgoing, int windowMs) {
+        LocalPeerHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            return false;
+        }
+        helper.submit(id, ownName, outgoing, windowMs);
+        return true;
+    }
+
+    private void submit(final long id, final String ownName, final String outgoing, int windowMs) {
         final long dl = SystemClock.uptimeMillis() + windowMs;
         handler.post(() -> start(id, ownName, outgoing, dl));
     }

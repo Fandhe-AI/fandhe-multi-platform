@@ -2,7 +2,7 @@
 // iOS（Issue #512）も同じファイルを共用する。共通部分は Foundation と MultipeerConnectivity だけを使い、
 // UIKit は `#if TARGET_OS_IPHONE` の背景遷移の購読にだけ使う（AppKit は使わない）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_local_peer.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-local-peer-connect/src/apple.rs` から C ABI 経由で呼ばれる。
 // `build.rs` が iOS / macOS の feature `device` 有効時に `cc` でコンパイルし、MultipeerConnectivity を
 // リンクする。
 //

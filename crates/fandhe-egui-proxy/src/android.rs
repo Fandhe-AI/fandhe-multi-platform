@@ -110,9 +110,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // Activity 再生成をまたいで残る旧要求の保留をここで捨てる。
     #[cfg(feature = "device")]
     crate::device::lan_discovery::reset_pending_tracking();
-    // Issue #511: `local_peer::bridge::SLOT` / `PENDING` も同じ理由でプロセス static のため捨てる。
-    #[cfg(feature = "device")]
-    crate::device::local_peer::reset_pending_tracking();
     // Issue #1104: `photo_pick::bridge::SLOT` もプロセス static のため再生成をまたいで残る。
     // 写真選択の契約は「保留中の要求は復元せず破棄」（`fandhe_device::photo_picker` モジュール
     // doc）なので、新しい `Idle` の画面状態を作る前に捨て、旧要求の遅延完了を id 不一致で

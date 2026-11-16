@@ -328,14 +328,6 @@ public class MainActivity extends GameActivity {
         lanDiscoveryHelper.request(requestId, durationMs);
     }
 
-    // 近くの端末との直接通信（Issue #513）。実装は `LocalPeerHelper`（許可ランチャーを STARTED 前に登録）。
-    // Rust の `android_local_peer.rs` が JNI で呼ぶ。
-    private final LocalPeerHelper localPeerHelper = new LocalPeerHelper(this);
-
-    void requestLocalPeer(long requestId, String ownName, String outgoing, int windowMs) {
-        localPeerHelper.request(requestId, ownName, outgoing, windowMs);
-    }
-
     // OS 管理のバックグラウンドダウンロード（Issue #392）。実装は `BackgroundDownloadHelper`。Rust の
     // `android_background_download.rs` が同期 JNI で呼ぶ（コールバックは無い）。
     private final BackgroundDownloadHelper backgroundDownloadHelper = new BackgroundDownloadHelper(this);
@@ -1169,7 +1161,6 @@ public class MainActivity extends GameActivity {
         super.onResume();
         activityResumed = true;
         webAuthSessionHelper.onResume();
-        localPeerHelper.onResume();
         // 測位継続の意思（Issue #890）があり、かつ権限が既にあるなら再登録する
         // （`onPause` で解除済みのため、フォアグラウンド復帰のたびに要る。傾き（#831）
         // の motionListener と同型の対）。権限が無ければここでは要求しない
@@ -1241,7 +1232,6 @@ public class MainActivity extends GameActivity {
         penStylusHelper.onPause();
         webAuthSessionHelper.onPause();
         lanDiscoveryHelper.onPause();
-        localPeerHelper.onPause();
         // 「使用中のみ」の権限のため、バックグラウンドでは測位しない（Issue #890）。
         if (locationManager != null) {
             locationManager.removeUpdates(locationListener);
@@ -2636,7 +2626,6 @@ public class MainActivity extends GameActivity {
         super.onDestroy();
         healthDataHelper.onDestroy();
         lanDiscoveryHelper.onDestroy();
-        localPeerHelper.onDestroy();
         musicLibraryHelper.onDestroy();
         pictureInPictureHelper.onDestroy();
         printHelper.onDestroy();

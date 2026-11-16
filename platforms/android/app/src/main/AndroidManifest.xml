@@ -175,7 +175,7 @@
     <!-- 近くの端末との直接通信（local-peer-connect、Issue #513）: Wi-Fi Aware のメッセージのみ（データパスは
          使わない）。NEARBY_WIFI_DEVICES は API 33+ の実行時許可（位置情報は導かない）、API 32 以下は
          宣言済みの ACCESS_FINE_LOCATION を使う。非搭載端末をストアの自動フィルタから除外しないため
-         uses-feature は required=false。切り離し時に削除する。 -->
+         uses-feature は required=false。切り離し時にこの宣言と `crates/fandhe-cap-local-peer-connect/` を削除する。 -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission
@@ -541,6 +541,10 @@
         <provider
             android:name="com.fandhe.platform.PaymentRequestLifecycle"
             android:authorities="${applicationId}.fandhe.payment-request"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.LocalPeerLifecycle"
+            android:authorities="${applicationId}.fandhe.local-peer-connect"
             android:exported="false" />
         <provider
             android:name="com.fandhe.platform.BiometricAuthLifecycle"

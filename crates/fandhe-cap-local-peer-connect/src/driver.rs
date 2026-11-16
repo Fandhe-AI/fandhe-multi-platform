@@ -2,8 +2,8 @@
 //! ドライバ。`fandhe_core::screens::peer_connect`（端末依存ゼロ）の要求を観測し、結果を
 //! `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約の SSOT は `fandhe_device::local_peer`（30 秒の窓・200 バイト・`sanitize_received`・
-//! `should_invite`・`decode_code`）。`device/lan_discovery.rs` と同型の pull 型。
+//! 契約の SSOT は `contract.rs`（30 秒の窓・200 バイト・`sanitize_received`・
+//! `should_invite`・`decode_code`）。`fandhe-cap-bluetooth-le` などと同型の pull 型。
 //!
 //! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
 //! （`device.rs` モジュール doc と同じ理由）。
@@ -17,11 +17,11 @@
 //!
 //! # OS ごとの `present`
 //!
-//! 3 OS とも `present(request_id, own_name, outgoing, window) -> Result<(), DeviceError>` の同じ形で、
+//! 3 OS とも `present(request_id, own_name, outgoing, window) -> Result<(), LocalPeerConnectError>` の同じ形で、
 //! 後続の OS 実装は自分のモジュールの中身だけを埋め、本ファイルの dispatch には触らない。
-//! - macOS: `apple_local_peer`（MultipeerConnectivity の `.m`）
-//! - iOS: `ios_local_peer`（b-ios が `apple_local_peer` へ委譲するまでは `Unsupported`）
-//! - Android: `android_local_peer`（b-android が埋めるまでは `Unsupported`）
+//! - macOS: `apple.rs`（MultipeerConnectivity の `.m`）
+//! - iOS: `ios.rs`（macOS と共用の `apple.rs` へ委譲する）
+//! - Android: `android.rs`（`LocalPeerHelper`、Wi-Fi Aware）
 //!
 //! # 上記以外
 //!
@@ -30,7 +30,7 @@
 //! # 守る範囲 / 守らない範囲
 //!
 //! 守る: 1 プロセス内の要求と完了の順序、失敗を成功と見せないこと、窓の終了時の資源の解放。
-//! 守らない範囲は `fandhe_device::local_peer` のモジュール doc を参照。
+//! 守らない範囲は `contract.rs` のモジュール doc を参照。
 //! 表示名と受け取った文字列はログへ出さない（security.md A09）。
 #![cfg_attr(
     not(any(target_os = "ios", target_os = "macos", target_os = "android", test)),
@@ -39,30 +39,38 @@
 
 use std::sync::Mutex;
 
+use crate::contract::LocalPeer;
+use crate::contract::{PeerExchange, is_valid_peer_name, sanitize_received};
+use crate::error::LocalPeerConnectError;
 use fandhe_core::screens::peer_connect::{
-    finish_exchange, mark_exchanging, take_request, PeerConnectState, PeerError, PeerRow,
+    PeerConnectState, PeerError, PeerRow, finish_exchange, mark_exchanging, take_request,
 };
-#[cfg(not(any(target_os = "ios", target_os = "macos", target_os = "android")))]
-use fandhe_device::local_peer::LocalPeer;
-use fandhe_device::local_peer::{is_valid_peer_name, sanitize_received, PeerExchange};
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
-/// 契約の `Result<Option<PeerExchange>, DeviceError>` を画面用へ写す（種別は 1 対 1、
+/// 現在のプラットフォームに応じた `LocalPeer` 実装を返す。
+///
+/// iOS・macOS・Android は OS のコールバックが非同期に届くため `LocalPeer` を実装せず、pull 型 [`bridge`] を
+/// [`peer_connect_effect`] が扱う。Windows は保留、Web は対象外のため、どの OS でも `Unsupported` 固定を返す。
+/// 画面の状態型に依存しない入口（`docs/architecture/consumer-app-structure.md` §8.2）。
+pub fn platform_local_peer_connect() -> std::sync::Arc<dyn LocalPeer> {
+    std::sync::Arc::new(crate::contract::UnsupportedLocalPeer)
+}
+
+/// 契約の `Result<Option<PeerExchange>, LocalPeerConnectError>` を画面用へ写す（種別は 1 対 1、
 /// その他は `Display` 文言のみ。内部構造は出さない、security.md A09）。
 /// `Cancelled` は契約上返らないため `Other` に写す。
 pub(crate) fn to_core(
-    result: Result<Option<PeerExchange>, DeviceError>,
+    result: Result<Option<PeerExchange>, LocalPeerConnectError>,
 ) -> Result<Option<PeerRow>, PeerError> {
     match result {
         Ok(found) => Ok(found.map(|p| PeerRow {
             peer_name: p.peer_name,
             received: p.received,
         })),
-        Err(DeviceError::PermissionDenied(_)) => Err(PeerError::PermissionDenied),
-        Err(DeviceError::Disabled(_)) => Err(PeerError::Disabled),
-        Err(DeviceError::Unsupported(_)) => Err(PeerError::Unsupported),
+        Err(LocalPeerConnectError::PermissionDenied(_)) => Err(PeerError::PermissionDenied),
+        Err(LocalPeerConnectError::Disabled(_)) => Err(PeerError::Disabled),
+        Err(LocalPeerConnectError::Unsupported(_)) => Err(PeerError::Unsupported),
         Err(other) => Err(PeerError::Other(other.to_string())),
     }
 }
@@ -117,8 +125,8 @@ impl Pending {
     pub(crate) fn finish(
         &self,
         request_id: u64,
-        result: Result<(), DeviceError>,
-    ) -> Option<Result<Option<PeerExchange>, DeviceError>> {
+        result: Result<(), LocalPeerConnectError>,
+    ) -> Option<Result<Option<PeerExchange>, LocalPeerConnectError>> {
         let mut guard = self.lock();
         if guard.as_ref().is_none_or(|(id, _)| *id != request_id) {
             return None;
@@ -139,7 +147,7 @@ pub(crate) static PENDING: Pending = Pending::new();
 
 #[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
 /// OS 側の完了通知。バッファを確定して [`bridge`] へ置く（古い要求は捨てる）。
-pub(crate) fn finish(request_id: u64, result: Result<(), DeviceError>) {
+pub(crate) fn finish(request_id: u64, result: Result<(), LocalPeerConnectError>) {
     if let Some(r) = PENDING.finish(request_id, result) {
         bridge::deliver(request_id, r);
     }
@@ -148,11 +156,11 @@ pub(crate) fn finish(request_id: u64, result: Result<(), DeviceError>) {
 #[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
 /// OS からのコールバックとの橋渡し（pull 型、`RequestSlot` の facade）。
 pub(crate) mod bridge {
+    use crate::contract::PeerExchange;
+    use crate::error::LocalPeerConnectError;
     use fandhe_core::screens::peer_connect::{PeerError, PeerRow};
-    use fandhe_device::local_peer::PeerExchange;
-    use fandhe_device::DeviceError;
 
-    use crate::device::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::RequestSlot;
 
     pub(crate) type Outcome = Result<Option<PeerRow>, PeerError>;
 
@@ -165,9 +173,9 @@ pub(crate) mod bridge {
     /// `request_id` 不一致・既に結果ありは捨てて `false`。
     pub(crate) fn deliver(
         request_id: u64,
-        result: Result<Option<PeerExchange>, DeviceError>,
+        result: Result<Option<PeerExchange>, LocalPeerConnectError>,
     ) -> bool {
-        SLOT.deliver(request_id, super::to_core(result))
+        SLOT.deliver(request_id, crate::driver::to_core(result))
     }
 }
 
@@ -184,8 +192,8 @@ fn random_seed() -> u64 {
 /// iOS / macOS / Android の effect ドライバ本体（`lan_discovery::drive_callback` と同型）。
 #[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
 fn drive_callback(state: &PeerConnectState, sender: &CompletionSender<PeerConnectState>) {
+    use crate::contract::{EXCHANGE_WINDOW_MS, outgoing_text, peer_token};
     use fandhe_core::screens::peer_connect::PeerPhase;
-    use fandhe_device::local_peer::{outgoing_text, peer_token, EXCHANGE_WINDOW_MS};
     use std::time::Duration;
 
     if take_request(state).is_some() {
@@ -207,11 +215,11 @@ fn drive_callback(state: &PeerConnectState, sender: &CompletionSender<PeerConnec
         PENDING.begin(request_id);
         let window = Duration::from_millis(EXCHANGE_WINDOW_MS);
         #[cfg(target_os = "macos")]
-        let started = super::apple_local_peer::present(request_id, &own_name, &outgoing, window);
+        let started = crate::apple::present(request_id, &own_name, &outgoing, window);
         #[cfg(target_os = "ios")]
-        let started = super::ios_local_peer::present(request_id, &own_name, &outgoing, window);
+        let started = crate::ios::present(request_id, &own_name, &outgoing, window);
         #[cfg(target_os = "android")]
-        let started = super::android_local_peer::present(request_id, &own_name, &outgoing, window);
+        let started = crate::android::present(request_id, &own_name, &outgoing, window);
         if let Err(e) = started {
             // 依頼自体が同期的に失敗した（コールバックは二度と来ない）。
             finish(request_id, Err(e));
@@ -223,7 +231,7 @@ fn drive_callback(state: &PeerConnectState, sender: &CompletionSender<PeerConnec
         return;
     }
     let generation = state.generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         &bridge::SLOT,
         sender,
         |_request_id| {},
@@ -263,58 +271,63 @@ pub fn peer_connect_effect(state: &PeerConnectState, sender: &CompletionSender<P
     #[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
     drive_callback(state, sender);
     #[cfg(not(any(target_os = "ios", target_os = "macos", target_os = "android")))]
-    drive(
-        state,
-        sender,
-        &fandhe_device::local_peer::UnsupportedLocalPeer,
-    );
+    drive(state, sender, platform_local_peer_connect().as_ref());
 }
 
-/// Activity 再生成時に旧要求の保留を捨てる（`android.rs::android_main` から呼ばれる。
+/// Activity 再生成時に旧要求の保留を捨てる（最終成果物の `android_main` が呼ぶ。
 /// Java 側の追跡は Activity インスタンスのフィールドで、再生成で一緒に消える）。
 #[cfg(target_os = "android")]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     bridge::SLOT.reset();
     PENDING.clear();
 }
 
-/// アプリ終了時に進行中の交換を止める（`device::shutdown` から呼ばれる）。
+/// アプリ終了時に進行中の交換を止める（最終成果物の終了フックが呼ぶ）。
 /// Rust 側のロックを握ったまま OS 側の停止を呼ばない（OS 側コールバックが同じロックを取るため、
 /// `device-bridge-contracts.md` 11 節）。`PENDING.clear()` はロックを解放して戻ってから停止を呼ぶ。
-pub fn stop_shared_exchange() {
+pub fn shutdown() {
     PENDING.clear();
     #[cfg(any(target_os = "ios", target_os = "macos"))]
-    super::apple_local_peer::stop();
+    crate::apple::stop();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::peer_connect::{start_exchange, PeerPhase};
-    use fandhe_device::local_peer::{decode_code, peer_token, UnsupportedLocalPeer};
+    use crate::contract::{UnsupportedLocalPeer, decode_code, peer_token};
+    use fandhe_core::screens::peer_connect::{PeerPhase, start_exchange};
 
     const A: &str = "fandhe-0000000a";
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    #[cfg(not(any(target_os = "ios", target_os = "macos", target_os = "android")))]
+    struct NoopWaker;
+    #[cfg(not(any(target_os = "ios", target_os = "macos", target_os = "android")))]
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
 
     #[test]
     fn to_core_maps_each_error_kind_distinctly() {
         assert_eq!(
-            to_core(Err(DeviceError::PermissionDenied("x"))),
+            to_core(Err(LocalPeerConnectError::PermissionDenied("x"))),
             Err(PeerError::PermissionDenied)
         );
         assert_eq!(
-            to_core(Err(DeviceError::Disabled("x"))),
+            to_core(Err(LocalPeerConnectError::Disabled("x"))),
             Err(PeerError::Disabled)
         );
         assert_eq!(
-            to_core(Err(DeviceError::Unsupported("x"))),
+            to_core(Err(LocalPeerConnectError::Unsupported("x"))),
             Err(PeerError::Unsupported)
         );
         assert!(matches!(
-            to_core(Err(DeviceError::Cancelled("x"))),
+            to_core(Err(LocalPeerConnectError::Cancelled("x"))),
             Err(PeerError::Other(_))
         ));
         assert!(matches!(
-            to_core(Err(DeviceError::Internal("x"))),
+            to_core(Err(LocalPeerConnectError::Internal("x"))),
             Err(PeerError::Other(_))
         ));
         assert_eq!(to_core(Ok(None)), Ok(None));
@@ -330,7 +343,7 @@ mod tests {
 
     #[test]
     fn unsupported_is_error_not_empty_success() {
-        use fandhe_device::local_peer::LocalPeer;
+        use crate::contract::LocalPeer;
         assert_eq!(
             to_core(UnsupportedLocalPeer.exchange("x")),
             Err(PeerError::Unsupported)
@@ -372,7 +385,9 @@ mod tests {
         let p = Pending::new();
         p.begin(1);
         assert!(p.offer(1, A, b"hello"));
-        let r = p.finish(1, Err(DeviceError::Disabled("x"))).unwrap();
+        let r = p
+            .finish(1, Err(LocalPeerConnectError::Disabled("x")))
+            .unwrap();
         assert_eq!(to_core(r), Err(PeerError::Disabled));
     }
 
@@ -409,9 +424,8 @@ mod tests {
     #[cfg(not(any(target_os = "ios", target_os = "macos", target_os = "android")))]
     #[test]
     fn unsupported_os_shows_unsupported_not_empty() {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = crate::app::egui_sender(tx, ctx);
+        let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
         let mut state = PeerConnectState::default();
         start_exchange(&mut state);
         peer_connect_effect(&state, &sender);

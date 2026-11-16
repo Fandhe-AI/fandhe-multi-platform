@@ -67,10 +67,6 @@ pub mod android_image_recognition;
 /// `device/lan_discovery.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_lan_discovery;
-/// Issue #511: Android 向け近くの端末との直接通信実装。
-/// `device/local_peer.rs` の Android 経路から呼ばれる。
-#[cfg(target_os = "android")]
-pub mod android_local_peer;
 /// Issue #485: Android 向け音楽ライブラリ実装（`MediaStore.Audio.Media` を JNI 経由で読む）。
 /// `device/music_library.rs` の Android 経路から呼ばれる。純関数をホストでテストするため test でも載せる。
 #[cfg(any(target_os = "android", test))]
@@ -163,11 +159,6 @@ pub mod apple_image_recognition;
 /// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_lan_discovery;
-/// Issue #511 macOS: 近くの端末との直接通信実装（`apple/fandhe_apple_local_peer.m` を呼ぶ C ABI ラッパー）。
-/// `device/local_peer.rs` の macOS 経路と、`ios_local_peer`（Issue #512）の委譲から呼ばれる。
-/// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_local_peer;
 /// Issue #889: iOS / macOS 共通の CoreLocation 実装（`apple/fandhe_apple_location.m`
 /// を呼ぶ C ABI ラッパー）。`device/location.rs` の Apple cfg 分岐から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -296,10 +287,6 @@ pub mod ios_image_recognition;
 /// `device/lan_discovery.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_lan_discovery;
-/// Issue #512: iOS 向け近くの端末との直接通信（親 #110、`apple_local_peer` へ委譲する）。
-/// `device/local_peer.rs` の iOS 経路から呼ばれる。
-#[cfg(target_os = "ios")]
-pub mod ios_local_peer;
 /// Issue #484: iOS 向け音楽ライブラリ実装（`ios/fandhe_ios_music_library.m` の MediaPlayer を呼ぶ
 /// C ABI ラッパー）。`device/music_library.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
@@ -345,9 +332,6 @@ pub mod ios_web_auth_session;
 /// Phase 11 の拡充ループ（親 #109、Issue #486）: LAN のサービス探索の effect ドライバ
 /// （macOS・iOS / Android 実装、Windows は `DnsServiceBrowse`、他 OS は `UnsupportedLanDiscovery` 固定。Web は対象外）。
 pub mod lan_discovery;
-/// Phase 11 の拡充ループ（親 #110、Issue #511）: 近くの端末との直接通信の effect ドライバ
-/// （macOS・iOS / Android 実装、他 OS は `UnsupportedLocalPeer` 固定）。
-pub mod local_peer;
 /// Phase 11 の拡充ループ（親 #887、Issue #888）: 位置情報の effect ドライバ（Windows のみ実装）。
 pub mod location;
 /// Issue #424: macOS 向けアプリショートカット実装（`macos/fandhe_macos_app_shortcuts.m` の Dock メニューを呼ぶ
@@ -569,7 +553,6 @@ pub fn shutdown() {
     tts::stop_shared_tts();
     location::stop_shared_location();
     lan_discovery::stop_shared_discovery();
-    local_peer::stop_shared_exchange();
     picture_in_picture::shutdown();
     web_auth_session::shutdown();
 }

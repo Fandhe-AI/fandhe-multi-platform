@@ -1769,6 +1769,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-local-peer-connect"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-managed-app-config"
 version = "0.2.0"
 dependencies = [
@@ -2587,6 +2599,7 @@ dependencies = [
  "fandhe-cap-launch-at-login",
  "fandhe-cap-live-activity",
  "fandhe-cap-local-fonts",
+ "fandhe-cap-local-peer-connect",
  "fandhe-cap-managed-app-config",
  "fandhe-cap-media-cast",
  "fandhe-cap-media-playback",

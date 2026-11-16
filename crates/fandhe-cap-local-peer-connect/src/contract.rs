@@ -6,7 +6,7 @@
 //! 返す」ことだけ。3 台以上・ファイル転送・継続チャット・異なる OS 同士の接続は扱わない。
 //! iOS / macOS は MultipeerConnectivity、Android は Wi-Fi Aware。Windows は保留、Web は対象外。
 //!
-//! 呼び出し元は `fandhe-egui-proxy` の `device/local_peer.rs`（request/response 型のため
+//! 呼び出し元は本 crate の `driver.rs`（request/response 型のため
 //! `RequestSlot` で要求追跡する）。各 OS 実装は相手の名前と受信バイト列を非信頼入力として
 //! [`is_valid_peer_name`] / [`sanitize_received`] で検証してから結果にする。完了コードの写像は
 //! [`decode_code`]、招待側の決め方は [`should_invite`] が SSOT で、OS 側で二重に書かない。
@@ -46,7 +46,7 @@
 //!
 //! 表示名と受け取った文字列はログに出さない（同 8 節、security.md A09）。
 
-use crate::DeviceError;
+use crate::error::LocalPeerConnectError;
 
 /// Bonjour のサービス種別（15 文字以内。Apple 実装が advertise / browse に使う）。
 pub const SERVICE_TYPE: &str = "fandhe-p2p";
@@ -71,15 +71,15 @@ pub struct PeerExchange {
 pub trait LocalPeer: Send + Sync {
     /// 約 [`EXCHANGE_WINDOW_MS`] の間に相手を探して `outgoing` を送り、相手の文字列を受け取る。
     /// 相手が居なければ `Ok(None)`。
-    fn exchange(&self, outgoing: &str) -> Result<Option<PeerExchange>, DeviceError>;
+    fn exchange(&self, outgoing: &str) -> Result<Option<PeerExchange>, LocalPeerConnectError>;
 }
 
 /// 対象外 OS・初期化失敗時のフォールバック。ダミーの成功実装へは倒さない。
 pub struct UnsupportedLocalPeer;
 
 impl LocalPeer for UnsupportedLocalPeer {
-    fn exchange(&self, _outgoing: &str) -> Result<Option<PeerExchange>, DeviceError> {
-        Err(DeviceError::Unsupported("local_peer"))
+    fn exchange(&self, _outgoing: &str) -> Result<Option<PeerExchange>, LocalPeerConnectError> {
+        Err(LocalPeerConnectError::Unsupported("local_peer"))
     }
 }
 
@@ -135,16 +135,16 @@ pub fn sanitize_received(bytes: &[u8]) -> Option<String> {
 /// | 4 | 中断 | `Internal` |
 /// | 5 | サービス種別の未宣言 | `Internal` |
 /// | それ以外 | 未知 | `Internal` |
-pub fn decode_code(code: i32) -> Result<(), DeviceError> {
+pub fn decode_code(code: i32) -> Result<(), LocalPeerConnectError> {
     const F: &str = "local_peer";
     match code {
         0 => Ok(()),
-        1 => Err(DeviceError::PermissionDenied(F)),
-        2 => Err(DeviceError::Disabled(F)),
-        3 => Err(DeviceError::Unsupported(F)),
-        4 => Err(DeviceError::Internal("local_peer interrupted")),
-        5 => Err(DeviceError::Internal("local_peer not declared")),
-        _ => Err(DeviceError::Internal("local_peer outcome")),
+        1 => Err(LocalPeerConnectError::PermissionDenied(F)),
+        2 => Err(LocalPeerConnectError::Disabled(F)),
+        3 => Err(LocalPeerConnectError::Unsupported(F)),
+        4 => Err(LocalPeerConnectError::Internal("local_peer interrupted")),
+        5 => Err(LocalPeerConnectError::Internal("local_peer not declared")),
+        _ => Err(LocalPeerConnectError::Internal("local_peer outcome")),
     }
 }
 
@@ -198,13 +198,19 @@ mod tests {
         assert!(decode_code(0).is_ok());
         assert!(matches!(
             decode_code(1),
-            Err(DeviceError::PermissionDenied(_))
+            Err(LocalPeerConnectError::PermissionDenied(_))
         ));
-        assert!(matches!(decode_code(2), Err(DeviceError::Disabled(_))));
-        assert!(matches!(decode_code(3), Err(DeviceError::Unsupported(_))));
+        assert!(matches!(
+            decode_code(2),
+            Err(LocalPeerConnectError::Disabled(_))
+        ));
+        assert!(matches!(
+            decode_code(3),
+            Err(LocalPeerConnectError::Unsupported(_))
+        ));
         for c in [4, 5, 6, -1] {
             assert!(
-                matches!(decode_code(c), Err(DeviceError::Internal(_))),
+                matches!(decode_code(c), Err(LocalPeerConnectError::Internal(_))),
                 "{c}"
             );
         }
@@ -221,7 +227,7 @@ mod tests {
     fn unsupported_is_error_not_empty_success() {
         assert!(matches!(
             UnsupportedLocalPeer.exchange("x"),
-            Err(DeviceError::Unsupported(_))
+            Err(LocalPeerConnectError::Unsupported(_))
         ));
     }
 }

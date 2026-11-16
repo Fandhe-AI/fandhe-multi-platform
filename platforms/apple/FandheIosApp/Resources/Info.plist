@@ -146,9 +146,9 @@
 
   NSBonjourServices の `_fandhe-p2p`（Issue #512）: 型サンプル「近くの端末との直接通信」
   （`FANDHE_PROXY_APP=peer_connect`）が MultipeerConnectivity
-  （`crates/fandhe-egui-proxy/apple/fandhe_apple_local_peer.m` は iOS/macOS 共用）で
+  （`crates/fandhe-cap-local-peer-connect/apple/fandhe_apple_local_peer.m` は iOS/macOS 共用）で
   advertise・browse するために必須。未宣言だと `didNotStart*` が -72008（code 5）になる。
-  種別は `fandhe_device::local_peer::SERVICE_TYPE` と一致させる。最小権限（security.md A05）とし、
+  種別は `fandhe_cap_local_peer_connect::SERVICE_TYPE` と一致させる。最小権限（security.md A05）とし、
   multicast entitlement は足さない。
 
   NSNearbyInteractionUsageDescription / NSBonjourServices の `_fandhe-uwb`（Issue #654）: 型サンプル

@@ -260,7 +260,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "peer_connect" => fandhe_core::screens::peer_connect::current_screen,
-    fandhe_egui_proxy::device::local_peer::peer_connect_effect,
+    fandhe_cap_local_peer_connect::peer_connect_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "haptics_tap" => fandhe_core::screens::haptics_tap::current_screen,

@@ -1,0 +1,61 @@
+[package]
+name = "fandhe-cap-local-peer-connect"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の local-peer-connect の機能 crate（契約・OS 別実装・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知の送り口（CompletionSender）・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+jni = { workspace = true }
+
+[build-dependencies]
+# iOS・macOS の ObjC を build.rs でコンパイルする helper。通常のビルドには cc を持ち込まない。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+# 機能宣言（capability-declaration.md）。`cargo fandhe check` が現行の設定と突き合わせる。
+[package.metadata.fandhe]
+id = "local-peer-connect"
+
+# 近くの端末との直接通信。iOS は MultipeerConnectivity（Bonjour 種別 `_fandhe-p2p`、`contract.rs` の `SERVICE_TYPE` と一致させる）。
+# multicast entitlement・`UIBackgroundModes` は足さない（最小権限）。
+[package.metadata.fandhe.ios]
+usage-descriptions = ["NSLocalNetworkUsageDescription"]
+frameworks = ["MultipeerConnectivity"]
+info-plist = { NSBonjourServices = ["_fandhe-p2p._tcp", "_fandhe-p2p._udp"] }
+
+# macOS の Info.plist には現状 NSBonjourServices・NSLocalNetworkUsageDescription を置いていないため、framework だけを宣言する。
+[package.metadata.fandhe.macos]
+frameworks = ["MultipeerConnectivity"]
+
+# Wi-Fi Aware のメッセージのみ（データパスは使わない）。NEARBY_WIFI_DEVICES は API 33+ の実行時許可で、位置情報を導かない
+# （`neverForLocation`）。API 32 以下の ACCESS_FINE_LOCATION は他機能の宣言を共用し、ここでは足さない。
+[package.metadata.fandhe.android]
+permissions = [
+  { name = "android.permission.ACCESS_WIFI_STATE" },
+  { name = "android.permission.CHANGE_WIFI_STATE" },
+  { name = "android.permission.NEARBY_WIFI_DEVICES", flags = ["neverForLocation"] },
+]
+features = [{ name = "android.hardware.wifi.aware", required = false }]
+java = ["android/java"]
+
+# Activity のライフサイクルへ参加する非公開 provider（FeatureLifecycleProvider、fandhe-platform-android）。
+# Manifest の同じ要素と完全に一致させる（cargo-fandhe の突き合わせテストが確かめる）。
+[[package.metadata.fandhe.android.components]]
+kind = "provider"
+name = "com.fandhe.platform.LocalPeerLifecycle"
+exported = false
+attributes = { authorities = "${applicationId}.fandhe.local-peer-connect" }
+
+[lints]
+workspace = true

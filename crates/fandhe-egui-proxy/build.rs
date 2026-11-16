@@ -89,9 +89,6 @@ fn build() {
     // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。Network をリンクする。
     compile_apple_lan_discovery();
-    // `apple/fandhe_apple_local_peer.m`（Issue #511 macOS）。macOS・iOS 両分岐から呼ぶ
-    // （b-ios は build.rs を触らずに済む）。MultipeerConnectivity をリンクする。
-    compile_apple_local_peer();
 
     // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も iOS 分岐と共用する。
     compile_apple_image_recognition();
@@ -234,19 +231,6 @@ fn compile_apple_lan_discovery() {
     compile_objc(
         "apple/fandhe_apple_lan_discovery.m",
         &["Foundation", "Network"],
-    );
-}
-
-/// `apple/fandhe_apple_local_peer.m` を `cc` でコンパイルし MultipeerConnectivity をリンクする
-/// （Issue #511 macOS・親 #110 の b-ios で iOS も共用）。
-fn compile_apple_local_peer() {
-    compile_objc(
-        "apple/fandhe_apple_local_peer.m",
-        if target_is_ios() {
-            &["Foundation", "MultipeerConnectivity", "UIKit"]
-        } else {
-            &["Foundation", "MultipeerConnectivity"]
-        },
     );
 }
 
@@ -468,9 +452,6 @@ fn build_macos() {
     // `apple/fandhe_apple_lan_discovery.m`（Issue #486 macOS）。macOS・iOS 両分岐から呼ぶ
     // （b-ios は build.rs を触らずに済む）。Network をリンクする。
     compile_apple_lan_discovery();
-    // `apple/fandhe_apple_local_peer.m`（Issue #511 macOS）。macOS・iOS 両分岐から呼ぶ
-    // （b-ios は build.rs を触らずに済む）。MultipeerConnectivity をリンクする。
-    compile_apple_local_peer();
     // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も共用する。
     compile_apple_image_recognition();
     // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
