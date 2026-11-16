@@ -63,6 +63,7 @@ device = [
   "dep:fandhe-cap-geocoding-search",
   "dep:fandhe-cap-global-hotkey",
   "dep:fandhe-cap-haptics",
+  "dep:fandhe-cap-health-data",
   "dep:fandhe-cap-home-widget",
   "dep:fandhe-cap-http-get",
   "dep:fandhe-cap-human-presence",
@@ -161,6 +162,7 @@ NSMotionUsageDescription = "型サンプル「歩数」「気圧」「行動認�
 NSLocalNetworkUsageDescription = "型サンプル「LAN のサービス探索」「近くの端末との直接通信」「UWB による距離」の動作確認に使います"
 NSNearbyInteractionUsageDescription = "型サンプル「UWB による距離」で、近くの端末までの距離を測るために使います"
 NSHomeKitUsageDescription = "型サンプル「スマートホーム操作」の動作確認に使います"
+NSHealthShareUsageDescription = "型サンプル「ヘルスデータ読み書き」の動作確認で、今日の歩数を読むために使います"
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」「音声認識」「動画の撮影」の動作確認に使います"
 NSAlarmKitUsageDescription = "型サンプル「アラーム」の動作確認に使います"
 NSBluetoothAlwaysUsageDescription = "型サンプル「BLE スキャン」「BLE の周辺機器役」の動作確認に使います"
@@ -236,6 +238,7 @@ fandhe-cap-gamepad = { path = "../fandhe-cap-gamepad", optional = true }
 fandhe-cap-geocoding-search = { path = "../fandhe-cap-geocoding-search", optional = true }
 fandhe-cap-global-hotkey = { path = "../fandhe-cap-global-hotkey", optional = true }
 fandhe-cap-haptics = { path = "../fandhe-cap-haptics", optional = true }
+fandhe-cap-health-data = { path = "../fandhe-cap-health-data", optional = true }
 fandhe-cap-home-widget = { path = "../fandhe-cap-home-widget", optional = true }
 fandhe-cap-http-get = { path = "../fandhe-cap-http-get", optional = true }
 fandhe-cap-human-presence = { path = "../fandhe-cap-human-presence", optional = true }

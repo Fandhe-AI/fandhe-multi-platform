@@ -222,7 +222,7 @@
     <!-- Issue #1100: ヘルスデータ画面が Health Connect の歩数を読む（API 34 以上のフレームワーク API）。
          実行時の許可は Health Connect の許可画面。背景・履歴・書き込みの権限は足さない。
          API 34 以上は OS 組み込みのため `<queries>` は足さない。切り離し時にこの行と下の
-         HealthPermissionsRationaleActivity・activity-alias を削除する。 -->
+         HealthPermissionsRationaleActivity・activity-alias と `crates/fandhe-cap-health-data/` を削除する。 -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
 
     <!-- 資格情報の安全な保存（Issue #924）: `allowBackup="false"` はクラウドバックアップを
@@ -549,6 +549,10 @@
         <provider
             android:name="com.fandhe.platform.PictureInPictureLifecycle"
             android:authorities="${applicationId}.fandhe.picture-in-picture"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.HealthDataLifecycle"
+            android:authorities="${applicationId}.fandhe.health-data"
             android:exported="false" />
         <provider
             android:name="com.fandhe.platform.BiometricAuthLifecycle"

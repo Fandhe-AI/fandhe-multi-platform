@@ -276,7 +276,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "health_steps_read" => fandhe_core::screens::health_steps_read::current_screen,
-    fandhe_egui_proxy::device::health_data::health_steps_read_effect,
+    fandhe_cap_health_data::health_steps_read_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pedometer_read" => fandhe_core::screens::pedometer_read::current_screen,

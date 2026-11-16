@@ -1,7 +1,7 @@
 // Phase 11 の拡充ループ（親 #149）型サンプル「ヘルスデータ読み書き」: iOS 実装（Issue #1090）。
 // HealthKit で今日 0 時から現在までの歩数の合計を 1 回だけ読む。書き込み・他の型・履歴・背景配信はしない。
 //
-// `crates/fandhe-egui-proxy/src/device/ios_health_data.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-health-data/src/ios.rs` から C ABI 経由で呼ばれる。
 // `build.rs` の iOS 分岐が feature `device` 有効時にのみコンパイルし、HealthKit をリンクする。
 // 権限宣言は `platforms/apple/FandheIosApp/Resources/Info.plist` の `NSHealthShareUsageDescription`
 // （無いと許可の要求でクラッシュする）と、同ターゲットの entitlement `com.apple.developer.healthkit`。

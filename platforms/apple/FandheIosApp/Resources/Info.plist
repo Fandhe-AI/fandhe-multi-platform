@@ -133,7 +133,7 @@
   対応する entitlement `com.apple.developer.homekit` は `FandheIosApp.entitlements` で宣言する。
 
   NSHealthShareUsageDescription（Issue #1090）: 型サンプル「ヘルスデータ読み書き」画面が HealthKit
-  （`crates/fandhe-egui-proxy/ios/fandhe_ios_health_data.m`）で今日の歩数の合計を読むために必須。
+  （`crates/fandhe-cap-health-data/ios/fandhe_ios_health_data.m`）で今日の歩数の合計を読むために必須。
   未設定だと許可の要求でクラッシュする。書き込みはしないので NSHealthUpdateUsageDescription は足さない
   （security.md A05）。対応する entitlement `com.apple.developer.healthkit` は `FandheIosApp.entitlements`
   で宣言する。

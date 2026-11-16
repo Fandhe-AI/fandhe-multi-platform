@@ -1,8 +1,8 @@
 //! Phase 11（親 #149）型サンプル「ヘルスケアの歩数」（Issue #1089）の effect ドライバ。
 //! `fandhe_core::screens::health_steps_read`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::health_data::HealthData` で今日の歩数を 1 回読んで `CompletionSender` 経由で
+//! `crate::contract::HealthData` で今日の歩数を 1 回読んで `CompletionSender` 経由で
 //! 結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)`
-//! として呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は `fandhe_device::health_data`。
+//! として呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は `contract.rs`。
 //!
 //! # スレッド
 //!
@@ -12,38 +12,38 @@
 //! # 再描画
 //!
 //! 結果はワーカーの戻り値から `CompletionSender::send` で入り、そこで `request_repaint` されるため
-//! `crate::ios::request_repaint` は不要。
+//! `fandhe_runtime::request_repaint` は不要。
 //!
 //! # OS 別実装の差し込み口
 //!
-//! [`implementation`] の cfg 分岐が最終形。iOS は `ios_health_data`、Android は
-//! `android_health_data`（#1100 が埋める。それまでは非対応）、それ以外は `UnsupportedHealthData`
+//! [`platform_health_data`] の cfg 分岐が最終形。iOS は `ios.rs`、Android は
+//! `android.rs`、それ以外は `UnsupportedHealthData`
 //! 固定でダミーの成功実装へは倒さない。
 
 use std::sync::Arc;
 
-use fandhe_core::screens::health_steps_read::{
-    finish_read, mark_reading, take_request, HealthStepsReadState, ReadFailure, StepsReading,
-};
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
-use fandhe_device::health_data::UnsupportedHealthData;
-use fandhe_device::health_data::{HealthData, HealthDataFailure, HealthSteps, READ_TIMEOUT};
+use crate::contract::UnsupportedHealthData;
+use crate::contract::{HealthData, HealthDataFailure, HealthSteps, READ_TIMEOUT};
+use fandhe_core::screens::health_steps_read::{
+    HealthStepsReadState, ReadFailure, StepsReading, finish_read, mark_reading, take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `HealthData` 実装を返す（プロセスで 1 個）。
-fn implementation() -> Arc<dyn HealthData> {
+pub fn platform_health_data() -> Arc<dyn HealthData> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn HealthData>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "ios")]
             {
-                super::ios_health_data::implementation()
+                crate::ios::implementation()
             }
             #[cfg(target_os = "android")]
             {
-                super::android_health_data::implementation()
+                crate::android::implementation()
             }
             #[cfg(not(any(target_os = "ios", target_os = "android")))]
             {
@@ -115,26 +115,32 @@ pub fn health_steps_read_effect(
     state: &HealthStepsReadState,
     sender: &CompletionSender<HealthStepsReadState>,
 ) {
-    drive(state, sender, implementation());
+    drive(state, sender, platform_health_data());
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::UnsupportedHealthData as Unsupported;
     use fandhe_core::screens::health_steps_read::{
-        read, CANCELED_STATUS, NO_VISIBLE_DATA_STATUS, TIMEOUT_STATUS, UNSUPPORTED_STATUS,
+        CANCELED_STATUS, NO_VISIBLE_DATA_STATUS, TIMEOUT_STATUS, UNSUPPORTED_STATUS, read,
     };
-    use fandhe_device::health_data::UnsupportedHealthData as Unsupported;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
     fn sender_with_channel() -> (
         CompletionSender<HealthStepsReadState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<HealthStepsReadState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<HealthStepsReadState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     struct Fake {
@@ -250,7 +256,7 @@ mod tests {
     #[test]
     fn unsupported_os_implementation_is_unsupported() {
         assert_eq!(
-            implementation().read_today_steps(Duration::from_millis(1)),
+            platform_health_data().read_today_steps(Duration::from_millis(1)),
             Err(HealthDataFailure::Unsupported)
         );
     }

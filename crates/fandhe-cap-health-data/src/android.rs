@@ -1,18 +1,18 @@
 //! Android 向けヘルスデータ（今日の歩数）実装（Issue #1100、親 #149）。
-//! `device/health_data.rs` の Android 経路から呼ばれ、Health Connect の歩数の合計
+//! `driver.rs` の Android 経路から呼ばれ、Health Connect の歩数の合計
 //! （API 34 以上のフレームワーク API `HealthConnectManager.aggregate`）を 1 回だけ期限付きで
 //! 取得する。Java 側は `HealthDataHelper`（許可の確認・集計・id の照合）。
 //!
 //! 流れ: `HealthData::read_today_steps`（ワーカースレッド）→ [`RequestSlot::begin`] で id 採番 →
-//! JNI `MainActivity.requestHealthDataRead(id)` → Java が結果コードを
-//! `nativeOnHealthDataResult` で返す → `fandhe_device::health_data::decode_code` で契約の結果へ写像 →
+//! JNI `HealthDataHelper.read(activity, id)`（static）→ Java が結果コードを
+//! `nativeOnHealthDataResult` で返す → `crate::contract::decode_code` で契約の結果へ写像 →
 //! ワーカーが 100ms 周期で slot を見て受け取る。期限は契約の `READ_TIMEOUT` 1 つだけで、
-//! 起点はこの入口（単調時計）。切れたら `cancelHealthDataRead(id)` で Java の追跡 id を消し
+//! 起点はこの入口（単調時計）。切れたら `HealthDataHelper.cancel(activity, id)` で Java の追跡 id を消し
 //! `Timeout`（0 歩にしない）。`aggregate` に取り消し API は無いため、遅れて届いた結果は
 //! Java の `RequestTracker` と slot の id 照合で捨てる。
 //!
 //! 写像（API 33 以下は `Unsupported`、許可なしは `NoVisibleData` など）の正は
-//! `fandhe_device::health_data` の doc「Android の写像」。ここでは複製しない。
+//! `contract.rs` の doc「Android の写像」。ここでは複製しない。
 //!
 //! 守る範囲: 1 プロセス内の要求順序・0 歩と未取得の区別・拒否/破棄/例外を成功に畳まないこと。
 //! 守らない範囲: 期限後に届く `aggregate` の結果、既定で許可時点の 30 日前までしか読めないこと。
@@ -23,10 +23,10 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use fandhe_device::health_data::HealthData;
-use fandhe_device::health_data::{HealthDataFailure, HealthSteps};
+use crate::contract::HealthData;
+use crate::contract::{HealthDataFailure, HealthSteps};
 
-use super::request_slot::{RequestSlot, POLL_INTERVAL};
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot};
 
 type Outcome = Result<HealthSteps, HealthDataFailure>;
 
@@ -109,42 +109,45 @@ impl HealthData for AndroidHealthData {
     }
 }
 
-/// `MainActivity.requestHealthDataRead(long)`（`cancel=false`）または
-/// `cancelHealthDataRead(long)`（`cancel=true`）を JNI で呼ぶ。`false` は呼び出し失敗。
-/// `unsafe` 2 箇所は `device/android.rs::request_calendar_insert` と同一の根拠。
+/// `HealthDataHelper.read(Activity, long)`（`cancel=false`）または `cancel(Activity, long)`（`cancel=true`）
+/// （どちらも static）を JNI で呼ぶ。クラスは Activity の class loader で解決する
+/// （`fandhe_platform_android::with_activity_class`）。戻りは `read` では Helper が要求を受理したか
+/// （Helper が無い＝生成前・破棄後は `false`。呼び出し元が `Failed` で確定する）、`cancel` では常に `true`。
+/// `false` は呼び出し失敗。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
 fn call_activity(cancel: bool, id: u64) -> bool {
-    use super::android::JniCallFailed;
-    let Some(app) = crate::android::android_app() else {
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+    let Some(app) = android_app() else {
         return false;
     };
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| -> Result<(), JniCallFailed> {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        let args = [jni::objects::JValue::Long(id as jni::sys::jlong)];
-        if cancel {
-            env.call_method(
-                &activity,
-                jni::jni_str!("cancelHealthDataRead"),
-                jni::jni_sig!((long) -> ()),
-                &args,
-            )?;
-        } else {
-            env.call_method(
-                &activity,
-                jni::jni_str!("requestHealthDataRead"),
-                jni::jni_sig!((long) -> ()),
-                &args,
-            )?;
-        }
-        Ok(())
-    })
-    .is_ok()
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.HealthDataHelper"),
+        |env, activity, class| -> Result<bool, JniCallFailed> {
+            let args = [
+                jni::objects::JValue::Object(activity),
+                jni::objects::JValue::Long(id as jni::sys::jlong),
+            ];
+            if cancel {
+                env.call_static_method(
+                    class,
+                    jni::jni_str!("cancel"),
+                    jni::jni_sig!((android.app.Activity, long) -> ()),
+                    &args,
+                )?;
+                Ok(true)
+            } else {
+                let accepted = env.call_static_method(
+                    class,
+                    jni::jni_str!("read"),
+                    jni::jni_sig!((android.app.Activity, long) -> boolean),
+                    &args,
+                )?;
+                Ok(accepted.z()?)
+            }
+        },
+    )
+    .unwrap_or(false)
 }
 
 /// `HealthDataHelper.nativeOnHealthDataResult`（Java 側）から呼ばれる JNI エクスポート。
@@ -156,7 +159,7 @@ fn call_activity(cancel: bool, id: u64) -> bool {
 /// ため他シンボルと衝突しない（既存の JNI エクスポートと同じ根拠）。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_HealthDataHelper_nativeOnHealthDataResult<'caller>(
     _env: jni::EnvUnowned<'caller>,
     _class: jni::objects::JClass<'caller>,
@@ -166,22 +169,22 @@ extern "system" fn Java_com_fandhe_platform_HealthDataHelper_nativeOnHealthDataR
 ) {
     SLOT.deliver(
         request_id as u64,
-        fandhe_device::health_data::decode_code(code, steps as f64),
+        crate::contract::decode_code(code, steps as f64),
     );
 }
 
-/// Android の `HealthData` 実装を返す（`device/health_data.rs` の dispatch から呼ばれる）。
+/// Android の `HealthData` 実装を返す（`driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn HealthData> {
     Arc::new(AndroidHealthData)
 }
 
-/// `device.rs` の `cfg(any(android, test))` でホストのテストビルドにも載るための形。
+/// `lib.rs` の `cfg(any(android, test))` でホストのテストビルドにも載るための形。
 /// dispatch は Android でしか呼ばない。非対応を返し、成功へは倒さない。
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 pub(crate) fn implementation() -> Arc<dyn HealthData> {
-    Arc::new(fandhe_device::health_data::UnsupportedHealthData)
+    Arc::new(crate::contract::UnsupportedHealthData)
 }
 
 #[cfg(test)]
@@ -194,7 +197,7 @@ mod tests {
     #[test]
     fn non_android_stub_is_not_a_fake_success() {
         assert_eq!(
-            implementation().read_today_steps(fandhe_device::health_data::READ_TIMEOUT),
+            implementation().read_today_steps(crate::contract::READ_TIMEOUT),
             Err(HealthDataFailure::Unsupported)
         );
     }

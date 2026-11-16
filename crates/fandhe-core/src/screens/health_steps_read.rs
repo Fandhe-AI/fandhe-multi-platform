@@ -7,7 +7,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-egui-proxy` の
-//! `device/health_data.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を注入する。
+//! `fandhe-cap-health-data` の `driver.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を注入する。
 //!
 //! 全対象 OS（iOS・Android）の文言・状態をここで定義済みで、後続の OS 実装は本画面を触らない。
 //! 許可は読み取りボタンの押下時に OS がシートで求めるため、登録・解除ボタンは無い。
@@ -56,7 +56,7 @@ pub enum ReadPhase {
     Reading,
 }
 
-/// 読み取りの成功値（`fandhe_device::health_data::HealthSteps` から写す責務は effect 側）。
+/// 読み取りの成功値（`fandhe_cap_health_data::HealthSteps` から写す責務は effect 側）。
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum StepsReading {
     /// 今日の歩数（0 を含む）。
@@ -75,7 +75,7 @@ impl std::fmt::Debug for StepsReading {
     }
 }
 
-/// 失敗の種別（`fandhe_device::health_data::HealthDataFailure` から写す責務は effect 側）。
+/// 失敗の種別（`fandhe_cap_health_data::HealthDataFailure` から写す責務は effect 側）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReadFailure {
     /// 非対応。

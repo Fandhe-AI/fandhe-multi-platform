@@ -54,11 +54,6 @@ pub mod android_file_association;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_fullscreen_immersive;
-/// Issue #1099: Android 向けヘルスデータ（今日の歩数）の骨格（#1100 が Health Connect 実装に
-/// 置き換える）。`device/health_data.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_health_data;
 /// Issue #1250: Android 向け文字認識の骨格（#1253 が ML Kit 実装に置き換える）。
 /// `device/image_recognition.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
@@ -223,9 +218,6 @@ pub mod fullscreen_immersive;
 /// Phase 11 の拡充ループ（親 #1056、Issue #1057）: ジオフェンスの effect ドライバ
 /// （location の継続取得に乗せて `GeofenceTracker` で判定する）。
 pub mod geofence;
-/// Phase 11 の拡充ループ（親 #149、Issue #1089）: ヘルスデータ（今日の歩数）の effect ドライバ
-/// （iOS・Android は OS 別モジュール。他 OS は `UnsupportedHealthData` 固定）。
-pub mod health_data;
 /// Phase 11 の拡充ループ（親 #1120、Issue #1250）: 画像の文字認識の effect ドライバ
 /// （macOS・Windows / iOS 実装、Android は骨格のスタブ（対応表で `no`）、他 OS は
 /// `UnsupportedTextRecognizer` 固定。Web は対象外）。
@@ -266,11 +258,6 @@ pub mod ios_file_association;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_fullscreen_immersive;
-/// Issue #1089・#1090: iOS 向けヘルスデータ（歩数）実装（HealthKit の C ABI ラッパー）。
-/// `device/health_data.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_health_data;
 /// Issue #1252: iOS 向け文字認識（PHPicker + Vision）の effect ドライバ。
 #[cfg(target_os = "ios")]
 pub mod ios_image_recognition;

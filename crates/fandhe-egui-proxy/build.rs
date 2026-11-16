@@ -114,8 +114,6 @@ fn build() {
     compile_ios_safe_area_insets();
     // `ios/fandhe_ios_music_library.m`（Issue #484）。iOS 分岐のみ。
     compile_ios_music_library();
-    // `ios/fandhe_ios_health_data.m`（Issue #1090）。iOS 分岐のみ（macOS は対応表で n-a）。
-    compile_ios_health_data();
     // `ios/fandhe_ios_pen_stylus.m`（Issue #356）。iOS 分岐のみ。
     compile_ios_pen_stylus();
     // `ios/fandhe_ios_web_auth_session.m`（Issue #532）。iOS 分岐のみ。
@@ -344,12 +342,6 @@ fn compile_ios_music_library() {
         "ios/fandhe_ios_music_library.m",
         &["Foundation", "MediaPlayer"],
     );
-}
-
-/// `ios/fandhe_ios_health_data.m` を `cc` でコンパイルし HealthKit をリンクする（Issue #1090）。**iOS 分岐のみ**
-/// から呼ばれる（`src/device/ios_health_data.rs` が使う）。
-fn compile_ios_health_data() {
-    compile_objc("ios/fandhe_ios_health_data.m", &["Foundation", "HealthKit"]);
 }
 
 /// `ios/fandhe_ios_fullscreen_immersive.m` を `cc` でコンパイルする（Issue #1313）。**iOS 分岐のみ**

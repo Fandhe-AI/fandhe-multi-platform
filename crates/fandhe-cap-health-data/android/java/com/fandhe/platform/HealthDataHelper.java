@@ -1,5 +1,6 @@
 package com.fandhe.platform;
 
+import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.health.connect.AggregateRecordsRequest;
 import android.health.connect.AggregateRecordsResponse;
@@ -17,11 +18,14 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 // ヘルスデータ（今日の歩数）画面（Issue #1100、親 #149）の Android 実装ヘルパー。
-// MainActivity から生成・委譲される（Rust の `device/android_health_data.rs` が
-// `MainActivity.requestHealthDataRead` / `cancelHealthDataRead` を JNI で呼び、結果を
-// `nativeOnHealthDataResult` で受ける）。契約の SSOT は `fandhe_device::health_data`。
+// `HealthDataLifecycle`（`FeatureLifecycleProvider` 派生）が Activity ごとに生成・破棄する（Rust の `android.rs` が
+// static の `read` / `cancel`（第 1 引数は Activity）を JNI で呼び、結果を
+// `nativeOnHealthDataResult` で受ける）。契約の SSOT は Rust の `contract.rs`。
 //
 // 1 回の要求 = 許可の確認（未許可なら Health Connect の許可画面）→ `HealthConnectManager.aggregate`
 // （`StepsRecord.STEPS_COUNT_TOTAL`、今日 0 時〜現在）。`aggregate` に取り消し API は無いため、
@@ -33,7 +37,7 @@ import java.time.ZoneId;
 // フィールドなので、再生成後の新インスタンスは NONE から始まり旧結果を拾わない。
 // 歩数・例外メッセージは logcat に出さない。
 final class HealthDataHelper {
-    // 結果コード。SSOT は Rust 側 `fandhe_device::health_data::decode_code`（同じ番号）。
+    // 結果コード。SSOT は Rust 側 `contract.rs` の `decode_code`（同じ番号）。
     // 3（期限切れ）は Rust 側だけが作り、4（取り消し）は iOS 専用のため Android は返さない。
     static final int RESULT_STEPS = 0;
     static final int RESULT_NO_VISIBLE_DATA = 1;
@@ -53,30 +57,65 @@ final class HealthDataHelper {
     // UI スレッドで最後に受理した id。これ以下の開始要求は追い越された古い要求として捨てる。
     private long latestId = RequestTracker.NONE;
 
-    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity の
-    // フィールド初期化子から本クラスを生成してここで登録する。
+    // Activity ごとの helper。`HealthDataLifecycle` が生成（attach）と破棄（detach）を知らせる。
+    private static final Map<Activity, HealthDataHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`HealthDataLifecycle.onHostCreated`
+    // （`Activity.onCreate` の中）から `attach` で生成してここで登録する。
     private final ActivityResultLauncher<String> permissionLauncher;
 
-    HealthDataHelper(ComponentActivity activity) {
+    private HealthDataHelper(ComponentActivity activity) {
         this.activity = activity;
         this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:HealthDataHelper:1", activity,
                 new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
     }
 
-    // JNI スレッドから呼ばれる。
-    void read(long id) {
+    // Activity の生成時（`HealthDataLifecycle` から、UI スレッド）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new HealthDataHelper(activity));
+    }
+
+    // Activity の破棄時（同上）。保留中の要求を FAILED で確定する。
+    static void detach(Activity activity) {
+        HealthDataHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // Rust から呼ぶ入口（JNI スレッド）。helper が無い（生成前・破棄後）要求は false を返し、Rust が
+    // 失敗で確定する（結果が来ないまま待たせない）。
+    static boolean read(Activity activity, long id) {
+        HealthDataHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            return false;
+        }
+        helper.begin(id);
+        return true;
+    }
+
+    // Rust 側の期限切れから呼ばれる。helper が無ければ何もしない。
+    static void cancel(Activity activity, long id) {
+        HealthDataHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.cancelRequest(id);
+        }
+    }
+
+    private void begin(long id) {
         activity.runOnUiThread(() -> start(id));
     }
 
-    // Rust 側の期限切れから呼ばれる。資源は無いので追跡 id を消すだけ（以後の結果は捨てられる）。
+    // 資源は無いので追跡 id を消すだけ（以後の結果は捨てられる）。
     // start の「取り消し確認〜追跡登録」と同じロックで直列化する（確認後の cancel で古い要求が復活しない）。
-    synchronized void cancel(long id) {
+    private synchronized void cancelRequest(long id) {
         cancelledId = Math.max(cancelledId, id);
         request.complete(id);
     }
 
-    // MainActivity.onDestroy から UI スレッドで呼ぶ。
-    void onDestroy() {
+    // `detach` から UI スレッドで呼ぶ。
+    private void onDestroy() {
         long id = request.take();
         if (id != RequestTracker.NONE) {
             nativeOnHealthDataResult(id, RESULT_FAILED, 0);

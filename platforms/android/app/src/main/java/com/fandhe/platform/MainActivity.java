@@ -236,19 +236,6 @@ public class MainActivity extends GameActivity {
     // JPEG へ変換するときの長辺の目標（画素）。これ以下になるまで `inSampleSize` で縮める。
     private static final int PHOTO_CONVERT_SIDE = 4096;
 
-
-    // ヘルスデータ（今日の歩数、Issue #1100）。実装は `HealthDataHelper`（フィールド初期化子で
-    // 生成し、STARTED 前に許可ランチャーを登録する）。Rust の `android_health_data.rs` が JNI で呼ぶ。
-    private final HealthDataHelper healthDataHelper = new HealthDataHelper(this);
-
-    void requestHealthDataRead(long requestId) {
-        healthDataHelper.read(requestId);
-    }
-
-    void cancelHealthDataRead(long requestId) {
-        healthDataHelper.cancel(requestId);
-    }
-
     // 音楽ライブラリ画面（Issue #485）。実装は `MusicLibraryHelper`（許可ランチャーを STARTED 前に登録）。
     // Rust の `android_music_library.rs` が JNI で呼ぶ。
     private final MusicLibraryHelper musicLibraryHelper = new MusicLibraryHelper(this);
@@ -2594,7 +2581,6 @@ public class MainActivity extends GameActivity {
         penStylusHelper.onDestroy();
         // UI キューを待つネイティブ終了処理（clear）が super.onDestroy() の後ろで詰まらないよう先に解放する。
         super.onDestroy();
-        healthDataHelper.onDestroy();
         lanDiscoveryHelper.onDestroy();
         musicLibraryHelper.onDestroy();
         printHelper.onDestroy();

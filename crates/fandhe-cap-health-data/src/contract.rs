@@ -5,7 +5,7 @@
 //! 機能名は「読み書き」だが、書き込み・他のデータ型・期間指定・背景配信は扱わない。
 //! 対象は iOS（HealthKit）と Android（API 34 以上のフレームワーク API `HealthConnectManager`。
 //! 実体は #1100）。macOS・Windows・Web は対象外。
-//! `fandhe-egui-proxy` の `device/health_data.rs` がワーカースレッドで [`HealthData::read_today_steps`]
+//! 本 crate の `driver.rs` がワーカースレッドで [`HealthData::read_today_steps`]
 //! を呼ぶ（ブロッキングの契約）。
 //!
 //! # 契約
@@ -15,7 +15,7 @@
 //!   隠すため）。0 歩にも失敗にも畳まない。OS のデータ無しの応答と「合計が nil」はここへ写す。
 //!   この向きは公式文書に基づいて固定したもので、レビューの指摘で反転させない
 //!   （`device-bridge-contracts.md`「6. 嘘の成功」）
-//! - 失敗は [`HealthDataFailure`]。`DeviceError` に variant を足すと既存の網羅 match が壊れるため
+//! - 失敗は [`HealthDataFailure`]。`HealthDataError` に variant を足すと既存の網羅 match が壊れるため
 //!   機能固有の enum にする（`pedometer::PedometerFailure` と同じ判断）。判別できない拒否を
 //!   `PermissionDenied` と断定する種別は作らない
 //! - 期限は [`READ_TIMEOUT`] が唯一の値。初回の許可シートへの応答時間を含み、許可待ちと集計待ちで
