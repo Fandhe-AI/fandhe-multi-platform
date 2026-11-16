@@ -166,7 +166,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "payment_request" => fandhe_core::screens::payment_request::current_screen,
-    fandhe_egui_proxy::device::payment_request::payment_request_effect,
+    fandhe_cap_payment_request::payment_request_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "digital_credentials" => fandhe_core::screens::digital_credentials::current_screen,
@@ -258,7 +258,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "car_display_show" => fandhe_core::screens::car_display_show::current_screen,
-    fandhe_egui_proxy::device::car_display::car_display_show_effect,
+    fandhe_cap_car_display::car_display_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "ble_scan" => fandhe_core::screens::ble_scan::current_screen,
@@ -274,7 +274,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "peer_connect" => fandhe_core::screens::peer_connect::current_screen,
-    fandhe_egui_proxy::device::local_peer::peer_connect_effect,
+    fandhe_cap_local_peer_connect::peer_connect_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "haptics_tap" => fandhe_core::screens::haptics_tap::current_screen,
@@ -290,7 +290,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "health_steps_read" => fandhe_core::screens::health_steps_read::current_screen,
-    fandhe_egui_proxy::device::health_data::health_steps_read_effect,
+    fandhe_cap_health_data::health_steps_read_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pedometer_read" => fandhe_core::screens::pedometer_read::current_screen,
@@ -310,7 +310,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "pip_show" => fandhe_core::screens::pip_show::current_screen,
-    fandhe_egui_proxy::device::picture_in_picture::pip_show_effect,
+    fandhe_cap_picture_in_picture::pip_show_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "cast_show" => fandhe_core::screens::cast_show::current_screen,

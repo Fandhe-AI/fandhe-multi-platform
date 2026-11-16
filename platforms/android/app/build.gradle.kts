@@ -132,6 +132,10 @@ android {
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-capture-protection/android/java")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-car-display/android/java")
+            @Suppress("DEPRECATION")
+            res.srcDirs("../../../crates/fandhe-cap-car-display/android/res")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-clipboard/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-companion-device/android/java")
@@ -180,6 +184,8 @@ android {
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-haptics/android/java")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-health-data/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-home-widget/android/java")
             @Suppress("DEPRECATION")
             res.srcDirs("../../../crates/fandhe-cap-home-widget/android/res")
@@ -191,6 +197,8 @@ android {
             res.srcDirs("../../../crates/fandhe-cap-live-activity/android/res")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-local-fonts/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-local-peer-connect/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-managed-app-config/android/java")
             @Suppress("DEPRECATION")
@@ -226,11 +234,15 @@ android {
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-passkey-signin/android/java")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-payment-request/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-pdf-viewer/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-pedometer/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-per-app-language/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-picture-in-picture/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-power-state/android/java")
             @Suppress("DEPRECATION")
@@ -429,7 +441,7 @@ dependencies {
     // （バージョン選定根拠は versions.env の WINDOW_VERSION コメント参照）。
     implementation("androidx.window:window:${androidVersion("WINDOW_VERSION")}")
     implementation("androidx.window:window-java:${androidVersion("WINDOW_VERSION")}")
-    // CarDisplayService（car-display）が Car App Library の `CarAppService`・`Screen`・`PaneTemplate` を
+    // 機能 crate fandhe-cap-car-display の CarDisplayService が Car App Library の `CarAppService`・`Screen`・`PaneTemplate` を
     // 直接 import するため明示依存にする（バージョン選定根拠は versions.env の CAR_APP_VERSION コメント参照）。
     implementation("androidx.car.app:app:${androidVersion("CAR_APP_VERSION")}")
     // Car App Library の推移依存 guava 31.1-android には OSV の勧告があるため、勧告のない版へ引き上げる

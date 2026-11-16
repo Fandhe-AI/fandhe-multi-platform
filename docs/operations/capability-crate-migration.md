@@ -171,7 +171,7 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | device-info | 未移行の `apple_quick_settings_tile.rs` が `macos_device_info::implementation()` を呼ぶ | quick-settings-tile の後 （第 11 束 #1331 で移した、§20） |
 | now-playing-controls | `media_playback`（egui-proxy・web-dom の両方）が `now_playing::sync*` を呼ぶ | media-playback と同じ PR で移す （第 11 束 #1331 で移した、§20） |
 | pen-stylus | Android が `MainActivity.dispatchTouchEvent` の上書きを要する。provider では置き換えられない | 口は #1327 で入った（§18）。`HostInput.addTouchObserver` で移せる |
-| picture-in-picture | Android が `onPictureInPictureModeChanged` の上書きと `<activity supportsPictureInPicture>` 属性を要する | PiP の切り替わりの口は #1327 で入った（§18、`ComponentActivity` のリスナー）。`<activity supportsPictureInPicture>` の宣言の拡張（#1328）が先 |
+| picture-in-picture | Android が `onPictureInPictureModeChanged` の上書きと `<activity supportsPictureInPicture>` 属性を要する | PiP の切り替わりの口は #1327 で入った（§18、`ComponentActivity` のリスナー）。`<activity supportsPictureInPicture>` の宣言の拡張（#1328）が先 （第 15 束 #1335 で移した、§25） |
 | fullscreen-immersive | `FullscreenHelper.onInsets` が、`MainActivity` の唯一の decorView insets リスナー（safe-area と共用）から呼ばれる | insets を配る口は #1327 で入った（§18、`HostInsets.addListener`）。移せる |
 | compose-mail-sms | 未移行の `windows_web_auth_session.rs` が `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を呼ぶ | `open_url` は #1192 で `fandhe-platform-windows` へ上げた（`windows_compose_mail_sms` は再公開だけを持つ）。web-auth-session と同時に移すか、その再公開を共通層への参照に付け替えて移す （第 8 束 #1193 で移した） |
 | print・print-screen | `print_screen_page_effect` が egui 固有の読み書き口（`EguiSenderExt` の `request_screenshot`・`tagged_screenshot`）を使う | `fandhe-runtime` に egui 非依存の口を足す設計が先（口は #1326 で入った。§17） |
@@ -206,9 +206,9 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | barcode-scan | `photo_pick::implementation`・`ios::present_photo_picker`・`image_recognition::precheck` を使う。photo-picker 側も barcode_scan の参照で止まっていて循環している | photo-picker・image-recognition と同じ PR で移す |
 | lan-discovery | apple の `.m` が `fandhe_apple_network_status_read` を、Windows が `windows_network_status` を使う。network-status も `map_view.rs` が OS 実装を使うため移せない | network-status・map-view と同時に移す |
 | wifi-info | 未移行の wifi-connect の Windows 実装（`windows_wifi_connect.rs`）が `windows_wifi_info::radio_off` を使う | wifi-connect と同時に移す（第 9 束 #1329 で移した） |
-| local-peer-connect | `NEARBY_WIFI_DEVICES` の `usesPermissionFlags="neverForLocation"` を宣言の `Permission`（name・max-sdk のみ）で表せず、`cargo-fandhe` の `tests/gen.rs` が通らない | 宣言に権限フラグを足してから |
+| local-peer-connect | `NEARBY_WIFI_DEVICES` の `usesPermissionFlags="neverForLocation"` を宣言の `Permission`（name・max-sdk のみ）で表せず、`cargo-fandhe` の `tests/gen.rs` が通らない | 宣言に権限フラグを足してから （第 15 束 #1335 で移した、§25） |
 | web-auth-session | Android は `MainActivity.onNewIntent` が `WebAuthSessionHelper.onNewIntent` を先に呼び、url-scheme の受信箱へ流さない分岐を持つ（provider に onNewIntent の口が無い）。Windows は `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を使う | Activity の Intent を配る口の設計が先。`open_url` は #1192 で `fandhe-platform-windows` へ上げた。口は #1325 で入った（§16）（第 13 束 #1333 で移した、§23） |
-| payment-request | Google Pay の `<application>` 直下の `meta-data`（`com.google.android.gms.wallet.api.enabled`）を宣言で表せない（`meta-data` はコンポーネント単位だけ） | 宣言に application の meta-data を足してから |
+| payment-request | Google Pay の `<application>` 直下の `meta-data`（`com.google.android.gms.wallet.api.enabled`）を宣言で表せない（`meta-data` はコンポーネント単位だけ） | 宣言に application の meta-data を足してから （第 15 束 #1335 で移した、§25） |
 | music-library | Android が許可ランチャーと `onDestroy` を持つ（provider と JNI エクスポートが要る）。Windows の `windows_photo_library::known_folder` を `fandhe-platform-windows` へ上げる共通層の変更も要る | 共通層の先行変更とあわせて別の周で |
 | translation | Android がランチャーと `onDestroy`・`reset_pending_tracking` を持ち、Apple は Swift の薄層（`links` と `import_link_args`）が要る | 別の周で |
 | flashlight | Android の Helper が `onStart` / `onStop` / `onDestroy` に参加する。`FeatureLifecycleProvider` の Started / Stopped の口は #1192 で足した | 口が `main` に入った後に移せる（app-lifecycle と同じ形）（第 9 束 #1329 で移した） |
@@ -365,8 +365,8 @@ wifi-connect・volume-control・sleep-lock-events の 8 機能を移した。残
 | alarm | Windows 実装が未移行の `windows_notification::{ensure_app_aumid, setting_result_for, APP_AUMID}` を使う | notification と同時に移すか、AUMID の登録を `fandhe-platform-windows` へ上げてから （第 11 束 #1331 で移した、§20） |
 | foldable-posture | Android の Helper が `onStart` / `onStop` に参加する。`FeatureLifecycleProvider` に Started / Stopped の口が無い | flashlight・capture-protection と同じ共通層の変更の後（第 9 束 #1329 で移した） |
 | ble-peripheral | Android の Helper が `onStop` に参加する（同上）。`reset_pending_tracking` と `device::shutdown` もある | Started / Stopped の口の後 （第 11 束 #1331 で移した、§20） |
-| health-data | `HealthPermissionsRationaleActivity` を指す `<activity-alias>` を、宣言の `ComponentKind`（activity / service / receiver / provider）で表せない | 宣言に activity-alias を足してから |
-| car-display | `<application>` 直下の `meta-data` 2 件を宣言で表せない（payment-request と同じ） | 宣言に application の meta-data を足してから |
+| health-data | `HealthPermissionsRationaleActivity` を指す `<activity-alias>` を、宣言の `ComponentKind`（activity / service / receiver / provider）で表せない | 宣言に activity-alias を足してから （第 15 束 #1335 で移した、§25） |
+| car-display | `<application>` 直下の `meta-data` 2 件を宣言で表せない（payment-request と同じ） | 宣言に application の meta-data を足してから （第 15 束 #1335 で移した、§25） |
 | deep-link | Android の振り分けが `MainActivity.deliverUrlIntent`（url-scheme の受け口）に埋まっている。`url_scheme::UrlInbox` も使う | url-scheme と同時に移す（Intent を配る口の設計が先）。口は #1325 で入った（§16）（第 13 束 #1333 で移した、§23） |
 | camera-preview-stream | 未移行の video-capture の Windows 実装が `windows_camera_preview_stream::{spawn, spawn_action}` を使う | 第 7 束（#1192）で `spawn` が共通層（`fandhe_platform_windows::winrt_async`）へ上がり、障害が解消した。次の周で移せる（第 9 束 #1329 で移した） |
 | open-in-shell | 未移行の recent-documents が driver の `open_in_shell::prepare_sample_file_in` と、Windows の `windows_open_in_shell::to_win32_path` を使う | recent-documents と同じ PR で移す （第 8 束 #1193 で recent-documents と同時に移した） |
@@ -522,7 +522,7 @@ launch-at-login・camera-preview-stream）で、後回しにしていた障害�
 | Started / Stopped / Resumed / Paused に参加する Android の Helper | Helper を private コンストラクタ + `HELPERS`（`WeakHashMap`）+ static の入口（第 1 引数は `Activity`）にし、`<Name>Lifecycle`（`FeatureLifecycleProvider` 派生）が `onHostCreated` で `attach`、`onHostStarted` などで Helper の static を呼び、`onHostDestroyed` で `detach` する。`super.onXxx()` の中で届くため、従来の `MainActivity` との前後の違いを Lifecycle クラスのコメントに書く。Helper が無い（生成前・破棄後）要求は、成功にも待ちにもせず失敗・「読めない」で確定する |
 | `onCreate` の直後に状態を掛け直す Helper（capture-protection） | `attach` の中で Helper を作った直後に掛け直す（`onHostCreated` は `Activity.onCreate` の中で届き、最初のフレームより前）。要求値は static のまま持ち越す |
 | 保留要求・許可ランチャーを持つ Helper（wifi-info・activity-recognition・camera-preview-stream） | ランチャーの登録は `attach`（STARTED より前）で、キーは明示する（従来の文字列のまま）。JNI は `with_activity_class` + `call_static_method` にして、Rust 側の `unsafe` を無くす（JNI のエクスポート名は変わらない） |
-| 機能 crate が GMS を使う Helper（activity-recognition） | GMS の判定を Helper の private メソッドに持つ（`DocumentScanHelper` と同じ）。決済が使う `GmsAvailability` は残す。`ActivityRecognitionReceiver` は `scaffold` が動かさないため `git mv` し、宣言の `components` に `kind = "receiver"`（`exported = false`・intent-filter なし）で書く |
+| 機能 crate が GMS を使う Helper（activity-recognition） | GMS の判定を Helper の private メソッドに持つ（`DocumentScanHelper` と同じ）。最後の利用者が移った `GmsAvailability` は廃止済み。`ActivityRecognitionReceiver` は `scaffold` が動かさないため `git mv` し、宣言の `components` に `kind = "receiver"`（`exported = false`・intent-filter なし）で書く |
 | driver の `unsafe`（flashlight の `IsIconic`） | `scaffold` が止まる前に、Windows 実装のファイルへ安全な `pub(crate)` 関数（`main_window_minimized`）として移し、driver はそれを呼ぶ |
 | 契約の一部だけを 2 機能が使う（wifi-info の `radio_off`、camera-preview-stream の縮小） | OS に触れない部品だけを `fandhe-device` の同名モジュールに最小限残し（wifi-info は `RADIO_ON`・`RADIO_STATE_OFF`・`radio_off`、camera-preview-stream は `preview_size`・`ScaledFrame`・`PackedLayout`・`downscale_packed`・`downscale_yuv420`）、機能 crate の `contract.rs` から `pub use` で再公開する。`scaffold` は契約を丸ごと `git mv` するため、実行後に手で分ける。他機能（`fandhe-cap-wifi-connect`・`fandhe-cap-ar`）の参照は変えない |
 | 終了・再生成で後片付けが要る機能（in-app-browser・camera-preview-stream） | `reset_pending_tracking`（と `shutdown`）を `pub` にし、`fandhe-gallery` の `android_main` と `shutdown()` が呼ぶ。`fandhe-egui-proxy` の `android.rs`・`device.rs` からは消す |
@@ -616,3 +616,22 @@ web-auth-session）で、URL・Intent・背景転送の完了を受ける 9 機�
 - macOS の Apple Event・Windows の起動引数を受ける共通の口
 - Web manifest の `shortcuts`・`file_handlers` を機能の宣言へ移すこと
 - 旧構造の撤去（#1194）、iOS・Android の実機確認（人間担当。URL 起動・App Links・背景転送の relaunch・Web 認証のコールバック・ショートカット・Spotlight）
+
+## 25. 第 15 束（#1335）で出た型
+
+第 15 束（health-data・car-display・payment-request・local-peer-connect・picture-in-picture）で、宣言で表せず後回しにしていた 5 機能を移した。
+障害は #1328（PR #1340）で宣言に足した `kind = "activity-alias"`・`application-meta-data`・権限の `flags`・`main-activity-attributes` で解消し、
+PiP の切り替わりの口は #1327（§18）で決着していた。はじめて出た型と、その扱いは次のとおり。
+
+| 型 | 扱い |
+|----|------|
+| `<activity-alias>` と実体の Activity（health-data） | 宣言の `components` に `kind = "activity"`（`exported = false`）を先に、`kind = "activity-alias"`（`target-activity` で実体を指す。`attributes = { permission = ... }`・intent-filter を持つ）を後に書く。`scaffold` は実体の Activity を動かさないため `git mv` で `android/java` へ移す。固定文言のみ表示し Intent の extras を読まない作りと、alias がシステム専用権限を要求する点は変えない |
+| `<application>` 直下の `<meta-data>`（car-display・payment-request） | 宣言の `application-meta-data`（`value` か `resource`）。`tests/gen.rs` に、生成側と現行 Manifest の同名の要素が同じ属性になる検査を足した。統合後の Manifest に依存 library 由来の同名が現れる場合の `verify-scope` の誤検知は、実例が出たら対応する |
+| 権限の `flags`（local-peer-connect） | `permissions = [{ name = "...NEARBY_WIFI_DEVICES", flags = ["neverForLocation"] }]`。API 32 以下の `ACCESS_FINE_LOCATION` は他機能の宣言を共用し、ここでは足さない（§21 の bluetooth 系と同じ扱い） |
+| MainActivity の属性と PiP リスナー（picture-in-picture） | 属性は宣言の `main-activity-attributes = { supportsPictureInPicture = "true" }`。切り替わりは provider の `onHostCreated` で `ComponentActivity.addOnPictureInPictureModeChangedListener` へ登録し、`onHostDestroyed` で外す（同一インスタンスの `Consumer` を Helper が持つ）。小窓から戻す Intent は `MainActivity.class` を参照せず `activity.getClass()` を使う |
+| 最後の利用者が移った共通 Java の畳み込み（payment-request の `GmsAvailability`） | 使う機能が 1 つだけになったため、判定を Helper の private static へ移してファイルを消した（`DocumentScanHelper`・`ActivityRecognitionHelper` と同じ形）。GMS を使わない機能を選んだ利用者に Play services の依存を乗せない |
+| Helper の入口と Lifecycle（payment-request・health-data・local-peer-connect・picture-in-picture） | §19 の型どおり、private コンストラクタ + `HELPERS`（`WeakHashMap`）+ static の入口（第 1 引数は `Activity`）。Helper が無い（生成前・破棄後）要求は成功にも待ちにもせず失敗で確定する（入口が `false` / 失敗コード / `null` を返す）。ランチャーのキーは従来の文字列のまま。local-peer-connect の Resumed / Paused は `super.onXxx()` の内側で届くため、従来の `MainActivity` との前後だけが違う（`foreground()` と `startPendingResume` の経路は前後で結果が変わらない） |
+| 契約を使う Web 実装が機能 crate に依存する（payment-request・picture-in-picture） | §8 の「同じ機能の Web 実装が使う純関数・定数」と同じ。`fandhe-web-dom` が機能 crate に依存し、`DeviceError` は機能 crate の失敗型へ付け替える。Web の本体は `fandhe-web-dom` に残る |
+| 失敗型を持たない機能（health-data） | 契約の `HealthDataFailure` が失敗の種類のため、`error.rs` を作らない（in-app-browser 等と同じ） |
+| Rust 側の `unsafe` の削減（car-display・picture-in-picture） | 独自の `with_activity` をやめて `fandhe_platform_android::with_activity_class` + `call_static_method` に寄せた。Android で JNI のエクスポートが残らない car-display は全 OS で `forbid(unsafe_code)`、picture-in-picture は Apple だけ `deny` |
+| `build.gradle.kts` の `implementation(...)` | car-app・wallet の依存の行と guava の constraints は、旧構造の撤去（#1194）までアプリ側に残す。宣言の `gradle` と版を一致させる（`tests/gen.rs` が確かめる） |

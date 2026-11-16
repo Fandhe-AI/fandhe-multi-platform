@@ -235,19 +235,6 @@ public class MainActivity extends GameActivity {
     // JPEG へ変換するときの長辺の目標（画素）。これ以下になるまで `inSampleSize` で縮める。
     private static final int PHOTO_CONVERT_SIDE = 4096;
 
-
-    // ヘルスデータ（今日の歩数、Issue #1100）。実装は `HealthDataHelper`（フィールド初期化子で
-    // 生成し、STARTED 前に許可ランチャーを登録する）。Rust の `android_health_data.rs` が JNI で呼ぶ。
-    private final HealthDataHelper healthDataHelper = new HealthDataHelper(this);
-
-    void requestHealthDataRead(long requestId) {
-        healthDataHelper.read(requestId);
-    }
-
-    void cancelHealthDataRead(long requestId) {
-        healthDataHelper.cancel(requestId);
-    }
-
     // 音楽ライブラリ画面（Issue #485）。実装は `MusicLibraryHelper`（許可ランチャーを STARTED 前に登録）。
     // Rust の `android_music_library.rs` が JNI で呼ぶ。
     private final MusicLibraryHelper musicLibraryHelper = new MusicLibraryHelper(this);
@@ -258,23 +245,6 @@ public class MainActivity extends GameActivity {
 
     void cancelMusicLibraryList(long requestId) {
         musicLibraryHelper.cancel(requestId);
-    }
-
-    // 物・サービスの決済（Issue #1131）。実装は `PaymentRequestHelper`（結果ランチャーを STARTED 前に登録）。
-    private final PaymentRequestHelper paymentRequestHelper = new PaymentRequestHelper(this);
-
-    void requestPayment(long requestId, boolean pay, String isReadyToPayJson, String paymentDataRequestJson) {
-        paymentRequestHelper.request(requestId, pay, isReadyToPayJson, paymentDataRequestJson);
-    }
-
-    // 車載ディスプレイ（Issue #1117）。実装は `CarDisplayScreen`。Rust の
-    // `android_car_display.rs` が JNI（署名 `(Ljava/lang/String;)V` と `()Z`）で呼ぶ。
-    void carDisplaySetText(String text) {
-        CarDisplayScreen.setText(text);
-    }
-
-    boolean carDisplayIsShowing() {
-        return CarDisplayScreen.isShowing();
     }
 
     // 印刷ダイアログ（Issue #328）。実装は `PrintHelper`。
@@ -315,14 +285,6 @@ public class MainActivity extends GameActivity {
         lanDiscoveryHelper.request(requestId, durationMs);
     }
 
-    // 近くの端末との直接通信（Issue #513）。実装は `LocalPeerHelper`（許可ランチャーを STARTED 前に登録）。
-    // Rust の `android_local_peer.rs` が JNI で呼ぶ。
-    private final LocalPeerHelper localPeerHelper = new LocalPeerHelper(this);
-
-    void requestLocalPeer(long requestId, String ownName, String outgoing, int windowMs) {
-        localPeerHelper.request(requestId, ownName, outgoing, windowMs);
-    }
-
     // ペン・筆圧入力（Issue #357）。実装は `PenStylusHelper`。
     private final PenStylusHelper penStylusHelper = new PenStylusHelper();
 
@@ -332,30 +294,6 @@ public class MainActivity extends GameActivity {
 
     int fullscreenSet(boolean on) {
         return fullscreenHelper.set(on);
-    }
-
-    // ピクチャ・イン・ピクチャ（Issue #366）。実装は `PictureInPictureHelper`。Rust の
-    // `android_picture_in_picture.rs` が egui スレッドから同期 JNI で呼ぶ。
-    private final PictureInPictureHelper pictureInPictureHelper = new PictureInPictureHelper(this);
-
-    int pipPrepare(long generation, int w, int h) {
-        return pictureInPictureHelper.prepare(generation, w, h);
-    }
-
-    int pipStart(long generation) {
-        return pictureInPictureHelper.start(generation);
-    }
-
-    int pipStop(long generation) {
-        return pictureInPictureHelper.stop(generation);
-    }
-
-    long[] pipSnapshot() {
-        return pictureInPictureHelper.snapshot();
-    }
-
-    void pipShutdown() {
-        pictureInPictureHelper.shutdown();
     }
 
     // マイク録音（Issue #957、Phase 11 型サンプル「マイク録音」の Android 経路）。
@@ -1057,12 +995,6 @@ public class MainActivity extends GameActivity {
         // `Window.Callback` を包み、通知してから元の戻り値をそのまま返すため、GameActivity → winit → egui の
         // 既存のタッチ経路は変わらない。
         HostInput.addTouchObserver(this, penStylusHelper::onTouch);
-
-        // ピクチャ・イン・ピクチャの切り替わり（Issue #366）。`ComponentActivity` のリスナーで受ける
-        // （`onPictureInPictureModeChanged` の上書きは持たない）。
-        addOnPictureInPictureModeChangedListener(
-                info -> pictureInPictureHelper.onPictureInPictureModeChanged(
-                        info.isInPictureInPictureMode()));
     }
 
     // 傾きセンサのリスナー登録（Issue #831）。バックグラウンド中は登録しない
@@ -1071,7 +1003,6 @@ public class MainActivity extends GameActivity {
     protected void onResume() {
         super.onResume();
         activityResumed = true;
-        localPeerHelper.onResume();
         // 測位継続の意思（Issue #890）があり、かつ権限が既にあるなら再登録する
         // （`onPause` で解除済みのため、フォアグラウンド復帰のたびに要る。傾き（#831）
         // の motionListener と同型の対）。権限が無ければここでは要求しない
@@ -1142,7 +1073,6 @@ public class MainActivity extends GameActivity {
         activityResumed = false;
         penStylusHelper.onPause();
         lanDiscoveryHelper.onPause();
-        localPeerHelper.onPause();
         // 「使用中のみ」の権限のため、バックグラウンドでは測位しない（Issue #890）。
         if (locationManager != null) {
             locationManager.removeUpdates(locationListener);
@@ -2529,12 +2459,8 @@ public class MainActivity extends GameActivity {
         penStylusHelper.onDestroy();
         // UI キューを待つネイティブ終了処理（clear）が super.onDestroy() の後ろで詰まらないよう先に解放する。
         super.onDestroy();
-        paymentRequestHelper.onDestroy();
-        healthDataHelper.onDestroy();
         lanDiscoveryHelper.onDestroy();
-        localPeerHelper.onDestroy();
         musicLibraryHelper.onDestroy();
-        pictureInPictureHelper.onDestroy();
         printHelper.onDestroy();
         screenOrientationHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため

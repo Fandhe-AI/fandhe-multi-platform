@@ -4,7 +4,7 @@
 //! registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod car_display_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面
-//! ファイルの置き場」節）。`fandhe-egui-proxy` の effect ドライバ（`device/car_display.rs`）が
+//! ファイルの置き場」節）。`fandhe-cap-car-display` の effect ドライバ（`driver.rs`）が
 //! [`take_request`] で要求を観測し、[`finish_set`] / [`finish_state`] で結果を注入する。
 //!
 //! # 設計の要点

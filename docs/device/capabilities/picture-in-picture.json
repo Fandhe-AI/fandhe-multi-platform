@@ -17,7 +17,7 @@
       "note": "実装済み（#365）。macOS と共用の `.m` で、実行時に生成する単色映像（5 色を 1 秒ごとに切り替え）を `AVSampleBufferDisplayLayer` から小窓へ出す「小窓にする」「小窓をやめる」のみ（音声・シーク・自動開始は範囲外）。AVKit の小窓は映像だけが対象で、egui の画面そのものは小窓にできない。sample buffer 経路は iOS 15+（deploymentTarget 17 なので分岐不要）。`isPictureInPictureSupported` が NO の環境（シミュレータで報告あり）は非対応表示にする。小窓中の背景遷移は中断にしない。delegate の通知直後に次フレームを起こす。守る範囲: 1 プロセス内の操作順、失敗を成功値へ畳まないこと、資源と音声セッションの解放。守らない範囲: ポーリング間隔ぶんの表示の遅れ、画面内プレビューと OS 側の映像の色替えの時刻ずれ、小窓の位置・大きさ（OS が決める）、画面回転への追従、複数プロセス。iOS 実機の目視は #363 で行う。",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#363）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_picture_in_picture.rs + crates/fandhe-egui-proxy/src/device/apple_picture_in_picture.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_picture_in_picture.m + crates/fandhe-egui-proxy/src/device/picture_in_picture.rs + crates/fandhe-core/src/screens/pip_show.rs + crates/fandhe-device/src/picture_in_picture.rs、Issue #365"
+      "impl": "crates/fandhe-cap-picture-in-picture/src/ios.rs + crates/fandhe-cap-picture-in-picture/src/apple.rs + crates/fandhe-cap-picture-in-picture/apple/fandhe_apple_picture_in_picture.m + crates/fandhe-cap-picture-in-picture/src/driver.rs + crates/fandhe-core/src/screens/pip_show.rs + crates/fandhe-cap-picture-in-picture/src/contract.rs、Issue #365"
     },
     "android": {
       "status": "done",
@@ -27,7 +27,7 @@
       "note": "実装済み（#366）。Activity ごと小窓になるので egui の画面がそのまま入る（API 26+、`FEATURE_PICTURE_IN_PICTURE` が無い端末は非対応）。小窓に入る呼び出しが成功を返した時点で「小窓に出ている」とし、小窓から戻った・利用者が閉じた・開始中の取り消しは失敗ではなく「戻った」にする。設定で無効など OS が許さない場合は「小窓にできない」、例外は内部エラーに分ける。小窓に入るときの `onPause` は中断扱いにしない。守る範囲: 1 プロセス内の操作順、世代の照合、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: 小窓の間は winit が描画を止めるため入る直前の画面が静止して残ること、モード変更通知の到着までの表示の遅れ（通知は `MainActivity` が `ComponentActivity` のリスナーで受ける、#1327）、小窓の位置・大きさ（OS が決める）、複数プロセス。Android 実機の確認は #363 で行う。",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#363）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_picture_in_picture.rs + platforms/android/app/src/main/java/com/fandhe/platform/PictureInPictureHelper.java + crates/fandhe-egui-proxy/src/device/picture_in_picture.rs + crates/fandhe-core/src/screens/pip_show.rs + crates/fandhe-device/src/picture_in_picture.rs、Issue #366"
+      "impl": "crates/fandhe-cap-picture-in-picture/src/android.rs + crates/fandhe-cap-picture-in-picture/android/java/com/fandhe/platform/PictureInPictureHelper.java + crates/fandhe-cap-picture-in-picture/android/java/com/fandhe/platform/PictureInPictureLifecycle.java + platforms/android/app/src/main/AndroidManifest.xml + crates/fandhe-cap-picture-in-picture/src/driver.rs + crates/fandhe-core/src/screens/pip_show.rs + crates/fandhe-cap-picture-in-picture/src/contract.rs、Issue #366"
     },
     "macos": {
       "status": "done",
@@ -37,7 +37,7 @@
       "note": "実装済み（#364）。範囲は実行時に生成する単色映像（5 色を 1 秒ごとに切り替え）を `AVSampleBufferDisplayLayer` から小窓へ出す「小窓にする」「小窓をやめる」のみ（音声・シーク・自動開始・Document PiP は範囲外）。sample buffer 経路は macOS 12.0+ で、実行体の最低版は 11.0 のため 12 未満と `isPictureInPictureSupported` が NO の環境は非対応にする。AppKit のアプリでも準備中から「小窓にできる」へ進むことは確認済み。結果は小窓中、小窓から戻った（失敗ではない。OS 側の閉じる操作と開始中のキャンセルを含む）、失敗（小窓にできない・期限切れ）、非対応を分けて表示する。窓が背面・最小化でも小窓は続き、終了時に止める。守る範囲: 1 プロセス内の操作順、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: ポーリング間隔ぶんの表示の遅れ、画面内プレビューと OS 側の映像の色替えの時刻ずれ、小窓の位置・大きさ（OS が決める）、複数窓・複数プロセス。Mac 実機の目視は #363 で行う。",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#363）",
-      "impl": "crates/fandhe-egui-proxy/src/device/apple_picture_in_picture.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_picture_in_picture.m + crates/fandhe-egui-proxy/src/device/picture_in_picture.rs + crates/fandhe-core/src/screens/pip_show.rs + crates/fandhe-device/src/picture_in_picture.rs、Issue #364"
+      "impl": "crates/fandhe-cap-picture-in-picture/src/apple.rs + crates/fandhe-cap-picture-in-picture/apple/fandhe_apple_picture_in_picture.m + crates/fandhe-cap-picture-in-picture/src/driver.rs + crates/fandhe-core/src/screens/pip_show.rs + crates/fandhe-cap-picture-in-picture/src/contract.rs、Issue #364"
     },
     "windows": {
       "status": "possible",
@@ -59,7 +59,7 @@
       "note": "実装済み（#367）。実行時に生成する単色 canvas（5 色を 1 秒ごとに切り替え）を `captureStream()` で `<video>` に入れ、「小窓にする」「小窓をやめる」だけを扱う（Document PiP・音声・自動開始は範囲外）。`pictureInPictureEnabled` が真でない・`requestPictureInPicture` / `captureStream` が無い環境（Firefox 153 未満・Firefox Android）は非対応表示にする。クリックから同期に連なる中で呼び、状態は `enterpictureinpicture` / `leavepictureinpicture` を真実とする（`leave` は失敗ではなく「戻った」）。準備・開始・終了の各遷移に 5 秒の期限を掛け、拒否（NotAllowedError）は「ブラウザに止められました」と出す。`pagehide` で小窓を閉じ、失敗・期限切れ・マウント破棄でストリーム・`<video>`・リスナー・タイマーを解放する。守る範囲: 1 マウント内の操作順、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: 複数タブ・複数マウント、画面内プレビューと小窓の色替えの時刻ずれ、小窓の位置・大きさ、期限後にブラウザが遅れて切り替えた場合の失敗文言、egui-proxy の wasm canvas 経路。実ブラウザの確認は #363 で行う。",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実ブラウザ確認待ち（#363）",
-      "impl": "crates/fandhe-web-dom/src/picture_in_picture.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/pip_show.rs + crates/fandhe-device/src/picture_in_picture.rs、Issue #367"
+      "impl": "crates/fandhe-web-dom/src/picture_in_picture.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/pip_show.rs + crates/fandhe-cap-picture-in-picture/src/contract.rs、Issue #367"
     }
   },
   "note": "media-playback（既存 id）との違い: 再生そのものではなく、再生中の映像の小窓表示。media-cast（別 id）は外部機器への再生で別物。今回の範囲: 実行時に生成する単色の映像（5 色を 1 秒ごとに切り替え。ネットワーク・バイナリ素材なし）を小窓へ出すボタンと戻すボタンを置き、小窓への出入りと失敗を表示する。Android は Activity ごと小窓にする。Document PiP・任意 UI の小窓化・自動開始は扱わない。Windows は Windows App SDK が前提のため保留。守備範囲: 1 プロセス内の操作順・嘘の成功の禁止・資源の解放までを守り、表示の遅れ・小窓の位置と大きさ・複数窓や複数プロセスは守らない"

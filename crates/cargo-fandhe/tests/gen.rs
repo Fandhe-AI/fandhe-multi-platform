@@ -256,7 +256,7 @@ fn android_manifest_overlay_matches_current_manifest() {
     // MAIN/LAUNCHER・SEND・`fandhe` scheme の VIEW の 3 つ（MAIN は殻の値として gen が出す）。
     assert_eq!(main_activity_filters(&gen).len(), 3);
 
-    // MainActivity の宣言（#1259）は gallery の現行 Manifest と同じ（gallery 固有の PiP は gen の対象外）。
+    // MainActivity の宣言（#1259）は gallery の現行 Manifest と同じ（`supportsPictureInPicture` は picture-in-picture の宣言から出る）。
     let main = |t: &[Tag]| -> (Attrs, Attrs) {
         let (_, a) = t
             .iter()
@@ -291,6 +291,33 @@ fn android_manifest_overlay_matches_current_manifest() {
     };
     assert_eq!(launcher(&gen), launcher(&cur));
     assert!(launcher(&gen).is_some());
+}
+
+/// `application-meta-data`（`<application>` 直下の `<meta-data>`）を宣言する機能は、生成側と現行 Manifest の
+/// 同名の要素が同じ属性になる（第 15 束 #1335 で car-display・payment-request が使い始めた）。
+#[test]
+fn application_meta_data_matches_current_manifest() {
+    let cur = tags(&repo("platforms/android/app/src/main/AndroidManifest.xml"));
+    let gen = tags(&gallery()["android/AndroidManifest.xml"]);
+    let find = |t: &[Tag], name: &str| -> Option<Attrs> {
+        t.iter()
+            .find(|(k, a)| k == "meta-data" && a.get("name").map(String::as_str) == Some(name))
+            .map(|(_, a)| a.clone())
+    };
+    let m = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.toml");
+    let mut n = 0;
+    for d in check_workspace(Some(&m)).unwrap() {
+        if !["car-display", "payment-request"].contains(&d.id.as_str()) {
+            continue;
+        }
+        for md in d.android.iter().flat_map(|a| &a.application_meta_data) {
+            let g = find(&gen, &md.name);
+            assert!(g.is_some(), "{} が生成されていない", md.name);
+            assert_eq!(g, find(&cur, &md.name), "{}", md.name);
+            n += 1;
+        }
+    }
+    assert_eq!(n, 3, "car-display の 2 件と payment-request の 1 件");
 }
 
 /// `fandhe.gradle` の `java.srcDirs += [...]` などの引用符内を取り出す。

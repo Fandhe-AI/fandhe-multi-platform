@@ -6,8 +6,8 @@
 //!
 //! # `PaymentSheet` トレイトを通らない理由
 //!
-//! `fandhe_device::payment_request::PaymentSheet` はブロッキングで、wasm のメインスレッドでは呼べない。
-//! `passkey.rs` と同じく Web は effect で非同期に処理し、`fandhe_device::payment_request` の
+//! `fandhe_cap_payment_request::PaymentSheet` はブロッキングで、wasm のメインスレッドでは呼べない。
+//! `passkey.rs` と同じく Web は effect で非同期に処理し、`fandhe_cap_payment_request` の
 //! const（`METHOD_DATA_JSON`・`DETAILS_JSON`）と `outcome_from_dom_error` だけを共有する。
 //!
 //! # 課金を起こさない設計
@@ -35,33 +35,33 @@
 //!
 //! 守る: 1 ページ内の要求と完了の順序（世代照合）、嘘の成功の禁止、課金できるトークンを作らないこと、
 //! マウント破棄・ページ離脱での取り消し。守らない: 複数タブ、利用者の取り消しと `abort()` の区別、
-//! OS 側の確定との時間差（`fandhe_device::payment_request` の doc と同じ）。
+//! OS 側の確定との時間差（`fandhe_cap_payment_request` の doc と同じ）。
 
+use fandhe_cap_payment_request::PaymentOutcome;
+use fandhe_cap_payment_request::PaymentRequestError;
 use fandhe_core::screens::payment_request::CoreOutcome;
-use fandhe_device::payment_request::PaymentOutcome;
-use fandhe_device::DeviceError;
 
 /// 失敗の固定文言（内部名・例外の内容は含めない）。
 const FAILED_TEXT: &str = "決済シートを完了できませんでした";
 
-/// `fandhe-egui-proxy/src/device/payment_request.rs` の `check_outcome` と同期する
-/// （同クレートに依存しないため同じ写像をここに置く）。
+/// `fandhe-cap-payment-request/src/driver.rs` の `check_outcome` と同期する
+/// （機能 crate の driver は画面の状態型を使う effect と一体のため同じ写像をここに置く）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-fn check_outcome(result: Result<bool, DeviceError>) -> Result<CoreOutcome, String> {
+fn check_outcome(result: Result<bool, PaymentRequestError>) -> Result<CoreOutcome, String> {
     match result {
         Ok(true) => Ok(CoreOutcome::Available),
-        Ok(false) | Err(DeviceError::Unsupported(_)) => Ok(CoreOutcome::Unsupported),
+        Ok(false) | Err(PaymentRequestError::Unsupported) => Ok(CoreOutcome::Unsupported),
         Err(_) => Err(FAILED_TEXT.to_string()),
     }
 }
 
 /// 同 `pay_outcome` と同期する。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-fn pay_outcome(result: Result<PaymentOutcome, DeviceError>) -> Result<CoreOutcome, String> {
+fn pay_outcome(result: Result<PaymentOutcome, PaymentRequestError>) -> Result<CoreOutcome, String> {
     match result {
         Ok(PaymentOutcome::TestAuthorized) => Ok(CoreOutcome::TestAuthorized),
         Ok(PaymentOutcome::Cancelled) => Ok(CoreOutcome::Cancelled),
-        Err(DeviceError::Unsupported(_)) => Ok(CoreOutcome::Unsupported),
+        Err(PaymentRequestError::Unsupported) => Ok(CoreOutcome::Unsupported),
         Ok(PaymentOutcome::Failed) | Err(_) => Err(FAILED_TEXT.to_string()),
     }
 }
@@ -69,9 +69,11 @@ fn pay_outcome(result: Result<PaymentOutcome, DeviceError>) -> Result<CoreOutcom
 /// `canMakePayment()` 側の例外を `outcome_from_dom_error` の結果から bool 系へ寄せる。
 /// 結果が返る（取り消し・失敗）ものは調べ損ねなので `Internal`（失敗文言）にし、成功へ畳まない。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-fn check_from_error(result: Result<PaymentOutcome, DeviceError>) -> Result<bool, DeviceError> {
+fn check_from_error(
+    result: Result<PaymentOutcome, PaymentRequestError>,
+) -> Result<bool, PaymentRequestError> {
     match result {
-        Ok(_) => Err(DeviceError::Internal("payment_request failed")),
+        Ok(_) => Err(PaymentRequestError::Internal("payment_request failed")),
         Err(e) => Err(e),
     }
 }
@@ -81,13 +83,13 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    use fandhe_cap_payment_request::PaymentRequestError;
+    use fandhe_cap_payment_request::{
+        outcome_from_dom_error, PaymentOutcome, DETAILS_JSON, METHOD_DATA_JSON,
+    };
     use fandhe_core::screens::payment_request::{
         finish, mark_running, take_request, CoreOutcome, PaymentAction, PaymentRequestState,
     };
-    use fandhe_device::payment_request::{
-        outcome_from_dom_error, PaymentOutcome, DETAILS_JSON, METHOD_DATA_JSON,
-    };
-    use fandhe_device::DeviceError;
     use js_sys::{Array, Function, Reflect};
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
@@ -175,7 +177,7 @@ mod web {
     }
 
     /// 例外の `name` だけを結果へ写す（`message` は読まない）。無ければ `Failed` になる。
-    fn outcome_of_error(err: &JsValue) -> Result<PaymentOutcome, DeviceError> {
+    fn outcome_of_error(err: &JsValue) -> Result<PaymentOutcome, PaymentRequestError> {
         let name = Reflect::get(err, &key("name"))
             .ok()
             .and_then(|v| v.as_string())
@@ -185,7 +187,7 @@ mod web {
 
     /// 承認後の応答を閉じる。`details` には触れず `complete("success")` だけを呼ぶ。
     /// どこで失敗しても `Failed`（成功にしない）。
-    async fn complete_response(response: JsValue) -> Result<PaymentOutcome, DeviceError> {
+    async fn complete_response(response: JsValue) -> Result<PaymentOutcome, PaymentRequestError> {
         let called = Reflect::get(&response, &key("complete"))
             .and_then(|f| f.dyn_into::<Function>())
             .and_then(|f| f.call1(&response, &key("success")));
@@ -224,7 +226,7 @@ mod web {
 
         // Check / Pay で結果の写像だけが違う。`checked` は canMakePayment() が返した bool。
         let done = move |applier: &Applier<PaymentRequestState>,
-                         r: Result<PaymentOutcome, DeviceError>,
+                         r: Result<PaymentOutcome, PaymentRequestError>,
                          checked: Option<bool>| {
             let out: Result<CoreOutcome, String> = match action {
                 PaymentAction::Check => check_outcome(match checked {
@@ -235,8 +237,8 @@ mod web {
             };
             applier.apply(move |s| finish(s, generation, out));
         };
-        let unsupported = || Err(DeviceError::Unsupported("payment_request"));
-        let internal = || Err(DeviceError::Internal("payment_request failed"));
+        let unsupported = || Err(PaymentRequestError::Unsupported);
+        let internal = || Err(PaymentRequestError::Internal("payment_request failed"));
 
         let Some(window) = web_sys::window() else {
             return done(applier, unsupported(), None);
@@ -307,18 +309,18 @@ pub(crate) use web::release_mount;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::payment_request::outcome_from_dom_error;
+    use fandhe_cap_payment_request::outcome_from_dom_error;
 
     #[test]
     fn maps_every_arm() {
         assert_eq!(check_outcome(Ok(true)), Ok(CoreOutcome::Available));
         assert_eq!(check_outcome(Ok(false)), Ok(CoreOutcome::Unsupported));
         assert_eq!(
-            check_outcome(Err(DeviceError::Unsupported("payment_request"))),
+            check_outcome(Err(PaymentRequestError::Unsupported)),
             Ok(CoreOutcome::Unsupported)
         );
         assert_eq!(
-            check_outcome(Err(DeviceError::Internal("payment_request failed"))),
+            check_outcome(Err(PaymentRequestError::Internal("payment_request failed"))),
             Err(FAILED_TEXT.to_string())
         );
         assert_eq!(
@@ -334,7 +336,7 @@ mod tests {
             Err(FAILED_TEXT.to_string())
         );
         assert_eq!(
-            pay_outcome(Err(DeviceError::Unsupported("payment_request"))),
+            pay_outcome(Err(PaymentRequestError::Unsupported)),
             Ok(CoreOutcome::Unsupported)
         );
         assert!(!FAILED_TEXT.contains("payment"));
@@ -344,11 +346,11 @@ mod tests {
     fn check_from_error_never_succeeds() {
         assert!(matches!(
             check_from_error(Ok(PaymentOutcome::Cancelled)),
-            Err(DeviceError::Internal(_))
+            Err(PaymentRequestError::Internal(_))
         ));
         assert!(matches!(
-            check_from_error(Err(DeviceError::Unsupported("payment_request"))),
-            Err(DeviceError::Unsupported(_))
+            check_from_error(Err(PaymentRequestError::Unsupported)),
+            Err(PaymentRequestError::Unsupported)
         ));
     }
 
