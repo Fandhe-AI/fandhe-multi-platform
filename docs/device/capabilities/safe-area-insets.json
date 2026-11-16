@@ -14,7 +14,7 @@
       "note": "実装済み（#445）。回転・分割表示は 1 秒間隔の読み直しで追従する。window が取れないときは 0 を出さず「失敗」を出す。守る範囲: 嘘の 0 を出さない、1 プロセス内の取得。守らない範囲: 反映は最大 1 秒 + 1 フレーム、key window のみ、起動直後の一時的な失敗表示",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#442）",
-      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_safe_area_insets.m + crates/fandhe-egui-proxy/src/device/ios_safe_area_insets.rs + crates/fandhe-egui-proxy/src/device/safe_area_insets.rs + crates/fandhe-core/src/screens/safe_area_insets_show.rs + crates/fandhe-device/src/safe_area_insets.rs、Issue #445"
+      "impl": "crates/fandhe-cap-safe-area-insets/ios/fandhe_ios_safe_area_insets.m + crates/fandhe-cap-safe-area-insets/src/ios.rs + crates/fandhe-cap-safe-area-insets/src/driver.rs + crates/fandhe-core/src/screens/safe_area_insets_show.rs + crates/fandhe-cap-safe-area-insets/src/contract.rs、Issue #445"
     },
     "android": {
       "status": "done",
@@ -24,7 +24,7 @@
       "note": "実装済み（#446）。受信前は 0 を出さず読み取り中。API 28 未満は切り欠き分が 0。守らない範囲: 反映は最大 1 秒 + 1 フレーム、Activity 再生成の直後に前の値が 1 回残り得る、zoom が 1 でないときのずれ",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#442）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_safe_area_insets.rs + crates/fandhe-platform-android/src/lib.rs + crates/fandhe-platform-android/android/java/com/fandhe/platform/HostInsets.java + crates/fandhe-egui-proxy/src/device/safe_area_insets.rs + crates/fandhe-core/src/screens/safe_area_insets_show.rs + crates/fandhe-device/src/safe_area_insets.rs、Issue #446"
+      "impl": "crates/fandhe-cap-safe-area-insets/src/android.rs + crates/fandhe-platform-android/src/lib.rs + crates/fandhe-platform-android/android/java/com/fandhe/platform/HostInsets.java + crates/fandhe-cap-safe-area-insets/android/java/com/fandhe/platform/SafeAreaInsetsLifecycle.java + crates/fandhe-cap-safe-area-insets/src/driver.rs + crates/fandhe-core/src/screens/safe_area_insets_show.rs + crates/fandhe-cap-safe-area-insets/src/contract.rs、Issue #446"
     },
     "macos": {
       "status": "done",
@@ -34,7 +34,7 @@
       "note": "OS の全画面（`toggleFullScreen`）は中身をセーフエリアの内側へ自動で置くため、窓表示でも全画面でも普段は 0。窓が取れないときは 0 を出さず「取得できません／失敗」を出す。守らない範囲: 反映は最大 1 秒 + 1 フレーム、複数窓では key window のみ、`NSScreen.safeAreaInsets`（画面についての値）は使わない",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#442）",
-      "impl": "crates/fandhe-egui-proxy/macos/fandhe_macos_safe_area_insets.m + crates/fandhe-egui-proxy/src/device/macos_safe_area_insets.rs + crates/fandhe-egui-proxy/src/device/safe_area_insets.rs + crates/fandhe-core/src/screens/safe_area_insets_show.rs + crates/fandhe-device/src/safe_area_insets.rs、Issue #444"
+      "impl": "crates/fandhe-cap-safe-area-insets/macos/fandhe_macos_safe_area_insets.m + crates/fandhe-cap-safe-area-insets/src/macos.rs + crates/fandhe-cap-safe-area-insets/src/driver.rs + crates/fandhe-core/src/screens/safe_area_insets_show.rs + crates/fandhe-cap-safe-area-insets/src/contract.rs、Issue #444"
     },
     "windows": {
       "status": "n-a",
@@ -49,7 +49,7 @@
       "note": "実装済み（#447）。`env()` を解さない環境は「取得できません」を出し、0 にしない。解析できない値・値域外は「失敗」。守る範囲: 非対応・解析不能を 0 に倒さない、破棄時にタイマーと探り用要素を解放する。守らない範囲: 反映は最大 1 秒 + 1 フレーム（背景タブではさらに遅れる）、viewport の `env()` を見る、zoom が 1 でないときのずれ。実ブラウザの確認は #442",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "iPhone Safari 確認待ち（#442）",
-      "impl": "crates/fandhe-web-dom/src/safe_area_insets.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/dom_tree.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/safe_area_insets_show.rs + crates/fandhe-device/src/safe_area_insets.rs、Issue #447"
+      "impl": "crates/fandhe-web-dom/src/safe_area_insets.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/dom_tree.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/safe_area_insets_show.rs + crates/fandhe-cap-safe-area-insets/src/contract.rs、Issue #447"
     }
   },
   "note": "iOS / Android / Web と、macOS（窓の contentView.safeAreaInsets。切り欠きのある MacBook で非 0 になりうる）が対象。Windows は n-a。fullscreen-immersive（別 id）と併用する。dynamic-type・dark-mode 等との重なりなし。今回の範囲: 4 辺のインセット値を表示し、そのぶんだけ余白を空けたパネルを描く（回転で更新）。守らない範囲: 反映は最大 1 秒 + 1 フレーム、OS ごとに見る値が違う（iOS は key window、Android はシステムバーと切り欠きの合計、macOS は窓の中身で普段は 0、Web は viewport の env()）"

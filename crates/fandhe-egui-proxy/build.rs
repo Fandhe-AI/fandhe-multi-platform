@@ -107,20 +107,10 @@ fn build() {
     // `ios/fandhe_ios_url_scheme.m`（Issue #1217）。iOS 分岐のみ（macOS は別 .m）。
     compile_ios_url_scheme();
 
-    // `ios/fandhe_ios_fullscreen_immersive.m`（Issue #1313）。iOS 分岐のみ。
-    compile_ios_fullscreen_immersive();
-    // `ios/fandhe_ios_screen_orientation.m`（Issue #656）。iOS 分岐のみ。
-    compile_ios_screen_orientation();
-    // `ios/fandhe_ios_print.m`（Issue #327）。iOS 分岐のみ。
-    compile_ios_print();
-    // `ios/fandhe_ios_safe_area_insets.m`（Issue #445）。iOS 分岐のみ。
-    compile_ios_safe_area_insets();
     // `ios/fandhe_ios_music_library.m`（Issue #484）。iOS 分岐のみ。
     compile_ios_music_library();
     // `ios/fandhe_ios_health_data.m`（Issue #1090）。iOS 分岐のみ（macOS は対応表で n-a）。
     compile_ios_health_data();
-    // `ios/fandhe_ios_pen_stylus.m`（Issue #356）。iOS 分岐のみ。
-    compile_ios_pen_stylus();
     // `ios/fandhe_ios_web_auth_session.m`（Issue #532）。iOS 分岐のみ。
     compile_ios_web_auth_session();
     // `apple/fandhe_apple_network_status.m`（Issue #1282 macOS + #1283 iOS）も共用する。
@@ -349,30 +339,6 @@ fn compile_macos_web_auth_session() {
     );
 }
 
-/// `macos/fandhe_macos_print.m` を `cc` でコンパイルする（Issue #325）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_print.rs` が使う）。
-fn compile_macos_print() {
-    compile_objc("macos/fandhe_macos_print.m", &["AppKit"]);
-}
-
-/// `macos/fandhe_macos_window_management.m` を `cc` でコンパイルする（Issue #636）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_window_management.rs` が使う）。
-fn compile_macos_window_management() {
-    compile_objc("macos/fandhe_macos_window_management.m", &["AppKit"]);
-}
-
-/// `macos/fandhe_macos_safe_area_insets.m` を `cc` でコンパイルする（Issue #444）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_safe_area_insets.rs` が使う）。
-fn compile_macos_safe_area_insets() {
-    compile_objc("macos/fandhe_macos_safe_area_insets.m", &["AppKit"]);
-}
-
-/// `macos/fandhe_macos_pen_stylus.m` を `cc` でコンパイルする（Issue #355）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_pen_stylus.rs` が使う）。
-fn compile_macos_pen_stylus() {
-    compile_objc("macos/fandhe_macos_pen_stylus.m", &["AppKit"]);
-}
-
 /// `ios/fandhe_ios_music_library.m` を `cc` でコンパイルする（Issue #484）。
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_music_library.rs` が使う）。
 fn compile_ios_music_library() {
@@ -388,24 +354,6 @@ fn compile_ios_health_data() {
     compile_objc("ios/fandhe_ios_health_data.m", &["Foundation", "HealthKit"]);
 }
 
-/// `ios/fandhe_ios_fullscreen_immersive.m` を `cc` でコンパイルする（Issue #1313）。**iOS 分岐のみ**
-/// から呼ばれる（`src/device/ios_fullscreen_immersive.rs` が使う）。`fandhe_ios_common.h` を使う。
-fn compile_ios_fullscreen_immersive() {
-    compile_objc(
-        "ios/fandhe_ios_fullscreen_immersive.m",
-        &["Foundation", "UIKit"],
-    );
-}
-
-/// `ios/fandhe_ios_screen_orientation.m` を `cc` でコンパイルする（Issue #656）。**iOS 分岐のみ**
-/// から呼ばれる（`src/device/ios_screen_orientation.rs` が使う）。`fandhe_ios_common.h` を使う。
-fn compile_ios_screen_orientation() {
-    compile_objc(
-        "ios/fandhe_ios_screen_orientation.m",
-        &["Foundation", "UIKit"],
-    );
-}
-
 /// `ios/fandhe_ios_web_auth_session.m` を `cc` でコンパイルし AuthenticationServices をリンクする（Issue #532）。
 /// **iOS 分岐のみ**から呼ばれる（`src/device/ios_web_auth_session.rs` が使う）。
 fn compile_ios_web_auth_session() {
@@ -413,24 +361,6 @@ fn compile_ios_web_auth_session() {
         "ios/fandhe_ios_web_auth_session.m",
         &["AuthenticationServices", "Foundation", "UIKit"],
     );
-}
-
-/// `ios/fandhe_ios_print.m` を `cc` でコンパイルする（Issue #327）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_print.rs` が使う）。
-fn compile_ios_print() {
-    compile_objc("ios/fandhe_ios_print.m", &["UIKit"]);
-}
-
-/// `ios/fandhe_ios_safe_area_insets.m` を `cc` でコンパイルする（Issue #445）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_safe_area_insets.rs` が使う）。
-fn compile_ios_safe_area_insets() {
-    compile_objc("ios/fandhe_ios_safe_area_insets.m", &["UIKit"]);
-}
-
-/// `ios/fandhe_ios_pen_stylus.m` を `cc` でコンパイルする（Issue #356）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_pen_stylus.rs` が使う）。
-fn compile_ios_pen_stylus() {
-    compile_objc("ios/fandhe_ios_pen_stylus.m", &["UIKit"]);
 }
 
 /// `ios/fandhe_ios_background_task.m` を `cc` でコンパイルし BackgroundTasks を
@@ -485,12 +415,6 @@ fn build_macos() {
     compile_macos_url_scheme();
     // `macos/fandhe_macos_app_shortcuts.m`（Issue #424）も macOS 専用。
     compile_macos_app_shortcuts();
-    // `macos/fandhe_macos_safe_area_insets.m`（Issue #444）も macOS 専用。
-    compile_macos_safe_area_insets();
-    // `macos/fandhe_macos_window_management.m`（Issue #636）も macOS 専用。
-    compile_macos_window_management();
-    // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。
-    compile_macos_print();
     // `apple/fandhe_apple_picture_in_picture.m`（Issue #364 macOS + #365 iOS）。iOS 分岐と共用する。AVKit を使う。
     compile_apple_picture_in_picture();
     // `apple/fandhe_apple_background_download.m`（Issue #390）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
@@ -503,7 +427,6 @@ fn build_macos() {
     compile_macos_music_library();
     // `macos/fandhe_macos_web_auth_session.m`（Issue #530）も macOS 専用。AuthenticationServices を使う。
     compile_macos_web_auth_session();
-    compile_macos_pen_stylus();
 
     // 素の実行体（`fandhe-gallery` の bin）へ `macos/Info.plist`
     // （`CFBundleIdentifier` + `NSLocationUsageDescription`）を埋め込む。macOS 10.15+

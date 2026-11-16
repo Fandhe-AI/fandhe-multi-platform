@@ -5,8 +5,8 @@
 //! [`super::mount::mount_with_effect`] の effect として駆動する。`take_request` で要求を観測し、
 //! Screen Orientation API（`screen.orientation`）と Fullscreen API へ渡して `finish` /
 //! `apply_read` で結果を返す。`fandhe-egui-proxy` の driver（非 wasm32 専用）は通らず、
-//! 本モジュールが同じ契約（`fandhe_device::screen_orientation` の doc）を Web 向けに満たす。
-//! 整数コードの検証は `fandhe_device::screen_orientation::parse_reading` を共有する。
+//! 本モジュールが同じ契約（`fandhe_cap_screen_orientation` の doc）を Web 向けに満たす。
+//! 整数コードの検証は `fandhe_cap_screen_orientation::parse_reading` を共有する。
 //!
 //! # 方式
 //!
@@ -148,12 +148,12 @@ mod web {
     use std::cell::{Cell, RefCell};
     use std::collections::HashMap;
 
+    use fandhe_cap_screen_orientation::{
+        parse_reading, Orientation as DeviceOrientation, CONFIRM_TIMEOUT,
+    };
     use fandhe_core::screens::screen_orientation_show::{
         apply_read, finish, lock_satisfied, mark_applying, take_request, LockRequest, Orientation,
         OrientationFailure, ReadState, Reading, ScreenOrientationShowState, NOT_LOCKED_REASON,
-    };
-    use fandhe_device::screen_orientation::{
-        parse_reading, Orientation as DeviceOrientation, CONFIRM_TIMEOUT,
     };
     use js_sys::{Function, Promise, Reflect};
     use wasm_bindgen::prelude::*;

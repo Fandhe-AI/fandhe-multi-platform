@@ -602,6 +602,26 @@
             android:name="com.fandhe.platform.CameraPreviewStreamLifecycle"
             android:authorities="${applicationId}.fandhe.camera-preview-stream"
             android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.PrintLifecycle"
+            android:authorities="${applicationId}.fandhe.print"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.ScreenOrientationLifecycle"
+            android:authorities="${applicationId}.fandhe.screen-orientation"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.FullscreenLifecycle"
+            android:authorities="${applicationId}.fandhe.fullscreen-immersive"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.SafeAreaInsetsLifecycle"
+            android:authorities="${applicationId}.fandhe.safe-area-insets"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.PenStylusLifecycle"
+            android:authorities="${applicationId}.fandhe.pen-stylus"
+            android:exported="false" />
         <!-- Issue #1100: Health Connect の許可画面から開かれる権限の理由画面。実体は exported=false、
              alias は START_VIEW_PERMISSION_USAGE（システム専用）を要求するので起動できるのは
              システムだけ（security.md A05）。固定文言のみ表示し、Intent の extras は読まない。

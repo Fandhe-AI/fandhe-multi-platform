@@ -5,8 +5,8 @@
 //! `fandhe-web-dom` の mount が使う。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は
-//! `fandhe-egui-proxy` の `device/safe_area_insets.rs`（Web は `fandhe-web-dom`）が一定間隔で
-//! 行い、[`apply_read`] で結果を注入する。`fandhe_device::safe_area_insets` の型は
+//! `fandhe-cap-safe-area-insets` の `driver.rs`（Web は `fandhe-web-dom`）が一定間隔で
+//! 行い、[`apply_read`] で結果を注入する。`fandhe_cap_safe_area_insets` の型は
 //! 依存方向の都合でここに写し取る。
 //!
 //! 枠を画面の端に見立て、内側のパネルを OS が報告した余白の分だけ寄せて描く。パネルは
@@ -27,7 +27,7 @@ pub const FRAME_H: f32 = 200.0;
 
 const CANVAS_ID: WidgetId = WidgetId::from_raw(1);
 
-/// OS から読めた余白（`fandhe_device::safe_area_insets::Insets` の写し）。
+/// OS から読めた余白（`fandhe_cap_safe_area_insets::Insets` の写し）。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Insets {
     /// 上。

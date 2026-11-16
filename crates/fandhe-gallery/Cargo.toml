@@ -27,6 +27,7 @@ device = [
   "dep:fandhe-cap-ar",
   "dep:fandhe-cap-audio-devices",
   "dep:fandhe-cap-audio-session",
+  "dep:fandhe-cap-autofill-otp",
   "dep:fandhe-cap-biometric-auth",
   "dep:fandhe-cap-ble-peripheral",
   "dep:fandhe-cap-bluetooth-classic",
@@ -58,6 +59,7 @@ device = [
   "dep:fandhe-cap-flashlight",
   "dep:fandhe-cap-focus-mode-status",
   "dep:fandhe-cap-foldable-posture",
+  "dep:fandhe-cap-fullscreen-immersive",
   "dep:fandhe-cap-gamepad",
   "dep:fandhe-cap-geocoding-search",
   "dep:fandhe-cap-global-hotkey",
@@ -91,15 +93,19 @@ device = [
   "dep:fandhe-cap-passkey-signin",
   "dep:fandhe-cap-pdf-viewer",
   "dep:fandhe-cap-pedometer",
+  "dep:fandhe-cap-pen-stylus",
   "dep:fandhe-cap-per-app-language",
   "dep:fandhe-cap-power-state",
+  "dep:fandhe-cap-print",
   "dep:fandhe-cap-quick-settings-tile",
   "dep:fandhe-cap-radio-control",
   "dep:fandhe-cap-recent-documents",
   "dep:fandhe-cap-removable-storage",
+  "dep:fandhe-cap-safe-area-insets",
   "dep:fandhe-cap-scanner-devices",
   "dep:fandhe-cap-screen-brightness",
   "dep:fandhe-cap-screen-capture",
+  "dep:fandhe-cap-screen-orientation",
   "dep:fandhe-cap-screen-wake-lock",
   "dep:fandhe-cap-secure-credential",
   "dep:fandhe-cap-serial-port",
@@ -123,6 +129,7 @@ device = [
   "dep:fandhe-cap-wallpaper-set",
   "dep:fandhe-cap-wifi-connect",
   "dep:fandhe-cap-wifi-info",
+  "dep:fandhe-cap-window-management",
   # END fandhe-cap
 ]
 frame-metrics = ["fandhe-egui-proxy/frame-metrics"]
@@ -196,6 +203,7 @@ fandhe-cap-app-progress-attention = { path = "../fandhe-cap-app-progress-attenti
 fandhe-cap-ar = { path = "../fandhe-cap-ar", optional = true }
 fandhe-cap-audio-devices = { path = "../fandhe-cap-audio-devices", optional = true }
 fandhe-cap-audio-session = { path = "../fandhe-cap-audio-session", optional = true }
+fandhe-cap-autofill-otp = { path = "../fandhe-cap-autofill-otp", optional = true }
 fandhe-cap-biometric-auth = { path = "../fandhe-cap-biometric-auth", optional = true }
 fandhe-cap-ble-peripheral = { path = "../fandhe-cap-ble-peripheral", optional = true }
 fandhe-cap-bluetooth-classic = { path = "../fandhe-cap-bluetooth-classic", optional = true }
@@ -227,6 +235,7 @@ fandhe-cap-file-watch = { path = "../fandhe-cap-file-watch", optional = true }
 fandhe-cap-flashlight = { path = "../fandhe-cap-flashlight", optional = true }
 fandhe-cap-focus-mode-status = { path = "../fandhe-cap-focus-mode-status", optional = true }
 fandhe-cap-foldable-posture = { path = "../fandhe-cap-foldable-posture", optional = true }
+fandhe-cap-fullscreen-immersive = { path = "../fandhe-cap-fullscreen-immersive", optional = true }
 fandhe-cap-gamepad = { path = "../fandhe-cap-gamepad", optional = true }
 fandhe-cap-geocoding-search = { path = "../fandhe-cap-geocoding-search", optional = true }
 fandhe-cap-global-hotkey = { path = "../fandhe-cap-global-hotkey", optional = true }
@@ -260,15 +269,19 @@ fandhe-cap-open-system-settings = { path = "../fandhe-cap-open-system-settings",
 fandhe-cap-passkey-signin = { path = "../fandhe-cap-passkey-signin", optional = true }
 fandhe-cap-pdf-viewer = { path = "../fandhe-cap-pdf-viewer", optional = true }
 fandhe-cap-pedometer = { path = "../fandhe-cap-pedometer", optional = true }
+fandhe-cap-pen-stylus = { path = "../fandhe-cap-pen-stylus", optional = true }
 fandhe-cap-per-app-language = { path = "../fandhe-cap-per-app-language", optional = true }
 fandhe-cap-power-state = { path = "../fandhe-cap-power-state", optional = true }
+fandhe-cap-print = { path = "../fandhe-cap-print", optional = true }
 fandhe-cap-quick-settings-tile = { path = "../fandhe-cap-quick-settings-tile", optional = true }
 fandhe-cap-radio-control = { path = "../fandhe-cap-radio-control", optional = true }
 fandhe-cap-recent-documents = { path = "../fandhe-cap-recent-documents", optional = true }
 fandhe-cap-removable-storage = { path = "../fandhe-cap-removable-storage", optional = true }
+fandhe-cap-safe-area-insets = { path = "../fandhe-cap-safe-area-insets", optional = true }
 fandhe-cap-scanner-devices = { path = "../fandhe-cap-scanner-devices", optional = true }
 fandhe-cap-screen-brightness = { path = "../fandhe-cap-screen-brightness", optional = true }
 fandhe-cap-screen-capture = { path = "../fandhe-cap-screen-capture", optional = true }
+fandhe-cap-screen-orientation = { path = "../fandhe-cap-screen-orientation", optional = true }
 fandhe-cap-screen-wake-lock = { path = "../fandhe-cap-screen-wake-lock", optional = true }
 fandhe-cap-secure-credential = { path = "../fandhe-cap-secure-credential", optional = true }
 fandhe-cap-serial-port = { path = "../fandhe-cap-serial-port", optional = true }
@@ -292,6 +305,7 @@ fandhe-cap-volume-control = { path = "../fandhe-cap-volume-control", optional = 
 fandhe-cap-wallpaper-set = { path = "../fandhe-cap-wallpaper-set", optional = true }
 fandhe-cap-wifi-connect = { path = "../fandhe-cap-wifi-connect", optional = true }
 fandhe-cap-wifi-info = { path = "../fandhe-cap-wifi-info", optional = true }
+fandhe-cap-window-management = { path = "../fandhe-cap-window-management", optional = true }
 # END fandhe-cap
 
 # Windows の共通層。起動時にメインウィンドウの HWND を控える（端末機能の有無によらない起動の定型、TASK-21.4 / #1184）。

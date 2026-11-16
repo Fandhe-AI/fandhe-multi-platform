@@ -5,7 +5,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
 //! 置き場」節の制約どおり）。入力の検査と OS 呼び出しは `fandhe-egui-proxy` の effect ドライバ
-//! （`device/print.rs`）が [`take_request`] で要求を観測して行い、[`finish_print`] で結果を
+//! （`fandhe-cap-print` の `driver.rs`）が [`take_request`] で要求を観測して行い、[`finish_print`] で結果を
 //! 注入する。本画面は二重押し防止と文言だけを持つ。全 OS 共通の画面で、OS 固有の操作は無い。
 //!
 //! # 結果を混同しない理由

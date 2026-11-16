@@ -14,7 +14,7 @@ TASK-21.4）。構成の根拠は `docs/architecture/consumer-app-structure.md`�
 |------|------|
 | 端末機能でない行（`ui-widget-catalog`・`checkbox-list`・`dark-mode`・`gpu-backend` など） | crate を作らない |
 | Windows・Web の実装がある機能 | `fandhe-platform-windows`（`open_url`・`SE_ERR_NOASSOC` を含む）/ `-web`（#1184・#1185）は済み。Windows は `src/windows.rs`（scaffold が移す）、Web は `fandhe-web-dom/src/<stem>.rs` を `src/web.rs` へ `git mv` して手で移す（下の「Web の移し方」）。`inventory` の注意は読み流してよい |
-| driver が egui 固有の読み書き口（`fandhe_render_egui::EguiSenderExt`）を使う機能 | 機能 crate は egui 非依存のため、そのままは移せない。拡大率・フォーカス・ファイルのドラッグ・ポインタ押下は `sender.host_view()`（`fandhe_runtime::HostView`、§13）で読み書きできる。画面の読み戻し・ウィンドウ操作・入力欄のヒントも `HostView` にある（§17）。`HostView` に無い口（`egui_context`・`canvas_*`）を使う機能は、その口を設計してから移す |
+| driver が egui 固有の読み書き口（`fandhe_render_egui::EguiSenderExt`）を使う機能 | 機能 crate は egui 非依存のため、そのままは移せない。拡大率・フォーカス・ファイルのドラッグ・ポインタ押下は `sender.host_view()`（`fandhe_runtime::HostView`、§13）で読み書きできる。画面の読み戻し・ウィンドウ操作・入力欄のヒントも `HostView` にある（§17）。全画面の切り替え・画素密度・キャンバス入力も `HostView` にあり、`EguiSenderExt` は撤去した（§24） |
 | 実装が共有ファイル（`device/android.rs`・`device/ios.rs`・`MainActivity.java`）に埋まった古い型（tts・file-picker・mic-record など） | `scaffold` では動かせない。`inventory` の参照行を見て手で切り出す |
 | 対応表の id と stem が違う機能（`http-get` → `http`、`dynamic-type` → `text_scale` など） | `--module <stem>` で渡す |
 | stem が複数ある機能 | stem ごとに手で移す。`scaffold` は 1 stem だけ扱う |
@@ -170,11 +170,11 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | network-status | 未移行の `fandhe_apple_lan_discovery.m` が `fandhe_apple_network_status_read` を呼ぶ | lan-discovery と一緒に移す |
 | device-info | 未移行の `apple_quick_settings_tile.rs` が `macos_device_info::implementation()` を呼ぶ | quick-settings-tile の後 （第 11 束 #1331 で移した、§20） |
 | now-playing-controls | `media_playback`（egui-proxy・web-dom の両方）が `now_playing::sync*` を呼ぶ | media-playback と同じ PR で移す （第 11 束 #1331 で移した、§20） |
-| pen-stylus | Android が `MainActivity.dispatchTouchEvent` の上書きを要する。provider では置き換えられない | 口は #1327 で入った（§18）。`HostInput.addTouchObserver` で移せる |
+| pen-stylus | Android が `MainActivity.dispatchTouchEvent` の上書きを要する。provider では置き換えられない | 口は #1327 で入った（§18）。`HostInput.addTouchObserver` で移せる （第 14 束 #1334 で移した、§24） |
 | picture-in-picture | Android が `onPictureInPictureModeChanged` の上書きと `<activity supportsPictureInPicture>` 属性を要する | PiP の切り替わりの口は #1327 で入った（§18、`ComponentActivity` のリスナー）。`<activity supportsPictureInPicture>` の宣言の拡張（#1328）が先 |
-| fullscreen-immersive | `FullscreenHelper.onInsets` が、`MainActivity` の唯一の decorView insets リスナー（safe-area と共用）から呼ばれる | insets を配る口は #1327 で入った（§18、`HostInsets.addListener`）。移せる |
+| fullscreen-immersive | `FullscreenHelper.onInsets` が、`MainActivity` の唯一の decorView insets リスナー（safe-area と共用）から呼ばれる | insets を配る口は #1327 で入った（§18、`HostInsets.addListener`）。移せる （第 14 束 #1334 で移した、§24） |
 | compose-mail-sms | 未移行の `windows_web_auth_session.rs` が `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を呼ぶ | `open_url` は #1192 で `fandhe-platform-windows` へ上げた（`windows_compose_mail_sms` は再公開だけを持つ）。web-auth-session と同時に移すか、その再公開を共通層への参照に付け替えて移す （第 8 束 #1193 で移した） |
-| print・print-screen | `print_screen_page_effect` が egui 固有の読み書き口（`EguiSenderExt` の `request_screenshot`・`tagged_screenshot`）を使う | `fandhe-runtime` に egui 非依存の口を足す設計が先（口は #1326 で入った。§17） |
+| print・print-screen | `print_screen_page_effect` が egui 固有の読み書き口（`EguiSenderExt` の `request_screenshot`・`tagged_screenshot`）を使う | `fandhe-runtime` に egui 非依存の口を足す設計が先（口は #1326 で入った。§17） （第 14 束 #1334 で移した、§24） |
 | in-app-purchase | 全 OS が未実装（`possible`）で `impl` が無い | 実装後 |
 
 ## 10. 第 4 束（#1189）で出た型と後回しの機能
@@ -459,7 +459,7 @@ print・print-screen・window-management・screen-orientation・autofill-otp の
 | egui 実装 | `fandhe-render-egui` の `EguiWaker`。読み戻しは `ViewportCommand::Screenshot`、ウィンドウは `ViewportCommand` と `ViewportInfo` |
 | ヒントの橋渡し | `fandhe-render-egui` は `forbid(unsafe_code)` で OS の入力欄を触れないため、`app::set_text_input_hint_hook` で橋渡しを持つ層が登録する（`set_teardown_hooks` と同じ形。2 回目以降は無視）。現状は `fandhe-egui-proxy` の `ios_text_input.rs`（置き場の移動は #1194） |
 | 採らなかった案 | `RgbaPixels` の流用（辺の上限 2048 で、Retina の読み戻しが通らなくなる）、`HostView: Send + Sync`（他の実装の fake を壊す）、`fandhe-render-egui` から C ABI を直接呼ぶ（`unsafe` の禁止に反する） |
-| 範囲外 | `egui_context`（fullscreen-immersive・safe-area-insets）と `canvas_*`（pen-stylus）は口を足さない |
+| 範囲外 | `egui_context`（fullscreen-immersive・safe-area-insets）と `canvas_*`（pen-stylus）は口を足さない（第 14 束 #1334 で足した。§24） |
 
 ### 移すときの使い方
 
@@ -580,3 +580,36 @@ notification・alarm・device-info・quick-settings-tile・media-playback・now-
 | `OsascriptNotifier`（notification） | 契約の trait と検証から OS 実装を分け、`src/macos.rs` へ移す。ホストの `cargo test` で純関数・子プロセスの挙動を検証できるよう、cfg は `any(target_os = "macos", test)` のまま |
 | `AlarmHelper` の起動 Intent | `MainActivity.class` を直接参照せず、`getLaunchIntentForPackage` を使う。取れなければ予約を作らず失敗にする |
 | 後回しの解消 | §9・§10・§11・§14 の後回し表のうち、device-info・now-playing-controls・compass-heading・environment-sensors・bluetooth-classic・motion-raw-sensors・quick-settings-tile・alarm・ble-peripheral を本束で移した。残りの notification・bluetooth-le・media-playback・tilt-motion は後回し表に載っていなかった機能 |
+
+## 24. 第 14 束（#1334）で出た型
+
+第 14 束（print・print-screen・window-management・screen-orientation・autofill-otp・fullscreen-immersive・safe-area-insets・pen-stylus）で、
+§17・§18 で口を足して待っていた 8 機能（7 crate）を移した。節番号は並列の第 12 束（§22）・第 13 束（§23）の後に続く。
+はじめて出た型と、その扱いは次のとおり。
+
+### `HostView` の追加（先行コミット）
+
+§17 の範囲外としていた 3 種の口を足し、`EguiSenderExt`（`egui_context`・`canvas_*`）を撤去した。既定値は、嘘の成功にならない側（接触なし・読めない）へ倒した。
+
+| 口 | 内容 |
+|----|------|
+| `WindowCommand::Fullscreen(bool)` | 全画面の切り替えの依頼。成否は `window_state().fullscreen` の読み戻しで判定する（macOS・Windows の fullscreen-immersive） |
+| `native_pixels_per_point() -> Option<f32>` | OS 報告の画素密度（拡大率を含まない）。Android の insets（物理 px）を dp へ換算する。既定は `None`（safe-area-insets は「読めない」にする。`window_state().pixels_per_point` は拡大率を含むため流用しない） |
+| `canvas_pointer(WidgetId)`・`canvas_pressed(WidgetId)`・`canvas_released(WidgetId)` | キャンバスの接触位置・押下・解放（pen-stylus）。既定は接触なし。`fandhe-render-egui` が `ctx.data` に書いた値を読む（書き込み側の `canvas_*_id` は描画側が使うため残す） |
+
+### 手作業で気づいた型
+
+| 型 | 扱い |
+|----|------|
+| 2 つの id を 1 つの crate にまとめる（print・print-screen） | `print_screen_page_effect` が `SLOT`・`.m`・`PrintHelper` を print と共用するため、crate は 1 つ（`fandhe-cap-print`）。宣言の `id` は print で、print-screen の対応表の `impl` は同じ crate のパスを指す（compose-mail-sms と同じ扱い、§15） |
+| Web 実装の置き場 | 第 2 束以降の多数と同じく、Web 実装の本体は `fandhe-web-dom` に残し、`fandhe-web-dom` が機能 crate に依存して契約の純関数・定数・エラー型を使う（`DeviceError` から各機能のエラー型へ付け替えた）。`fandhe-web-dom/src/<stem>.rs` を `src/web.rs` へ動かす形にはしていない |
+| `Send + Sync` を要求する trait で `HostView` を使う（window-management・fullscreen-immersive・autofill-otp） | `&CompletionSender<S>` を持つ実装にし、使うたびに `host_view()` を引く（§17）。dispatch の戻りは `Box<dyn … + '_>` / `Arc<dyn … + '_>`。autofill-otp は OS 実装を持たない（`platform_autofill_otp(sender)` が描画層へ委譲する） |
+| iOS の入力欄のヒント（autofill-otp） | 機能 crate に C ABI を持ち込まず、driver が `HostView::set_text_input_hint` だけを呼ぶ（§17）。UIKit 側（`fandhe-egui-proxy` の `ios_text_input.rs`・`fandhe_ios_text_input.m`）は描画層の IME 橋渡しのため動かさない（置き場は #1194）。対応表 iOS 欄の `impl` は driver と `HostView` の口を指し、`note` に橋渡しの現在地を書いた |
+| insets に値だけ要る機能（safe-area-insets） | Rust は `fandhe_platform_android::window_insets_px()` を読む。取り付けは `HostInsets` の最初の `addListener` で起きるため、`SafeAreaInsetsLifecycle` が `onHostStarted` で何もしない配り先（`static final` の同一インスタンス）を登録する（§18）。従来は `MainActivity` が fullscreen の配り先を常に登録していた |
+| insets の配り先を持つ機能（fullscreen-immersive） | `FullscreenLifecycle` が `onHostCreated` で `attach`、`onHostStarted` で `HostInsets.addListener(activity, <helper が持つ同一インスタンス>)`、`onHostDestroyed` で `detach` する。`getDecorView()` を呼ぶため `onHostCreated` では登録しない。`current` の世代判定は従来どおり |
+| タッチ入力を観測する機能（pen-stylus） | `PenStylusLifecycle` が `onHostCreated` で `HostInput.addTouchObserver(activity, <helper が持つ同一インスタンス>)`、`onHostPaused`・`onHostDestroyed` で接触なしへ戻す。イベントは消費しない |
+| Helper を Lifecycle 化した 4 機能の `super` の前後 | `onHostPaused` / `onHostDestroyed` は `super.onXxx()` の中で届く。従来の `MainActivity` は print・screen-orientation・fullscreen・pen-stylus の `onDestroy` を `super.onDestroy()` の前（pen-stylus の `onPause` は `super.onPause()` の後）に呼んでいたため、`super` に対する前後だけが違う。どれも接触なしへ戻す・破棄済みにするだけの冪等な操作 |
+| Helper が無い要求 | static の入口は Helper を `HELPERS` で引き、無ければ結果を待たせず失敗で確定する（print は `nativeOnPrintResult` へ `RESULT_PRESENT_FAILED`、screen-orientation は `RESULT_FAILED` / null、fullscreen は `RESULT_FAILED`） |
+| feature `device` 無効ビルド向けの JNI no-op スタブ | `nativeOnFullscreenChanged`・`nativeOnPenSample`・`nativeOnPenClear` のスタブを `fandhe-egui-proxy` の `android.rs` から `fandhe-gallery` の `lib.rs` へ移した（§21 と同じ）。print の `reset_pending_tracking` は gallery の `android_main` が呼ぶ |
+| 旧受け口の撤去 | `MainActivity` から 4 機能のフィールド・ラッパー・`fullscreenHelper::onInsets` の登録・`penStylusHelper::onTouch` の登録・`onPause` / `onDestroy` の呼び出しを消した。`fandhe-egui-proxy` の `windows` features のうち pen-stylus・print だけが使っていたもの（`Win32_UI_Input_Pointer`・`Win32_UI_Controls_Dialogs`・`Win32_Storage_Xps`）は機能 crate の宣言へ移した |
+| `scaffold` が動かさない Helper | `FullscreenHelper` は stem（`fullscreen_immersive`）と名前が違うため `git mv` されない。手で `android/java/` へ移した |

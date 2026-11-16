@@ -1,0 +1,306 @@
+//! Phase 11 の拡充ループ（親 #105、Issue #444）「セーフエリア」の effect ドライバ。
+//! `crate::contract::SafeAreaSource` を一定間隔で読み、結果を
+//! `fandhe_core::screens::safe_area_insets_show`（端末依存ゼロ）へ注入する
+//! （`registry.rs` の `effect` 区画から毎フレーム同期に呼ばれる）。
+//!
+//! **間隔つき pull**（`fandhe-cap-system-accent-color` の `driver.rs` と同型）: 最終読取から `READ_INTERVAL` 未満なら
+//! OS を読まない。状態が変わらなければ送信を省くが、次の読み取りまでの再描画を必ず予約する
+//! （入力が無いと egui が描画せずポーリングが止まる、契約表 4）。
+//!
+//! dispatch（[`platform_safe_area_insets`]）は全対象 OS の最終形。macOS は `macos.rs`、
+//! iOS は `ios.rs`、Android は `android.rs`（いずれも実装済み）。Web は `fandhe-web-dom` 側。
+
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+#[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
+use crate::contract::UnsupportedSafeArea;
+use crate::contract::{self as dev, READ_INTERVAL, SafeAreaSource};
+use crate::error::SafeAreaInsetsError;
+use fandhe_core::screens::safe_area_insets_show::{
+    Insets, ReadFailure, SafeAreaInsetsShowState, apply_read,
+};
+
+use fandhe_runtime::{CompletionSender, HostView};
+
+/// 現在のプラットフォームに応じた実装を返す。Android は px から dp への換算に描画層の画素密度
+/// （`HostView::native_pixels_per_point`、他 OS では未使用）を使う。画面の状態型に依存しないため、
+/// フレームワークの外のアプリも使える。
+pub fn platform_safe_area_insets(host: &dyn HostView) -> Arc<dyn SafeAreaSource> {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = host;
+        Arc::new(crate::macos::MacosSafeArea)
+    }
+    #[cfg(target_os = "ios")]
+    {
+        let _ = host;
+        crate::ios::implementation()
+    }
+    #[cfg(target_os = "android")]
+    {
+        crate::android::implementation(host)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
+    {
+        let _ = host;
+        Arc::new(UnsupportedSafeArea)
+    }
+}
+
+/// 契約の結果を画面の入力へ写す。失敗は固定文言へ畳み、OS 固有値を画面へ漏らさない
+/// （security.md A09）。
+fn to_result(
+    r: Result<Option<dev::Insets>, SafeAreaInsetsError>,
+) -> Result<Option<Insets>, ReadFailure> {
+    match r {
+        Ok(i) => Ok(i.map(|i| Insets {
+            top: i.top,
+            right: i.right,
+            bottom: i.bottom,
+            left: i.left,
+        })),
+        Err(SafeAreaInsetsError::Unsupported(_)) => Err(ReadFailure::Unsupported),
+        Err(_) => Err(ReadFailure::Failed("セーフエリアの取得".to_string())),
+    }
+}
+
+/// 最終読取の時刻（プロセス全体で 1 つ）。
+#[derive(Default)]
+struct Timing {
+    last_read: Option<Instant>,
+}
+
+static TIMING: Mutex<Timing> = Mutex::new(Timing { last_read: None });
+
+/// 間隔判定・読取・送信省略を行う本体（テストから時刻と実装を差し込めるよう切り出す）。
+fn drive(
+    state: &SafeAreaInsetsShowState,
+    sender: &CompletionSender<SafeAreaInsetsShowState>,
+    src: &dyn SafeAreaSource,
+    now: Instant,
+    timing: &mut Timing,
+) {
+    let due = timing
+        .last_read
+        .is_none_or(|prev| now.saturating_duration_since(prev) >= READ_INTERVAL);
+    let result = if due {
+        timing.last_read = Some(now);
+        Some(to_result(src.read()))
+    } else {
+        None
+    };
+    // 送信を省く分岐でも次回の読み取りを予約する（契約表 4）。
+    let since_read = timing
+        .last_read
+        .map_or(Duration::ZERO, |p| now.saturating_duration_since(p));
+    sender.request_repaint_after(READ_INTERVAL.saturating_sub(since_read));
+
+    let Some(result) = result else { return };
+    let mut next = state.clone();
+    apply_read(&mut next, result.clone());
+    // 同じ状態のまま毎フレーム送らない。
+    if next == *state {
+        return;
+    }
+    let _ = sender.send(Box::new(move |s: &mut SafeAreaInsetsShowState| {
+        apply_read(s, result.clone())
+    }));
+}
+
+/// `registry.rs` の `effect` 区画から `safe_area_insets_show` 画面用に配線される effect ドライバ。
+pub fn safe_area_insets_show_effect(
+    state: &SafeAreaInsetsShowState,
+    sender: &CompletionSender<SafeAreaInsetsShowState>,
+) {
+    let mut timing = TIMING
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    drive(
+        state,
+        sender,
+        platform_safe_area_insets(sender.host_view()).as_ref(),
+        Instant::now(),
+        &mut timing,
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::contract::UnsupportedSafeArea as Unsupported;
+    use fandhe_core::screens::safe_area_insets_show::SafeAreaView;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _: Duration) {}
+    }
+
+    type Rx = std::sync::mpsc::Receiver<fandhe_runtime::Completion<SafeAreaInsetsShowState>>;
+
+    fn sender_with_channel() -> (CompletionSender<SafeAreaInsetsShowState>, Rx) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
+    }
+
+    struct Fake {
+        result: Result<Option<dev::Insets>, SafeAreaInsetsError>,
+        reads: AtomicUsize,
+    }
+
+    impl Fake {
+        fn new(result: Result<Option<dev::Insets>, SafeAreaInsetsError>) -> Self {
+            Self {
+                result,
+                reads: AtomicUsize::new(0),
+            }
+        }
+        fn insets(top: f32) -> Self {
+            Self::new(Ok(Some(dev::Insets {
+                top,
+                right: 0.0,
+                bottom: 0.0,
+                left: 0.0,
+            })))
+        }
+    }
+
+    impl SafeAreaSource for Fake {
+        fn read(&self) -> Result<Option<dev::Insets>, SafeAreaInsetsError> {
+            self.reads.fetch_add(1, Ordering::SeqCst);
+            match &self.result {
+                Ok(c) => Ok(*c),
+                Err(SafeAreaInsetsError::Unsupported(n)) => {
+                    Err(SafeAreaInsetsError::Unsupported(n))
+                }
+                Err(_) => Err(SafeAreaInsetsError::Internal("x")),
+            }
+        }
+    }
+
+    fn apply_all(rx: &Rx, s: &mut SafeAreaInsetsShowState) -> usize {
+        let mut n = 0;
+        while let Ok(c) = rx.try_recv() {
+            c(s);
+            n += 1;
+        }
+        n
+    }
+
+    #[test]
+    fn skips_os_read_within_interval() {
+        let (tx, _rx) = sender_with_channel();
+        let fake = Fake::insets(1.0);
+        let state = SafeAreaInsetsShowState::default();
+        let t0 = Instant::now();
+        let mut timing = Timing::default();
+        drive(&state, &tx, &fake, t0, &mut timing);
+        drive(
+            &state,
+            &tx,
+            &fake,
+            t0 + Duration::from_millis(500),
+            &mut timing,
+        );
+        assert_eq!(fake.reads.load(Ordering::SeqCst), 1);
+        drive(&state, &tx, &fake, t0 + READ_INTERVAL, &mut timing);
+        assert_eq!(fake.reads.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn same_value_is_not_sent_but_change_is() {
+        let (tx, rx) = sender_with_channel();
+        let mut state = SafeAreaInsetsShowState::default();
+        let t0 = Instant::now();
+        let mut timing = Timing::default();
+        drive(&state, &tx, &Fake::insets(1.0), t0, &mut timing);
+        assert_eq!(apply_all(&rx, &mut state), 1);
+        drive(
+            &state,
+            &tx,
+            &Fake::insets(1.0),
+            t0 + READ_INTERVAL,
+            &mut timing,
+        );
+        assert!(rx.try_recv().is_err());
+        drive(
+            &state,
+            &tx,
+            &Fake::insets(9.0),
+            t0 + READ_INTERVAL * 2,
+            &mut timing,
+        );
+        assert_eq!(apply_all(&rx, &mut state), 1);
+        assert!(matches!(state.view, SafeAreaView::Read(i) if i.top == 9.0));
+    }
+
+    #[test]
+    fn failures_never_become_read() {
+        for r in [
+            Err(SafeAreaInsetsError::Unsupported("safe_area_insets")),
+            Err(SafeAreaInsetsError::Internal("x")),
+        ] {
+            let (tx, rx) = sender_with_channel();
+            let mut state = SafeAreaInsetsShowState::default();
+            drive(
+                &state,
+                &tx,
+                &Fake::new(r),
+                Instant::now(),
+                &mut Timing::default(),
+            );
+            apply_all(&rx, &mut state);
+            assert!(matches!(
+                state.view,
+                SafeAreaView::Unsupported | SafeAreaView::Failed(_)
+            ));
+        }
+    }
+
+    #[test]
+    fn previous_value_is_not_kept_after_failure() {
+        let (tx, rx) = sender_with_channel();
+        let mut state = SafeAreaInsetsShowState::default();
+        let t0 = Instant::now();
+        let mut timing = Timing::default();
+        drive(&state, &tx, &Fake::insets(1.0), t0, &mut timing);
+        apply_all(&rx, &mut state);
+        let failing = Fake::new(Err(SafeAreaInsetsError::Internal("x")));
+        drive(&state, &tx, &failing, t0 + READ_INTERVAL, &mut timing);
+        apply_all(&rx, &mut state);
+        assert!(!matches!(state.view, SafeAreaView::Read(_)));
+    }
+
+    #[test]
+    fn not_yet_received_stays_reading() {
+        let (tx, rx) = sender_with_channel();
+        let mut state = SafeAreaInsetsShowState::default();
+        drive(
+            &state,
+            &tx,
+            &Fake::new(Ok(None)),
+            Instant::now(),
+            &mut Timing::default(),
+        );
+        apply_all(&rx, &mut state);
+        assert_eq!(state.view, SafeAreaView::Reading);
+    }
+
+    #[test]
+    fn unsupported_impl_reports_unsupported() {
+        let (tx, rx) = sender_with_channel();
+        let mut state = SafeAreaInsetsShowState::default();
+        drive(
+            &state,
+            &tx,
+            &Unsupported,
+            Instant::now(),
+            &mut Timing::default(),
+        );
+        apply_all(&rx, &mut state);
+        assert_eq!(state.view, SafeAreaView::Unsupported);
+    }
+}

@@ -2,7 +2,7 @@
 //!
 //! `fandhe_core::screens::pen_draw`（端末依存ゼロ）の画面を [`super::mount::mount_with_effect`]
 //! の effect として駆動する。`fandhe-egui-proxy` の wasm canvas 経路は対象外
-//! （`UnsupportedPenStylus` のまま）。`fandhe_device::pen_stylus::PenStylus` trait（`Send + Sync`）は
+//! （`UnsupportedPenStylus` のまま）。`fandhe_cap_pen_stylus::PenStylus` trait（`Send + Sync`）は
 //! JS の Closure を持てないため通さず、`PenSample::new` / `altitude_from_tilt_deg` で値を検証して
 //! core の `apply_sample` / `end_stroke` / `apply_failure` へ直接流す。
 //!
@@ -29,10 +29,10 @@
 //!
 //! 筆圧・座標・例外の message は DOM・ログへ出さない（security.md A09）。
 
+use fandhe_cap_pen_stylus::{altitude_from_tilt_deg, PenSample, PointerKind};
 use fandhe_core::screens::pen_draw::{
     apply_sample, end_stroke, PenDrawState, PenSampleView, PointerKindView, CANVAS_SIZE,
 };
-use fandhe_device::pen_stylus::{altitude_from_tilt_deg, PenSample, PointerKind};
 
 /// キューに積む操作。世代はイベント時点の画面の世代（クリア前の操作は core が捨てる）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
