@@ -9,7 +9,7 @@
 // 動作: 同じサービス種別（"fandhe-p2p"）を advertise と browse の両方で行い、見つけた相手のうち
 // 1 台だけと暗号化必須（MCEncryptionRequired）のセッションを張り、固定文字列を 1 回送り、相手の
 // 1 回を受け取って閉じる。どちらが招待するかは表示名のバイト順（strcmp）で決める
-// （Rust 側 `fandhe_device::local_peer::should_invite` と同じ規則。SSOT は Rust 側）。
+// （Rust 側 `fandhe-cap-local-peer-connect` の `contract.rs` の `should_invite` と同じ規則。SSOT は Rust 側）。
 // 相手は認証しない（同じ種別を名乗る別インスタンスは区別できない。守らない範囲）。
 //
 // 契約（pull 型。`fandhe_apple_lan_discovery.m` と同型）:
@@ -26,7 +26,7 @@
 //     Rust 側が公開する `extern "C"` 関数。offer が true を返したら受け取り成功（窓を閉じる）、
 //     false なら不正・古い入力として相手を切り、窓の残りで次の相手を待つ。code: 0 成功（相手なしを含む）/ 1 許可なし /
 //     2 今は使えない / 3 非対応 / 4 中断・失敗（接続後に受信できず期限切れを含む） / 5 サービス種別が未宣言。意味づけは Rust 側
-//     `fandhe_device::local_peer::decode_code` に一本化する。1 要求につき finished は高々 1 回
+//     `contract.rs` の `decode_code` に一本化する。1 要求につき finished は高々 1 回
 //     （`FandhePeerClose` が唯一の発火点）。
 //
 // スレッド: 専用のシリアルキューだけで動かし、main queue は使わない（main 側が取るロックとの
@@ -208,7 +208,7 @@ static void FandhePeerEnsureLifecycleObservers(void) {
 #endif
 
 // 相手の表示名が "fandhe-" + 小文字 hex 8 桁かの検査。SSOT は Rust 側 `is_valid_peer_name`
-// （`fandhe_device::local_peer`）で、ここはそれと同じ形に揃えた前段チェック。厳密な検証は Rust 側 offer も行う。
+// （`contract.rs`）で、ここはそれと同じ形に揃えた前段チェック。厳密な検証は Rust 側 offer も行う。
 static BOOL FandhePeerLooksValid(MCPeerID *peer) {
     NSString *n = peer.displayName;
     if (n.length != 15 || ![n hasPrefix:@"fandhe-"]) {

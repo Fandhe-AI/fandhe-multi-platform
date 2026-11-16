@@ -3,8 +3,8 @@
 //! `fandhe_core::screens::pip_show`（端末依存ゼロ）の状態機械を
 //! [`super::mount::mount_with_effect`] の effect として直接駆動する。`take_command` で要求を観測し
 //! Picture-in-Picture API へ渡し、`apply_update` / `set_preview` / `expire` で結果を返す。
-//! `fandhe-device` の trait は通らない（他の Web モジュールと同じ。`fandhe-egui-proxy` の
-//! wasm canvas 経路は対象外）。色表・期限は `fandhe_cap_picture_in_picture` と共有する。
+//! 端末機能の契約（`fandhe_cap_picture_in_picture` の trait）は通らない（他の Web モジュールと同じ。
+//! `fandhe-render-egui` の wasm canvas 経路は対象外）。色表・期限は `fandhe_cap_picture_in_picture` と共有する。
 //!
 //! # 方式
 //!

@@ -53,5 +53,5 @@
       "note": "端末同士を近距離で見つけて直接つなぐ API は無い。WebRTC は別機能として扱う（要確認）。"
     }
   },
-  "note": "iOS / macOS は MultipeerConnectivity、Android は Wi-Fi Aware / Nearby Connections。Windows は Wi-Fi Direct（WiFiDirectDevice）。Web は no。OS 間で互換が無いため、同じ OS 同士の接続に限られる点を実装前に確認する。bluetooth-le（既存 id）は周辺機器との接続で、本機能は端末同士の通信。今回の範囲: 同じアプリを動かす近くの端末を探して接続し、文字列 1 つを送り合う（ファイル転送・3 台以上は扱わない）。（macOS は #511 で実装。同じアプリの 2 台が 30 秒の窓で互いを見つけ、200 バイト以内の固定文字列を 1 回ずつ送り合う。守らない範囲は `fandhe_device::local_peer` のモジュール doc。iOS は #512 で実装（macOS と同じ `.m`）。Android は子 issue が実装する）"
+  "note": "iOS / macOS は MultipeerConnectivity、Android は Wi-Fi Aware / Nearby Connections。Windows は Wi-Fi Direct（WiFiDirectDevice）。Web は no。OS 間で互換が無いため、同じ OS 同士の接続に限られる点を実装前に確認する。bluetooth-le（既存 id）は周辺機器との接続で、本機能は端末同士の通信。今回の範囲: 同じアプリを動かす近くの端末を探して接続し、文字列 1 つを送り合う（ファイル転送・3 台以上は扱わない）。（macOS は #511 で実装。同じアプリの 2 台が 30 秒の窓で互いを見つけ、200 バイト以内の固定文字列を 1 回ずつ送り合う。守らない範囲は `fandhe-cap-local-peer-connect` の `contract.rs` のモジュール doc。iOS は #512 で実装（macOS と同じ `.m`）。Android は子 issue が実装する）"
 }
