@@ -207,11 +207,11 @@ pub(crate) fn finish(request_id: u64, result: Result<(), LanDiscoveryError>) {
 pub(crate) mod bridge {
     use crate::contract::LanService;
     use crate::error::LanDiscoveryError;
-    use fandhe_core::screens::lan_discover::{LanError, LanRow};
 
     use fandhe_runtime::request_slot::RequestSlot;
 
-    pub(crate) type Outcome = Result<Vec<LanRow>, LanError>;
+    /// OS の結果をそのまま保持する（画面用の写像は `drive_callback` が行い、画面非依存の公開入口と共有する）。
+    pub(crate) type Outcome = Result<Vec<LanService>, LanDiscoveryError>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
@@ -224,7 +224,7 @@ pub(crate) mod bridge {
         request_id: u64,
         result: Result<Vec<LanService>, LanDiscoveryError>,
     ) -> bool {
-        SLOT.deliver(request_id, super::to_core(result))
+        SLOT.deliver(request_id, result)
     }
 }
 
@@ -272,7 +272,7 @@ fn drive_callback(state: &LanDiscoverState, sender: &CompletionSender<LanDiscove
             // 反映できる状態か確かめてから `finish_browse` し、反映できたときだけ
             // `true` を返す（`RequestSlot` 側がそれを見て `clear` する）。
             if s.phase != LanPhase::Idle {
-                finish_browse(s, generation, outcome);
+                finish_browse(s, generation, to_core(outcome));
                 true
             } else {
                 false
@@ -313,14 +313,6 @@ pub fn lan_discover_effect(state: &LanDiscoverState, sender: &CompletionSender<L
         target_os = "android"
     ))]
     drive_callback(state, sender);
-    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
-    #[allow(dead_code)] // 非対応 OS の同期経路のテストだけが使う
-    struct NoopWaker;
-    impl fandhe_runtime::RepaintWaker for NoopWaker {
-        fn wake(&self) {}
-        fn wake_after(&self, _delay: std::time::Duration) {}
-    }
-
     #[cfg(not(any(
         target_os = "ios",
         target_os = "macos",
@@ -340,11 +332,77 @@ pub fn reset_pending_tracking() {
 
 /// 画面の状態型に依存しない入口。LAN 探索は結果が OS のスレッドから非同期に届く（`OBSERVED` の観測と
 /// `finish` の 1 回の完了通知）ため、結果が届くまで塞ぐ同期の [`LanDiscovery`] 実装は提供しない。
-/// 画面の外のアプリが探索するなら [`lan_discover_effect`] の経路を使う。ここは同期 trait 経由の呼び出しに
+/// 画面の外のアプリが探索するなら [`begin_lan_discovery`] / [`poll_lan_discovery`] を使う。ここは同期 trait 経由の呼び出しに
 /// 対して「未対応」を正直に返す（成功の 0 件にしない）。
 // ponytail: 同期 trait の実装は要求が出たら足す（`OBSERVED.finish` を待つワーカーが要る）。
 pub fn platform_lan_discovery() -> Box<dyn crate::contract::LanDiscovery> {
     Box::new(crate::contract::UnsupportedLanDiscovery)
+}
+
+/// 探索を OS へ依頼し、結果を [`poll_lan_discovery`] で受け取るための要求 id を返す
+/// （iOS・macOS・Windows・Android）。
+///
+/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。1 プロセスに 1 要求で、
+/// 進行中、または結果が未取得の要求があるうちは `Internal`（busy）で断る。依頼自体の失敗は `Err`（結果は届かない）。
+/// それ以外の OS は `Unsupported`。
+#[cfg(any(
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "android"
+))]
+pub fn begin_lan_discovery() -> Result<u64, LanDiscoveryError> {
+    let duration = std::time::Duration::from_millis(crate::contract::BROWSE_DURATION_MS);
+    let request_id = bridge::SLOT
+        .try_begin_unless(|_| true)
+        .ok_or(LanDiscoveryError::Internal("lan_discovery busy"))?;
+    OBSERVED.begin(request_id);
+    #[cfg(target_os = "macos")]
+    let started = crate::apple::present(request_id, duration);
+    #[cfg(target_os = "ios")]
+    let started = crate::ios::present(request_id, duration);
+    #[cfg(target_os = "android")]
+    let started = crate::android::present(request_id, duration);
+    #[cfg(target_os = "windows")]
+    let started = crate::windows::present(request_id, duration);
+    if let Err(e) = started {
+        OBSERVED.clear();
+        bridge::SLOT.clear(request_id);
+        return Err(e);
+    }
+    Ok(request_id)
+}
+
+/// 非対応 OS では成功へ倒さず `Unsupported`。
+#[cfg(not(any(
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "android"
+)))]
+pub fn begin_lan_discovery() -> Result<u64, LanDiscoveryError> {
+    Err(LanDiscoveryError::Unsupported("lan_discovery"))
+}
+
+/// [`begin_lan_discovery`] の結果を取り出す。窓が閉じて届いていれば 1 度だけ `Some`、未着・旧 id・取り出し済みは `None`。
+pub fn poll_lan_discovery(request_id: u64) -> Option<Result<Vec<LanService>, LanDiscoveryError>> {
+    #[cfg(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "android"
+    ))]
+    return bridge::SLOT.take_ready(request_id);
+    #[cfg(not(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "android"
+    )))]
+    {
+        let _ = request_id;
+        None
+    }
 }
 
 /// アプリ終了時に進行中の探索を止める（`fandhe-gallery` の終了フック（`shutdown()`）から呼ばれる）。
@@ -360,6 +418,14 @@ pub fn stop_shared_discovery() {
 
 #[cfg(test)]
 mod tests {
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    #[allow(dead_code)] // 非対応 OS の同期経路のテストだけが使う
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     use super::*;
     use crate::contract::{
         LanDiscovery, MAX_SERVICES, UnsupportedLanDiscovery, decode_code, parse_addr,

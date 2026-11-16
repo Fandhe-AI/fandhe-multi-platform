@@ -129,6 +129,11 @@ static APPLE_STARTED: OnceLock<()> = OnceLock::new();
 static UNSUPPORTED_PUSHED: OnceLock<()> = OnceLock::new();
 
 /// 画面の状態型に依存しない入口。共有の測位状態を返す（[`shared_location`] と同じ）。
+///
+/// Apple（iOS・macOS）は、この関数だけでは測位が始まらず `last_fix()` が `Ok(None)` のままになる。
+/// `CLLocationManager` を main スレッドで起こすため、フレームワークの外のアプリは main スレッドで
+/// `start_apple_location_once()` を 1 度呼ぶこと（`location_effect` 経由の画面は自動で呼ぶ）。
+/// Windows は初回呼び出しで書き手を起動し、Android は `location_effect` が権限要求と開始を行う。
 pub fn platform_location() -> &'static SharedLocation {
     shared_location()
 }

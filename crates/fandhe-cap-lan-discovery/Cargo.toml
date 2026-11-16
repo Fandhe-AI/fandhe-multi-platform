@@ -50,6 +50,7 @@ attributes = { authorities = "${applicationId}.fandhe.lan-discovery" }
 
 [package.metadata.fandhe.ios]
 frameworks = ["Network"]
+usage-descriptions = ["NSLocalNetworkUsageDescription"]
 # `_http._tcp` だけを探す。未宣言だと OS が探索を拒否する。
 info-plist = { NSBonjourServices = ["_http._tcp"] }
 

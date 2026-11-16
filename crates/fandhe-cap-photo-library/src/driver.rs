@@ -72,11 +72,11 @@ pub(crate) fn outcome_from_apple_code(code: i32) -> Result<SavedTo, PhotoLibrary
 pub(crate) mod bridge {
     use crate::contract::SavedTo;
     use crate::error::PhotoLibraryError;
-    use fandhe_core::screens::photo_save::SaveOutcome;
 
     use fandhe_runtime::request_slot::RequestSlot;
 
-    pub(crate) type Outcome = Result<SaveOutcome, String>;
+    /// OS の結果をそのまま保持する（画面用の写像は `drive_callback` が行う。画面非依存の公開入口と共有する）。
+    pub(crate) type Outcome = Result<SavedTo, PhotoLibraryError>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
@@ -88,7 +88,7 @@ pub(crate) mod bridge {
     /// OS からの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果ありは
     /// 捨てて `false`（先に届いたものだけを採る）。
     pub(crate) fn deliver(request_id: u64, result: Result<SavedTo, PhotoLibraryError>) -> bool {
-        SLOT.deliver(request_id, super::to_outcome(result))
+        SLOT.deliver(request_id, result)
     }
 
     /// Android: Activity 再生成直後に `android_main` から呼ぶ。[`SLOT`] はプロセス static の
@@ -115,6 +115,42 @@ pub fn platform_photo_library() -> Box<dyn PhotoLibrary> {
     return Box::new(crate::windows::WindowsPhotoLibrary);
     #[cfg(not(target_os = "windows"))]
     return Box::new(crate::contract::UnsupportedPhotoLibrary);
+}
+
+/// 任意の検査済み PNG の保存を OS へ依頼し、結果を [`poll_photo_save`] で受け取るための要求 id を返す
+/// （macOS・iOS・Android）。
+///
+/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。1 プロセスに 1 要求で、
+/// 進行中、または結果が未取得の要求があるうちは `Internal`（busy）で断る。依頼自体の失敗は `Err`（結果は届かない）。
+/// Windows は同期の [`platform_photo_library`] を使う。Linux は `Unsupported`。
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+pub fn begin_photo_save(image: &PngImage) -> Result<u64, PhotoLibraryError> {
+    let request_id = bridge::SLOT
+        .try_begin_unless(|_| true)
+        .ok_or(PhotoLibraryError::Internal("photo_library busy"))?;
+    if let Err(e) = begin_save(request_id, image) {
+        bridge::SLOT.clear(request_id);
+        return Err(e);
+    }
+    Ok(request_id)
+}
+
+/// OS コールバック型の実装がない OS では成功へ倒さず `Unsupported`。
+#[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
+pub fn begin_photo_save(image: &PngImage) -> Result<u64, PhotoLibraryError> {
+    let _ = image;
+    Err(PhotoLibraryError::Unsupported("photo_library"))
+}
+
+/// [`begin_photo_save`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・取り出し済みは `None`。
+pub fn poll_photo_save(request_id: u64) -> Option<Result<SavedTo, PhotoLibraryError>> {
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+    return bridge::SLOT.take_ready(request_id);
+    #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
+    {
+        let _ = request_id;
+        None
+    }
 }
 
 /// OS へ保存を依頼する。`Ok` は受理済みで結果は後から [`bridge::deliver`] で届く。
@@ -158,7 +194,7 @@ fn drive_callback(state: &PhotoSaveState, sender: &CompletionSender<PhotoSaveSta
         move |s: &mut PhotoSaveState, outcome| {
             // 反映できたとき（`Idle` へ戻っていないとき）だけ `true` を返す。
             if s.phase != SavePhase::Idle {
-                finish_save(s, generation, outcome);
+                finish_save(s, generation, to_outcome(outcome));
                 true
             } else {
                 false
@@ -310,7 +346,10 @@ mod bridge_tests {
         ));
         assert!(!bridge::deliver(id, Ok(SavedTo::PhotoLibrary)));
         let (_, ready) = bridge::SLOT.snapshot().expect("begin 済み");
-        assert_eq!(ready, Some(Ok(SaveOutcome::Denied)));
+        assert_eq!(
+            ready,
+            Some(Err(PhotoLibraryError::PermissionDenied("photo_library")))
+        );
         bridge::SLOT.clear(id);
     }
 }
