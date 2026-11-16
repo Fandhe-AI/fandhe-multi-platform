@@ -7,10 +7,10 @@
 //! （Issue #888）のみが使う経路で、Web は `clipboard.rs`/`tts.rs`/`file_picker.rs` と
 //! 同じ理由（`fandhe-egui-proxy` の feature `device` が wasm32 に依存を持ち込まない設計）で
 //! これを通らず、本モジュールが DOM レンダラ側の対応実装にあたる。
-//! ただし座標の妥当性検証だけは [`fandhe_device::location::is_valid_fix`] を共有する
+//! ただし座標の妥当性検証だけは [`fandhe_cap_location::is_valid_fix`] を共有する
 //! （検証ロジックの SSOT を 1 箇所に保つ）。
 //!
-//! # ブラウザ側の失敗種別の対応（`fandhe_device::location` モジュール doc の対応表と対）
+//! # ブラウザ側の失敗種別の対応（`fandhe_cap_location` の契約 doc の対応表と対）
 //!
 //! | `PositionError.code` | 画面の [`FailureKind`] |
 //! |---|---|
@@ -38,7 +38,7 @@ use fandhe_core::screens::location_show::{FailureKind, LocationView};
 /// ブラウザの `PositionError.code`（1 = `PERMISSION_DENIED` / 2 = `POSITION_UNAVAILABLE` /
 /// 3 = `TIMEOUT`）を画面の [`FailureKind`] へ写す純関数（モジュール doc の対応表参照）。
 // native ビルドでは `mod web`（唯一の呼び出し元）が存在しないため未使用警告が出る
-// （`fandhe-egui-proxy::device::location::is_retry_request` と同じ理由）。
+// （`fandhe_cap_location` の旧 `is_retry_request` と同じ理由）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn failure_kind_from_code(code: u16) -> FailureKind {
     match code {
@@ -74,10 +74,10 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    use fandhe_cap_location::{is_valid_fix, Fix};
     use fandhe_core::screens::location_show::{
         apply_failure, apply_fix, FailureKind, LocationShowState, LocationView,
     };
-    use fandhe_device::location::{is_valid_fix, Fix};
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
 

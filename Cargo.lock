@@ -1194,6 +1194,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-background-task"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-local-storage-kv",
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "serde_json",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-biometric-auth"
 version = "0.2.0"
 dependencies = [
@@ -1631,6 +1648,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-geofence"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-location",
+ "fandhe-core",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-global-hotkey"
 version = "0.2.0"
 dependencies = [
@@ -1741,6 +1768,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-lan-discovery"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-network-status",
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-launch-at-login"
 version = "0.2.0"
 dependencies = [
@@ -1793,6 +1834,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-local-storage-kv"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-location"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-managed-app-config"
 version = "0.2.0"
 dependencies = [
@@ -1801,6 +1864,18 @@ dependencies = [
  "fandhe-platform-apple",
  "fandhe-runtime",
  "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-map-view"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-network-status",
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
  "thiserror 2.0.20",
 ]
 
@@ -1907,6 +1982,34 @@ dependencies = [
 
 [[package]]
 name = "fandhe-cap-multi-display"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-music-library"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-network-status"
 version = "0.2.0"
 dependencies = [
  "fandhe-core",
@@ -2081,6 +2184,22 @@ dependencies = [
  "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-photo-library"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "image",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -2578,6 +2697,7 @@ dependencies = [
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
  "fandhe-cap-audio-session",
+ "fandhe-cap-background-task",
  "fandhe-cap-biometric-auth",
  "fandhe-cap-ble-peripheral",
  "fandhe-cap-bluetooth-classic",
@@ -2612,6 +2732,7 @@ dependencies = [
  "fandhe-cap-foldable-posture",
  "fandhe-cap-gamepad",
  "fandhe-cap-geocoding-search",
+ "fandhe-cap-geofence",
  "fandhe-cap-global-hotkey",
  "fandhe-cap-haptics",
  "fandhe-cap-health-data",
@@ -2621,11 +2742,15 @@ dependencies = [
  "fandhe-cap-image-generation",
  "fandhe-cap-in-app-browser",
  "fandhe-cap-in-app-review",
+ "fandhe-cap-lan-discovery",
  "fandhe-cap-launch-at-login",
  "fandhe-cap-live-activity",
  "fandhe-cap-local-fonts",
  "fandhe-cap-local-peer-connect",
+ "fandhe-cap-local-storage-kv",
+ "fandhe-cap-location",
  "fandhe-cap-managed-app-config",
+ "fandhe-cap-map-view",
  "fandhe-cap-media-cast",
  "fandhe-cap-media-playback",
  "fandhe-cap-media-transcode",
@@ -2634,6 +2759,8 @@ dependencies = [
  "fandhe-cap-ml-inference",
  "fandhe-cap-motion-raw-sensors",
  "fandhe-cap-multi-display",
+ "fandhe-cap-music-library",
+ "fandhe-cap-network-status",
  "fandhe-cap-nfc",
  "fandhe-cap-nfc-card-emulation",
  "fandhe-cap-nlp",
@@ -2647,6 +2774,7 @@ dependencies = [
  "fandhe-cap-pdf-viewer",
  "fandhe-cap-pedometer",
  "fandhe-cap-per-app-language",
+ "fandhe-cap-photo-library",
  "fandhe-cap-picture-in-picture",
  "fandhe-cap-power-state",
  "fandhe-cap-quick-settings-tile",
@@ -2781,6 +2909,7 @@ dependencies = [
  "fandhe-cap-app-lifecycle",
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
+ "fandhe-cap-background-task",
  "fandhe-cap-bluetooth-le",
  "fandhe-cap-camera-preview-stream",
  "fandhe-cap-color-picker",
@@ -2797,6 +2926,7 @@ dependencies = [
  "fandhe-cap-gamepad",
  "fandhe-cap-http-get",
  "fandhe-cap-local-fonts",
+ "fandhe-cap-location",
  "fandhe-cap-media-cast",
  "fandhe-cap-media-playback",
  "fandhe-cap-media-transcode",
@@ -2804,6 +2934,7 @@ dependencies = [
  "fandhe-cap-midi",
  "fandhe-cap-motion-raw-sensors",
  "fandhe-cap-multi-display",
+ "fandhe-cap-network-status",
  "fandhe-cap-nfc",
  "fandhe-cap-nlp",
  "fandhe-cap-notification",

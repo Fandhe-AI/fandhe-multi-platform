@@ -1,0 +1,62 @@
+[package]
+name = "fandhe-cap-music-library"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の music-library の機能 crate（契約・OS 別実装・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# `device_info::clean_text`（曲名・アーティストの整形）。2 機能以上が使う OS に触れない部品なので `fandhe-device` に残る。
+fandhe-device = { path = "../fandhe-device" }
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知の送り口（CompletionSender）・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+jni = { workspace = true }
+
+# Known Folder（Music）の解決は Windows 共通層。ファイルのタグ読み取り（`IPropertyStore`）は windows.rs。
+[target.'cfg(target_os = "windows")'.dependencies]
+fandhe-platform-windows = { path = "../fandhe-platform-windows" }
+windows = { workspace = true, features = ["std", "Win32_Foundation", "Win32_Storage_EnhancedStorage", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_UI_Shell", "Win32_UI_Shell_PropertiesSystem"] }
+
+[build-dependencies]
+# iOS・macOS の ObjC を build.rs でコンパイルする helper。通常のビルドには cc を持ち込まない。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+# 機能宣言（capability-declaration.md）。権限・usage description・framework は手で足す（cargo fandhe check が検証する）。
+[package.metadata.fandhe]
+id = "music-library"
+
+[package.metadata.fandhe.android]
+# 曲の一覧の読み取り（`MediaStore.Audio`）。API 33 以上は `READ_MEDIA_AUDIO`、API 32 以下は `READ_EXTERNAL_STORAGE`。
+permissions = [
+  { name = "android.permission.READ_MEDIA_AUDIO" },
+  { name = "android.permission.READ_EXTERNAL_STORAGE", max-sdk = 32 },
+]
+java = ["android/java"]
+
+# Activity のライフサイクルへ参加する非公開 provider（FeatureLifecycleProvider、fandhe-platform-android）。
+# Manifest の同じ要素と完全に一致させる（cargo-fandhe の突き合わせテストが確かめる）。
+[[package.metadata.fandhe.android.components]]
+kind = "provider"
+name = "com.fandhe.platform.MusicLibraryLifecycle"
+exported = false
+attributes = { authorities = "${applicationId}.fandhe.music-library" }
+
+[package.metadata.fandhe.ios]
+frameworks = ["MediaPlayer"]
+usage-descriptions = ["NSAppleMusicUsageDescription"]
+
+[package.metadata.fandhe.macos]
+frameworks = ["iTunesLibrary"]
+usage-descriptions = ["NSAppleMusicUsageDescription"]
+
+[lints]
+workspace = true

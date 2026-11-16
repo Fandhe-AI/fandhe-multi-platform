@@ -212,6 +212,18 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // 以前は egui-proxy の `android::run` が呼んでいた。機能 crate を egui-proxy が知らないようにするため移した）。
     #[cfg(feature = "device")]
     fandhe_cap_document_scan::reset_pending_tracking();
+    // 写真ライブラリ保存の保留中の要求も破棄する（保留中の保存要求は復元せず破棄し、旧要求の遅延完了を id 不一致で無視させる。`fandhe_cap_photo_library::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_photo_library::reset_pending_tracking();
+    // 位置情報の再試行の処理済み世代を基準値へ戻す（画面状態は再生成で retry_seq 0 へ戻る。`fandhe_cap_location::reset_retry_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_location::reset_retry_tracking();
+    // ジオフェンス画面の状態も再生成で未登録へ戻るため、static 側の登録もまとめて破棄する。
+    #[cfg(feature = "device")]
+    fandhe_cap_geofence::reset_register_tracking();
+    // LAN のサービス探索の保留中の要求も破棄する（プロセス static の旧要求を再生成後へ持ち越さない。`fandhe_cap_lan_discovery::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_lan_discovery::reset_pending_tracking();
     // 機械学習推論の処理済み世代も破棄する。画面状態は再生成で generation 0 に戻るため、残すと次の
     // 「推論する」が飲み込まれる（`fandhe_cap_ml_inference::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
@@ -386,6 +398,10 @@ fn shutdown() {
     fandhe_cap_system_tray::stop_shared_system_tray();
     fandhe_cap_global_hotkey::shutdown();
     fandhe_cap_midi::shutdown();
+    // 位置情報の測位子プロセス（Windows）を止める。
+    fandhe_cap_location::stop_shared_location();
+    // LAN のサービス探索の停止（Rust 側のロックを握らずに OS 側を止める）。
+    fandhe_cap_lan_discovery::stop_shared_discovery();
     fandhe_cap_media_cast::shutdown();
     fandhe_cap_serial_port::shutdown();
     fandhe_cap_audio_session::shutdown();

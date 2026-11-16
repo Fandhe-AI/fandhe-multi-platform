@@ -1,0 +1,55 @@
+[package]
+name = "fandhe-cap-background-task"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の background-task の機能 crate（契約・OS 別実装・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# `Storage`・`FsStorage`（実行記録の保存）。他機能も使う OS に触れない部品なので `fandhe-device` に残る。
+fandhe-device = { path = "../fandhe-device" }
+# 保存先の解決（`data_dir()`）。Java の Worker が書く場所と Rust が読む場所を一致させる。
+fandhe-cap-local-storage-kv = { path = "../fandhe-cap-local-storage-kv" }
+# 実行記録（`RunRecord`）の JSON 形式。Java の Worker が書く形式と一致させる。
+serde_json = { workspace = true }
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知の送り口（CompletionSender）・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+jni = { workspace = true }
+
+# Task Scheduler 2.0 COM（`ITaskService` 等。windows.rs）。`ITaskFolder::RegisterTaskDefinition` は
+# `Win32_System_Ole` + `Win32_System_Variant` の両方を要求する。
+[target.'cfg(target_os = "windows")'.dependencies]
+fandhe-platform-windows = { path = "../fandhe-platform-windows" }
+windows = { workspace = true, features = ["std", "Win32_Foundation", "Win32_System_Com", "Win32_System_TaskScheduler", "Win32_System_Ole", "Win32_System_Variant"] }
+
+[build-dependencies]
+# iOS・macOS の ObjC を build.rs でコンパイルする helper。通常のビルドには cc を持ち込まない。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+# 機能宣言（capability-declaration.md）。権限・usage description・framework は手で足す（cargo fandhe check が検証する）。
+[package.metadata.fandhe]
+id = "background-task"
+
+[package.metadata.fandhe.android]
+# 一意名の WorkManager 予約（Worker が実行記録を `getFilesDir()` 直下へ書く）。版は `scripts/android/versions.env` の
+# `WORK_RUNTIME_VERSION` と一致させる（cargo-fandhe の突き合わせテストが確かめる）。
+gradle = ["androidx.work:work-runtime:2.12.0"]
+java = ["android/java"]
+
+[package.metadata.fandhe.ios]
+frameworks = ["BackgroundTasks"]
+# 識別子は `ios/fandhe_ios_background_task.m` の `kFandheBackgroundTaskIdentifier` と一致させる。`fetch` だけを宣言する
+# （不要な `processing` 等は足さない。PiP 用の `audio` は別機能が宣言する）。
+info-plist = { BGTaskSchedulerPermittedIdentifiers = ["com.fandhe.iosapp.background-task"], UIBackgroundModes = ["fetch"] }
+
+[lints]
+workspace = true

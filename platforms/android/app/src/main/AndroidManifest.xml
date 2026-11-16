@@ -611,6 +611,18 @@
             android:authorities="${applicationId}.fandhe.wifi-info"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.LanDiscoveryLifecycle"
+            android:authorities="${applicationId}.fandhe.lan-discovery"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.LocationLifecycle"
+            android:authorities="${applicationId}.fandhe.location"
+            android:exported="false" />
+        <provider
+            android:name="com.fandhe.platform.MusicLibraryLifecycle"
+            android:authorities="${applicationId}.fandhe.music-library"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.ActivityRecognitionLifecycle"
             android:authorities="${applicationId}.fandhe.activity-recognition"
             android:exported="false" />

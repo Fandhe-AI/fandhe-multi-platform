@@ -25,8 +25,8 @@ use fandhe_runtime::CompletionSender;
 
 /// 設定する見本画像（256x256 のグラデーション PNG）。
 ///
-/// ponytail: photo-save の見本画像と同じ生成を持つ複製（photo-save は未移行で、その `pub(crate)` は機能 crate から見えない）。
-/// photo-save を移すときに、見本の生成を共有するか見直す。
+/// ponytail: `fandhe-cap-photo-library` の見本画像と同じ生成を持つ複製（デモ画像のため、2 つの機能 crate を依存させず複製する。
+/// 共有するなら `fandhe-device` へ置く）。
 pub fn sample_png() -> Vec<u8> {
     let img = image::RgbaImage::from_fn(256, 256, |x, y| image::Rgba([x as u8, y as u8, 160, 255]));
     let mut out = std::io::Cursor::new(Vec::new());
