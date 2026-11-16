@@ -215,10 +215,6 @@ pub(crate) mod bridge {
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
-    pub(crate) fn begin() -> u64 {
-        SLOT.begin()
-    }
-
     /// `request_id` 不一致・既に結果ありは捨てて `false`。
     pub(crate) fn deliver(
         request_id: u64,
@@ -239,10 +235,23 @@ fn drive_callback(state: &LanDiscoverState, sender: &CompletionSender<LanDiscove
     use fandhe_core::screens::lan_discover::LanPhase;
     use std::time::Duration;
 
-    if take_request(state).is_some() {
+    if let Some(request) = take_request(state) {
         let _ = sender.send(Box::new(mark_browsing));
 
-        let request_id = bridge::begin();
+        // 先行（公開入口など）を置き換えず、画面には失敗として返す。
+        let Some(request_id) = SCREEN_OWNER.begin_excluding(&bridge::SLOT, &[&PUBLIC_OWNER]) else {
+            let generation = request.generation;
+            let _ = sender.send(Box::new(move |s: &mut LanDiscoverState| {
+                finish_browse(
+                    s,
+                    generation,
+                    Err(LanError::Other(
+                        "他の探索が処理中です。完了後にもう一度お試しください".to_string(),
+                    )),
+                );
+            }));
+            return;
+        };
         OBSERVED.begin(request_id);
         let duration = Duration::from_millis(crate::contract::BROWSE_DURATION_MS);
         #[cfg(target_os = "macos")]
@@ -264,8 +273,9 @@ fn drive_callback(state: &LanDiscoverState, sender: &CompletionSender<LanDiscove
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &SCREEN_OWNER,
         sender,
         |_request_id| {},
         move |s: &mut LanDiscoverState, outcome| {
@@ -277,6 +287,15 @@ fn drive_callback(state: &LanDiscoverState, sender: &CompletionSender<LanDiscove
             } else {
                 false
             }
+        },
+        move |s: &mut LanDiscoverState| {
+            finish_browse(
+                s,
+                generation,
+                Err(LanError::Other(
+                    "探索が中断されました。もう一度お試しください".to_string(),
+                )),
+            );
         },
     );
 }
@@ -339,6 +358,26 @@ pub fn platform_lan_discovery() -> Box<dyn crate::contract::LanDiscovery> {
     Box::new(crate::contract::UnsupportedLanDiscovery)
 }
 
+#[cfg(any(
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "android"
+))]
+/// 公開入口 [`begin_lan_discovery`] が追う自分の分の要求（画面側が置き換え・横取りしない）。
+static PUBLIC_OWNER: fandhe_runtime::request_slot::SlotOwner =
+    fandhe_runtime::request_slot::SlotOwner::new();
+
+#[cfg(any(
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "android"
+))]
+/// 画面 effect が追う自分の分の要求（公開入口と slot を共有するため区別する）。
+static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
+    fandhe_runtime::request_slot::SlotOwner::new();
+
 /// 探索を OS へ依頼し、結果を [`poll_lan_discovery`] で受け取るための要求 id を返す
 /// （iOS・macOS・Windows・Android）。
 ///
@@ -353,8 +392,8 @@ pub fn platform_lan_discovery() -> Box<dyn crate::contract::LanDiscovery> {
 ))]
 pub fn begin_lan_discovery() -> Result<u64, LanDiscoveryError> {
     let duration = std::time::Duration::from_millis(crate::contract::BROWSE_DURATION_MS);
-    let request_id = bridge::SLOT
-        .try_begin_unless(|_| true)
+    let request_id = PUBLIC_OWNER
+        .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
         .ok_or(LanDiscoveryError::Internal("lan_discovery busy"))?;
     OBSERVED.begin(request_id);
     #[cfg(target_os = "macos")]
@@ -368,6 +407,7 @@ pub fn begin_lan_discovery() -> Result<u64, LanDiscoveryError> {
     if let Err(e) = started {
         OBSERVED.clear();
         bridge::SLOT.clear(request_id);
+        PUBLIC_OWNER.release(request_id);
         return Err(e);
     }
     Ok(request_id)
@@ -392,7 +432,16 @@ pub fn poll_lan_discovery(request_id: u64) -> Option<Result<Vec<LanService>, Lan
         target_os = "windows",
         target_os = "android"
     ))]
-    return bridge::SLOT.take_ready(request_id);
+    {
+        let (id, ready) = bridge::SLOT.snapshot()?;
+        if id != request_id {
+            return None;
+        }
+        let result = ready?;
+        bridge::SLOT.clear(id);
+        PUBLIC_OWNER.release(id);
+        Some(result)
+    }
     #[cfg(not(any(
         target_os = "ios",
         target_os = "macos",

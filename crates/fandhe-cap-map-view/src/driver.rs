@@ -89,26 +89,21 @@ fn to_outcome(result: Result<fandhe_device::Image, MapViewError>) -> Result<MapO
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub(crate) mod bridge {
     use crate::error::MapViewError;
-    use fandhe_core::screens::map_view_show::MapOutcome;
 
     use fandhe_runtime::request_slot::RequestSlot;
 
-    pub(crate) type Outcome = Result<MapOutcome, String>;
+    /// OS の結果をそのまま保持する（画面用の写像は `drive_callback` が行う。画面非依存の公開入口と共有する）。
+    pub(crate) type Outcome = Result<fandhe_device::Image, MapViewError>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
-    /// 依頼直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
-    pub(crate) fn begin() -> u64 {
-        SLOT.begin()
-    }
-
-    /// OS からの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果ありは
+    /// OS からの結果を置く。`request_id` 不一致・未登録・既に結果ありは
     /// 捨てて `false`（先に届いたものだけを採る）。
     pub(crate) fn deliver(
         request_id: u64,
         result: Result<fandhe_device::Image, MapViewError>,
     ) -> bool {
-        SLOT.deliver(request_id, super::to_outcome(result))
+        SLOT.deliver(request_id, result)
     }
 
     /// `.m` の受け口から呼ぶ。コード → 画素の検査 → 配送を 1 か所で行う。
@@ -161,16 +156,9 @@ fn expire_if_needed(request_id: u64, now: std::time::Instant) {
 
 /// 要求を OS へ渡す。失敗はその場で `bridge::deliver` する。
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-fn start_request(request_id: u64, preset: usize) {
+fn start_request(request_id: u64, region: MapRegion) {
     use fandhe_cap_network_status::NetworkSnapshot;
 
-    let region = match region_for(preset) {
-        Ok(r) => r,
-        Err(e) => {
-            bridge::deliver(request_id, Err(e));
-            return;
-        }
-    };
     // オフラインと分かっていれば OS を呼ばない。判定不能・失敗は止めずに進める。
     if matches!(
         fandhe_cap_network_status::platform_network_status().read(),
@@ -187,6 +175,62 @@ fn start_request(request_id: u64, preset: usize) {
     }
 }
 
+/// 公開入口 [`begin_map_snapshot`] が追う自分の分の要求（画面側が置き換え・横取りしない）。
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+static PUBLIC_OWNER: fandhe_runtime::request_slot::SlotOwner =
+    fandhe_runtime::request_slot::SlotOwner::new();
+
+/// 画面 effect が追う自分の分の要求（公開入口と slot を共有するため区別する）。
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
+    fandhe_runtime::request_slot::SlotOwner::new();
+
+/// 地図スナップショットを依頼し、結果を [`poll_map_snapshot`] で受け取るための要求 id を返す（macOS・iOS）。
+///
+/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。1 プロセスに 1 要求で、
+/// 進行中、または結果が未取得の要求があるうちは `Internal`（busy）で断る。結果は [`poll_map_snapshot`] で
+/// 取り出す（取り出さないと busy のまま）。オフライン・期限切れ等の失敗も結果として届く。
+/// それ以外の OS は `Unsupported`。
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+pub fn begin_map_snapshot(region: MapRegion) -> Result<u64, MapViewError> {
+    let request_id = PUBLIC_OWNER
+        .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
+        .ok_or(MapViewError::Internal("map_view busy"))?;
+    start_request(request_id, region);
+    Ok(request_id)
+}
+
+/// macOS / iOS 以外では成功へ倒さず `Unsupported`。
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+pub fn begin_map_snapshot(region: MapRegion) -> Result<u64, MapViewError> {
+    let _ = region;
+    Err(MapViewError::Unsupported)
+}
+
+/// [`begin_map_snapshot`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・取り出し済みは `None`
+/// （未着のあいだに呼ぶと期限（15 秒）を判定し、切れていれば取り消して失敗で確定する）。
+pub fn poll_map_snapshot(request_id: u64) -> Option<Result<fandhe_device::Image, MapViewError>> {
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        let (id, ready) = bridge::SLOT.snapshot()?;
+        if id != request_id {
+            return None;
+        }
+        let Some(result) = ready else {
+            expire_if_needed(id, std::time::Instant::now());
+            return None;
+        };
+        bridge::SLOT.clear(id);
+        PUBLIC_OWNER.release(id);
+        Some(result)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    {
+        let _ = request_id;
+        None
+    }
+}
+
 /// macOS / iOS 版の effect ドライバ本体。
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 fn drive_callback(state: &MapViewShowState, sender: &CompletionSender<MapViewShowState>) {
@@ -194,8 +238,24 @@ fn drive_callback(state: &MapViewShowState, sender: &CompletionSender<MapViewSho
 
     if let Some(req) = take_request(state) {
         let _ = sender.send(Box::new(mark_loading));
-        let request_id = bridge::begin();
-        start_request(request_id, req.preset);
+        let generation = req.generation;
+        // 先行（公開入口など）を置き換えず、画面には失敗として返す。
+        let Some(request_id) = SCREEN_OWNER.begin_excluding(&bridge::SLOT, &[&PUBLIC_OWNER]) else {
+            let _ = sender.send(Box::new(move |s: &mut MapViewShowState| {
+                finish(
+                    s,
+                    generation,
+                    Err("他の地図取得が処理中です。完了後にもう一度お試しください".to_string()),
+                );
+            }));
+            return;
+        };
+        match region_for(req.preset) {
+            Ok(region) => start_request(request_id, region),
+            Err(e) => {
+                bridge::deliver(request_id, Err(e));
+            }
+        }
         return;
     }
 
@@ -203,18 +263,26 @@ fn drive_callback(state: &MapViewShowState, sender: &CompletionSender<MapViewSho
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &SCREEN_OWNER,
         sender,
         |request_id| expire_if_needed(request_id, std::time::Instant::now()),
         move |s: &mut MapViewShowState, outcome| {
             // 反映できたとき（`Idle` へ戻っていないとき）だけ `true` を返す。
             if s.phase != MapPhase::Idle {
-                finish(s, generation, outcome);
+                finish(s, generation, to_outcome(outcome));
                 true
             } else {
                 false
             }
+        },
+        move |s: &mut MapViewShowState| {
+            finish(
+                s,
+                generation,
+                Err("地図取得が中断されました。もう一度お試しください".to_string()),
+            );
         },
     );
 }
@@ -362,7 +430,7 @@ mod bridge_tests {
 
     #[test]
     fn stale_id_dropped_second_deliver_ignored_and_late_success_after_timeout_dropped() {
-        let id = bridge::begin();
+        let id = bridge::SLOT.begin();
         let ok = || vec![0u8; (MAP_WIDTH_PX * MAP_HEIGHT_PX * 4) as usize];
         // 古い id は捨てる。
         assert!(!bridge::deliver_rgba(
@@ -398,10 +466,10 @@ mod bridge_tests {
             (0, Some(vec![0u8; 4]), 1, 1),
             (0, Some(vec![0u8; 3]), MAP_WIDTH_PX, MAP_HEIGHT_PX),
         ] {
-            let id = bridge::begin();
+            let id = bridge::SLOT.begin();
             assert!(bridge::deliver_rgba(id, code, px, w, h));
             let (_, ready) = bridge::SLOT.snapshot().unwrap();
-            assert!(!matches!(ready, Some(Ok(MapOutcome::Shown(_)))));
+            assert!(!matches!(ready, Some(Ok(_))));
             bridge::SLOT.clear(id);
         }
     }

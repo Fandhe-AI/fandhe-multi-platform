@@ -80,11 +80,6 @@ pub(crate) mod bridge {
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
-    /// 依頼直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
-    pub(crate) fn begin() -> u64 {
-        SLOT.begin()
-    }
-
     /// OS からの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果ありは
     /// 捨てて `false`（先に届いたものだけを採る）。
     pub(crate) fn deliver(request_id: u64, result: Result<SavedTo, PhotoLibraryError>) -> bool {
@@ -125,11 +120,12 @@ pub fn platform_photo_library() -> Box<dyn PhotoLibrary> {
 /// Windows は同期の [`platform_photo_library`] を使う。Linux は `Unsupported`。
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub fn begin_photo_save(image: &PngImage) -> Result<u64, PhotoLibraryError> {
-    let request_id = bridge::SLOT
-        .try_begin_unless(|_| true)
+    let request_id = PUBLIC_OWNER
+        .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
         .ok_or(PhotoLibraryError::Internal("photo_library busy"))?;
     if let Err(e) = begin_save(request_id, image) {
         bridge::SLOT.clear(request_id);
+        PUBLIC_OWNER.release(request_id);
         return Err(e);
     }
     Ok(request_id)
@@ -145,13 +141,32 @@ pub fn begin_photo_save(image: &PngImage) -> Result<u64, PhotoLibraryError> {
 /// [`begin_photo_save`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・取り出し済みは `None`。
 pub fn poll_photo_save(request_id: u64) -> Option<Result<SavedTo, PhotoLibraryError>> {
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
-    return bridge::SLOT.take_ready(request_id);
+    {
+        let (id, ready) = bridge::SLOT.snapshot()?;
+        if id != request_id {
+            return None;
+        }
+        let result = ready?;
+        bridge::SLOT.clear(id);
+        PUBLIC_OWNER.release(id);
+        Some(result)
+    }
     #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
     {
         let _ = request_id;
         None
     }
 }
+
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+/// 公開入口 [`begin_photo_save`] が追う自分の分の要求（画面側が置き換え・横取りしない）。
+static PUBLIC_OWNER: fandhe_runtime::request_slot::SlotOwner =
+    fandhe_runtime::request_slot::SlotOwner::new();
+
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+/// 画面 effect が追う自分の分の要求（公開入口と slot を共有するため区別する）。
+static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
+    fandhe_runtime::request_slot::SlotOwner::new();
 
 /// OS へ保存を依頼する。`Ok` は受理済みで結果は後から [`bridge::deliver`] で届く。
 /// `Err` は依頼自体の失敗（呼び出し元がその場で `deliver` する）。
@@ -170,9 +185,20 @@ fn begin_save(request_id: u64, image: &PngImage) -> Result<(), PhotoLibraryError
 fn drive_callback(state: &PhotoSaveState, sender: &CompletionSender<PhotoSaveState>) {
     use fandhe_core::screens::photo_save::SavePhase;
 
-    if take_request(state).is_some() {
+    if let Some(request) = take_request(state) {
         let _ = sender.send(Box::new(mark_saving));
-        let request_id = bridge::begin();
+        // 先行（公開入口など）を置き換えず、画面には失敗として返す。
+        let Some(request_id) = SCREEN_OWNER.begin_excluding(&bridge::SLOT, &[&PUBLIC_OWNER]) else {
+            let generation = request.generation;
+            let _ = sender.send(Box::new(move |s: &mut PhotoSaveState| {
+                finish_save(
+                    s,
+                    generation,
+                    Err("他の保存が処理中です。完了後にもう一度お試しください".to_string()),
+                );
+            }));
+            return;
+        };
         // 検査を通らない画像は OS へ渡さずその場で画面へ返す。
         let accepted = PngImage::new(sample_png())
             .map_err(PhotoLibraryError::from)
@@ -187,8 +213,9 @@ fn drive_callback(state: &PhotoSaveState, sender: &CompletionSender<PhotoSaveSta
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &SCREEN_OWNER,
         sender,
         |_request_id| {},
         move |s: &mut PhotoSaveState, outcome| {
@@ -199,6 +226,13 @@ fn drive_callback(state: &PhotoSaveState, sender: &CompletionSender<PhotoSaveSta
             } else {
                 false
             }
+        },
+        move |s: &mut PhotoSaveState| {
+            finish_save(
+                s,
+                generation,
+                Err("保存が中断されました。もう一度お試しください".to_string()),
+            );
         },
     );
 }
@@ -337,7 +371,7 @@ mod bridge_tests {
 
     #[test]
     fn stale_request_id_is_dropped_and_second_deliver_ignored() {
-        let id = bridge::begin();
+        let id = bridge::SLOT.begin();
         assert!(!bridge::deliver(id + 1000, Ok(SavedTo::PhotoLibrary)));
         assert!(bridge::SLOT.snapshot().is_some_and(|(_, r)| r.is_none()));
         assert!(bridge::deliver(
