@@ -401,8 +401,9 @@ fn drive(
 ///
 /// 制約（デモ認可ページ向けの実装）:
 /// - Android は開く URL を `http://127.0.0.1`、コールバックを `fandhe://web-auth` に固定している（`WebAuthSessionHelper`）。
-///   外部アプリの実際の認可サーバーには使えない。`req.redirect` は見ないため、`CustomScheme { fandhe, web-auth/callback }`
-///   以外のリダイレクトは成功せず、期限切れ（`TimedOut`）になる。
+///   外部アプリの実際の認可サーバーには使えない。`req.redirect` は OS へ渡さない。`start_url` が `http://127.0.0.1`
+///   以外なら開けずに `Err(Internal)`、届いた `fandhe://web-auth` のコールバックが `req.redirect` と合わなければ
+///   `InvalidCallback`、コールバックなしで戻れば `Cancelled`、ブラウザが戻らないまま期限を過ぎれば `TimedOut`。
 /// - Windows は開く URL を `http://127.0.0.1:` か `https://` に限る（コールバックは呼び出し側のループバック受け口）。
 /// - 実 OAuth 対応（開く URL・コールバックの設定化）は未実装。
 pub fn begin_web_auth(req: AuthRequest) -> Result<u64, WebAuthFailure> {

@@ -55,7 +55,7 @@ pub const MAX_TITLE_BYTES: usize = 256;
 pub const MAX_URL_BYTES: usize = 2048;
 
 impl ShortcutSpec<'_> {
-    /// 入力検査（全 OS 実装が `install` の先頭で通す、唯一の場所）。外部アプリの値が起動引数（Windows のタスク）・
+    /// 入力検査（入口 `platform_app_shortcuts` の wrapper が OS 実装へ委譲する前に通す。各 OS 実装は検査しない）。外部アプリの値が起動引数（Windows のタスク）・
     /// JNI・C ABI へ渡るため、空・長すぎる値・制御文字、URL の `"`・`\`（`CommandLineToArgvW` の規則で閉じ引用符を壊す）・空白・scheme の欠落を `InvalidInput` で拒否する。
     pub fn validate(&self) -> Result<(), AppShortcutsError> {
         let bad = AppShortcutsError::InvalidInput("app_shortcuts spec");
