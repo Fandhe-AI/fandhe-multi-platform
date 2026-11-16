@@ -11,7 +11,7 @@
 //! 変わったときに読み戻す間隔つき pull で、次の読み取りまでの再描画を必ず予約する（契約表 4）。
 //! 読み取りに失敗・非対応のときは予約しない（失敗状態で再描画し続けない）。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象。Web は本経路を通らず
+//! Web（wasm32）は本経路を通らず
 //! `fandhe-web-dom`（#658）が `screen.orientation` へ直接配線する。
 //!
 //! dispatch（[`platform_screen_orientation`]）は全対象 OS の最終形。iOS は `ios.rs`（#656）、

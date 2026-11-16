@@ -49,7 +49,7 @@
 
 #import "fandhe_ios_common.h"
 
-// Rust 側（`ios_screen_orientation.rs`）が定義する。errorHandler の直後に再描画を起こす。
+// Rust 側（`src/ios.rs`）が定義する。errorHandler の直後に再描画を起こす。
 extern void fandhe_rust_screen_orientation_geometry_failed(void);
 
 // 希望値（0 = なし、1 = 縦、2 = 横）。main スレッドでのみ読み書きする。

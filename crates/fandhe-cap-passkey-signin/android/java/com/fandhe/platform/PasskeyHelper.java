@@ -48,7 +48,7 @@ import java.security.SecureRandom;
 // `nativeOnPasskeyResult(id, kind, payload)` で受けて `passkey::bridge::deliver` へ渡す。
 //
 // 要求 JSON の組み立てと応答の照合（challenge・type・UP/UV/AT・署名の有無）は Rust だけで行い、ここへ
-// 定数を複製しない。ここは OS の応答を (kind, payload) に分けるだけ。KIND_* は `android_passkey.rs` の
+// 定数を複製しない。ここは OS の応答を (kind, payload) に分けるだけ。KIND_* は `src/android.rs` の
 // 定数と同じ値（SSOT はこの Java 側）。DOM 例外名は `getDomError()` を instanceof で判定して作る
 // （クラス名の文字列化は R8 で壊れるため使わない）。Rust 側の写像表は `outcome_from_dom_error`（SSOT）。
 //

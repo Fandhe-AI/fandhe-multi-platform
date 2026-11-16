@@ -1,7 +1,7 @@
 //! iOS 向けセーフエリア実装（Issue #445、親 #105。#444 のスタブを置き換え）。
 //! `ios/fandhe_ios_safe_area_insets.m`（key window の `safeAreaInsets`、`build.rs` が iOS
-//! ターゲットの feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。
-//! `unsafe` はこの呼び出しに閉じる。`device/safe_area_insets.rs` の iOS 経路から呼ばれ、
+//! ターゲットでコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。
+//! `unsafe` はこの呼び出しに閉じる。`driver` の iOS 経路から呼ばれ、
 //! 契約は `contract`。値の検査と写像は同モジュールの `insets_from_raw`（SSOT）。
 //!
 //! # 再描画
@@ -51,7 +51,7 @@ impl SafeAreaSource for IosSafeArea {
     }
 }
 
-/// iOS の実装を返す。`device/safe_area_insets.rs` の iOS 経路から呼ばれる。
+/// iOS の実装を返す。`driver` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub(crate) fn implementation() -> Arc<dyn SafeAreaSource> {
     Arc::new(IosSafeArea)

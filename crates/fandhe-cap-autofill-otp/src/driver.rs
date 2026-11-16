@@ -1,7 +1,7 @@
 //! Phase 11 の拡充ループ型サンプル「ワンタイムコードの入力」（親 #121、Issue #585）の effect ドライバ。
 //! `fandhe_core::screens::otp_input`（端末依存ゼロ）の要求を観測し、OS へ「この入力欄はワンタイム
 //! コード」とヒントを 1 回伝えて結果を `CompletionSender` 経由で返す（`screens/registry.rs` の `effect`
-//! 区画から呼ばれる、`device/in_app_review.rs` と同型の同期経路）。契約と守る範囲は
+//! 区画から呼ばれる。画面の要求を同期で処理する経路）。契約と守る範囲は
 //! `contract` のモジュール doc を参照。
 //!
 //! ヒント API は completion を持たない同期呼び出しで、iOS は main thread で `UITextField` を触る必要が

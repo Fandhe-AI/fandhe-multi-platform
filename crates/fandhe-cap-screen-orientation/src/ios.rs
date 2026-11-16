@@ -1,7 +1,7 @@
 //! iOS 向け画面向き実装（Issue #656、親 #128）。`ios/fandhe_ios_screen_orientation.m`
-//! （`build.rs` が iOS 分岐の feature `device` 有効時にコンパイルする）を `unsafe extern "C"`
+//! （`build.rs` が iOS ターゲットでコンパイルする）を `unsafe extern "C"`
 //! 3 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
-//! `device/screen_orientation.rs` の iOS 経路が `implementation()` を呼ぶ（dispatch・共通コア
+//! `driver` の iOS 経路が `implementation()` を呼ぶ（dispatch・共通コア
 //! 画面・trait は #655 で確定済みで触らない）。
 //!
 //! # 方式
@@ -119,7 +119,7 @@ extern "C" fn fandhe_rust_screen_orientation_geometry_failed() {
     fandhe_runtime::request_repaint();
 }
 
-/// `device/screen_orientation.rs` の iOS 経路から呼ばれる。
+/// `driver` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub(crate) fn implementation() -> Arc<dyn ScreenOrientation> {
     Arc::new(IosScreenOrientation)

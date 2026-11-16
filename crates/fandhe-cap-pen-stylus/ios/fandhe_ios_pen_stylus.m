@@ -5,7 +5,7 @@
 // `src/ios.rs` から C ABI 経由で呼ばれる。
 // `build.rs` が iOS ターゲットでコンパイルする。
 //
-// 契約（`ios_pen_stylus.rs` と対）:
+// 契約（`src/ios.rs` と対）:
 //   int32_t fandhe_ios_pen_stylus_install(void)
 //     -> 0 = 取り付け済み（2 回目以降は何もせず 0、冪等）。
 //        1 = base view を取得できなかった。

@@ -1,7 +1,7 @@
 //! macOS 向けセーフエリア実装（Issue #444、親 #105）。
 //! `macos/fandhe_macos_safe_area_insets.m`（窓の `contentView.safeAreaInsets`、`build.rs` が macOS
-//! ターゲットの feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。
-//! `unsafe` はこの呼び出しに閉じる。`device/safe_area_insets.rs` の macOS 経路から呼ばれ、
+//! ターゲットでコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。
+//! `unsafe` はこの呼び出しに閉じる。`driver` の macOS 経路から呼ばれ、
 //! 契約は `contract`。値の検査と写像は同モジュールの `insets_from_raw`（SSOT）。
 //!
 //! # 既知の天井

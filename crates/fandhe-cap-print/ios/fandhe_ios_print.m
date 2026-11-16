@@ -12,7 +12,7 @@
 //     戻り値: 0 = 受理（結果は後で非同期に届く）、1 = 受理できない（NULL・0 寸法・長さ不一致）。
 //     画素は return 前に NSData へコピーし、所有権は移らない。結果コード表は文章版と共用。
 //   extern void fandhe_rust_print_outcome(uint64_t request_id, int32_t code)
-//     code は `device/print.rs::outcome_from_ios_code` の表と一致させる
+//     code は `src/driver.rs` の `outcome_from_ios_code` の表と一致させる
 //     （0 Submitted / 1 Cancelled / 2 error あり / 3 提示不可 / 4 印刷不可）。
 //     各依頼につきちょうど 1 回だけ呼ぶ。
 //

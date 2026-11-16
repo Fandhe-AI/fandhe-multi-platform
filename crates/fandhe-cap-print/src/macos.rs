@@ -1,5 +1,5 @@
 //! macOS 向け印刷の実装（Issue #325）。`macos/fandhe_macos_print.m`（`NSPrintPanel` +
-//! `NSPrintOperation` の 2 段構成、`build.rs` が macOS ターゲットの feature `device` 有効時に
+//! `NSPrintOperation` の 2 段構成、`build.rs` が macOS ターゲットで
 //! コンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ
 //! `// SAFETY:` で契約を明記する。`driver` の macOS 経路から呼ばれ、契約は
 //! `contract`。見出し・本文は `PrintRequest` で検査済みのものだけを渡す。

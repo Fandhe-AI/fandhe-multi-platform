@@ -1,8 +1,8 @@
 //! macOS 向けウィンドウ管理の読み取り（Issue #636、親 #127）。
 //! `macos/fandhe_macos_window_management.m`（窓の `level` と、窓がいる画面の `visibleFrame`。
-//! `build.rs` が macOS ターゲットの feature `device` 有効時にコンパイルする）を
+//! `build.rs` が macOS ターゲットでコンパイルする）を
 //! `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` は呼び出し 1 つずつに閉じる。
-//! 変更（位置・大きさ・最前面）は `device/window_management.rs` の `ViewportWindowManager` が
+//! 変更（位置・大きさ・最前面）は `driver` の `ViewportWindowManager` が
 //! eframe の `ViewportCommand` で行い、ここは [`NativeReads`] の 2 関数だけを担う。
 //! 契約は `contract`。座標変換と値の検査の SSOT は同モジュールの
 //! `frame_from_cocoa`。座標・画面の大きさはログへ出さない。
@@ -59,7 +59,7 @@ impl NativeReads for MacosReads {
     }
 }
 
-/// macOS の `WindowManager` を返す。`device/window_management.rs::implementation` から呼ばれる。
+/// macOS の `WindowManager` を返す。`driver::implementation` から呼ばれる。
 pub(crate) fn implementation<S>(sender: &CompletionSender<S>) -> Box<dyn WindowManager + '_> {
     Box::new(ViewportWindowManager {
         sender,

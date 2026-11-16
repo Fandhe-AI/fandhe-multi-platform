@@ -1,5 +1,5 @@
 //! Windows 向けウィンドウ管理の読み取り（Issue #637、親 #127）。
-//! `device/window_management.rs::implementation` の Windows 経路から呼ばれ、
+//! `driver::implementation` の Windows 経路から呼ばれ、
 //! [`NativeReads`] の 2 関数（最前面か・今いる画面の作業領域）だけを Win32 で読む。
 //! 変更（位置・大きさ・最前面）は `ViewportWindowManager` が eframe の `ViewportCommand` で行う
 //! （`SetWindowPos` を直接呼ぶと winit が持つフラグと食い違うため）。
