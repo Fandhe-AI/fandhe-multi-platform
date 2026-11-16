@@ -33,8 +33,13 @@ import java.util.WeakHashMap;
 // コールバックは開始 URL の state と一致する現在の要求にだけ確定する（不一致は破棄）。
 //
 // 結果コードの SSOT は KIND_*（Rust 側の写像と同じ値）。
-// ライフサイクル: 状態はインスタンスフィールド。再生成後の新インスタンスは NONE から始まり、
-// Rust 側 `reset_pending_tracking()` と対で旧要求を捨てる。旧要求の遅延結果は id 照合で捨てる。
+// ライフサイクル（引き継ぎ型）: 要求の状態（追跡 id・離脱記録・state）は Activity ではなくプロセスの static に持つ。
+// 認証中に Activity が再生成（回転等）されても、コールバックは新しい Activity の `onNewIntent` へ届く
+// （MainActivity は singleTask。公式文書 Tasks and the back stack: 既存インスタンスがあれば `onNewIntent()` へ routing、
+// 構成変更は同じ Activity の破棄と再生成）。新しい helper が同じ状態を見るので、再生成をまたいで結果を 1 度だけ確定できる。
+// Rust 側の保留（`bridge::ACTIVE`・`SLOT`）も残したままにするので、呼び出し側の掃除は要らない。
+// 結果が一度も返らない場合（Activity が再生成されずに終了した・プロセス死）は、Rust 側の期限（300 秒）が失敗として確定する。
+// 旧要求の遅延結果は id 照合で捨てる。
 // 守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止（非前景・ブラウザなしを成功に畳まない）。
 // 守らない範囲: Custom Tab を閉じられないこと（取り消し・期限切れ後もタブが残る）・既定ブラウザの
 // UI の差・複数プロセス・プロセス死後のコールバック・他アプリによる `fandhe` scheme の横取り
@@ -53,20 +58,23 @@ final class WebAuthSessionHelper {
     private static final Map<Activity, WebAuthSessionHelper> HELPERS =
             Collections.synchronizedMap(new WeakHashMap<>());
 
+    // 要求の状態は static（引き継ぎ型）。Activity ごとの helper はこれを共有し、LOCK で守る。
+    private static final Object LOCK = new Object();
+    private static final RequestTracker request = new RequestTracker();
+    // 起動を OS に渡した要求 / 起動後に onPause を挟んだ要求。
+    private static long launchedId = RequestTracker.NONE;
+    private static long leftId = RequestTracker.NONE;
+    // 現在の要求の開始 URL に含まれる state。コールバックの所属照合に使う。
+    private static String currentState = null;
+
     private final ComponentActivity activity;
-    private final RequestTracker request = new RequestTracker();
-    // 起動を OS に渡した要求 / 起動後に onPause を挟んだ要求。どちらも this のロックで守る。
-    private long launchedId = RequestTracker.NONE;
-    private long leftId = RequestTracker.NONE;
-    // 現在の要求の開始 URL に含まれる state。コールバックの所属照合に使う（this のロックで守る）。
-    private String currentState = null;
 
     private WebAuthSessionHelper(ComponentActivity activity) {
         this.activity = activity;
     }
 
-    // Activity の生成時（`WebAuthSessionLifecycle.onHostCreated`）。再生成後の新インスタンスは NONE から始まり、
-    // Rust 側 `reset_pending_tracking()` と対で旧要求を捨てる。
+    // Activity の生成時（`WebAuthSessionLifecycle.onHostCreated`）。要求の状態は static なので、再生成後の新 helper も
+    // 認証中の要求を引き継いで、`onNewIntent` のコールバックを確定できる。
     static void attach(ComponentActivity activity) {
         WebAuthSessionHelper helper = new WebAuthSessionHelper(activity);
         HELPERS.put(activity, helper);
@@ -113,7 +121,7 @@ final class WebAuthSessionHelper {
 
     // JNI スレッドから呼ばれる。
     void start(long id, String url) {
-        synchronized (this) {
+        synchronized (LOCK) {
             request.track(id);
             currentState = Uri.parse(url).getQueryParameter("state");
             launchedId = RequestTracker.NONE;
@@ -125,7 +133,7 @@ final class WebAuthSessionHelper {
     // JNI スレッドから呼ばれる。launch と同じロックで排他にし、未開始なら起動させない。
     // 開いた Custom Tab は閉じられない（守らない範囲）。
     void cancel(long id) {
-        synchronized (this) {
+        synchronized (LOCK) {
             if (request.complete(id)) {
                 launchedId = RequestTracker.NONE;
                 leftId = RequestTracker.NONE;
@@ -133,7 +141,13 @@ final class WebAuthSessionHelper {
         }
     }
 
-    private synchronized void launch(long id, String url) {
+    private void launch(long id, String url) {
+        synchronized (LOCK) {
+            launchLocked(id, url);
+        }
+    }
+
+    private void launchLocked(long id, String url) {
         // 取り消し済み・差し替え済みの旧要求は起動しない。
         if (request.current() != id) {
             return;
@@ -164,7 +178,7 @@ final class WebAuthSessionHelper {
         }
     }
 
-    // first-wins: 現在の要求だけ確定して Rust へ返す。
+    // first-wins: 現在の要求だけ確定して Rust へ返す（LOCK を持って呼ぶ）。
     private void finish(long id, int kind) {
         if (request.complete(id)) {
             launchedId = RequestTracker.NONE;
@@ -173,23 +187,33 @@ final class WebAuthSessionHelper {
         }
     }
 
-    synchronized void onPause() {
-        if (launchedId != RequestTracker.NONE && launchedId == request.current()) {
-            leftId = launchedId;
+    void onPause() {
+        synchronized (LOCK) {
+            if (launchedId != RequestTracker.NONE && launchedId == request.current()) {
+                leftId = launchedId;
+            }
         }
     }
 
     // コールバックなしでアプリへ戻った＝キャンセル。onNewIntent は onResume より先に来るため、
     // コールバックが先に確定していれば leftId は消えていて何もしない。
-    synchronized void onResume() {
-        long id = leftId;
-        if (id != RequestTracker.NONE) {
-            finish(id, KIND_CANCELLED);
+    void onResume() {
+        synchronized (LOCK) {
+            long id = leftId;
+            if (id != RequestTracker.NONE) {
+                finish(id, KIND_CANCELLED);
+            }
         }
     }
 
     // コールバック intent なら true（呼び出し側は url-scheme へ流さない）。
-    synchronized boolean onNewIntent(Intent intent) {
+    boolean onNewIntent(Intent intent) {
+        synchronized (LOCK) {
+            return onNewIntentLocked(intent);
+        }
+    }
+
+    private boolean onNewIntentLocked(Intent intent) {
         if (!isCallback(intent)) {
             return false;
         }

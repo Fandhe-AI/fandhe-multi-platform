@@ -4,7 +4,9 @@
 //!
 //! 契約（`contract`）・失敗の種類（`error`）・effect ドライバと要求の追跡（`driver` と `driver::bridge`）・OS 実装
 //! （iOS・macOS は `ios`・`macos` と `*.m`、Android は `android` と `android/java`、Windows は `windows`）を 1 つに集める。
-//! 画面の状態型を参照してよいのは `driver` だけ。入口 `pub fn platform_web_auth_session()` は状態型に依存しない。
+//! 画面の状態型を参照してよいのは `driver` だけ。公開入口は状態型に依存せず、外のアプリは `begin_web_auth` で開始し、
+//! `poll_web_auth(id)` で結果を 1 度だけ受け取る（`cancel_web_auth`・Windows のループバックは `complete_web_auth_loopback`）。
+//! `platform_web_auth_session()` は乱数・SHA-256・`start`/`cancel` の OS 口で、結果の受け口は上の `poll_web_auth`。
 //!
 //! # 依存方向と Android の受け口
 //!
@@ -12,11 +14,12 @@
 //! （選んでいないアプリへ url-scheme の受信箱を持ち込まない）。Android は `WebAuthSessionLifecycle`（非公開 provider）が
 //! `onNewIntent` のリスナーと Paused / Resumed を受け、`fandhe://web-auth` のコールバックを確定する。同じ filter を宣言する
 //! url-scheme 側は、コールバックを受信箱へ流さない（`UrlSchemeHelper.deliver` が同じ条件で除外。code・state を別画面に出さない）。
-//! `reset_pending_tracking`・`shutdown` は `fandhe-gallery` が Activity 再生成・終了時に呼ぶ。
+//! `shutdown` は `fandhe-gallery` が終了時に呼ぶ。Activity 再生成では要求を引き継ぎ（Java が状態を static に持ち、結果は新しい Activity の `onNewIntent` へ届く）、呼び出し側の掃除は要らない。
 //!
 //! 守る範囲: 1 プロセス内で 1 件ずつ処理すること、嘘の成功を出さないこと、期限・取り消し・終了でサーバーと OS のセッションを残さないこと、
 //! 秘密値（URL・state・code）をログと `Debug` に出さないこと。
-//! 守らない範囲: Android でブラウザのタブが裏に残ること、既定ブラウザの UI の差、複数プロセス、プロセス死後のコールバック、
+//! 守らない範囲: 結果が一度も返らない間（Activity が再生成されずに終了した・プロセス死）は期限（300 秒）まで要求が残り、期限は
+//! `poll_web_auth` を呼んだときに確定すること、Android でブラウザのタブが裏に残ること、既定ブラウザの UI の差、複数プロセス、プロセス死後のコールバック、
 //! 他アプリによる `fandhe` scheme の横取り（PKCE で緩和）、トークン交換。
 
 // unsafe は OS 実装の FFI・JNI エクスポートに限る（`// SAFETY:` を付ける）。該当 OS だけ deny へ緩める。
@@ -53,8 +56,6 @@ mod macos;
 #[cfg(target_os = "windows")]
 mod windows;
 
-#[cfg(target_os = "android")]
-pub use android::reset_pending_tracking;
 pub use contract::*;
 pub use driver::*;
 pub use error::WebAuthSessionError;

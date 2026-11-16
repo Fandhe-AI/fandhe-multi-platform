@@ -54,12 +54,18 @@ pub fn platform_spotlight_index() -> Arc<dyn SpotlightIndex> {
     }
 }
 
-/// ドライバの可変状態。要求の追跡は [`RequestSlot`] に任せ、ここは期限の起点だけを持つ。
+/// ドライバの可変状態。要求の追跡は [`RequestSlot`] に任せ、ここは期限の起点と発送直後の見張りを持つ。
 /// テストが並列で干渉しないよう static から切り出して引数で渡す（スロットは leak）。
+///
+/// 画面の状態は Activity の再生成で `default()`（世代 0）に戻るが、本 struct は static のため残る。
+/// 呼び出し側（`android_main`）の掃除には頼らず、[`drive`] が「前の状態が残した保留」を自分で見分けて捨てる。
 struct Session {
     slot: &'static RequestSlot<Result<(), IndexFailure>>,
     /// 進行中の要求を観測した時刻（単調時計）。
     started: Mutex<Option<Instant>>,
+    /// 発送したが `mark_running` の反映を見ていない世代。同じ世代の `Requested` を 1 回だけ見逃すための印
+    /// （直前のフレームで発送した要求の二重発送を防ぐ）。
+    awaiting_mark: Mutex<Option<u64>>,
 }
 
 impl Default for Session {
@@ -67,21 +73,12 @@ impl Default for Session {
         Self {
             slot: Box::leak(Box::new(RequestSlot::new())),
             started: Mutex::new(None),
+            awaiting_mark: Mutex::new(None),
         }
     }
 }
 
 static SESSION: std::sync::OnceLock<Session> = std::sync::OnceLock::new();
-
-/// Activity 再生成時（`android_main` の再実行）に、保留中の要求を破棄する。画面状態は
-/// `default()`（世代 0）に戻るため、保留が残ると次の「登録する」が飲み込まれる。古いワーカーの
-/// 結果は照合で捨てられる。走っている OS 呼び出しは止めず走り切らせる。
-pub fn reset_pending_tracking() {
-    if let Some(s) = SESSION.get() {
-        s.slot.reset();
-        *s.started.lock().unwrap_or_else(|e| e.into_inner()) = None;
-    }
-}
 
 /// `SpotlightIndexError` を画面の失敗種別へ写す。OS の文言・内部識別子は画面にもログにも出さない。
 pub(crate) fn to_failure(e: SpotlightIndexError) -> IndexFailure {
@@ -141,11 +138,26 @@ fn drive(
     }
 
     let slot = session.slot;
-    if let Some((_, action)) = take_request(state) {
-        // 保留ありは発送済み（`mark_running` の適用待ち）。二重に発送しない。
+    if let Some((generation, action)) = take_request(state) {
         if slot.snapshot().is_some() {
-            return;
+            // 直前のフレームで発送した同じ世代なら `mark_running` の適用待ち。1 回だけ見逃して二重に発送しない。
+            // 見逃した後も `Requested` のままなら、前の画面状態（Activity 再生成で世代 0 へ戻る前）が残した保留なので
+            // 捨てて発送し直す。古いワーカーの結果は要求 id の不一致で捨てられる（走っている OS 呼び出しは止めない）。
+            if session
+                .awaiting_mark
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .take()
+                == Some(generation)
+            {
+                return;
+            }
+            slot.reset();
         }
+        *session
+            .awaiting_mark
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(generation);
         let request_id = slot.begin();
         let started = Instant::now();
         *session.started.lock().unwrap_or_else(|e| e.into_inner()) = Some(started);
@@ -432,7 +444,7 @@ mod tests {
     }
 
     #[test]
-    fn reset_lets_a_fresh_screen_dispatch_again() {
+    fn stale_slot_of_a_previous_screen_state_does_not_swallow_a_new_request() {
         let (sender, rx) = channel();
         let imp = fake(|| Ok(()));
         let session = Session::default();
@@ -447,16 +459,7 @@ mod tests {
             &session,
             Duration::from_secs(30),
         );
-        assert!(rx.try_recv().is_err(), "記録が残ると飲み込まれる");
-        session.slot.reset();
-        drive(
-            &state,
-            &sender,
-            &imp,
-            &no_url(),
-            &session,
-            Duration::from_secs(30),
-        );
+        // 前の画面状態が残した保留（発送の見張りなし）は、掃除の呼び出しなしでも捨てて発送し直す。
         assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok());
     }
 

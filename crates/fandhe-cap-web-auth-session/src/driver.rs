@@ -20,6 +20,7 @@
 //! それ以外（Linux 等）は `UnsupportedWebAuthSession` 固定で、ダミーの成功実装へは倒さない。
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 #[cfg(not(any(
     target_os = "macos",
@@ -28,13 +29,16 @@ use std::sync::Arc;
     target_os = "windows"
 )))]
 use crate::contract::UnsupportedWebAuthSession;
-use crate::contract::{CallbackKind, WebAuthFailure, WebAuthOutcome, WebAuthSession};
+use crate::contract::{
+    AuthRequest, CallbackKind, SESSION_TIMEOUT, WebAuthFailure, WebAuthOutcome, WebAuthSession,
+};
 use fandhe_core::screens::web_auth_session_demo::{
     CoreFailure, CoreOutcome, Phase, ReturnedKind, WebAuthSessionDemoState, finish, mark_running,
     take_cancel, take_request,
 };
 
 use fandhe_runtime::CompletionSender;
+use fandhe_runtime::request_slot::{SlotOwner, poll_and_finish_owned};
 
 /// 現在のプラットフォームに応じた `WebAuthSession` 実装を返す（プロセスで 1 個）。
 pub fn platform_web_auth_session() -> Arc<dyn WebAuthSession> {
@@ -108,11 +112,12 @@ pub(crate) mod bridge {
         AuthRequest, DemoAuthServer, SESSION_TIMEOUT, WebAuthFailure, WebAuthOutcome,
         WebAuthSession, verify_callback,
     };
-    use fandhe_core::screens::web_auth_session_demo::{CoreFailure, CoreOutcome};
 
     use fandhe_runtime::request_slot::RequestSlot;
 
-    pub(crate) type Outcome = Result<CoreOutcome, CoreFailure>;
+    /// OS の生の結果。画面用への写像（`to_core`）は取り出す側が行う
+    /// （画面経由でも公開入口 `poll_web_auth` でも同じ slot を使う）。
+    pub(crate) type Outcome = Result<WebAuthOutcome, WebAuthFailure>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
@@ -154,7 +159,7 @@ pub(crate) mod bridge {
                 .and_then(decide);
             decided.and_then(|r| {
                 let a = g.take()?;
-                SLOT.deliver(a.request_id, super::to_core(r));
+                SLOT.deliver(a.request_id, r);
                 Some(a)
             })
         };
@@ -170,8 +175,11 @@ pub(crate) mod bridge {
 
     /// OS 層（macOS / iOS / Android の完了）の受け口。Windows のループバックは
     /// [`complete_loopback`] を使う。現在の要求でない `request_id`・取り消し／期限で確定済みの要求の完了は捨てる。
-    // Android は #534 が埋めるまで未使用。Windows・Linux はループバックの受け口だけを使う。
-    #[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
+    // Windows・Linux はループバックの受け口だけを使う。
+    #[cfg_attr(
+        not(any(target_os = "macos", target_os = "ios", target_os = "android")),
+        allow(dead_code)
+    )]
     pub(crate) fn complete_from_os(request_id: u64, result: Result<RawResult, WebAuthFailure>) {
         conclude_with(
             Some(request_id),
@@ -274,23 +282,57 @@ fn setup(imp: &dyn WebAuthSession, request_id: u64) -> Result<bridge::Active, We
     })
 }
 
+/// 画面（`web_auth_session_demo`）の要求の持ち主。公開入口の要求（[`EXTERNAL_OWNER`]）と 1 つの `SLOT` を分け合い、
+/// 互いの進行中の要求を置き換えず、相手の結果を取らない。
+static SCREEN_OWNER: SlotOwner = SlotOwner::new();
+/// 公開入口（[`begin_web_auth`]）の要求の持ち主。
+static EXTERNAL_OWNER: SlotOwner = SlotOwner::new();
+/// 画面が発送したが `mark_running` の反映を見ていない要求の id（0 は無し）。同じ要求の `Requested` を 1 回だけ見逃すための印。
+static AWAITING_MARK: AtomicU64 = AtomicU64::new(0);
+
+/// 画面の要求 1 件を打ち切る（OS のセッションとサーバーを閉じ、結果の置き場を空にする）。
+fn abandon_screen_request(imp: &dyn WebAuthSession, request_id: u64) {
+    bridge::conclude_with(
+        Some(request_id),
+        |_| Some(Ok(WebAuthOutcome::Cancelled)),
+        Some(imp),
+    );
+    let _ = bridge::SLOT.take_ready(request_id);
+    SCREEN_OWNER.release(request_id);
+}
+
 /// 毎フレームの処理（テストから任意の実装を差し込めるよう切り出す）。
+///
+/// 画面の状態は Activity の再生成で `default()` へ戻るが、`SLOT`・`ACTIVE` は static のため残る。呼び出し側の掃除
+/// （`reset_pending_tracking` 等）には頼らず、新しい要求を受けたとき前の画面状態の要求を打ち切って引き継がない
+/// （結果は新しい画面状態へは届けない。公開入口の要求には触れない）。
 fn drive(
     state: &WebAuthSessionDemoState,
     sender: &CompletionSender<WebAuthSessionDemoState>,
     imp: &dyn WebAuthSession,
 ) {
     if take_request(state).is_some() {
-        // `mark_running` の反映前に次フレームが同じ要求を観測しても、二重に開かない。
-        if bridge::lock().is_some() || bridge::SLOT.snapshot().is_some() {
-            return;
+        let mine = SCREEN_OWNER.current();
+        if mine != 0 {
+            // `mark_running` の反映前に次フレームが同じ要求を観測しても、二重に開かない（1 回だけ見逃す）。
+            // 見逃した後も `Requested` のままなら、前の画面状態が残した要求なので打ち切って発送し直す。
+            if AWAITING_MARK.swap(0, Ordering::AcqRel) == mine {
+                return;
+            }
+            abandon_screen_request(imp, mine);
         }
+        // 公開入口の進行中・未取得の要求があるあいだは始めない（置き換えない）。終わるまで毎フレーム見直す。
+        let Some(request_id) = SCREEN_OWNER.begin_excluding(&bridge::SLOT, &[&EXTERNAL_OWNER])
+        else {
+            sender.request_repaint_after(fandhe_runtime::request_slot::POLL_INTERVAL);
+            return;
+        };
+        AWAITING_MARK.store(request_id, Ordering::Release);
         let _ = sender.send(Box::new(mark_running));
-        let request_id = bridge::SLOT.begin();
         match setup(imp, request_id) {
             // 準備に失敗した要求は登録前なので、結果だけを置く（サーバーは `Drop` で止まる）。
             Err(f) => {
-                bridge::SLOT.deliver(request_id, Err(to_failure(f)));
+                bridge::SLOT.deliver(request_id, Err(f));
             }
             Ok(active) => {
                 let req = active.req.clone();
@@ -307,11 +349,17 @@ fn drive(
     if state.phase != Phase::Running {
         return;
     }
+    // 取り消し・期限は画面自身の要求だけに掛ける（公開入口の要求を巻き込まない）。
+    let mine = SCREEN_OWNER.current();
     if take_cancel(state).is_some() {
-        bridge::conclude_with(None, |_| Some(Ok(WebAuthOutcome::Cancelled)), Some(imp));
+        bridge::conclude_with(
+            Some(mine),
+            |_| Some(Ok(WebAuthOutcome::Cancelled)),
+            Some(imp),
+        );
     }
     bridge::conclude_with(
-        None,
+        Some(mine),
         |a| {
             (a.started.elapsed() >= crate::contract::SESSION_TIMEOUT)
                 .then_some(Ok(WebAuthOutcome::TimedOut))
@@ -319,20 +367,107 @@ fn drive(
         Some(imp),
     );
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    poll_and_finish_owned(
         &bridge::SLOT,
+        &SCREEN_OWNER,
         sender,
         |_request_id| {},
         move |s: &mut WebAuthSessionDemoState, outcome| {
             // 反映できたとき（`Idle` へ戻っていないとき）だけ `true` を返す。
             if s.phase != Phase::Idle {
-                finish(s, generation, outcome);
+                finish(s, generation, to_core(outcome));
                 true
             } else {
                 false
             }
         },
+        // 自分の要求が失われた（`SLOT` が空・別の要求へ置き換わった）。成功にせず失敗で確定させる。
+        move |s: &mut WebAuthSessionDemoState| {
+            finish(s, generation, Err(CoreFailure::Internal));
+        },
     );
+}
+
+/// 公開入口: 認証 UI を開き、結果を受け取るための要求 id を返す。画面の状態型に依存せず、フレームワークの外のアプリも使える
+/// （`docs/architecture/consumer-app-structure.md` §8.2）。
+///
+/// `req` は呼び出し側が作る（`state`・PKCE・`start_url`。乱数と SHA-256 は [`platform_web_auth_session`] の
+/// `fill_random`・`sha256` を使う）。開始後は [`poll_web_auth`] を呼び続けて結果を 1 度だけ受け取る。
+/// 1 プロセスに 1 要求で、進行中または結果が未取得の要求があるうち（画面の要求を含む）は `Internal` で断る。
+/// OS が UI を開けなかったときは `Err` で、結果は届かない。Windows はループバックの受け口を呼び出し側が持ち、
+/// 受けた URL を [`complete_web_auth_loopback`] へ渡す。非対応 OS は `Unsupported`。
+pub fn begin_web_auth(req: AuthRequest) -> Result<u64, WebAuthFailure> {
+    begin_external(&*platform_web_auth_session(), req)
+}
+
+fn begin_external(imp: &dyn WebAuthSession, req: AuthRequest) -> Result<u64, WebAuthFailure> {
+    let request_id = EXTERNAL_OWNER
+        .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &EXTERNAL_OWNER])
+        .ok_or(WebAuthFailure::Internal)?;
+    // OS の完了が即座に届いても照合できるよう、開く前に登録する。
+    *bridge::lock() = Some(bridge::Active {
+        request_id,
+        started: std::time::Instant::now(),
+        req: req.clone(),
+        server: None,
+    });
+    if let Err(f) = imp.start(request_id, &req) {
+        // 結果は届かないので、登録を外して `Err` で返す。
+        bridge::conclude_with(Some(request_id), |_| Some(Err(f)), None);
+        let _ = bridge::SLOT.take_ready(request_id);
+        EXTERNAL_OWNER.release(request_id);
+        return Err(f);
+    }
+    Ok(request_id)
+}
+
+/// [`begin_web_auth`] の結果を取り出す。確定していれば 1 度だけ `Some`（`take_ready` で原子的に取る）、未着・旧 id・取り出し済みは `None`。
+///
+/// 期限（[`SESSION_TIMEOUT`]、開始から単調時計）の判定はここで行う。超えていれば OS のセッションを閉じ、
+/// `Ok(TimedOut)` を返す。呼び出さない間は期限切れが確定しない。要求が失われた（Activity の終了後に結果が返らず
+/// 別の呼び出しで置き換わった等）ときは `Err(Internal)` を 1 度だけ返す。
+pub fn poll_web_auth(request_id: u64) -> Option<Result<WebAuthOutcome, WebAuthFailure>> {
+    poll_external(&*platform_web_auth_session(), request_id)
+}
+
+fn poll_external(
+    imp: &dyn WebAuthSession,
+    request_id: u64,
+) -> Option<Result<WebAuthOutcome, WebAuthFailure>> {
+    if request_id == 0 || EXTERNAL_OWNER.current() != request_id {
+        return None;
+    }
+    if !matches!(bridge::SLOT.snapshot(), Some((id, _)) if id == request_id) {
+        EXTERNAL_OWNER.release(request_id);
+        return Some(Err(WebAuthFailure::Internal));
+    }
+    bridge::conclude_with(
+        Some(request_id),
+        |a| (a.started.elapsed() >= SESSION_TIMEOUT).then_some(Ok(WebAuthOutcome::TimedOut)),
+        Some(imp),
+    );
+    let r = bridge::SLOT.take_ready(request_id)?;
+    EXTERNAL_OWNER.release(request_id);
+    Some(r)
+}
+
+/// [`begin_web_auth`] の要求を取り消す。OS のセッションを閉じ、結果は [`poll_web_auth`] が `Ok(Cancelled)` で返す。
+/// 現在の要求でない id・確定済みの要求には何もしない。
+pub fn cancel_web_auth(request_id: u64) {
+    if request_id != 0 && EXTERNAL_OWNER.current() == request_id {
+        bridge::conclude_with(
+            Some(request_id),
+            |_| Some(Ok(WebAuthOutcome::Cancelled)),
+            Some(&*platform_web_auth_session()),
+        );
+    }
+}
+
+/// Windows のループバック（呼び出し側が持つ `127.0.0.1` の受け口）が受けたコールバック URL を渡す。
+/// `verify_callback` を通った URL だけで確定して `true`。通らない・現在の要求でない・確定済みなら `false`
+/// （受け口は 404 を返して待ち続ける）。他の OS は OS 層が受けるため使わない。
+pub fn complete_web_auth_loopback(request_id: u64, url: String) -> bool {
+    bridge::complete_loopback(request_id, url)
 }
 
 /// `registry.rs` から配線される effect ドライバ。
@@ -416,6 +551,9 @@ mod tests {
     fn reset() {
         bridge::shutdown(&Fake::new());
         bridge::SLOT.reset();
+        SCREEN_OWNER.adopt(0);
+        EXTERNAL_OWNER.adopt(0);
+        AWAITING_MARK.store(0, Ordering::SeqCst);
     }
 
     struct Harness {
@@ -635,6 +773,147 @@ mod tests {
         h.frame(&fake);
         bridge::shutdown(&fake);
         assert!(fake.cancelled.load(Ordering::SeqCst) && bridge::lock().is_none());
+    }
+
+    fn cancel_external(imp: &dyn WebAuthSession, id: u64) {
+        bridge::conclude_with(Some(id), |_| Some(Ok(WebAuthOutcome::Cancelled)), Some(imp));
+    }
+
+    fn ext_request() -> AuthRequest {
+        let state = crate::contract::State::from_bytes([3; 16]);
+        AuthRequest {
+            start_url: "http://127.0.0.1:1/authorize".into(),
+            redirect: crate::contract::Redirect::CustomScheme {
+                scheme: "fandhe".into(),
+                path: crate::contract::CALLBACK_PATH.into(),
+            },
+            state,
+        }
+    }
+
+    fn ext_url(req: &AuthRequest) -> String {
+        format!(
+            "fandhe://web-auth/callback?state={}&code=abc123",
+            req.state.to_hex()
+        )
+    }
+
+    #[test]
+    fn external_result_is_taken_exactly_once() {
+        let _g = serial();
+        let fake = Fake::new();
+        let req = ext_request();
+        let id = begin_external(&fake, req.clone()).expect("開始");
+        assert!(fake.started.load(Ordering::SeqCst));
+        assert!(poll_external(&fake, id).is_none(), "未着は None");
+        bridge::complete_from_os(id, Ok(bridge::RawResult::Url(ext_url(&req))));
+        assert!(matches!(
+            poll_external(&fake, id),
+            Some(Ok(WebAuthOutcome::Returned(_)))
+        ));
+        assert!(poll_external(&fake, id).is_none(), "2 回目は取れない");
+        assert!(bridge::SLOT.snapshot().is_none());
+    }
+
+    #[test]
+    fn external_start_failure_is_err_and_leaves_nothing() {
+        let _g = serial();
+        let fake = Fake::new();
+        fake.fail_start.store(true, Ordering::SeqCst);
+        assert_eq!(
+            begin_external(&fake, ext_request()).unwrap_err(),
+            WebAuthFailure::NoBrowser
+        );
+        assert!(bridge::lock().is_none() && bridge::SLOT.snapshot().is_none());
+        assert!(begin_external(&Fake::new(), ext_request()).is_ok());
+    }
+
+    #[test]
+    fn external_deadline_is_decided_by_poll_and_closes_os_session() {
+        let _g = serial();
+        let fake = Fake::new();
+        let id = begin_external(&fake, ext_request()).unwrap();
+        bridge::lock().as_mut().unwrap().started = std::time::Instant::now()
+            .checked_sub(SESSION_TIMEOUT)
+            .expect("monotonic clock is old enough");
+        assert!(matches!(
+            poll_external(&fake, id),
+            Some(Ok(WebAuthOutcome::TimedOut))
+        ));
+        assert!(fake.cancelled.load(Ordering::SeqCst) && bridge::lock().is_none());
+    }
+
+    #[test]
+    fn external_lost_request_is_reported_once_as_error() {
+        let _g = serial();
+        let fake = Fake::new();
+        let id = begin_external(&fake, ext_request()).unwrap();
+        bridge::SLOT.reset();
+        assert_eq!(
+            poll_external(&fake, id),
+            Some(Err(WebAuthFailure::Internal))
+        );
+        assert!(poll_external(&fake, id).is_none());
+    }
+
+    #[test]
+    fn external_and_screen_do_not_replace_each_other() {
+        let _g = serial();
+        let (mut h, fake) = (Harness::new(), Fake::new());
+        let id = begin_external(&fake, ext_request()).unwrap();
+        // 画面は外の要求の進行中は始めない。外の要求も画面の要求を取り消さない。
+        screen::start(&mut h.state);
+        h.frame(&fake);
+        assert_eq!(h.state.phase, Phase::Requested);
+        cancel_external(&fake, id);
+        // 外の結果が未取得のあいだも画面は始めない（結果を落とさない）。
+        h.frame(&fake);
+        assert_eq!(h.state.phase, Phase::Requested);
+        assert!(matches!(
+            poll_external(&fake, id),
+            Some(Ok(WebAuthOutcome::Cancelled))
+        ));
+        h.frame(&fake);
+        assert_eq!(h.state.phase, Phase::Running);
+        // 画面の取り消し・期限は外の要求を巻き込まない。
+        assert!(begin_external(&fake, ext_request()).is_err());
+    }
+
+    #[test]
+    fn external_begin_is_refused_while_screen_request_runs() {
+        let _g = serial();
+        let (mut h, fake) = (Harness::new(), Fake::new());
+        screen::start(&mut h.state);
+        h.frame(&fake);
+        assert_eq!(
+            begin_external(&fake, ext_request()).unwrap_err(),
+            WebAuthFailure::Internal
+        );
+        assert!(bridge::lock().as_ref().is_some_and(|a| a.server.is_some()));
+    }
+
+    #[test]
+    fn new_screen_state_abandons_the_previous_states_request_without_a_reset() {
+        let _g = serial();
+        let fake = Fake::new();
+        let mut old = Harness::new();
+        screen::start(&mut old.state);
+        old.frame(&fake);
+        let old_id = id();
+        // Activity 再生成: 画面状態は作り直され、static の要求だけが残る（掃除の呼び出しなし）。
+        let mut fresh = Harness::new();
+        screen::start(&mut fresh.state);
+        fresh.frame(&fake);
+        fresh.frame(&fake);
+        assert!(
+            fake.cancelled.load(Ordering::SeqCst),
+            "前の要求の OS セッションを閉じる"
+        );
+        assert_ne!(id(), old_id);
+        assert_eq!(fresh.state.phase, Phase::Running);
+        // 古い要求の遅延コールバックは新しい要求を確定させない。
+        bridge::complete_from_os(old_id, Ok(bridge::RawResult::Url(valid_url())));
+        assert!(bridge::lock().is_some());
     }
 
     #[test]

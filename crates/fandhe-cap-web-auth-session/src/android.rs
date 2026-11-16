@@ -10,8 +10,12 @@
 //! 乱数は Java の `SecureRandom`、SHA-256 は `MessageDigest`（`forbid(unsafe_code)` の
 //! `fandhe-device` は OS の部品を持てないため OS 層が受ける）。
 //!
-//! 守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止（未知の結果コードを成功へ倒さない）・Activity
-//! 再生成時の旧要求の破棄（[`reset_pending_tracking`]）。守らない範囲: Custom Tab を閉じられないこと・
+//! ライフサイクル（引き継ぎ型）: 認証中に Activity が再生成されても、要求の状態は Java 側が static に持ち、
+//! コールバックは新しい Activity の `onNewIntent`（singleTask）へ届いて確定する。Rust 側の `ACTIVE`・`SLOT` は残したままにし、
+//! 呼び出し側の掃除は要らない。結果が返らない間（Activity が再生成されずに終了・プロセス死）は期限
+//! （[`crate::SESSION_TIMEOUT`]）が期限切れとして確定する（期限の判定は取り出す側の呼び出しで行う）。
+//!
+//! 守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止（未知の結果コードを成功へ倒さない）。守らない範囲: Custom Tab を閉じられないこと・
 //! 既定ブラウザの UI の差・複数プロセス・プロセス死後のコールバック・他アプリによる `fandhe` scheme の
 //! 横取り（PKCE で緩和）・トークン交換。URL・state・code はログに出さない。
 //!
@@ -20,9 +24,9 @@
 
 use std::sync::Arc;
 
-use crate::contract::{AuthRequest, RedirectKind, WebAuthFailure, WebAuthOutcome, WebAuthSession};
+use crate::contract::{AuthRequest, RedirectKind, WebAuthFailure, WebAuthSession};
 
-use crate::driver::bridge::{self, RawResult};
+use crate::driver::bridge::RawResult;
 
 /// 結果コード（Java 側 `WebAuthSessionHelper.KIND_*` と対）。
 const KIND_URL: i32 = 0;
@@ -43,14 +47,6 @@ fn map_result(kind: i32, url: Option<String>) -> Result<RawResult, WebAuthFailur
 /// Android の `WebAuthSession` 実装を返す。
 pub(crate) fn implementation() -> Arc<dyn WebAuthSession> {
     Arc::new(AndroidWebAuthSession)
-}
-
-/// Activity 再生成時に旧要求を捨てる（`android.rs::android_main` から呼ばれる）。`ACTIVE` を外して
-/// デモサーバーを止め、結果の置き場も空にする。Java 側は新しいヘルパーが `NONE` から始まり対になる。
-/// 旧要求の遅延コールバックは id 不一致で捨てられる。JNI は呼ばない。
-pub fn reset_pending_tracking() {
-    bridge::conclude_with(None, |_| Some(Ok(WebAuthOutcome::Cancelled)), None);
-    bridge::SLOT.reset();
 }
 
 struct AndroidWebAuthSession;
@@ -227,7 +223,7 @@ extern "system" fn Java_com_fandhe_platform_WebAuthSessionHelper_nativeOnWebAuth
         } else {
             url.try_to_string(env).ok()
         };
-        bridge::complete_from_os(request_id as u64, map_result(kind, value));
+        crate::driver::bridge::complete_from_os(request_id as u64, map_result(kind, value));
         Ok(())
     });
     let _ = outcome.into_outcome();
