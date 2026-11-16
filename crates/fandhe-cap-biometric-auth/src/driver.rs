@@ -208,18 +208,12 @@ pub(crate) mod bridge {
     /// （`device::location::reset_retry_tracking` と同じ位置づけ）。[`SLOT`] は
     /// プロセス static のため Activity 再生成をまたいで残るが、画面状態
     /// （`BiometricCheckState`）は再生成のたびに `Default`（`Idle`）で作り直される。
-    /// 放置すると、再生成前に開始した認証が OS 側（`BiometricAuthHelper` の `biometricPrompt`、
-    /// `FragmentManager` 経由で再接続される契約）でその後完了しても、
-    /// [`super::drive_callback`] は新しい `Idle` 状態を見て早期 return するため、
-    /// 結果が画面へ一切反映されず黙って失われる
-    /// （codex-review 指摘、PR #917。#885 の camera/tts とは異なり Java 側が
-    /// 完了を確定済みではなく実際に取りこぼす点が違う）。ここで [`SLOT`] を
-    /// 丸ごと捨て、以後届く旧 `request_id` の [`deliver`] を `request_id` 不一致で
-    /// 確実に無視させる。対になる後始末として Java 側
-    /// （`BiometricAuthHelper.attach`）は旧要求の id を引き継ぎ、`BiometricPrompt` を
-    /// `cancelAuthentication()` で閉じて OS の終了通知を待つ（その間の新しい要求は内部エラーで返る）。
-    /// 旧要求の待ち手はここで `Internal("biometric superseded")` として戻り、OS の結果が先に届いても
-    /// 再生成由来の終了は中断（`Internal`）であり利用者のキャンセル（`Cancelled`）には写らない。
+    /// 再生成前に開始した認証の prompt は OS 側で生き残り（`BiometricAuthHelper` 冒頭の説明）、
+    /// 新 Activity の helper が id を引き継いで結果を届ける。この id は旧要求なので、ここで [`SLOT`] を
+    /// 丸ごと捨てておけば [`deliver`] は `request_id` 不一致で確実に捨てる。旧要求の待ち手は
+    /// `Internal("biometric superseded")` で戻る（利用者のキャンセルには写らない）。
+    /// Java 側は回転で何も取り消さず、生き残った prompt が終わるまで後続の要求を `Internal` で断る
+    /// （OS が一度も応答しない間は断られ続ける。再生成を伴わない破棄は `detach` が解放する）。
     /// 両者の呼び出し順に依存しない（[`deliver`] の照合はどちらが先でも安全）。
     ///
     /// 呼び出し元（`android::android_main`）は Android にのみ存在するため、それ以外の
@@ -470,11 +464,11 @@ pub fn reset_pending_tracking() {
 /// | code | 意味 |
 /// |---|---|
 /// | 0 | 認証した（`Authenticated`） |
-/// | 1 | キャンセル（`Cancelled`） |
+/// | 1 | キャンセル（利用者の操作のみ。`Cancelled`） |
 /// | 2 | 使えない（未登録・非対応ハードウェア等、`Unavailable`） |
 /// | 3 | 失敗（不一致・ロックアウト等、`Failed`） |
 /// | 4 | 内部エラー（提示依頼自体の失敗、`Err(Internal("biometric present"))`） |
-/// | 5 | 中断（Activity の破棄・再生成で prompt が閉じられた。利用者のキャンセルではない。`Err(Internal("biometric interrupted"))`） |
+/// | 5 | 中断（OS 起因の取り消し、または再生成を伴わない Activity 破棄。利用者のキャンセルではない。`Err(Internal("biometric interrupted"))`） |
 /// | それ以外 | 未知（`Err(Internal("biometric outcome"))`） |
 ///
 /// 呼び出し元（`android.rs::Java_..._nativeOnBiometricResult`）は Android にのみ
