@@ -382,7 +382,9 @@ fn missing_main_activity_fails_and_empty_selection_has_no_false_positive() {
 }
 
 #[test]
-fn all_selected_passes_even_with_flags_and_attributes() {
+fn all_selected_skips_structure_checks_entirely() {
+    // 未選択 0 件では構造照合（フラグ・属性の「宣言にありません」系）まで進まず早期に成功する仕様。
+    // フラグと属性を実際に評価する経路は selected_permission_flag_passes 等が担う。
     let m = make_ws(
         "all-flags",
         &deps(&["cam", "nfc", "both", "ble", "scan", "pip"]),
