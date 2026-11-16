@@ -1,0 +1,335 @@
+//! Phase 11 の拡充ループ（親 #101）型サンプル「アプリショートカット」（Issue #424）の
+//! effect ドライバ。`fandhe_core::screens::url_scheme_show`（端末依存ゼロ）へ、
+//! `crate::contract::AppShortcuts` の登録結果を一度だけ注入する。
+//! `fandhe-gallery` の `screens/registry.rs` が url-scheme の effect の後に続けて呼ぶ（選ばれたショートカットの
+//! 受信は URL として url-scheme の `UrlInbox` に入るので、ここは「OS に出す側」だけ。
+//! 2 つの機能 crate を driver で結ばず、最終成果物が順に呼ぶ）。
+//!
+//! # dispatch
+//!
+//! [`platform_app_shortcuts`] は全 OS 分の最終形。全 OS 実装済み（macOS #424・iOS #425・Android #426・Web #427・Windows #428）。ここの分岐・[`ON_WORKER`] は変えない。
+//!
+//! # スレッド
+//!
+//! macOS・iOS は main thread のまま同期で呼ぶ。Windows・Android は別スレッドで呼ぶ
+//! （COM・JNI の呼び出しを UI スレッドで待たない）。どちらも `finish` で状態を確定してから
+//! 画面へ送る（`device-bridge-contracts.md`「2. 並行性」）。実行中は次回のポーリングだけ予約する。
+
+use std::time::Duration;
+
+#[cfg(any(
+    not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "android",
+        target_os = "windows"
+    )),
+    test
+))]
+use crate::contract::UnsupportedAppShortcuts;
+use crate::contract::{AppShortcuts, InstallCell, InstallOutcome, Registration, ShortcutSpec};
+use crate::error::AppShortcutsError;
+use fandhe_core::screens::url_scheme_show::{
+    SHORTCUT_TITLE, SHORTCUT_URL, ShortcutStatus, UrlSchemeShowState, apply_shortcut_status,
+};
+
+use fandhe_runtime::CompletionSender;
+
+/// 別スレッドで実行中のとき結果を取りに戻る間隔。
+const POLL_INTERVAL: Duration = Duration::from_millis(100);
+
+/// Windows・Android は別スレッドで呼ぶ。後続の子は変えない。
+const ON_WORKER: bool = cfg!(any(target_os = "windows", target_os = "android"));
+
+/// 画面（`url_scheme_show`）のショートカット仕様。契約と OS 実装へは引数として渡す（画面の定数を参照してよいのは driver だけ）。
+const SCREEN_SPEC: ShortcutSpec<'static> = ShortcutSpec {
+    title: SHORTCUT_TITLE,
+    url: SHORTCUT_URL,
+};
+
+/// プロセス全体で 1 回だけ登録するための状態。
+static CELL: InstallCell = InstallCell::new();
+
+/// 現在の OS の実装（macOS は Dock メニュー、iOS は Info.plist の宣言、Android は動的ショートカット、
+/// Windows はジャンプリスト、他は `Unsupported`）。
+///
+/// 返す実装は [`ShortcutSpec::validate`] を通してから OS 実装へ委譲する（入口はここ 1 か所。非対応 OS でも検査が先）。
+pub fn platform_app_shortcuts() -> &'static dyn AppShortcuts {
+    static VALIDATED: std::sync::OnceLock<Validated> = std::sync::OnceLock::new();
+    VALIDATED.get_or_init(|| Validated(os_implementation()))
+}
+
+/// 検査してから委譲する薄い wrapper。
+struct Validated(&'static dyn AppShortcuts);
+
+impl AppShortcuts for Validated {
+    fn install(&self, spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError> {
+        spec.validate()?;
+        self.0.install(spec)
+    }
+}
+
+fn os_implementation() -> &'static dyn AppShortcuts {
+    #[cfg(target_os = "macos")]
+    {
+        crate::macos::implementation()
+    }
+    #[cfg(target_os = "ios")]
+    {
+        crate::ios::implementation()
+    }
+    #[cfg(target_os = "android")]
+    {
+        crate::android::implementation()
+    }
+    #[cfg(target_os = "windows")]
+    {
+        crate::windows::implementation()
+    }
+    #[cfg(not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "android",
+        target_os = "windows"
+    )))]
+    {
+        &UnsupportedAppShortcuts
+    }
+}
+
+fn status_of(o: InstallOutcome) -> ShortcutStatus {
+    match o {
+        InstallOutcome::Declared => ShortcutStatus::Declared,
+        InstallOutcome::Installed => ShortcutStatus::Installed,
+        InstallOutcome::Unsupported => ShortcutStatus::Unsupported,
+        InstallOutcome::Failed => ShortcutStatus::Failed,
+    }
+}
+
+fn send(sender: &CompletionSender<UrlSchemeShowState>, o: InstallOutcome) {
+    let status = status_of(o);
+    // 受信側（ProxyApp）がドロップ済みの送信失敗は無視してよい。
+    let _ = sender.send(Box::new(move |s: &mut UrlSchemeShowState| {
+        apply_shortcut_status(s, status);
+    }));
+}
+
+/// 登録を 1 回だけ起動し、結果を画面へ一度だけ届ける。
+fn drive(
+    state: &UrlSchemeShowState,
+    sender: &CompletionSender<UrlSchemeShowState>,
+    cell: &'static InstallCell,
+    sc: &'static dyn AppShortcuts,
+    on_worker: bool,
+) {
+    if state.shortcut_status() != ShortcutStatus::Unread {
+        return;
+    }
+    // 画面を開き直したときは保持済みの結果を送るだけ（再登録しない）。
+    if let Some(o) = cell.get() {
+        send(sender, o);
+        return;
+    }
+    if !cell.begin() {
+        // 別スレッドで実行中。結果を取りに戻る。
+        sender.request_repaint_after(POLL_INTERVAL);
+        return;
+    }
+    let run = {
+        let sender = sender.clone();
+        move || {
+            let result = sc.install(&SCREEN_SPEC);
+            cell.finish(&result);
+            if let Some(o) = cell.get() {
+                send(&sender, o);
+            }
+        }
+    };
+    if on_worker {
+        std::thread::spawn(run);
+        sender.request_repaint_after(POLL_INTERVAL);
+    } else {
+        run();
+    }
+}
+
+/// `url_scheme_show` 画面の effect。url-scheme の effect の後に最終成果物が呼ぶ入口。
+pub fn drive_app_shortcuts(
+    state: &UrlSchemeShowState,
+    sender: &CompletionSender<UrlSchemeShowState>,
+) {
+    drive(state, sender, &CELL, platform_app_shortcuts(), ON_WORKER);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::contract::Registration;
+    use crate::error::AppShortcutsError;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct Fake {
+        calls: AtomicUsize,
+        result: fn() -> Result<Registration, AppShortcutsError>,
+    }
+    impl AppShortcuts for Fake {
+        fn install(&self, _spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            (self.result)()
+        }
+    }
+
+    fn fake(result: fn() -> Result<Registration, AppShortcutsError>) -> &'static Fake {
+        Box::leak(Box::new(Fake {
+            calls: AtomicUsize::new(0),
+            result,
+        }))
+    }
+    fn cell() -> &'static InstallCell {
+        Box::leak(Box::new(InstallCell::new()))
+    }
+    fn sender_with_channel() -> (
+        CompletionSender<UrlSchemeShowState>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<UrlSchemeShowState>>,
+    ) {
+        use fandhe_runtime::RepaintWaker;
+        struct NoopWaker;
+        impl RepaintWaker for NoopWaker {
+            fn wake(&self) {}
+            fn wake_after(&self, _delay: std::time::Duration) {}
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
+    }
+
+    fn run_once(f: &'static Fake) -> ShortcutStatus {
+        let (sender, rx) = sender_with_channel();
+        let mut state = UrlSchemeShowState::default();
+        drive(&state, &sender, cell(), f, false);
+        rx.recv().expect("結果を 1 件送る")(&mut state);
+        state.shortcut_status()
+    }
+
+    #[test]
+    fn installs_once_and_does_not_reinstall_on_reopen() {
+        let f = fake(|| Ok(Registration::Installed));
+        let c = cell();
+        let (sender, rx) = sender_with_channel();
+        let mut state = UrlSchemeShowState::default();
+        drive(&state, &sender, c, f, false);
+        rx.recv().unwrap()(&mut state);
+        assert_eq!(state.shortcut_status(), ShortcutStatus::Installed);
+        // 送信済みなら何もしない。
+        drive(&state, &sender, c, f, false);
+        assert!(rx.try_recv().is_err());
+        // 画面を開き直した（Unread の新しい状態）。保持済みを送り、再登録しない。
+        let mut reopened = UrlSchemeShowState::default();
+        drive(&reopened, &sender, c, f, false);
+        rx.recv().unwrap()(&mut reopened);
+        assert_eq!(reopened.shortcut_status(), ShortcutStatus::Installed);
+        assert_eq!(f.calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn running_cell_is_not_started_twice() {
+        let f = fake(|| Ok(Registration::Installed));
+        let c = cell();
+        assert!(c.begin());
+        let (sender, rx) = sender_with_channel();
+        let state = UrlSchemeShowState::default();
+        drive(&state, &sender, c, f, false);
+        assert_eq!(f.calls.load(Ordering::SeqCst), 0);
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn errors_never_become_installed() {
+        assert_eq!(
+            run_once(fake(|| Err(AppShortcutsError::PermissionDenied("x")))),
+            ShortcutStatus::Failed
+        );
+        assert_eq!(
+            run_once(fake(|| Err(AppShortcutsError::InvalidInput("x")))),
+            ShortcutStatus::Failed
+        );
+        assert_eq!(
+            run_once(fake(|| Err(AppShortcutsError::Internal("x")))),
+            ShortcutStatus::Failed
+        );
+        assert_eq!(
+            run_once(fake(|| Err(AppShortcutsError::Unsupported("x")))),
+            ShortcutStatus::Unsupported
+        );
+        assert_eq!(
+            run_once(fake(|| Ok(Registration::Declared))),
+            ShortcutStatus::Declared
+        );
+    }
+
+    #[test]
+    fn nothing_is_sent_once_status_is_set() {
+        let f = fake(|| Ok(Registration::Installed));
+        let (sender, rx) = sender_with_channel();
+        let mut state = UrlSchemeShowState::default();
+        apply_shortcut_status(&mut state, ShortcutStatus::Failed);
+        drive(&state, &sender, cell(), f, false);
+        assert!(rx.try_recv().is_err());
+        assert_eq!(f.calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn worker_path_delivers_one_result() {
+        let f = fake(|| Ok(Registration::Installed));
+        let (sender, rx) = sender_with_channel();
+        let mut state = UrlSchemeShowState::default();
+        drive(&state, &sender, cell(), f, true);
+        rx.recv_timeout(Duration::from_secs(5)).expect("1 件届く")(&mut state);
+        assert_eq!(state.shortcut_status(), ShortcutStatus::Installed);
+        assert!(rx.recv_timeout(Duration::from_millis(200)).is_err());
+    }
+
+    /// iOS の Info.plist の静的項目と `Cargo.toml` の宣言が画面の定数とずれていないこと。
+    #[test]
+    fn info_plist_matches_screen_constants() {
+        let plist = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../platforms/apple/FandheIosApp/Resources/Info.plist"
+        ));
+        assert!(plist.contains("<key>UIApplicationShortcutItems</key>"));
+        assert!(plist.contains(&format!("<string>{SHORTCUT_URL}</string>")));
+        assert!(plist.contains(&format!("<string>{SHORTCUT_TITLE}</string>")));
+        // `Cargo.toml` の宣言（cargo fandhe が Info.plist へ反映する元）も同じ値。
+        let manifest = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
+        assert!(manifest.contains(&format!("\"{SHORTCUT_URL}\"")));
+        assert!(manifest.contains(&format!("\"{SHORTCUT_TITLE}\"")));
+    }
+
+    #[test]
+    fn entrance_validates_before_delegating_even_when_unsupported() {
+        let bad = ShortcutSpec {
+            title: "t",
+            url: "x://y\"z",
+        };
+        assert!(matches!(
+            platform_app_shortcuts().install(&bad),
+            Err(AppShortcutsError::InvalidInput(_))
+        ));
+    }
+
+    #[test]
+    fn screen_spec_passes_validation() {
+        assert!(SCREEN_SPEC.validate().is_ok());
+    }
+
+    #[test]
+    fn unsupported_stub_is_not_success() {
+        let f: &'static Fake = Box::leak(Box::new(Fake {
+            calls: AtomicUsize::new(0),
+            result: || UnsupportedAppShortcuts.install(&SCREEN_SPEC),
+        }));
+        assert_eq!(run_once(f), ShortcutStatus::Unsupported);
+    }
+}

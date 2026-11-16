@@ -44,12 +44,12 @@
 //! 画面とログに URL・例外の `message`・`failureReason` の生文字列を出さない。
 //! 最終 URL は Cache Storage に置くだけで表示しない。
 
+use fandhe_cap_background_download::{completion_status, DownloadStatus};
 use fandhe_core::screens::background_download::{DownloadView, UNSUPPORTED};
-use fandhe_device::background_download::{completion_status, DownloadStatus};
 use fandhe_device::DeviceError;
 
 #[cfg(target_arch = "wasm32")]
-use fandhe_device::background_download::FILE_NAME;
+use fandhe_cap_background_download::FILE_NAME;
 use fandhe_device::http::check_url;
 
 /// SW が `result` に書く結果の 1 世代分（`web/background-download-sw.js` と形を合わせる）。

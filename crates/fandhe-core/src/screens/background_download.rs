@@ -4,7 +4,7 @@
 //! （`screens/mod.rs` の `pub mod background_download;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは `fandhe-egui-proxy` の
-//! effect ドライバ（`device/background_download.rs`）が [`take_request`] で要求を観測し
+//! effect ドライバ（`crates/fandhe-cap-background-download/src/driver.rs`）が [`take_request`] で要求を観測し
 //! [`finish_action`] で結果を注入する（`background_task.rs` と同型の状態機械）。全 OS 分の文言と
 //! 定数はここに置き、OS ごとの子 issue はこの画面を触らない。
 //!
@@ -65,7 +65,7 @@ pub enum Phase {
     InFlight,
 }
 
-/// OS 側の転送状態の表示用写像（`fandhe_device::background_download::DownloadStatus` と対応。
+/// OS 側の転送状態の表示用写像（`fandhe_cap_background_download::DownloadStatus` と対応。
 /// `fandhe-core` は `fandhe-device` に依存しないので写像は proxy 側の責務）。
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum DownloadView {

@@ -14,17 +14,17 @@
       "note": "アプリ内のデモ認可ページ（127.0.0.1）を開き、返ったコールバック URL を state・パス・code/error の形式まで検査して伏せ字で表示する。PKCE は S256 の値を作るだけでトークン交換はしない。結果は返却・キャンセル・期限切れ（300 秒）の三値で、不一致の URL は失敗として扱う。セッション外（Safari 等）から届いた `fandhe://web-auth/*` は url-scheme の受信箱へ流さず捨てる。守らない範囲: 背景遷移中は認可ページが読めないこと・システムブラウザの UI の差・複数プロセス・プロセス死後のコールバック・トークン交換",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#528）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_web_auth_session.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_web_auth_session.m + crates/fandhe-egui-proxy/src/device/web_auth_session.rs + crates/fandhe-core/src/screens/web_auth_session_demo.rs + crates/fandhe-device/src/web_auth_session.rs、Issue #532"
+      "impl": "crates/fandhe-cap-web-auth-session/src/ios.rs + crates/fandhe-cap-web-auth-session/ios/fandhe_ios_web_auth_session.m + crates/fandhe-cap-web-auth-session/src/driver.rs + crates/fandhe-core/src/screens/web_auth_session_demo.rs + crates/fandhe-cap-web-auth-session/src/contract.rs、Issue #532"
     },
     "android": {
       "status": "done",
       "api": "Custom Tabs（`androidx.browser` 1.8.0 の `CustomTabsIntent.launchUrl`）、開けなければ `ACTION_VIEW`。コールバックは既存の `fandhe` intent-filter と `singleTask` の `onNewIntent`。乱数は `SecureRandom`、SHA-256 は `MessageDigest`",
       "perm": "なし（manifest 変更なし。既存の `fandhe` intent-filter を使う。`<queries>` 不要）",
       "url": "https://developer.chrome.com/docs/android/custom-tabs",
-      "note": "アプリ内のデモ認可ページ（127.0.0.1）を Custom Tabs で開き、返ったコールバック URL を state・パス・code/error の形式まで検査して伏せ字で表示する。PKCE は S256 の値を作るだけでトークン交換はしない。結果は返却・キャンセル（コールバックなしでアプリへ戻った）・期限切れ（300 秒）の三値で、不一致の URL は失敗として扱う。`web-auth` の URL は url-scheme の受信箱へ流さない。ブラウザが無ければ `NoBrowser`。守る範囲: 1 プロセス内の順序・嘘の成功の禁止・Activity 再生成時の旧要求の破棄。守らない範囲: Custom Tab が取り消し・期限切れ後も残ること・既定ブラウザの UI の差・複数プロセス・プロセス死後のコールバック・他アプリによる `fandhe` scheme の横取り（PKCE で緩和）・トークン交換",
+      "note": "アプリ内のデモ認可ページ（127.0.0.1）を Custom Tabs で開き、返ったコールバック URL を state・パス・code/error の形式まで検査して伏せ字で表示する。PKCE は S256 の値を作るだけでトークン交換はしない。結果は返却・キャンセル（コールバックなしでアプリへ戻った）・期限切れ（300 秒）の三値で、不一致の URL は失敗として扱う。`web-auth` の URL は url-scheme の受信箱へ流さない。ブラウザが無ければ `NoBrowser`。守る範囲: 1 プロセス内の順序・嘘の成功の禁止・認証中の Activity 再生成では要求を引き継ぎ、コールバックは新しい Activity の `onNewIntent`（singleTask）、Activity だけが破棄されていた場合は起動 Intent（共通層の `deliverIntents`）で、離脱判定より先に確定する。守らない範囲: Android は開く URL が `http://127.0.0.1`・コールバックが `fandhe://web-auth` 固定（`req.redirect` は OS へ渡さず、他の開始 URL は開けずに失敗、合わないコールバックは不一致として失敗になる）のため外部アプリの実際の認可サーバーには使えないこと（Windows は `https://` も開ける）・結果が一度も返らない間（Activity が再生成されずに終了した・プロセス死）は期限（300 秒）まで要求が残り、期限は取り出す側の呼び出しで確定すること・Custom Tab が取り消し・期限切れ後も残ること・既定ブラウザの UI の差・複数プロセス・プロセス死後のコールバック・他アプリによる `fandhe` scheme の横取り（PKCE で緩和）・トークン交換",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#528）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_web_auth_session.rs + platforms/android/app/src/main/java/com/fandhe/platform/WebAuthSessionHelper.java + crates/fandhe-egui-proxy/src/device/web_auth_session.rs + crates/fandhe-core/src/screens/web_auth_session_demo.rs + crates/fandhe-device/src/web_auth_session.rs、Issue #534"
+      "impl": "crates/fandhe-cap-web-auth-session/src/android.rs + crates/fandhe-cap-web-auth-session/android/java/com/fandhe/platform/WebAuthSessionHelper.java + crates/fandhe-cap-web-auth-session/android/java/com/fandhe/platform/WebAuthSessionLifecycle.java + crates/fandhe-cap-web-auth-session/src/driver.rs + crates/fandhe-core/src/screens/web_auth_session_demo.rs + crates/fandhe-cap-web-auth-session/src/contract.rs、Issue #534"
     },
     "macos": {
       "status": "done",
@@ -34,7 +34,7 @@
       "note": "アプリ内のデモ認可ページ（127.0.0.1）を開き、返ったコールバック URL を state・パス・code/error の形式まで検査して伏せ字で表示する。PKCE は S256 の値を作るだけでトークン交換はしない。結果は返却・キャンセル・期限切れ（300 秒）の三値で、不一致の URL は失敗として扱う。守らない範囲: 既定ブラウザの UI の差・複数プロセス・プロセス死後のコールバック・トークン交換",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#528）",
-      "impl": "crates/fandhe-egui-proxy/src/device/macos_web_auth_session.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_web_auth_session.m + crates/fandhe-egui-proxy/src/device/web_auth_session.rs + crates/fandhe-core/src/screens/web_auth_session_demo.rs + crates/fandhe-device/src/web_auth_session.rs、Issue #530"
+      "impl": "crates/fandhe-cap-web-auth-session/src/macos.rs + crates/fandhe-cap-web-auth-session/macos/fandhe_macos_web_auth_session.m + crates/fandhe-cap-web-auth-session/src/driver.rs + crates/fandhe-core/src/screens/web_auth_session_demo.rs + crates/fandhe-cap-web-auth-session/src/contract.rs、Issue #530"
     },
     "windows": {
       "status": "done",
@@ -44,7 +44,7 @@
       "note": "アプリ内のデモ認可ページ（127.0.0.1）を既定ブラウザで開き、ループバックに届いたコールバックを state・パス・code/error の形式まで検査して伏せ字で表示する。state 照合を通らない `/callback` は確定せず 404 を返して待ち続ける。PKCE は S256 の値を作るだけでトークン交換はしない。結果は返却・キャンセル・期限切れ（300 秒）の三値で、取り消しはサーバー停止のみ。`ShellExecuteW` の `> 32` は OS が受理しただけを意味する。守る範囲: 1 プロセス内の順序・嘘の成功の禁止・資源の解放。守らない範囲: ブラウザのタブが残ること・既定ブラウザの UI の差・複数プロセス・プロセス死後のコールバック・トークン交換",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#528）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_web_auth_session.rs + crates/fandhe-egui-proxy/src/device/web_auth_session.rs + crates/fandhe-core/src/screens/web_auth_session_demo.rs + crates/fandhe-device/src/web_auth_session.rs、Issue #531"
+      "impl": "crates/fandhe-cap-web-auth-session/src/windows.rs + crates/fandhe-cap-web-auth-session/src/driver.rs + crates/fandhe-core/src/screens/web_auth_session_demo.rs + crates/fandhe-cap-web-auth-session/src/contract.rs、Issue #531"
     },
     "web": {
       "status": "n-a",

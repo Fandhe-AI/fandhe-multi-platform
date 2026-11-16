@@ -226,6 +226,36 @@ extern "system" fn Java_com_fandhe_platform_EnvironmentSensorsHelper_nativeOnFor
 ) {
 }
 
+/// `device` feature 無効ビルド向けの `nativeOnUrlSchemeReceived`・`nativeOnDeepLinkReceived` no-op フォールバック（#1218・#1279、#1333）。
+/// `UrlSchemeLifecycle`・`DeepLinkLifecycle` は feature を知らず、`ACTION_VIEW` のたびに `UrlSchemeHelper.deliver`・
+/// `DeepLinkHelper.deliver` を呼ぶため、実体を持つ `fandhe-cap-url-scheme`・`fandhe-cap-deep-link`（`device` 有効時のみ依存）が無いと
+/// `UnsatisfiedLinkError` になる。実体との二重定義を避けるため cfg は `device` 無効のときだけ。署名は Java 宣言・実体と一致
+/// （`(String) -> void`）。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
+/// シンボル名は JNI 命名規約上の固定名。
+#[cfg(all(target_os = "android", not(feature = "device")))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_UrlSchemeHelper_nativeOnUrlSchemeReceived(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _url: *mut core::ffi::c_void,
+) {
+}
+
+/// [`Java_com_fandhe_platform_UrlSchemeHelper_nativeOnUrlSchemeReceived`] と同じ根拠の no-op（deep-link）。
+#[cfg(all(target_os = "android", not(feature = "device")))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_DeepLinkHelper_nativeOnDeepLinkReceived(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _url: *mut core::ffi::c_void,
+) {
+}
+
 /// Android アプリのエントリポイント（計測専用ビルド）。
 ///
 /// `android-activity`（GameActivity 方式）がライブラリロード後にこのシンボル名を検索して呼ぶ
@@ -440,6 +470,8 @@ pub fn register_teardown_hooks() {
 #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
 fn shutdown() {
     fandhe_egui_proxy::device::shutdown();
+    // 進行中の Web 認証（デモサーバーと OS のセッション）を閉じる。
+    fandhe_cap_web_auth_session::shutdown();
     // 再生（media-playback）→ OS のメディア操作（now-playing-controls）の順に止め、どちらも audio_session より前に置く。
     fandhe_cap_media_playback::shutdown();
     fandhe_cap_now_playing_controls::shutdown();

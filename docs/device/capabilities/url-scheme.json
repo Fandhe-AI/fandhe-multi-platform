@@ -17,18 +17,18 @@
       ],
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_url_scheme.m + crates/fandhe-platform-apple/ios/fandhe_ios_app_delegate.m + crates/fandhe-egui-proxy/src/device/apple_url_scheme.rs + crates/fandhe-egui-proxy/src/device/url_scheme.rs + crates/fandhe-device/src/url_scheme.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue 旧#1217",
+      "impl": "crates/fandhe-cap-url-scheme/ios/fandhe_ios_url_scheme.m + crates/fandhe-platform-apple/ios/fandhe_ios_app_delegate.m + crates/fandhe-cap-url-scheme/src/apple.rs + crates/fandhe-cap-url-scheme/src/driver.rs + crates/fandhe-device/src/url_scheme.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue 旧#1217",
       "verified": true
     },
     "android": {
       "status": "done",
       "detail": "できている（実機）",
-      "api": "`<intent-filter>`（`ACTION_VIEW` + `BROWSABLE` + `DEFAULT` + `<data android:scheme>`）。受信は MainActivity の `onCreate` の `getIntent()` / `onNewIntent`、JNI で Rust へ渡す",
+      "api": "`<intent-filter>`（`ACTION_VIEW` + `BROWSABLE` + `DEFAULT` + `<data android:scheme>`）。受信は `UrlSchemeLifecycle`（非公開 provider。共通層の `deliverIntents` が起動時の `getIntent()` と `onNewIntent` を配る）、JNI で Rust へ渡す。利用者の `MainActivity` に配線は要らない",
       "perm": "なし（`AndroidManifest.xml` への intent-filter 追加のみ）",
       "url": "https://developer.android.com/training/app-links/deep-linking",
-      "note": "実装済み（Issue 旧#1218）。MainActivity を `launchMode=\"singleTask\"` にして起動中の URL を `onNewIntent` で受ける（standard だと外部アプリからの ACTION_VIEW ごとに新インスタンスができる）。`onCreate` の `getIntent()` は `savedInstanceState` なし・履歴（Recents）起動でないときだけ届け、二重配送を防ぐ。守らない範囲: プロセス死亡後の復元で前回の URL は再表示しない。起動中に URL を受けると自タスクで MainActivity の上にある外部 Activity（カメラ・SAF・共有シート等）は閉じられ、既存のキャンセル経路で確定する。検査は共通層で行い、弾いたものは件数だけ数える。`autoVerify` / `assetlinks.json` は独自 scheme には不要。実機確認は #8 で済み",
+      "note": "実装済み（Issue 旧#1218）。MainActivity を `launchMode=\"singleTask\"` にして起動中の URL を `onNewIntent` で受ける（standard だと外部アプリからの ACTION_VIEW ごとに新インスタンスができる）。起動時の `getIntent()` は `savedInstanceState` なし・履歴（Recents）起動でないときだけ届け、二重配送を防ぐ（共通層の `deliverIntents`）。https の App Links は deep-link の受信箱へ、`fandhe://web-auth` のコールバックは web-auth-session が確定するため、url-scheme の受信箱へは流さない（`UrlSchemeHelper.deliver`）。守らない範囲: プロセス死亡後の復元で前回の URL は再表示しない。起動中に URL を受けると自タスクで MainActivity の上にある外部 Activity（カメラ・SAF・共有シート等）は閉じられ、既存のキャンセル経路で確定する。検査は共通層で行い、弾いたものは件数だけ数える。`autoVerify` / `assetlinks.json` は独自 scheme には不要。実機確認は #8 で済み",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "platforms/android/app/src/main/AndroidManifest.xml + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/android_url_scheme.rs + crates/fandhe-egui-proxy/src/device/url_scheme.rs + crates/fandhe-egui-proxy/src/android.rs + crates/fandhe-device/src/url_scheme.rs、Issue 旧#1218",
+      "impl": "platforms/android/app/src/main/AndroidManifest.xml + crates/fandhe-cap-url-scheme/android/java/com/fandhe/platform/UrlSchemeHelper.java + crates/fandhe-cap-url-scheme/android/java/com/fandhe/platform/UrlSchemeLifecycle.java + crates/fandhe-cap-url-scheme/src/android.rs + crates/fandhe-cap-url-scheme/src/driver.rs + crates/fandhe-gallery/src/lib.rs + crates/fandhe-device/src/url_scheme.rs、Issue 旧#1218",
       "verified": true
     },
     "macos": {
@@ -39,7 +39,7 @@
       "url": "https://developer.apple.com/documentation/appkit/nsapplicationdelegate/application(_:open:)-61n9r",
       "note": "実装済み（Issue 旧#1215）。Apple Event `kAEGetURL` ハンドラ方式（`application:openURLs:` は使わない。winit 0.30 は application delegate を登録せず、この方式は delegate に触れない）。ハンドラはイベントループ開始前に登録する。scheme は Info.plist 入りの .app が LaunchServices に登録されて初めて有効で、Mac 目視用に `scripts/apple/bundle-macos-url-scheme.sh` で .app 化する。受け取った URL は scheme・長さ・制御文字を検査し、弾いたものは件数だけ数える。Mac 目視は #8 で済み",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-device/src/url_scheme.rs + crates/fandhe-egui-proxy/src/device/apple_url_scheme.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_url_scheme.m + crates/fandhe-egui-proxy/src/device/url_scheme.rs + crates/fandhe-core/src/screens/url_scheme_show.rs + scripts/apple/bundle-macos-url-scheme.sh、Issue 旧#1215",
+      "impl": "crates/fandhe-device/src/url_scheme.rs + crates/fandhe-cap-url-scheme/src/apple.rs + crates/fandhe-cap-url-scheme/macos/fandhe_macos_url_scheme.m + crates/fandhe-cap-url-scheme/src/driver.rs + crates/fandhe-core/src/screens/url_scheme_show.rs + scripts/apple/bundle-macos-url-scheme.sh、Issue 旧#1215",
       "verified": true
     },
     "windows": {
@@ -50,7 +50,7 @@
       "url": "https://learn.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/platform-apis/aa767914(v=vs.85)",
       "note": "実装済み（Issue 旧#1216）。登録先は `HKCU\\Software\\Classes\\fandhe`（既定値 `URL:fandhe Protocol`、値 `URL Protocol`、`shell\\open\\command` の既定値 `\"<exe>\" \"%1\"`）。起動のたびに黙って書かず、型サンプル画面の「登録する」「登録を解除する」ボタンで操作する。URL は起動引数で届き、ちょうど 1 引数・有効な Unicode のものだけを scheme・長さ・制御文字の検査へ回し、引数が割れた場合は拒否として数える。起動済みの場合は名前付き mutex（`Local\\`）で既存インスタンスを見つけ、named pipe（セッション別・`FILE_FLAG_FIRST_PIPE_INSTANCE`・リモート拒否・相手のセッションを照合）で URL を送って新プロセスを終了する。受理は終了コード 0、検査で弾かれたら 2、転送失敗は 1（成功として扱わない）。守る範囲: 1 プロセス内の受信順・不正 URL の非表示・転送失敗を成功にしないこと・pipe の先取り防止。守らない範囲: 同一ユーザー・同一セッションの別プロセスによる pipe の占有や妨害、セッション間の転送、他アプリが同じ scheme を登録した場合の上書き、exe 移動後の自動再登録。Windows 実機確認は未実施（#8 で追う）",
       "implStatus": "Windows 実機確認待ち（#8）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_url_scheme.rs + crates/fandhe-egui-proxy/src/device/url_scheme.rs + crates/fandhe-gallery/src/main.rs + crates/fandhe-core/src/screens/url_scheme_show.rs + crates/fandhe-device/src/url_scheme.rs、Issue 旧#1216"
+      "impl": "crates/fandhe-cap-url-scheme/src/windows.rs + crates/fandhe-cap-url-scheme/src/driver.rs + crates/fandhe-gallery/src/main.rs + crates/fandhe-core/src/screens/url_scheme_show.rs + crates/fandhe-device/src/url_scheme.rs、Issue 旧#1216"
     },
     "web": {
       "status": "done",

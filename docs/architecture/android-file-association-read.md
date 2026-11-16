@@ -1,7 +1,7 @@
 # Android のファイルの関連付け: 止まる読み取りを回収する設計
 
 - 対応: Issue #451（親 #102）。未マージの実装は PR #436（ブランチ `feat/418-android-file-association`）
-- 契約の正: `crates/fandhe-device/src/file_association.rs`（本書は Android 固有の決定だけを書く）
+- 契約の正: `crates/fandhe-cap-file-association/src/contract.rs`（本書は Android 固有の決定だけを書く）
 - 状態: 設計のみ。実装が済むまで対応表の Android セルの `deferred` は外さない
 
 ## 1. 背景

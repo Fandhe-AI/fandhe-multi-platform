@@ -5,7 +5,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS から届いた URL の検査・保持は
 //! `fandhe_device::url_scheme`、スナップショットを本モジュールへ注入するのは
-//! `fandhe-egui-proxy` の effect ドライバ（`device/url_scheme.rs`）の責務。
+//! `fandhe-egui-proxy` の effect ドライバ（`crates/fandhe-cap-url-scheme/src/driver.rs`）の責務。
 //!
 //! Issue #1216（Windows）: Windows にはアプリ側の宣言で scheme を登録する手段がないため、
 //! 画面の操作でレジストリ登録・解除を行う（`registrable` が立った OS だけボタンを出す。
@@ -28,7 +28,7 @@ pub const SHORTCUT_URL: &str = "fandhe://shortcut/open-demo";
 pub const WEB_SHORTCUT_URL: &str = "web+fandhe://shortcut/open-demo";
 
 /// macOS の App Intents（ショートカット App・Siri）のアクション名（SSOT。Issue #1148）。
-/// Swift 側 `FandheShowIntent.swift` の `title` と一致させる（`device/url_scheme.rs` のテストが検査）。
+/// Swift 側 `FandheShowIntent.swift` の `title` と一致させる（`crates/fandhe-cap-url-scheme/src/driver.rs` のテストが検査）。
 pub const INTENT_TITLE: &str = "Fandhe に表示";
 /// App Intents の `perform` が開く URL（受信は既存の `UrlInbox`）。Swift 側と一致させる。
 pub const INTENT_URL: &str = "fandhe://intent/show";

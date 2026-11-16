@@ -100,14 +100,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // 無視させる（`device::photo_pick::bridge::reset` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::photo_pick::reset_pending_tracking();
-    // Issue #534: `web_auth_session::bridge` の `ACTIVE`（デモサーバー）と `SLOT` も同様に破棄する。
-    // 残ると次の要求が開けなくなる（`device::android_web_auth_session::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::android_web_auth_session::reset_pending_tracking();
-    // Issue #560: OS の検索への登録の処理済み世代も破棄する（理由は translation と同じ。
-    // `device::spotlight_index::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::spotlight_index::reset_pending_tracking();
 
     // TASK-17.2（REQ-17）/ Issue #715: `FANDHE_PROXY_APP=<名前>` で描画対象を切り替える
     // （`main.rs`/`web.rs`/`ios.rs` と同じ契約、A03 対策・security.md 準拠の固定文字列

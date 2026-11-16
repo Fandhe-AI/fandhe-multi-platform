@@ -102,11 +102,17 @@ android {
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-app-lifecycle/android/java")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-app-shortcuts/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-audio-devices/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-audio-session/android/java")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-background-download/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-background-task/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-background-upload/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-biometric-auth/android/java")
             @Suppress("DEPRECATION")
@@ -143,6 +149,8 @@ android {
             res.srcDirs("../../../crates/fandhe-cap-compose-mail-sms/android/res")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-contacts/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-deep-link/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-device-identifier/android/java")
             @Suppress("DEPRECATION")
@@ -286,6 +294,8 @@ android {
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-spell-check/android/java")
             @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-spotlight-index/android/java")
+            @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-system-accent-color/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-system-sound/android/java")
@@ -293,6 +303,8 @@ android {
             java.srcDirs("../../../crates/fandhe-cap-tilt-motion/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-translation/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-url-scheme/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-usb-device/android/java")
             @Suppress("DEPRECATION")
@@ -305,6 +317,8 @@ android {
             java.srcDirs("../../../crates/fandhe-cap-volume-control/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-wallpaper-set/android/java")
+            @Suppress("DEPRECATION")
+            java.srcDirs("../../../crates/fandhe-cap-web-auth-session/android/java")
             @Suppress("DEPRECATION")
             java.srcDirs("../../../crates/fandhe-cap-wifi-connect/android/java")
             @Suppress("DEPRECATION")
@@ -374,7 +388,7 @@ android {
 // FANDHE_ANDROID_DEEP_LINK_HOST で渡す（Rust 側 `option_env!` も同じ変数を読む。値は書かない）。
 // 設定時だけ src/deeplink/AndroidManifest.xml（autoVerify の https intent-filter）を重ねる。
 // 未設定なら filter を出さない（host なしの https 宣言は全 https を受けるため）。形式の正は
-// `fandhe_device::deep_link::validate_host`。ずれても Rust が拒否する側（fail-closed）に倒れる。
+// `fandhe_cap_deep_link::validate_host`。ずれても Rust が拒否する側（fail-closed）に倒れる。
 // 不正な形式は XML への注入を避けるためビルドを止める（値はメッセージに出さない）。
 val deepLinkHost: String? = System.getenv("FANDHE_ANDROID_DEEP_LINK_HOST")?.takeIf { it.isNotEmpty() }
 if (deepLinkHost != null) {

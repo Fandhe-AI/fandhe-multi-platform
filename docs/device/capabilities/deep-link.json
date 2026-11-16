@@ -20,7 +20,7 @@
     },
     "android": {
       "status": "done",
-      "api": "App Links（`<intent-filter android:autoVerify=\"true\">` + `ACTION_VIEW` / `BROWSABLE` / `DEFAULT` + `<data android:scheme=\"https\" android:host>`）。受信は MainActivity の `getIntent()` / `onNewIntent`、JNI で Rust へ",
+      "api": "App Links（`<intent-filter android:autoVerify=\"true\">` + `ACTION_VIEW` / `BROWSABLE` / `DEFAULT` + `<data android:scheme=\"https\" android:host>`）。受信は `DeepLinkLifecycle`（非公開 provider。共通層の `deliverIntents` が起動時の `getIntent()` と `onNewIntent` を配る）、JNI で Rust へ",
       "perm": "なし（intent-filter のみ）。検証用ドメインに `assetlinks.json` を置く",
       "url": [
         "https://developer.android.com/training/app-links/verify-android-applinks",
@@ -28,11 +28,11 @@
         "https://developer.android.com/about/versions/12/behavior-changes-all",
         "https://developer.android.com/training/app-links"
       ],
-      "note": "実装済み（#1279）。振り分け: `MainActivity.deliverUrlIntent` が `DeepLinkHelper.deliver` を呼び、scheme が https の `ACTION_VIEW` は deep-link の受信箱へ、それ以外（`fandhe://`・http）は url-scheme の受信箱へ渡す。許可ホストはビルド時の環境変数 `FANDHE_ANDROID_DEEP_LINK_HOST` で渡す（値は本リポジトリに書かない）。Gradle は設定時だけ `autoVerify` の https intent-filter を重ね（未設定なら出さない。形式が不正ならビルドを止める）、Rust は同じ変数を `option_env!` で読み、無い・不正なら届いた URL を全件拒否する（件数だけ数える）。検査は Rust の `fandhe_device::deep_link` に一本化。二重配送の防ぎ方は url-scheme と同じ（再生成・履歴起動では配らない）。守る範囲と守らない範囲は `fandhe_device::deep_link` の doc のとおり。前提: 検証用ドメインの `https://<domain>/.well-known/assetlinks.json` に署名証明書の SHA-256 を載せ、`application/json`・リダイレクトなしで配信する（debug と release で鍵が違うので両方。Play App Signing では手元の keytool の値と一致しない）（公式）。autoVerify は API 23 以上（minSdk 24 は全域）。公式は App Links を「Google services のある端末」で対応としている。Android 12 以上は `adb shell pm verify-app-links --re-verify` で手動検証し `pm get-app-links` で状態を見る。Android 15 以上は定期再検証で反映に最大 7 日（公式）。 確認用ドメイン: 確認するときだけ一時的な静的ホスティングに `assetlinks.json` を置き、終わったら消す（#1236）。ドメインは本リポジトリに書かない。まず adb のテスト用承認（`pm set-app-links` 等。使える条件は公式文書で確かめる）でドメインなしに届くことを確かめ、OS の検証まで通すときだけ一時ドメインを使う。一時ドメインの配置はアカウントの操作が要るため人手で行う",
+      "note": "実装済み（#1279）。振り分け: `DeepLinkLifecycle` が `DeepLinkHelper.deliver` へ配り、scheme が https の `ACTION_VIEW` は deep-link の受信箱へ、それ以外（`fandhe://`・http）は url-scheme の `UrlSchemeHelper.deliver` が自分の受信箱へ渡す（互いの Java に依存せず、同じ条件を持つ）。https の intent-filter（`autoVerify`・ホスト）は宣言で表せないため flavor の Manifest に残る（利用者の責務）。許可ホストはビルド時の環境変数 `FANDHE_ANDROID_DEEP_LINK_HOST` で渡す（値は本リポジトリに書かない）。Gradle は設定時だけ `autoVerify` の https intent-filter を重ね（未設定なら出さない。形式が不正ならビルドを止める）、Rust は同じ変数を `option_env!` で読み、無い・不正なら届いた URL を全件拒否する（件数だけ数える）。検査は Rust の `fandhe_cap_deep_link` に一本化。二重配送の防ぎ方は url-scheme と同じ（再生成・履歴起動では配らない）。守る範囲と守らない範囲は `fandhe_cap_deep_link` の doc のとおり。前提: 検証用ドメインの `https://<domain>/.well-known/assetlinks.json` に署名証明書の SHA-256 を載せ、`application/json`・リダイレクトなしで配信する（debug と release で鍵が違うので両方。Play App Signing では手元の keytool の値と一致しない）（公式）。autoVerify は API 23 以上（minSdk 24 は全域）。公式は App Links を「Google services のある端末」で対応としている。Android 12 以上は `adb shell pm verify-app-links --re-verify` で手動検証し `pm get-app-links` で状態を見る。Android 15 以上は定期再検証で反映に最大 7 日（公式）。 確認用ドメイン: 確認するときだけ一時的な静的ホスティングに `assetlinks.json` を置き、終わったら消す（#1236）。ドメインは本リポジトリに書かない。まず adb のテスト用承認（`pm set-app-links` 等。使える条件は公式文書で確かめる）でドメインなしに届くことを確かめ、OS の検証まで通すときだけ一時ドメインを使う。一時ドメインの配置はアカウントの操作が要るため人手で行う",
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
       "verified": true,
-      "impl": "platforms/android/app/src/main/java/com/fandhe/platform/DeepLinkHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + platforms/android/app/src/deeplink/AndroidManifest.xml + platforms/android/app/build.gradle.kts + crates/fandhe-egui-proxy/src/device/android_deep_link.rs + crates/fandhe-egui-proxy/src/device/deep_link.rs + crates/fandhe-core/src/screens/deep_link_show.rs + crates/fandhe-device/src/deep_link.rs、Issue #1279"
+      "impl": "crates/fandhe-cap-deep-link/android/java/com/fandhe/platform/DeepLinkHelper.java + crates/fandhe-cap-deep-link/android/java/com/fandhe/platform/DeepLinkLifecycle.java + platforms/android/app/src/deeplink/AndroidManifest.xml + platforms/android/app/build.gradle.kts + crates/fandhe-cap-deep-link/src/android.rs + crates/fandhe-cap-deep-link/src/driver.rs + crates/fandhe-core/src/screens/deep_link_show.rs + crates/fandhe-cap-deep-link/src/contract.rs、Issue #1279"
     },
     "macos": {
       "status": "possible",

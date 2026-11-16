@@ -1,0 +1,62 @@
+[package]
+name = "fandhe-cap-app-shortcuts"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の app-shortcuts の機能 crate（契約・OS 別実装・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 完了通知の送り口（CompletionSender）・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+jni = { workspace = true }
+
+# macOS の `.m` が url-scheme の `fandhe_rust_url_scheme_received` を呼ぶ（他機能の OS 機能を実際に使うため機能 crate 同士の依存、
+# consumer-app-structure.md §8）。macOS だけで、他 OS へ url-scheme の宣言は入らない。
+[target.'cfg(target_os = "macos")'.dependencies]
+fandhe-cap-url-scheme = { path = "../fandhe-cap-url-scheme" }
+
+# ジャンプリスト（COM）。COM の初期化・PROPVARIANT は共通層から取る。
+[target.'cfg(target_os = "windows")'.dependencies]
+fandhe-platform-windows = { path = "../fandhe-platform-windows" }
+windows = { workspace = true, features = [
+    "std",
+    "Win32_Foundation",
+    "Win32_Storage_EnhancedStorage",
+    "Win32_System_Com",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_Shell_PropertiesSystem",
+] }
+
+# Windows のタスクの起動引数が url-scheme の起動引数の解釈（生コマンドライン照合）を通ることをテストで固定する。
+[dev-dependencies]
+fandhe-cap-url-scheme = { path = "../fandhe-cap-url-scheme" }
+
+[build-dependencies]
+# iOS・macOS の ObjC を build.rs でコンパイルする helper。通常のビルドには cc を持ち込まない。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+# 機能宣言（capability-declaration.md）。権限・usage description・framework は手で足す（cargo fandhe check が検証する）。
+[package.metadata.fandhe]
+id = "app-shortcuts"
+
+# iOS のホーム画面ショートカットは Info.plist の静的宣言（type を URL として url-scheme の受信箱へ渡す。受信は
+# fandhe-platform-apple の scene delegate）。title・type は `fandhe_core::screens::url_scheme_show` の
+# `SHORTCUT_TITLE`・`SHORTCUT_URL` と一致させる（`driver.rs` のテストが Info.plist とこの宣言を照合する）。アイコンは付けない。
+[package.metadata.fandhe.ios]
+info-plist = { UIApplicationShortcutItems = [{ UIApplicationShortcutItemTitle = "デモを開く", UIApplicationShortcutItemType = "fandhe://shortcut/open-demo" }] }
+
+[package.metadata.fandhe.android]
+java = ["android/java"]
+
+[lints]
+workspace = true

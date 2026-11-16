@@ -10,7 +10,7 @@
       "status": "done",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#833）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_background_upload.rs + crates/fandhe-egui-proxy/src/device/apple_background_upload.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_background_upload.m + crates/fandhe-platform-apple/ios/fandhe_ios_app_delegate.m + crates/fandhe-egui-proxy/src/device/background_upload.rs + crates/fandhe-core/src/screens/background_upload.rs + crates/fandhe-device/src/background_upload.rs + scripts/device/serve-upload-sink.mjs、Issue #836",
+      "impl": "crates/fandhe-cap-background-upload/src/ios.rs + crates/fandhe-cap-background-upload/src/apple.rs + crates/fandhe-cap-background-upload/apple/fandhe_apple_background_upload.m + crates/fandhe-platform-apple/ios/fandhe_ios_app_delegate.m + crates/fandhe-cap-background-upload/src/driver.rs + crates/fandhe-core/src/screens/background_upload.rs + crates/fandhe-cap-background-upload/src/contract.rs + scripts/device/serve-upload-sink.mjs、Issue #836",
       "api": "`URLSessionConfiguration.background(withIdentifier:)` の session で `uploadTask(with:fromFile:)`。走行中の転送は `getAllTasks(completionHandler:)`、進み具合は `countOfBytesSent` / `countOfBytesExpectedToSend`、終わりは delegate の `urlSession(_:task:didCompleteWithError:)`。背景起動は `application(_:handleEventsForBackgroundURLSession:completionHandler:)` と `urlSessionDidFinishEvents(forBackgroundURLSession:)`",
       "perm": "不要（`UIBackgroundModes` は足さない。ローカルの確認用の受け口へつなぐ `NSAllowsLocalNetworking` は background-download で宣言済み）",
       "url": [
@@ -26,7 +26,7 @@
       "status": "done",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#833）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_background_upload.rs + platforms/android/app/src/main/java/com/fandhe/platform/BackgroundUploadHelper.java + platforms/android/app/src/main/java/com/fandhe/platform/BackgroundUploadWorker.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java + crates/fandhe-egui-proxy/src/device/background_upload.rs + crates/fandhe-core/src/screens/background_upload.rs + crates/fandhe-device/src/background_upload.rs + scripts/device/serve-upload-sink.mjs、Issue #837",
+      "impl": "crates/fandhe-cap-background-upload/src/android.rs + crates/fandhe-cap-background-upload/android/java/com/fandhe/platform/BackgroundUploadHelper.java + crates/fandhe-cap-background-upload/android/java/com/fandhe/platform/BackgroundUploadWorker.java + crates/fandhe-cap-background-upload/android/java/com/fandhe/platform/BackgroundUploadLifecycle.java + crates/fandhe-cap-background-upload/src/driver.rs + crates/fandhe-core/src/screens/background_upload.rs + crates/fandhe-cap-background-upload/src/contract.rs + scripts/device/serve-upload-sink.mjs、Issue #837",
       "api": "WorkManager（`androidx.work`、導入済み）の `OneTimeWorkRequest` を `enqueueUniqueWork`（`ExistingWorkPolicy.REPLACE`、`NetworkType.CONNECTED` の制約）で依頼し、Worker が `HttpURLConnection` で送る。状態は `getWorkInfosForUniqueWork` / `getWorkInfosForUniqueWorkLiveData` の `WorkInfo`（`State`・`getProgress`・`getOutputData`）から読み、取り消しは `cancelUniqueWork`。OS 管理の送信専用 API（DownloadManager の送信版）は無い",
       "perm": "不要（`INTERNET` は宣言済み。小さなファイル 1 つで前面サービスを使わないため、`POST_NOTIFICATIONS`・`FOREGROUND_SERVICE_DATA_SYNC` は足さない。ローカルの確認用の受け口への平文は background-download の network security config で許可済み）",
       "url": [
@@ -42,7 +42,7 @@
       "status": "done",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#833）",
-      "impl": "crates/fandhe-egui-proxy/src/device/apple_background_upload.rs + crates/fandhe-egui-proxy/apple/fandhe_apple_background_upload.m + crates/fandhe-egui-proxy/src/device/background_upload.rs + crates/fandhe-core/src/screens/background_upload.rs + crates/fandhe-device/src/background_upload.rs + scripts/device/serve-upload-sink.mjs、Issue #835",
+      "impl": "crates/fandhe-cap-background-upload/src/apple.rs + crates/fandhe-cap-background-upload/apple/fandhe_apple_background_upload.m + crates/fandhe-cap-background-upload/src/driver.rs + crates/fandhe-core/src/screens/background_upload.rs + crates/fandhe-cap-background-upload/src/contract.rs + scripts/device/serve-upload-sink.mjs、Issue #835",
       "api": "iOS と同じ background `NSURLSession`（`uploadTask(with:fromFile:)`、`getAllTasks`、delegate の完了通知）",
       "perm": "不要（App Sandbox を使わない素の実行体。`NSAllowsLocalNetworking` は background-download で宣言済み）",
       "url": [

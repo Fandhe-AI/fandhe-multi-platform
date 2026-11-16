@@ -13,11 +13,10 @@
 // Phase 8（端末機能、Issue #750）のカメラ Intent 中継、Phase 10（Issue #831）の
 // 重力センサ中継、Phase 11（Issue #859）のクリップボード中継、Phase 11（Issue #866）の
 // 読み上げ（TTS）中継、Phase 11（Issue #874）のファイル選択（SAF）中継、
-// Phase 11（Issue #1218）のカスタム URL scheme
-// （`fandhe://`、`onCreate` の `getIntent()` / `onNewIntent`）受信中継、
 // （いずれも feature `device` 切り離し時に削除）。
 // 機能 crate へ移した機能（カメラ撮影・書類スキャン・NFC カードエミュレーション・ホーム画面ウィジェット・
-// 共有テキスト受信・ゲームコントローラ）の JNI 入口と Activity への参加は、各 crate の Java（static 入口と非公開 provider）が持つ
+// 共有テキスト受信・ゲームコントローラ・カスタム URL scheme・ディープリンク・Web 認証セッション・アプリショートカット・
+// OS の検索への登録・バックグラウンドダウンロード・バックグラウンド送信）の JNI 入口と Activity への参加は、各 crate の Java（static 入口と非公開 provider）が持つ
 // ためここには無い（Issue #1257）。
 // window insets 中継（現在は共通層 `HostInsets` が持つ、#1327）の経緯（Issue #579: `AndroidApp::content_rect()` は GameActivity
 // 経路（android-activity 0.6.1、Pixel 10a / Android 16 実機）で insets を反映せず常に
@@ -192,76 +191,11 @@ public class MainActivity extends GameActivity {
     // JPEG へ変換するときの長辺の目標（画素）。これ以下になるまで `inSampleSize` で縮める。
     private static final int PHOTO_CONVERT_SIDE = 4096;
 
-    // OS の検索への登録（Issue #562）。実装は `SpotlightIndexHelper`。Rust の `android_spotlight_index.rs` がワーカースレッドから同期 JNI で呼ぶ。
-    int spotlightIndex(String domain, String id, String title, String text, long remainingMs) {
-        return SpotlightIndexHelper.index(getApplicationContext(), domain, id, title, text, remainingMs);
-    }
-
-    int spotlightRemoveAll(String domain, long remainingMs) {
-        return SpotlightIndexHelper.removeAll(getApplicationContext(), domain, remainingMs);
-    }
-
-    // OAuth 用 Web 認証セッション（Issue #534）。実装は `WebAuthSessionHelper`。
-    // Rust の `android_web_auth_session.rs` が JNI で呼ぶ。
-    private final WebAuthSessionHelper webAuthSessionHelper = new WebAuthSessionHelper(this);
-
-    void requestWebAuthStart(long requestId, String url) {
-        webAuthSessionHelper.start(requestId, url);
-    }
-
-    void requestWebAuthCancel(long requestId) {
-        webAuthSessionHelper.cancel(requestId);
-    }
-
-    byte[] webAuthRandom(int len) {
-        return WebAuthSessionHelper.random(len);
-    }
-
-    byte[] webAuthSha256(byte[] data) {
-        return WebAuthSessionHelper.sha256(data);
-    }
-
     @Override
     protected void onStart() {
         super.onStart();
     }
 
-
-    // OS 管理のバックグラウンドダウンロード（Issue #392）。実装は `BackgroundDownloadHelper`。Rust の
-    // `android_background_download.rs` が同期 JNI で呼ぶ（コールバックは無い）。
-    private final BackgroundDownloadHelper backgroundDownloadHelper = new BackgroundDownloadHelper(this);
-
-    int backgroundDownloadStart(String url) {
-        return backgroundDownloadHelper.start(url);
-    }
-
-    int backgroundDownloadCancel() {
-        return backgroundDownloadHelper.cancel();
-    }
-
-    long[] backgroundDownloadStatus() {
-        return backgroundDownloadHelper.status();
-    }
-
-    // OS 管理のバックグラウンド送信（Issue #837）。実装は `BackgroundUploadHelper`。Rust の
-    // `android_background_upload.rs` が同期 JNI で呼び、状態変化は native コールバックで合図される。
-    private final BackgroundUploadHelper backgroundUploadHelper = new BackgroundUploadHelper(this);
-
-    int backgroundUploadStart(String url) {
-        return backgroundUploadHelper.start(url);
-    }
-
-    int backgroundUploadCancel() {
-        return backgroundUploadHelper.cancel();
-    }
-
-    long[] backgroundUploadStatus() {
-        return backgroundUploadHelper.status();
-    }
-
-    int backgroundUploadObserve() {
-        return backgroundUploadHelper.observe();
-    }
 
     // マイク録音（Issue #957、Phase 11 型サンプル「マイク録音」の Android 経路）。
     // `MicRecorder` trait は通らない（`device/mic_record.rs` モジュール doc の
@@ -738,42 +672,6 @@ public class MainActivity extends GameActivity {
     // volatile 不要）の先頭で検査して、破棄後の要求はエラーで完了させる。
     private boolean ttsActivityDestroyed;
 
-    // カスタム URL scheme 受信（Issue #1218）。`onCreate` / `onNewIntent` から
-    // `deliverUrlIntent` が呼ぶ。実体は `crates/fandhe-egui-proxy/src/device/
-    // android_url_scheme.rs`（feature `device` 無効時の no-op は `android.rs`）。JNI 署名は
-    // この宣言・no-op スタブ・Rust 実体の 3 か所で一致させる。検査（scheme・長さ・制御文字）は
-    // Rust 側の共通層に一本化しており、ここでは受け取った文字列を加工せずに渡す。
-    // URL はトークンを含みうるためログへ出さない。
-    private static native void nativeOnUrlSchemeReceived(String url);
-
-    // `ACTION_VIEW` のときだけ URL を Rust へ渡す（MAIN/LAUNCHER 起動は拒否件数に混ぜない）。
-    // null の data もそのまま渡し、Rust 側が拒否として数える。
-    private static void deliverUrlIntent(Intent intent) {
-        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) {
-            return;
-        }
-        // Web 認証のコールバック（code・state を含む）は url-scheme 受信箱へ流さない（Issue #534）。
-        if (WebAuthSessionHelper.isCallback(intent)) {
-            return;
-        }
-        // https の App Links は deep-link 受信箱へ、それ以外（fandhe://・http）は url-scheme へ（Issue #1279）。
-        if (DeepLinkHelper.deliver(intent)) return;
-        nativeOnUrlSchemeReceived(intent.getDataString());
-    }
-
-    // `launchMode="singleTask"`（AndroidManifest.xml 参照）により、起動中に届いた URL は
-    // 新インスタンスではなくここへ来る。1 インテントにつき 1 回だけ呼ばれる。
-    @Override
-    protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent);
-        // Web 認証のコールバックはここで確定し、setIntent で code を含む intent を残さない（Issue #534）。
-        if (webAuthSessionHelper.onNewIntent(intent)) {
-            return;
-        }
-        setIntent(intent);
-        deliverUrlIntent(intent);
-    }
-
     /**
      * a11y 無効時の accesskit イベント送信を親 View で止める（Issue #2）。
      *
@@ -808,18 +706,7 @@ public class MainActivity extends GameActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        backgroundUploadHelper.onCreate();
         installAccessibilityOffGuard();
-
-        // コールドスタートの URL を届ける（共有テキストは機能 crate の `ShareReceiveLifecycle` が届ける）。二重配送を避けるため、再生成（savedInstanceState
-        // あり）と履歴（Recents）からの再起動（元のインテントが再送される）では届けない。
-        // 同一プロセス内の再生成は Rust 側 static の受信箱が保持しているので表示は保たれる。
-        // 守らない範囲: プロセス死亡後の復元では前回の URL を再表示しない（新プロセスの
-        // 受信箱は空。画面状態全体が失われるのと同じ扱い）。
-        if (savedInstanceState == null
-                && (getIntent().getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0) {
-            deliverUrlIntent(getIntent());
-        }
 
 
         // マイク録音（Issue #957）: `micRecordRequest` は static のため Activity 再生成を
@@ -853,7 +740,6 @@ public class MainActivity extends GameActivity {
     protected void onResume() {
         super.onResume();
         activityResumed = true;
-        webAuthSessionHelper.onResume();
         // マイク録音（Issue #957）: 許可結果が非前景中に届き `startMicRecorder` を
         // 保留していた要求を再開する（cursor Bugbot 指摘、PR #962。
         // `micStartPendingResume` doc 参照）。
@@ -884,7 +770,6 @@ public class MainActivity extends GameActivity {
     protected void onPause() {
         super.onPause();
         activityResumed = false;
-        webAuthSessionHelper.onPause();
         // マイク録音（Issue #957）: バックグラウンド遷移で録音中なら破棄する（保留要求を
         // 残さない、device-bridge-contracts.md「ライフサイクル境界」節）。権限ダイアログ
         // 表示中（`micRecorder == null` だが `micRecordRequest` は追跡中）は誤破棄しない
@@ -2051,12 +1936,6 @@ public class MainActivity extends GameActivity {
                 Thread.currentThread().interrupt();
             }
         }
-    }
-
-    // Rust 側（`AndroidAppShortcuts::call_install`、JNI 署名 `(Ljava/lang/String;Ljava/lang/String;)I`）
-    // からワーカースレッドで呼ばれる同期メソッド（Issue #426）。結果コードは `AppShortcutsHelper` を参照。
-    private int appShortcutsInstall(String label, String url) {
-        return AppShortcutsHelper.install(getApplicationContext(), label, url);
     }
 
     // `TextToSpeech` はプロセス内リソース（音声エンジンへの接続）を持つため、

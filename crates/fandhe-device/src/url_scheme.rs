@@ -3,9 +3,11 @@
 //! 扱う範囲は「OS から push で届いた URL 文字列を検査し、最新 1 件を保持して画面が
 //! 読めるようにする」ところまで。パース・ルーティングはしない（対応表
 //! `docs/device/capabilities/url-scheme.json` のトップレベル `note` 参照）。
-//! 呼び出し元は `fandhe-egui-proxy` の `device/url_scheme.rs`（画面向け effect ドライバ）
-//! と各 OS 実装（macOS は `device/apple_url_scheme.rs`）。`RequestSlot` 型（要求 1 件に
-//! 結果 1 件）ではなく、OS が任意のタイミングで書き込む継続配信型として扱う。
+//! 本モジュールは OS に触れない部品（検査・受信箱）だけを持つ。機能の契約（`UrlScheme` trait）・
+//! effect ドライバ・各 OS 実装は `fandhe-cap-url-scheme`（`UrlScheme` はそこで再公開する）。
+//! deep-link・file-association・web-auth-session・in-app-browser・Web 実装が同じ検査を使うため、
+//! 機能 crate 同士の依存を作らず、ここに残して共有する（`capability-crate-migration.md` §23）。
+//! `RequestSlot` 型（要求 1 件に結果 1 件）ではなく、OS が任意のタイミングで書き込む継続配信型として扱う。
 //!
 //! # 契約（各 OS 実装・呼び出し元が守る不変条件）
 //!
@@ -20,7 +22,7 @@
 //!   書き込む。画面は構築時と以後のポーリングでスナップショットを読むので、UI ができる前に
 //!   届いた URL も取りこぼさない
 //! - **非対応 OS は `Err(Unsupported)`**: 空のスナップショットを成功として返さない
-//!   （[`UnsupportedUrlScheme`]。`device-bridge-contracts.md`「6. 嘘の成功」）
+//!   （`fandhe-cap-url-scheme` の `UnsupportedUrlScheme`。`device-bridge-contracts.md`「6. 嘘の成功」）
 //! - **ログに URL を出さない**: トークン等の秘密値が入りうる（同「8. 秘密値」）
 //!
 //! # 各 OS の届き方（同じ契約で扱う）
@@ -167,21 +169,6 @@ impl Default for UrlInbox {
     }
 }
 
-/// URL scheme 受信の契約（モジュール doc 参照）。
-pub trait UrlScheme: Send + Sync {
-    /// 受信状態を返す。未対応の OS は `Err(Unsupported)`。
-    fn snapshot(&self) -> Result<InboxSnapshot, DeviceError>;
-}
-
-/// 非対応 OS 用。常に `Unsupported("url_scheme")` を返す。
-pub struct UnsupportedUrlScheme;
-
-impl UrlScheme for UnsupportedUrlScheme {
-    fn snapshot(&self) -> Result<InboxSnapshot, DeviceError> {
-        Err(DeviceError::Unsupported("url_scheme"))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -244,13 +231,5 @@ mod tests {
         let snap = inbox.snapshot();
         assert_eq!(snap.last.unwrap().url, "fandhe://b");
         assert_eq!((snap.rejected, snap.seq), (3, 5));
-    }
-
-    #[test]
-    fn unsupported_never_returns_ok() {
-        assert!(matches!(
-            UnsupportedUrlScheme.snapshot(),
-            Err(DeviceError::Unsupported("url_scheme"))
-        ));
     }
 }

@@ -2,7 +2,7 @@
 //!
 //! `fandhe_core::screens::file_association_show`（端末依存ゼロ）の画面を
 //! [`super::mount::mount_with_effect`] の effect として駆動する。受信の検査・保持は
-//! `fandhe_device::file_association`（契約の SSOT）の `FileInbox` と `accepts` を使う。
+//! `fandhe_cap_file_association`（契約の SSOT）の `FileInbox` と `accepts` を使う。
 //! Web は `fandhe-device` の trait を通らない（`url_scheme.rs` と同じ理由）。
 //!
 //! # 方式
@@ -28,9 +28,9 @@
 //! 守らない: 未インストールの PWA、Chromium 以外・Chrome Android（`launchQueue` が無く
 //! 「未対応」を出す）、`launch_handler` を指定しないため複数ウィンドウが開きうること、複数タブ。
 
+use fandhe_cap_file_association::{accepts, OpenFailure, OpenedFile};
 use fandhe_core::screens::file_association_show::{LatestFile, OpenFailureKind};
 use fandhe_device::drag_drop::DropError;
-use fandhe_device::file_association::{accepts, OpenFailure, OpenedFile};
 use fandhe_device::file_picker::MAX_FILE_BYTES;
 
 /// ハンドルを読んでよいか。ディレクトリ・名前が取れない・拡張子の不一致は拒否として数える。
@@ -78,11 +78,11 @@ mod web {
     use std::cell::{Cell, RefCell};
     use std::collections::{HashMap, VecDeque};
 
+    use fandhe_cap_file_association::FileInbox;
     use fandhe_core::screens::file_association_show::{
         apply_snapshot, apply_unsupported, set_web_hint, FileAssociationShowState,
     };
     use fandhe_device::drag_drop::DropError;
-    use fandhe_device::file_association::FileInbox;
     use fandhe_device::file_picker::PickedFile;
     use js_sys::{Array, Function, Reflect};
     use wasm_bindgen::prelude::*;

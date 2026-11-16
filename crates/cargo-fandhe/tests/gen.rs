@@ -241,8 +241,20 @@ fn android_manifest_overlay_matches_current_manifest() {
     };
     assert_eq!(send(&gen).len(), 1);
     assert_eq!(send(&gen), send(&cur));
-    // MAIN/LAUNCHER と SEND の 2 つ（MAIN は殻の値として gen が出す）。
-    assert_eq!(main_activity_filters(&gen).len(), 2);
+    // `fandhe` scheme の VIEW（url-scheme と web-auth-session が同じ filter を宣言し、統合規則で 1 つになる、#1333）も両側で一致する。
+    let fandhe_view = |t: &[Tag]| -> Vec<IntentFilter> {
+        main_activity_filters(t)
+            .into_iter()
+            .filter(|f| {
+                f.actions.iter().any(|a| a == "android.intent.action.VIEW")
+                    && f.data.iter().any(|d| d.scheme.as_deref() == Some("fandhe"))
+            })
+            .collect()
+    };
+    assert_eq!(fandhe_view(&gen).len(), 1);
+    assert_eq!(fandhe_view(&gen), fandhe_view(&cur));
+    // MAIN/LAUNCHER・SEND・`fandhe` scheme の VIEW の 3 つ（MAIN は殻の値として gen が出す）。
+    assert_eq!(main_activity_filters(&gen).len(), 3);
 
     // MainActivity の宣言（#1259）は gallery の現行 Manifest と同じ（`supportsPictureInPicture` は picture-in-picture の宣言から出る）。
     let main = |t: &[Tag]| -> (Attrs, Attrs) {

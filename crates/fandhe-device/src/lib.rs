@@ -17,12 +17,6 @@
 //! #745 の API が確定してから #747〜#749 側で行う。
 #![forbid(unsafe_code)]
 
-/// Phase 11（端末機能の拡充ループ、親 #101、Issue #424）: アプリショートカット（長押し・ジャンプリスト・Dock メニュー）の登録。
-pub mod app_shortcuts;
-/// Phase 11（端末機能の拡充ループ、親 #100、Issue #390）: OS 管理のバックグラウンドダウンロード。
-pub mod background_download;
-/// Phase 11 の拡充ループ（親 #170、Issue #835）: OS 管理のバックグラウンド送信の契約。
-pub mod background_upload;
 /// Phase 11（端末機能の拡充ループ、親 #116、Issue #557）: 画像内のバーコード・QR 読み取り。
 pub mod barcode_scan;
 /// カメラのライブ映像の縮小の部品（`downscale_packed`・`downscale_yuv420`・`preview_size`）だけ。`fandhe-cap-ar` と
@@ -31,16 +25,12 @@ pub mod barcode_scan;
 pub mod camera_preview_stream;
 /// Phase 11（端末機能の拡充ループ、親 #1154、Issue #1404）: 方位（コンパス）。
 pub mod compass;
-/// Phase 11（端末機能の拡充ループ、親 #153、Issue #1278）: ディープリンク（Universal Links / App Links）の受信。
-pub mod deep_link;
 /// Phase 11（端末機能の拡充ループ、親 #1131、Issue #1304）: 端末・OS 情報（機種・OS 版・空き容量）。
 pub mod device_info;
 /// Phase 11（端末機能の拡充ループ、親 #1013、Issue #1014）: ドラッグ & ドロップ受け取り。
 pub mod drag_drop;
 /// Phase 11（端末機能の拡充ループ、親 #148、Issue #762）: 画面のスポイト（画面上の 1 点の色を `#rrggbb` で返す）。
 pub mod eye_dropper;
-/// Phase 11（端末機能の拡充ループ、親 #102、Issue #416）: ファイルの関連付け（OS から渡されたファイルを開く）。
-pub mod file_association;
 /// Phase 11（端末機能の拡充ループ、Issue #872）: ファイル選択ダイアログ。
 pub mod file_picker;
 pub mod http;
@@ -60,8 +50,6 @@ pub mod photo_library;
 pub mod photo_picker;
 /// Phase 11（端末機能の拡充ループ、親 #1023、Issue #1024）: 音声認識。
 pub mod speech_recognition;
-/// Phase 11（端末機能の拡充ループ、親 #117、Issue #560）: OS の検索への登録（固定のメモ 1 件の登録と全削除）。
-pub mod spotlight_index;
 pub mod storage;
 /// Phase 11（端末機能の拡充ループ、親 #115、Issue #535）: 端末内翻訳（固定の原文を 1 回訳す）。
 pub mod translation;
@@ -69,8 +57,6 @@ pub mod translation;
 pub mod tts;
 /// Phase 11（端末機能の拡充ループ、親 #1116、Issue #1215）: カスタム URL scheme の受信。
 pub mod url_scheme;
-/// Phase 11（端末機能の拡充ループ、親 #113、Issue #530）: OAuth 用の Web 認証セッション（デモ認可ページ + コールバック検査）。
-pub mod web_auth_session;
 /// Wi-Fi の電源状態の判定（`radio_off`）だけ。wifi-info と wifi-connect が共有する純関数で、機能の契約は `fandhe-cap-wifi-info`
 /// が持つ（Issue #514 / #1329、consumer-app-structure.md §8）。
 pub mod wifi_info;

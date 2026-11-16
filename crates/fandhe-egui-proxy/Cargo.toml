@@ -442,7 +442,7 @@ windows = { workspace = true, optional = true, features = [
     # `Win32_System_Variant` の両方を要求する（`VARIANT` の空値渡し）。
     "Win32_System_TaskScheduler",
     "Win32_System_Ole",
-    # Issue #1216: `device/windows_url_scheme.rs` が URL scheme の登録・解除
+    # Issue #1216: `crates/fandhe-cap-url-scheme/src/windows.rs` が URL scheme の登録・解除
     # （`RegCreateKeyExW`/`RegSetValueExW`/`RegDeleteTreeW`、`Win32_System_Registry`）、
     # 単一インスタンス判定の名前付き mutex（`CreateMutexW`/`GetCurrentProcessId`、
     # `Win32_System_Threading`。`SECURITY_ATTRIBUTES` 型のため `Win32_Security`）、
@@ -452,7 +452,7 @@ windows = { workspace = true, optional = true, features = [
     # （`ProcessIdToSessionId`、`Win32_System_RemoteDesktop`）、引数解析前の生コマンドライン
     # 取得（`GetCommandLineW`、`Win32_System_Environment`）に使う。新規パッケージは増えない。
     "Win32_System_Registry",
-    # Issue #424: `device/windows_app_shortcuts.rs`（ジャンプリスト `ICustomDestinationList`）が使う。
+    # Issue #424: `crates/fandhe-cap-app-shortcuts/src/windows.rs`（ジャンプリスト `ICustomDestinationList`）が使う。
     # 親の設計で (a) に割り当て、後続の子が Cargo.toml を触らずに済むようにする。新規パッケージは増えない。
     "Win32_UI_Shell_Common",
     "Win32_System_Threading",
@@ -491,7 +491,7 @@ windows = { workspace = true, optional = true, features = [
     # （`IMFMediaEngine*` / `IMFMediaEngineNotify` / `IMFByteStream`）を呼ぶ。mfplat.dll の
     # 自由関数は動的に読み込むため import は増えない。新規パッケージは増えない。
     "Win32_Media_MediaFoundation",
-    # Issue #394: `device/windows_background_download.rs` が BITS（`IBackgroundCopyManager` /
+    # Issue #394: `crates/fandhe-cap-background-download/src/windows.rs` が BITS（`IBackgroundCopyManager` /
     # `IBackgroundCopyJob`）を呼ぶ。新規パッケージは増えない。
     "Win32_Networking_BackgroundIntelligentTransferService",
     # Issue #438: `device/windows_focus_mode_status.rs` が `FocusSessionManager`（`UI_Shell`）を読む。
@@ -506,7 +506,7 @@ windows = { workspace = true, optional = true, features = [
     # Issue #792: `device/windows_wifi_connect.rs` が `WlanConnect` / `WLAN_CONNECTION_PARAMETERS`
     # （windows 0.61 では `Win32_NetworkManagement_Ndis` の下）を呼ぶ。新規パッケージは増えない（Cargo.lock は不変）。
     "Win32_NetworkManagement_Ndis",
-    # Issue #531: `device/windows_web_auth_session.rs` が `BCryptGenRandom` / `BCryptHash` を呼ぶ。
+    # Issue #531: `crates/fandhe-cap-web-auth-session/src/windows.rs` が `BCryptGenRandom` / `BCryptHash` を呼ぶ。
     # 新規パッケージは増えない（Cargo.lock は不変）。
     "Win32_Security_Cryptography",
     # Issue #581: `device/windows_spell_check.rs` が `ISpellCheckerFactory` / `ISpellChecker` /
