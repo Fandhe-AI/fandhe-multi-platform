@@ -26,7 +26,7 @@
       "api": "`BiometricPrompt`（`androidx.biometric`）",
       "perm": "`USE_BIOMETRIC`（API 24〜27 の `USE_FINGERPRINT` は `androidx.biometric` の manifest merge で補う）",
       "url": "https://developer.android.com/identity/sign-in/biometric-auth",
-      "note": "実装済み（旧#908）。`BiometricPrompt` + `BIOMETRIC_STRONG` のみ（`DEVICE_CREDENTIAL` は不使用）。`onAuthenticationFailed`（不一致）は最終結果にせずプロンプト継続。Activity 再生成は `onCreate` で `BiometricPrompt` を再生成して再接続するが、画面状態（`BiometricCheckState`）は `android_main` 再実行のたびに `Idle` へ作り直されるため、再生成前に開始した認証が再接続後に完了しても結果は反映されない。camera/tts（旧#881/旧#885、Java 側が既に結果を確定済みなので取りこぼしが起きない設計）とは異なり生体認証は実際に取りこぼすため、`android_main` で `biometric_auth::bridge::reset()` を呼んで保留中の要求を明示的に無効化し、`MainActivity::onCreate` で `cancelAuthentication()` により宛先を失った認証を閉じる（codex-review 指摘、PR 旧#917）。ユーザーは再度ボタンを押せば良い。プロセス死は結果を捨てる（既知の天井）。実機未確認",
+      "note": "実装済み（旧#908）。`BiometricPrompt` + `BIOMETRIC_STRONG` のみ（`DEVICE_CREDENTIAL` は不使用）。`onAuthenticationFailed`（不一致）は最終結果にせずプロンプト継続。Activity 再生成（回転等）では認証 UI を取り消さない（androidx の `BiometricPrompt` は設定変更をまたいで生き残り、結果は新しい Activity の callback へ届く）。新しい helper が追跡中の要求 id を引き継ぎ、その認証 UI が終わるまで後続の要求は `Err(Internal)` で断る。`android_main` の `reset_pending_tracking()` が再生成前の待ち手を `Err(Internal)` で戻し、引き継いだ認証 UI の結果は旧 id として捨てる。再生成を伴わない Activity 破棄は中断として `Err(Internal)` で確定する。OS 起因の取り消し（`ERROR_CANCELED`）も `Err(Internal)` で、`Cancelled` は利用者の操作（キャンセル・否定ボタン）だけ。OS が認証 UI の結果を一度も返さない間は後続が断られ続ける（固定タイムアウトは掛けない）。プロセス死は結果を捨てる（既知の天井）。実機未確認",
       "sourceName": [
         "生体認証"
       ],

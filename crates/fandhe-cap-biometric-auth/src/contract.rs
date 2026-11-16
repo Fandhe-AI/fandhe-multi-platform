@@ -5,13 +5,10 @@
 //! （不一致・ロックアウト）を区別し、キャンセル・失敗・使えないが「認証した」へ
 //! 化けない契約をテストで固定する。
 //!
-//! macOS/iOS は OS がコールバック型（`LAContext.evaluatePolicy` の reply が非同期で
-//! 届く）のため本トレイトを **通らず**、`fandhe_core::screens::biometric_check`
-//! （端末依存ゼロの状態機械）へ直接書き戻す（`share.rs` モジュール doc と同じ判断）。
-//! Windows（#907、`UserConsentVerifier` の `IAsyncOperation` 完了ハンドラ）も同じ
-//! 判断で本トレイトを通らず直接書き戻す。Android（#908）も同様の非同期経路になる見込み。
-//! 対応不可プラットフォーム（Linux、本 Issue 時点の Android）は
-//! `Err(BiometricAuthError::Unsupported)`。
+//! 画面の経路（macOS・iOS・Windows・Android）は OS のコールバック型の完了を
+//! `fandhe_core::screens::biometric_check`（端末依存ゼロの状態機械）へ直接書き戻し、本トレイトを通らない。
+//! 画面を介さない公開入口 `platform_biometric_auth()` は、対応 OS では同じ橋渡しの上で本トレイトを実装する。
+//! 対応不可プラットフォーム（Linux 等）は `Err(BiometricAuthError::Unsupported)`。
 //!
 //! 認証結果以外の情報（生体データ・テンプレート・端末識別子）は保持・ログ出力しない
 //! （security.md A09）。本トレイト・実装は端末ローカルの可否確認であり、サーバー側の
@@ -52,12 +49,12 @@ pub trait BiometricAuth: Send + Sync {
     /// `Cancelled` は利用者の操作（キャンセル・否定ボタン）だけ。認証 UI が利用者の操作なしに閉じられたとき
     /// （OS 起因の取り消し、Android で再生成を伴わず Activity が破棄された、再生成・後続の要求で待ち手が置き換えられた）は
     /// `Err(Internal)` で返る。各要求の結果は 1 度だけ確定し、先行する認証 UI の結果が後続の要求の結果になることはない
-    /// （Android は再生成をまたいで生き残った認証 UI が終わるまで後続を `Err(Internal)` で断る。OS が一度も応答しない間は
-    /// 断られ続けるが、固定タイムアウトは掛けない）。
+    /// （Android は先行する認証 UI が終わるまで後続を `Err(Internal)` で断る。再生成をまたいで生き残った認証 UI を含め、
+    /// OS が結果を一度も返さない間は断られ続けるが、固定タイムアウトは掛けない）。
     fn authenticate(&self, reason: &str) -> Result<AuthOutcome, BiometricAuthError>;
 }
 
-/// 対応不可プラットフォーム用（Linux、本 Issue 時点の Android）。常に
+/// 対応不可プラットフォーム用（Linux 等）。常に
 /// `Unsupported("biometric_auth")` を返す。
 pub struct UnsupportedBiometricAuth;
 

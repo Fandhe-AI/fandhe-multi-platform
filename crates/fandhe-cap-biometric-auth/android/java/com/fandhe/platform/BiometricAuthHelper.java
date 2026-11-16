@@ -13,7 +13,7 @@ import java.util.WeakHashMap;
 
 // 生体認証（Issue #908）の Android 実装ヘルパー。`BiometricAuthLifecycle` が Activity ごとに生成する
 // （Rust の `fandhe-cap-biometric-auth/src/android.rs` が static メソッド `request(Activity, long, String)` を JNI で呼び、
-// 結果を `nativeOnBiometricResult` で受ける）。`BiometricAuth` trait は通らない（pull 型 bridge）。
+// 結果を `nativeOnBiometricResult` で受ける）。画面の経路は `BiometricAuth` trait を通らない（pull 型 bridge）。公開入口も同じ要求 id の追跡を使う。
 //
 // code の意味（本ファイルが SSOT、Rust 側 `outcome_from_android_code` の doc と対）:
 // 0 = 認証した / 1 = キャンセル（利用者の操作 `ERROR_USER_CANCELED`・`ERROR_NEGATIVE_BUTTON` のみ）/ 2 = 使えない（未登録・非対応等）/ 3 = 失敗（不一致・ロックアウト等）/
@@ -32,7 +32,8 @@ import java.util.WeakHashMap;
 //   拒否するので、その prompt が終わるまで別の要求は始まらず、結果を取り違えない。
 // - Rust 側は再生成で `reset_pending_tracking()` が待ち手を `Internal` で戻し、引き継いだ prompt の結果は旧 id として捨てる。
 // - 再生成を伴わない破棄では prompt の宛先ごと消えるため、`detach` が中断（5）で確定し tracker を空ける。
-// 残る限界: 生き残った prompt に OS が一度も応答しないと、その間の次の要求は内部エラーで断られる（固定タイムアウトは足さない）。
+// 残る限界: prompt（再生成をまたいで生き残ったものを含む）に OS が結果を一度も返さないと、その間の次の要求は内部エラーで断られる
+// （固定タイムアウトは足さない。再生成を伴わない破棄では `detach` が解放する）。
 //
 // UI スレッドで読み書きする。`promptId` は JNI を呼ぶスレッド（`request`）からも書くため volatile。
 //

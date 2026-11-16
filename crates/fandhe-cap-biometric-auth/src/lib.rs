@@ -11,7 +11,8 @@
 //!
 //! 守る範囲: 1 プロセス内での要求と結果の順序・嘘の成功の禁止（キャンセル・使えない・不一致を区別し、古い世代の結果は
 //! 捨てる）・生体データや OS の文言を持ち回らないこと。守らない範囲: Windows の「認証した」が PIN を含みうること
-//! （`driver::outcome_from_verification` の doc）、再生成をまたいだ保留中の要求の復元（破棄する契約）。
+//! （`driver::outcome_from_verification` の doc）、再生成をまたいだ保留中の要求の復元（破棄する契約）、
+//! Android で OS が認証 UI の結果を返さない間に後続の要求が断られ続けること（固定タイムアウトは掛けない。`contract::BiometricAuth::authenticate` の doc）。
 
 // unsafe は OS 実装の FFI・JNI エクスポートに限る（`// SAFETY:` を付ける）。該当 OS だけ deny へ緩める。
 #![cfg_attr(
