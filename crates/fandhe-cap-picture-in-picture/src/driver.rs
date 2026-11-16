@@ -176,30 +176,31 @@ fn drive(
         return None;
     }
 
-    if let Some((command, generation)) = take_command(state) {
-        if inner.handled != generation {
-            inner.handled = generation;
-            let _ = sender.send(Box::new(move |s: &mut PipShowState| {
-                mark_command_taken(s, generation)
-            }));
-            inner.last_report = None;
-            handle_command(&mut inner, sender, pip, command, generation);
-        }
+    if let Some((command, generation)) = take_command(state)
+        && inner.handled != generation
+    {
+        inner.handled = generation;
+        let _ = sender.send(Box::new(move |s: &mut PipShowState| {
+            mark_command_taken(s, generation)
+        }));
+        inner.last_report = None;
+        handle_command(&mut inner, sender, pip, command, generation);
     }
 
     let transitioning = matches!(
         state.phase,
         PipShowPhase::Preparing | PipShowPhase::Starting | PipShowPhase::Stopping
     );
-    if transitioning && state.generation == inner.handled {
-        if let Some((g, started)) = inner.pending {
-            // 期限（単調時計）を過ぎたら、届いている結果も成功にせず失敗で確定し、遅れて始まる小窓を止める。
-            if g == state.generation && started.elapsed() >= deadline {
-                inner.pending = None;
-                let _ = sender.send(Box::new(move |s: &mut PipShowState| expire(s, g)));
-                release_resources(&mut inner, pip);
-                return None;
-            }
+    if transitioning
+        && state.generation == inner.handled
+        && let Some((g, started)) = inner.pending
+    {
+        // 期限（単調時計）を過ぎたら、届いている結果も成功にせず失敗で確定し、遅れて始まる小窓を止める。
+        if g == state.generation && started.elapsed() >= deadline {
+            inner.pending = None;
+            let _ = sender.send(Box::new(move |s: &mut PipShowState| expire(s, g)));
+            release_resources(&mut inner, pip);
+            return None;
         }
     }
 

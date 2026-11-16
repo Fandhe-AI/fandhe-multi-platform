@@ -143,12 +143,12 @@ fn drive_state(
         if inner.in_flight {
             return;
         }
-        if let Some(due) = inner.next_due {
-            if now < due {
-                // 送信を省く分岐でも次回を予約する。
-                sender.request_repaint_after(due - now);
-                return;
-            }
+        if let Some(due) = inner.next_due
+            && now < due
+        {
+            // 送信を省く分岐でも次回を予約する。
+            sender.request_repaint_after(due - now);
+            return;
         }
         inner.generation += 1;
         inner.in_flight = true;

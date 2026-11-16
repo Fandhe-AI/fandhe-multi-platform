@@ -139,7 +139,7 @@ final class PaymentRequestHelper {
             return;
         }
         try {
-            // SUCCESS 以外（無い・古い・無効）は非対応（GmsAvailability の doc 参照）。
+            // SUCCESS 以外（無い・古い・無効）は非対応（`isGmsAvailable` の doc 参照）。
             if (!isGmsAvailable(activity)) {
                 finish(id, KIND_UNSUPPORTED, 0, false);
                 return;
