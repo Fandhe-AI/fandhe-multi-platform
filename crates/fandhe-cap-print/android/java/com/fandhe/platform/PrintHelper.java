@@ -45,9 +45,11 @@ import java.util.WeakHashMap;
 // `super.onDestroy()` の前に呼んでいたため、`super` に対する前後だけが違う。
 // ライフサイクル: `request` はインスタンスフィールド。Activity の破棄で印刷ダイアログは閉じ、結果は再生成後の
 // Activity へ引き継がれない（AOSP `PrintManager.PrintDocumentAdapterDelegate.onActivityDestroyed` が adapter を
-// 手放し、保留中の onLayout / onWrite / onFinish を捨てる）。よって `onDestroy` で追跡中の id があれば
-// RESULT_PRESENT_FAILED を 1 回だけ届け、Rust の `SLOT` を解放する（外部アプリは `reset_pending_tracking()` を
-// 呼ばないため）。破棄後に届く `onFinish` は `complete` が false になり何も送らない。
+// 手放し、保留中の onLayout / onWrite / onFinish を捨てる）。よって `onDestroy` で追跡中の id があれば、
+// ジョブの状態（`PrintJob.getInfo().getState()`。スプーラへの問い合わせを 1 回だけ）から通常の `evaluate` と同じ写像で
+// 結果を 1 回だけ届け、Rust の `SLOT` を解放する。状態が CREATED で決められないときは、onFinish 後なら
+// RESULT_UNCONFIRMED、ダイアログ表示中なら RESULT_PRESENT_FAILED。外部アプリは `reset_pending_tracking()` を
+// 呼ばないため、この確定が無いと busy が残る。破棄後に届く `onFinish` は `complete` が false になり何も送らない。
 // 限界: プロセスごと消えた場合は届かないが、Rust 側の状態も同時に消えるので busy は残らない。
 // 画面の内容の印刷（#1012）は `printImage`。ARGB の int[] を受け、`onWrite` の試行ごとに Bitmap を作って
 // 印刷可能領域へ縦横比を保って描き、必ず recycle する（色は不透明前提。色の正確さは守らない範囲）。
@@ -152,10 +154,17 @@ final class PrintHelper {
     private void onDestroy() {
         handler.removeCallbacksAndMessages(null);
         long id = request.take();
-        job = null;
         if (id != RequestTracker.NONE) {
-            nativeOnPrintResult(id, RESULT_PRESENT_FAILED);
+            // OS のジョブ状態を 1 回だけ読んで確定する（推測のタイマーは足さない）。
+            // 状態がまだ CREATED のとき: onFinish 後（印刷フレームワークの手を離れた）なら確認できなかったので
+            // UNCONFIRMED、ダイアログ表示中なら提示は途中で終わったので PRESENT_FAILED。
+            int code = decide();
+            if (code < 0) {
+                code = finishedAt != 0L ? RESULT_UNCONFIRMED : RESULT_PRESENT_FAILED;
+            }
+            nativeOnPrintResult(id, code);
         }
+        job = null;
     }
 
     private void finish(long id, int code) {
@@ -194,21 +203,31 @@ final class PrintHelper {
         }
     }
 
+    // ジョブの現在の状態から結果コードを決める。CREATED 等でまだ決められないときは -1。
+    // 取り消しを失敗より先に見る（利用者の取り消しを失敗に化けさせない。契約表 10）。
+    // writeFailed は直近の onWrite 試行の結果で、再試行が成功すれば false に戻っている。
+    // 状態は `PrintJob.getInfo().getState()`（スプーラへ問い合わせる）なので Activity 破棄後も読める。
+    private int decide() {
+        PrintJob j = job;
+        if (j != null && j.isCancelled()) {
+            return RESULT_CANCELLED;
+        } else if (writeFailed || (j != null && j.isFailed())) {
+            return RESULT_FAILED;
+        } else if (j != null && (j.isQueued() || j.isStarted() || j.isBlocked()
+                || j.isCompleted())) {
+            return RESULT_SUBMITTED;
+        }
+        return -1;
+    }
+
     // `onFinish` の後に結果を確定する。CREATED のままなら 2 秒まで再確認する。
     private void evaluate(long id) {
         if (request.current() != id) {
             return;
         }
-        PrintJob j = job;
-        // 取り消しを失敗より先に見る（利用者の取り消しを失敗に化けさせない。契約表 10）。
-        // writeFailed は直近の onWrite 試行の結果で、再試行が成功すれば false に戻っている。
-        if (j != null && j.isCancelled()) {
-            finish(id, RESULT_CANCELLED);
-        } else if (writeFailed || (j != null && j.isFailed())) {
-            finish(id, RESULT_FAILED);
-        } else if (j != null && (j.isQueued() || j.isStarted() || j.isBlocked()
-                || j.isCompleted())) {
-            finish(id, RESULT_SUBMITTED);
+        int code = decide();
+        if (code >= 0) {
+            finish(id, code);
         } else if (SystemClock.elapsedRealtime() - finishedAt < RECHECK_WINDOW_MS) {
             handler.postDelayed(() -> evaluate(id), RECHECK_INTERVAL_MS);
         } else {
