@@ -1,5 +1,5 @@
 //! macOS 向け壁紙設定実装（Issue #970、親 #188）。`macos/fandhe_macos_wallpaper.m`
-//! （`build.rs` が macOS ターゲットの feature `device` 有効時にコンパイルする）を
+//! （`build.rs` が macOS ターゲットでコンパイルする）を
 //! `extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
 //! `driver.rs` の macOS 経路から main スレッドで呼ばれ、契約は
 //! `crate::contract`。

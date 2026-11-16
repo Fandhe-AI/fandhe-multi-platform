@@ -5,7 +5,7 @@
 //!
 //! 写像は `windows` クレートの型に依存しない純関数に切り出し、ホストの `cargo test` で
 //! 検査する（WinRT 呼び出しだけ内側の `cfg(target_os = "windows")` に閉じる。
-//! `fandhe-egui-proxy` の `device/windows_url_scheme.rs` と同じ方針）。`unsafe` と `RoInitialize` は使わない
+//! 他の Windows 機能 crate と同じ方針）。`unsafe` と `RoInitialize` は使わない
 //! （`fandhe-cap-system-sound` の `windows.rs` と同じ前提）。HRESULT・インターフェース情報はログにも画面にも
 //! 出さず固定文言へ畳む（security.md A09）。
 //!

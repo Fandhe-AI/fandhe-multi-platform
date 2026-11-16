@@ -2,8 +2,8 @@
 // iTunesLibrary の `ITLibrary` で、端末の曲のタイトルとアーティストを先頭 20 件だけ読む。
 // 再生・アートワーク・アルバム・総件数は読まない。曲名・アーティスト・NSError はログに出さない。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_music_library.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルし、iTunesLibrary を
+// 本 crate の `src/macos.rs` から C ABI 経由で呼ばれる。
+// `build.rs` の `build_macos()` がコンパイルし、iTunesLibrary を
 // リンクする。権限宣言は `macos/Info.plist` の `NSAppleMusicUsageDescription`
 // （無いと初回アクセスで OS がプロセスを終了させる。ホストのテスト実行体には Info.plist が
 // 埋め込まれないため、Rust のテストから実物の ITLibrary は呼ばない）。

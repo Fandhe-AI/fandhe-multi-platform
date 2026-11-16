@@ -137,7 +137,7 @@ pub fn platform_location() -> &'static SharedLocation {
 
 /// 共有 `SharedLocation` への参照を返す（Windows のみ未初期化時に書き手を起動・
 /// 登録する。Apple は `location_effect` 側が起動する、モジュール doc 参照）。
-/// `registry.rs` の `effect` 区画・`fandhe-egui-proxy` の `device.rs::shutdown` から参照される公開入口。
+/// `registry.rs` の `effect` 区画・`fandhe-gallery` の終了フック（`shutdown()`）から参照される公開入口。
 pub fn shared_location() -> &'static SharedLocation {
     shared_location_for(false)
 }
@@ -252,7 +252,7 @@ pub fn restart_location(shared: &SharedLocation, _precise: bool) {
 }
 
 /// アプリ終了時に Windows の測位子プロセスを止める（`fandhe-gallery` の終了フック（`shutdown()`）から呼ばれる契約。`static` は `Drop` が走らないため、
-/// 明示停止が要る、`fandhe-egui-proxy` の `device/tts.rs::stop_shared_tts` と同じ理由）。
+/// 明示停止が要る、`fandhe-cap-bluetooth-le` の `stop_shared_scan` と同じ理由）。
 pub fn stop_shared_location() {
     #[cfg(target_os = "windows")]
     if let Some(driver) = WINDOWS_DRIVER

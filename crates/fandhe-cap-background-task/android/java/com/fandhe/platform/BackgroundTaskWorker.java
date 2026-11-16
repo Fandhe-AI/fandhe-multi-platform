@@ -26,7 +26,7 @@ public final class BackgroundTaskWorker extends Worker {
     // Rust 側 `fandhe_cap_background_task::RECORD_KEY`
     // （"background-task.last-run"）を `fandhe_device::storage` の非公開
     // `encode_key`（各バイトを小文字 16 進 2 桁）で符号化した固定値（SSOT は
-    // Rust 側。`android_background_task.rs` の `record_file_name_matches_fs_storage_encoding`
+    // Rust 側。`src/android.rs` の `record_file_name_matches_fs_storage_encoding`
     // テストが同じ値を固定する）。
     private static final String RECORD_FILE_NAME =
             "6261636b67726f756e642d7461736b2e6c6173742d72756e";

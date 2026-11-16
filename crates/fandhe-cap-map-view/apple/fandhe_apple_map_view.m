@@ -2,8 +2,8 @@
 // macOS / iOS は実装本体を共用し、画像型・CGImage の取り出し・scale の指定だけ小さな #if で分ける。
 // それ以外（visionOS 等。build.rs からは呼ばれない）は常に Unsupported のスタブ。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_map_view.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の macOS / iOS 両分岐が feature `device` 有効時に `cc` でコンパイルし、MapKit と
+// 本 crate の `src/apple.rs` から C ABI 経由で呼ばれる。
+// `build.rs` の macOS / iOS 両分岐が `cc` でコンパイルし、MapKit と
 // CoreGraphics をリンクする。
 //
 // 契約（pull 型。`fandhe_apple_photo_library.m` と同型）:
@@ -13,7 +13,7 @@
 //   fandhe_apple_map_view_cancel(request_id)
 //     id が進行中のものと一致するときだけ取り消して参照を解放する。
 //   fandhe_rust_map_view_outcome(request_id, code, rgba, len, w, h)
-//     Rust 側が公開する関数。code の表は device/map_view.rs::outcome_from_apple_code が SSOT
+//     Rust 側が公開する関数。code の表は `src/driver.rs` の `outcome_from_apple_code` が SSOT
 //     （0 画像あり / 1 非対応 / 2 通信できない / 3 MapKit の失敗 / 4 画像なし・変換失敗 /
 //      5 main 以外）。rgba は呼び出しの間だけ有効（Rust 側がコピーし、こちらが直後に free する）。
 //     受理した各依頼につき高々 1 回呼ぶ（cancel 後は呼ばない場合がある。期限は Rust 側が持つ）。

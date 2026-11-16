@@ -2,8 +2,8 @@
 // iOS（b-ios）も同じファイルを共用する。Foundation / Network / dns_sd（libSystem）だけを使い、
 // AppKit / UIKit は使わない。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_lan_discovery.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が iOS / macOS の feature `device` 有効時に `cc` でコンパイルし、Network をリンクする。
+// 本 crate の `src/apple.rs` から C ABI 経由で呼ばれる。
+// `build.rs` が iOS / macOS で `cc` によりコンパイルし、Network をリンクする。
 //
 // 発見と解決の分担: `nw_browser`（Bonjour）は endpoint（サービス名）しか返さないため、発見に使い、
 // アドレスとポートは dns_sd の `DNSServiceResolve` → `DNSServiceGetAddrInfo` で解決する。

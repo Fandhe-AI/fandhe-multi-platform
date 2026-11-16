@@ -2,8 +2,8 @@
 // （Issue #889）。CoreLocation（`CLLocationManager`）は iOS と macOS で同一 API のため、
 // 1 ファイルを両 OS で共用する（`ios/` 配下の他ファイルと違い `apple/` に置く理由）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_location.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が iOS・macOS 両ターゲット（feature `device` 有効時）で `cc` コンパイルし、
+// 本 crate の `src/apple.rs` から C ABI 経由で呼ばれる。
+// `build.rs` が iOS・macOS 両ターゲットで `cc` コンパイルし、
 // CoreLocation フレームワークをリンクする。
 //
 // 契約（push 型。`fandhe_ios_tts.m` の delegate → Rust 通知と同型、
@@ -13,7 +13,7 @@
 //     `authorizationStatus` を再評価して結果を再 push する。再試行ボタン押下時に
 //     Rust 側が [`fandhe_rust_location_...`] を再受信するための経路）。
 //   fandhe_rust_location_fix(double lat_deg, double lon_deg, double accuracy_m)
-//     -> Rust 側（`apple_location.rs`）が公開する `extern "C"` 関数。有効な 1 測位を
+//     -> Rust 側（`src/apple.rs`）が公開する `extern "C"` 関数。有効な 1 測位を
 //        push する。
 //   fandhe_rust_location_failure(int32_t code) -> 同じく Rust 側が公開する関数。
 //        1 = denied（権限拒否）、2 = disabled（位置情報サービス自体が無効）、
@@ -41,7 +41,7 @@
 #import <CoreLocation/CoreLocation.h>
 #import <TargetConditionals.h>
 
-// Rust 側（`apple_location.rs`）が公開する `extern "C"` 関数。
+// Rust 側（`src/apple.rs`）が公開する `extern "C"` 関数。
 extern void fandhe_rust_location_fix(double lat_deg, double lon_deg, double accuracy_m);
 extern void fandhe_rust_location_failure(int32_t code);
 

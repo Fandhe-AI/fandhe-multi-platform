@@ -2,13 +2,13 @@
 //! effect ドライバ。`fandhe_core::screens::background_task`（端末依存ゼロ）の
 //! ボタン要求を観測して `crate::contract::BackgroundTask` を呼び、
 //! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect`
-//! 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`device/
-//! notification.rs::drive` と同型）。
+//! 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約。
+//! `fandhe-cap-notification` の `drive` と同型）。
 //!
 //! # ボタン要求（同期呼び出し + 別スレッド）
 //!
 //! `schedule()`/`cancel()` は FFI 1 回と状態更新だけで UI を要さないため、
-//! `notification.rs::drive` と同じく別スレッドへ逃がして完了を送る
+//! `fandhe-cap-notification` の `drive` と同じく別スレッドへ逃がして完了を送る
 //! （`CompletionSender::send` 経由。UI スレッドをブロックしない）。
 //!
 //! # ポーリング（OS が非同期に処理を実行するため）

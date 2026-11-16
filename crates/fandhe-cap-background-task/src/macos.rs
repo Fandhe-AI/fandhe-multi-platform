@@ -2,7 +2,7 @@
 //! （`macos/fandhe_macos_background_task.m`、`build.rs` が macOS ターゲットで
 //! コンパイル・リンクする）を `unsafe extern "C"` 2 関数（[`ffi::schedule`]/
 //! [`ffi::cancel`]）で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する
-//! （`fandhe-egui-proxy` の `device/apple_mic_record.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
+//! （coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `driver.rs` の macOS 経路から [`MacBackgroundTask`] を使う
 //! （`crate::contract::BackgroundTask` 実装）。
@@ -129,7 +129,7 @@ impl MacBackgroundTask {
         Self::with_ffi(storage, ffi::schedule, ffi::cancel)
     }
 
-    /// テストから任意の FFI 実装を注入する入口（`fandhe-egui-proxy` の `device/apple_mic_record.rs` 等と同じ設計）。
+    /// テストから任意の FFI 実装を注入する入口（FFI 関数ポインタを差し替える設計）。
     fn with_ffi(
         storage: Arc<dyn Storage>,
         schedule_fn: fn(u64, f64, f64) -> bool,
@@ -305,7 +305,7 @@ fn on_fired(task: &MacBackgroundTask, generation: u64, now_unix_ms: u64) {
 
 /// プロセス static（`driver.rs::platform_background_task` が構築した
 /// 唯一のインスタンスを保持する。発火コールバックは FFI 境界を越えて届くため
-/// `Arc` 経由でしか参照できない、`g_*` static と同じ必要性）。
+/// `Arc` 経由でしか参照できない、発火コールバック `fandhe_rust_background_task_fired` がプロセス static 経由でしか届かないのと同じ必要性）。
 static INSTANCE: OnceLock<Arc<MacBackgroundTask>> = OnceLock::new();
 
 /// `driver.rs::platform_background_task` から 1 度だけ呼ばれ、以後の発火

@@ -4,7 +4,7 @@
 // （sandbox なしのアプリ）。ロック画面の壁紙は公開 API が無く、Rust 側で `Unsupported` にする。
 //
 // `crates/fandhe-cap-wallpaper-set/src/macos.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `build.rs` の `build_macos()` がコンパイルする。
 //
 // 契約:
 //   fandhe_macos_wallpaper_set(const char *path_utf8) -> int32_t

@@ -2,8 +2,8 @@
 // iOS 実装（Issue #1255）。Photos の API が iOS / macOS で同じで UIKit も要らないため、
 // `#if TARGET_OS_IPHONE` 分岐なしで共用する。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_photo_library.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の macOS / iOS 両分岐が feature `device` 有効時に `cc` でコンパイルし、Photos を
+// 本 crate の `src/apple.rs` から C ABI 経由で呼ばれる。
+// `build.rs` の macOS / iOS 両分岐が `cc` でコンパイルし、Photos を
 // リンクする。
 //
 // 契約（pull 型。`fandhe_apple_calendar.m` と同型、coding-rust.md の FFI 例外規定）:
@@ -14,7 +14,7 @@
 //     return する前に NSData へ値コピーするため、呼び出し元は return 後に解放してよい
 //     （所有権は移らない）。
 //   fandhe_rust_photo_library_outcome(uint64_t request_id, int32_t code)
-//     Rust 側が公開する関数。code は device/photo_save.rs::outcome_from_apple_code の表が SSOT
+//     Rust 側が公開する関数。code は `src/driver.rs` の `outcome_from_apple_code` の表が SSOT
 //     （0 保存確定 / 1 拒否・制限・未決定のまま / 2 macOS 11 未満 / 3 performChanges の失敗 /
 //      4 認可要求の異常）。各依頼につきちょうど 1 回だけ呼ぶ。
 //

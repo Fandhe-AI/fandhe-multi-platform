@@ -2,8 +2,8 @@
 // （Issue #1282）。Network.framework の `NWPathMonitor` は iOS と macOS で同一 API のため
 // 1 ファイルを共用する（UIKit / AppKit 非依存）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_network_status.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が feature `device` 有効時に `cc` コンパイルし Network をリンクする。
+// 本 crate の `src/apple.rs` から C ABI 経由で呼ばれる。
+// `build.rs` が `cc` でコンパイルし Network をリンクする。
 //
 // 設計判断: `NWPathMonitor` に同期取得 API は無いため、初回呼び出しで monitor を 1 つだけ
 // 開始し（`dispatch_once`）、handler が最新の path を 1 個の atomic に詰める。read は

@@ -2,8 +2,8 @@
 // MediaPlayer の `MPMediaQuery songsQuery` で、端末の曲のタイトルとアーティストを先頭 20 件だけ読む。
 // 再生・アートワーク・アルバム・再生回数・総件数は読まない。曲名・アーティスト・NSError はログに出さない。
 //
-// `crates/fandhe-egui-proxy/src/device/ios_music_library.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の iOS 分岐が feature `device` 有効時にのみコンパイルする。MediaPlayer は
+// 本 crate の `src/ios.rs` から C ABI 経由で呼ばれる。
+// `build.rs` の iOS 分岐がコンパイルする。MediaPlayer は
 // Now Playing 用にリンク済みで追加リンクは無い。権限宣言は
 // `platforms/apple/FandheIosApp/Resources/Info.plist` の `NSAppleMusicUsageDescription`
 // （無いと許可要求時に OS がプロセスを終了させる）。macOS 版 `fandhe_macos_music_library.m` と

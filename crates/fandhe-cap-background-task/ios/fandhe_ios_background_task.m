@@ -3,9 +3,8 @@
 // ため使えず、iOS は `BackgroundTasks`（`BGTaskScheduler`）を使う
 // （`macos/fandhe_macos_background_task.m` 冒頭コメント参照）。
 //
-// `crates/fandhe-egui-proxy/src/device/ios_background_task.rs` から C ABI 経由で
-// 呼ばれる。`build.rs` が feature `device` 有効時のみ `cc` コンパイルし、
-// BackgroundTasks をリンクする。
+// 本 crate の `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が `cc` で
+// コンパイルし、BackgroundTasks をリンクする。
 //
 // 契約（coding-rust.md の FFI 例外規定、`fandhe_apple_biometric.m` と同型）:
 //   int32_t fandhe_ios_background_task_register(void)
@@ -16,7 +15,7 @@
 //        launchHandler が実際に OS から呼ばれるのはこの関数が返った後（非同期）。
 //   int32_t fandhe_ios_background_task_submit(double earliest_begin_secs)
 //     -> 未登録（`g_registered == NO`）のまま呼ばない契約（呼び出し元
-//        `ios_background_task.rs::IosBackgroundTask::schedule` が `instance()` 経由で
+//        `src/ios.rs` の `IosBackgroundTask::schedule` が `instance()` 経由で
 //        1 回だけ register 済みの状態を前提にする）。ハンドラ未登録の予約が発火すると
 //        クラッシュするため、未登録時は何もせず 3 を返す。
 //        戻り値:
@@ -27,12 +26,12 @@
 //          3 = 非対応（シミュレータ、または未登録）
 //          4 = その他（上限超過・未知のコード・別 domain・request 生成失敗）
 //        コードの分類はここで行うが、`DeviceError` への写像自体は Rust 側
-//        `device/background_task.rs::submit_code_to_result`（SSOT）に一本化する
+//        `src/driver.rs` の `submit_code_to_result`（SSOT）に一本化する
 //        （`.m` 側で二重に写像しない、`fandhe_ios_notification.m` と同じ方針）。
 //   void fandhe_ios_background_task_cancel(void)
 //     -> `cancelTaskRequestWithIdentifier:` を呼ぶ。未予約でも安全（べき等）。
 //   int32_t fandhe_rust_ios_background_task_fired(int32_t result)
-//     -> Rust 側（`ios_background_task.rs`）が公開する `extern "C"` 関数。
+//     -> Rust 側（`src/ios.rs`）が公開する `extern "C"` 関数。
 //        result: 0 = Completed、1 = Expired。戻り値: 0 = 保存成功、1 = 失敗。
 //
 // launch handler のスレッド: `g_task_queue`（専用シリアルキュー、メインキューではない）を
@@ -53,7 +52,7 @@
 // - 一度きりの完了呼び出しは `finished`（`@synchronized(task)` の瞬時の
 //   check-and-set、保存処理を含まない）で保証する（device-bridge-contracts.md
 //   「5. FFI 境界」completion の一度きり契約）
-// - 記録の最終的な内容は Rust 側 `ios_background_task.rs::on_fired` の「時刻の新しい方を
+// - 記録の最終的な内容は Rust 側 `src/ios.rs` の `on_fired` の「時刻の新しい方を
 //   残す」規則で決まる
 
 // 識別子は Info.plist の `BGTaskSchedulerPermittedIdentifiers` と一致させる
@@ -69,7 +68,7 @@
 // `BGTaskSchedulerPermittedIdentifiers` と一致させる（相互参照コメントあり）。
 static NSString *const kFandheBackgroundTaskIdentifier = @"com.fandhe.iosapp.background-task";
 
-// Rust 側（`ios_background_task.rs`）が公開する `extern "C"` 関数。
+// Rust 側（`src/ios.rs`）が公開する `extern "C"` 関数。
 extern int32_t fandhe_rust_ios_background_task_fired(int32_t result);
 
 // `register()` が成功したかどうか。未登録のまま `submit` を呼ぶとハンドラ無しの
@@ -172,13 +171,13 @@ int32_t fandhe_ios_background_task_submit(double earliest_begin_secs) {
     return 3;
   }
 
-  // SAFETY: `submit`/`schedule` は `ios_background_task.rs::IosBackgroundTask::ffi`
+  // SAFETY: `submit`/`schedule` は `src/ios.rs` の `IosBackgroundTask::ffi`
   // ロックで直列化された Rust ワーカースレッドから呼ばれる契約で、このスレッドには
   // 呼び出し元が autoreleasepool を張らない。`dateWithTimeIntervalSinceNow:` 等が
   // 返す autorelease オブジェクトをこの呼び出し内で drain する
   // （device-bridge-contracts.md「5. FFI 境界」、cursor Low 指摘、#1050）。
   @autoreleasepool {
-    // 置き換え契約（`ios_background_task.rs` モジュール doc「世代管理をしない」
+    // 置き換え契約（`src/ios.rs` のモジュール doc「世代管理をしない」
     // 参照、codex P1 指摘 #1050 discussion_r4163129008）: 同じ識別子を
     // 取り消さずに再 submit しても OS 側で自動的に置き換わる保証はない
     // （`BGTaskSchedulerErrorCodeTooManyPendingTaskRequests` で失敗し得る）。

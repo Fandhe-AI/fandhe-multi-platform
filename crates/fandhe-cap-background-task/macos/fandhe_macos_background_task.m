@@ -3,8 +3,7 @@
 // しない）のため、iOS/macOS 共用の `apple/*.m` ではなくここ（`macos/` 配下）に置く
 // （`apple/fandhe_apple_location.m` 等との違い）。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_background_task.rs` から C ABI 経由で
-// 呼ばれる。`build.rs` の `build_macos()` が feature `device` 有効時にのみ
+// 本 crate の `src/macos.rs` から C ABI 経由で呼ばれる。`build.rs` の `build_macos()` が
 // コンパイルし、Foundation をリンクする。
 //
 // 契約:
@@ -12,7 +11,7 @@
 //     double tolerance) -> int32_t
 //     0 = 予約を受理（`NSBackgroundActivityScheduler` を生成して
 //     `scheduleWithBlock:` まで完了した）。1 = 生成に失敗（呼び出し元は Rust 側の
-//     世代を元に戻す、`macos_background_task.rs::schedule` 参照）。新しい
+//     世代を元に戻す、`src/macos.rs` の `MacBackgroundTask::schedule` 参照）。新しい
 //     scheduler の生成に成功してから既存の予約を `invalidate` して置き換える
 //     （二重予約は置き換え契約）。生成失敗時は既存の `g_scheduler` に触れないため、
 //     既存予約は失われない。identifier は `generation` ごとに一意にする（固定の
@@ -22,7 +21,7 @@
 //   fandhe_macos_background_task_cancel(void) -> void
 //     既存の予約があれば `invalidate` して nil にする。未予約でも安全（べき等）。
 //   fandhe_rust_background_task_fired(uint64_t generation) -> Rust 側
-//     （`macos_background_task.rs`）が公開する `extern "C"` 関数。block が実際に
+//     （`src/macos.rs`）が公開する `extern "C"` 関数。block が実際に
 //     OS から呼ばれた瞬間に渡した `generation` とともに呼ぶ。
 //
 // スレッド契約: `scheduleWithBlock:` に渡す block は `NSBackgroundActivityScheduler`
@@ -36,13 +35,13 @@
 // `shouldDefer` 分岐を追加する）。
 //
 // Rust 側が `schedule`/`cancel` の呼び出しを `Mutex` で直列化する契約
-// （`macos_background_task.rs::MacBackgroundTask::ffi` 参照）のため、この .m 側は
+// （`src/macos.rs` の `MacBackgroundTask::ffi` 参照）のため、この .m 側は
 // 呼び出し間の排他を自前で持たない。`g_scheduler` への書き込みは
 // `fandhe_macos_background_task_schedule`/`_cancel`（呼び出し元が直列化済み）と
 // block 内の読み取りのみで、block 自体は `g_scheduler` を書き換えない。
 //
 // アプリ終了時: プロセスが終わると `g_scheduler` も含め全リソースが消えるため、
-// 明示的な解放処理は不要（`macos_background_task.rs` モジュール doc 参照）。
+// 明示的な解放処理は不要（`src/macos.rs` のモジュール doc 参照）。
 
 #import <Foundation/Foundation.h>
 
