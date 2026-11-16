@@ -12,7 +12,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::contract::{DOMAIN_ID, IndexItem, SpotlightIndex, TIMEOUT, validate_item};
+use crate::contract::{DOMAIN_ID, IndexItem, SpotlightIndex, TIMEOUT};
 use crate::error::SpotlightIndexError;
 
 // SAFETY: `apple/fandhe_apple_spotlight_index.m` が定義する C ABI（`build.rs` がコンパイル・リンク）。
@@ -65,7 +65,6 @@ pub(crate) struct AppleSpotlightIndex;
 impl SpotlightIndex for AppleSpotlightIndex {
     #[allow(unsafe_code)]
     fn index(&self, item: &IndexItem<'_>, remaining: Duration) -> Result<(), SpotlightIndexError> {
-        validate_item(item)?;
         let ms = timeout_ms(remaining)?;
         // SAFETY: 各ポインタは本呼び出しの間だけ有効な `&str` 由来で、長さは各バイト数と一致する。
         // `.m` 側は同期でコピーして保持しない。ワーカースレッドからの呼び出しを想定した関数。

@@ -14,7 +14,7 @@
 //! - **期限**（契約表 3）: 期限は Rust のドライバだけが持つ（[`SPOTLIGHT_DEADLINE`]）。起点は
 //!   要求を観測した時の `Instant`（単調時計）。`remaining` は OS 側の完了待ちの上限で、時間切れは
 //!   `Internal(`[`TIMEOUT`]`)`。期限後に届いた成功は捨てる
-//! - **入力不正**: [`validate_item`] が `InvalidInput` を返す。OS の呼び出しより前に行う
+//! - **入力不正**: [`validate_item`] が `InvalidInput` を返す。入口 `platform_spotlight_index` が返す実装が OS の呼び出しより前に行う（非対応 OS でも `Unsupported` より先）。各 OS 実装は検査しない
 //! - **並行性**（契約表 2）: 世代は画面が要求ごとに進め、完了は「処理中かつ同じ世代」のときだけ適用する
 //! - **ライフサイクル**（契約表 1）: Android は Activity 再生成でドライバの記録を捨てる
 //! - **ログ**: 識別子・題名・本文・OS のエラー文はログにも画面にも出さない

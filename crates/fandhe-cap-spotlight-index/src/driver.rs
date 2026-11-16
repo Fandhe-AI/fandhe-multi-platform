@@ -35,7 +35,27 @@ use fandhe_runtime::CompletionSender;
 use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, poll_and_finish};
 
 /// 現在のプラットフォームに応じた `SpotlightIndex` 実装を返す（dispatch の最終形）。
+///
+/// 返す実装は `index` の入力を [`validate_item`] で検査してから OS 実装へ委譲する（入口はここ 1 か所。
+/// 非対応 OS でも検査が先で、不正な項目は `Unsupported` ではなく `InvalidInput`）。各 OS 実装は検査しない。
 pub fn platform_spotlight_index() -> Arc<dyn SpotlightIndex> {
+    Arc::new(Validated(os_implementation()))
+}
+
+/// 検査してから委譲する薄い wrapper。
+struct Validated(Arc<dyn SpotlightIndex>);
+
+impl SpotlightIndex for Validated {
+    fn index(&self, item: &IndexItem<'_>, remaining: Duration) -> Result<(), SpotlightIndexError> {
+        validate_item(item)?;
+        self.0.index(item, remaining)
+    }
+    fn remove_all(&self, remaining: Duration) -> Result<(), SpotlightIndexError> {
+        self.0.remove_all(remaining)
+    }
+}
+
+fn os_implementation() -> Arc<dyn SpotlightIndex> {
     #[cfg(target_os = "macos")]
     {
         crate::apple::implementation()
@@ -100,7 +120,7 @@ fn run_worker(
                 title: ITEM_TITLE,
                 text: ITEM_TEXT,
             };
-            validate_item(&item).and_then(|()| imp.index(&item, remaining()))
+            imp.index(&item, remaining())
         }
         Action::RemoveAll => imp.remove_all(remaining()),
     };
@@ -463,6 +483,19 @@ mod tests {
             Duration::from_secs(30),
         );
         assert!(session.slot.snapshot().is_none());
+    }
+
+    #[test]
+    fn entrance_validates_before_delegating_even_when_unsupported() {
+        let item = IndexItem {
+            id: "a/b",
+            title: "t",
+            text: "",
+        };
+        assert!(matches!(
+            platform_spotlight_index().index(&item, Duration::from_secs(1)),
+            Err(SpotlightIndexError::InvalidInput(_))
+        ));
     }
 
     #[test]
