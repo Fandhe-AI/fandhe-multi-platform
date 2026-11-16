@@ -45,12 +45,24 @@ import java.util.WeakHashMap;
 // 有無の判定にだけ使い、toJson() を呼ばず、保持せず、ログにも出さない（課金できるトークンを扱わない）。
 //
 // ライフサイクル: Activity は WeakReference で持つ。onPause / onStop では取り消さない（決済シートが自身を
-// pause させる）。onDestroy で追跡を外し結果は送らない（trait doc の「破棄」）。再生成後の新インスタンスは
-// NONE から始まり、Rust 側 reset_pending_tracking() と対で旧要求を捨てる。旧結果が新ランチャーへ再配送されても
-// 起動を記録した要求が無いため捨て、新しい要求の id は消費しない。
+// pause させる）。要求 id・シート起動中の id・pay は static で、Activity 再生成をまたいで残る。
+// 再生成と結果（androidx.activity 1.8.0 の `ActivityResultRegistry` / `ComponentActivity` で確認。`fandhe-cap-contacts` の
+// `ContactsHelper` と同じ根拠）: シートは `StartIntentSenderForResult`（ActivityResult API）で起動する。registry は
+// `onSaveInstanceState` で登録キーと要求コードを保存し、新 Activity の `onCreate` で復元する。シートの結果が再生成の最中に
+// 届くと registry が保留し、新 Activity が同じキーで `register` した後、STARTED で新しい callback へ届ける。
+// - シート起動後の再生成・終了ではないシステム破棄: 何も捨てない。新 helper の callback が結果を 1 度だけ届ける。
+//   結果が届くまで `launchedId` を残し、新しい要求は `request` が false を返して断る（断らないと、旧要求の結果が
+//   後続の要求の id を消費して成功に見える）。
+// - 終了による破棄（`isFinishing()` が真）: registry ごと消え結果は二度と届かない。中断として失敗を 1 度だけ届ける。
+// - シート起動前（isReadyToPay / loadPaymentData の Task 待ち）の破棄: Task の callback は破棄済み helper で捨てられるため、
+//   終了かどうかによらず中断として失敗を 1 度だけ届ける。
+// 失敗の送達は `take()` が NONE でないときだけ行う（first-wins。callback との二重通知にならない）。
+// Rust 側 reset_pending_tracking()（gallery の android_main）が待ち手を先に戻していれば、引き継いだ結果は旧 id として捨てられる。
+// 残る限界: 決済シートが結果を一度も返さない間（終了ではない破棄の後、利用者が戻らない間を含む）は、後続の要求が
+// 失敗で断られ続ける。固定タイムアウトは掛けない。
 // 守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止。守らない範囲: プロセス死をまたぐ結果・
 // GMS の Task が返らない場合・複数プロセス。期限は掛けない（利用者操作の UI）。
-// ロック順: this のロック内で完結し、他のロックを取らない。Rust 側は自分のロックの内側から Java を呼ばない。
+// ロック順: static の `LOCK` 内で完結し、他のロックを取らない。Rust 側は自分のロックの内側から Java を呼ばない。
 final class PaymentRequestHelper {
     static final int KIND_READY = 0;
     static final int KIND_NOT_READY = 1;
@@ -64,14 +76,17 @@ final class PaymentRequestHelper {
             long requestId, int kind, int resultCode, boolean hasPaymentData);
 
     private final WeakReference<ComponentActivity> activityRef;
-    private final RequestTracker request = new RequestTracker();
-    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity のフィールド初期化子で生成する。
+    // 再生成をまたいで残す状態（static）。すべて `LOCK` で守る（`request` の tracker は原子的だが判定と更新を揃えるため）。
+    private static final Object LOCK = new Object();
+    private static final RequestTracker request = new RequestTracker();
+    private static long launchedId = RequestTracker.NONE;
+    private static boolean pay;
+
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`attach`（onCreate 内）のコンストラクタで登録する。
     private final ActivityResultLauncher<IntentSenderRequest> launcher;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
 
-    // 以下は this のロックで守る。
-    private long launchedId = RequestTracker.NONE;
-    private boolean pay;
+    // 以下は `LOCK` で守る。
     private String paymentDataJson;
     private boolean destroyed;
 
@@ -92,11 +107,11 @@ final class PaymentRequestHelper {
         HELPERS.put(activity, new PaymentRequestHelper(activity));
     }
 
-    // Activity の破棄時（同上）。結果は送らず追跡を外す。
+    // Activity の破棄時（同上）。引き継げない要求だけ失敗で確定する（`onDestroy` 参照）。
     static void detach(Activity activity) {
         PaymentRequestHelper helper = HELPERS.remove(activity);
         if (helper != null) {
-            helper.onDestroy();
+            helper.onDestroy(activity.isFinishing());
         }
     }
 
@@ -115,143 +130,154 @@ final class PaymentRequestHelper {
         if (helper == null) {
             return false;
         }
-        helper.begin(id, pay, isReadyJson, paymentDataJson);
-        return true;
+        return helper.begin(id, pay, isReadyJson, paymentDataJson);
     }
 
-    private void begin(long id, boolean pay, String isReadyJson, String paymentDataJson) {
-        synchronized (this) {
+    private boolean begin(long id, boolean pay, String isReadyJson, String paymentDataJson) {
+        synchronized (LOCK) {
+            // 再生成前のシートの結果がまだ届いていない間は断る（旧結果が新しい要求を確定させない）。
+            if (launchedId != RequestTracker.NONE) {
+                return false;
+            }
             request.track(id);
-            launchedId = RequestTracker.NONE;
-            this.pay = pay;
+            PaymentRequestHelper.pay = pay;
             this.paymentDataJson = paymentDataJson;
         }
         uiHandler.post(() -> start(id, isReadyJson));
+        return true;
     }
 
-    private synchronized void start(long id, String isReadyJson) {
-        if (request.current() != id || destroyed) {
-            return;
-        }
-        ComponentActivity activity = activityRef.get();
-        if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
-            finish(id, KIND_FAILED, 0, false);
-            return;
-        }
-        try {
-            // SUCCESS 以外（無い・古い・無効）は非対応（`isGmsAvailable` の doc 参照）。
-            if (!isGmsAvailable(activity)) {
-                finish(id, KIND_UNSUPPORTED, 0, false);
+    private void start(long id, String isReadyJson) {
+        synchronized (LOCK) {
+            if (request.current() != id || destroyed) {
                 return;
             }
-            PaymentsClient client = Wallet.getPaymentsClient(
-                    activity,
-                    new Wallet.WalletOptions.Builder()
-                            .setEnvironment(WalletConstants.ENVIRONMENT_TEST)
-                            .build());
-            client.isReadyToPay(IsReadyToPayRequest.fromJson(isReadyJson))
-                    .addOnCompleteListener(ContextCompat.getMainExecutor(activity),
-                            task -> onReadyToPay(id, client, task));
-        } catch (RuntimeException e) {
-            finish(id, KIND_FAILED, 0, false);
+            ComponentActivity activity = activityRef.get();
+            if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
+                finish(id, KIND_FAILED, 0, false);
+                return;
+            }
+            try {
+                // SUCCESS 以外（無い・古い・無効）は非対応（`isGmsAvailable` の doc 参照）。
+                if (!isGmsAvailable(activity)) {
+                    finish(id, KIND_UNSUPPORTED, 0, false);
+                    return;
+                }
+                PaymentsClient client = Wallet.getPaymentsClient(
+                        activity,
+                        new Wallet.WalletOptions.Builder()
+                                .setEnvironment(WalletConstants.ENVIRONMENT_TEST)
+                                .build());
+                client.isReadyToPay(IsReadyToPayRequest.fromJson(isReadyJson))
+                        .addOnCompleteListener(ContextCompat.getMainExecutor(activity),
+                                task -> onReadyToPay(id, client, task));
+            } catch (RuntimeException e) {
+                finish(id, KIND_FAILED, 0, false);
+            }
         }
     }
 
     // Task のコールバック（UI スレッド）。再開後に現在の要求かを照合し直す。
-    private synchronized void onReadyToPay(long id, PaymentsClient client, Task<Boolean> task) {
-        if (request.current() != id || destroyed) {
-            return;
-        }
-        // Task 失敗は「使えない」に畳まず失敗にする。
-        if (!task.isSuccessful()) {
-            finish(id, KIND_FAILED, 0, false);
-            return;
-        }
-        boolean ready = Boolean.TRUE.equals(task.getResult());
-        if (!pay) {
-            finish(id, ready ? KIND_READY : KIND_NOT_READY, 0, false);
-            return;
-        }
-        if (!ready) {
-            finish(id, KIND_UNSUPPORTED, 0, false);
-            return;
-        }
-        ComponentActivity activity = activityRef.get();
-        if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
-            finish(id, KIND_FAILED, 0, false);
-            return;
-        }
-        // 背景で決済シートを出さない。
-        if (!activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
-            finish(id, KIND_FAILED, 0, false);
-            return;
-        }
-        try {
-            client.loadPaymentData(PaymentDataRequest.fromJson(paymentDataJson))
-                    .addOnCompleteListener(ContextCompat.getMainExecutor(activity),
-                            t -> onPaymentData(id, t));
-        } catch (RuntimeException e) {
-            finish(id, KIND_FAILED, 0, false);
+    private void onReadyToPay(long id, PaymentsClient client, Task<Boolean> task) {
+        synchronized (LOCK) {
+            if (request.current() != id || destroyed) {
+                return;
+            }
+            // Task 失敗は「使えない」に畳まず失敗にする。
+            if (!task.isSuccessful()) {
+                finish(id, KIND_FAILED, 0, false);
+                return;
+            }
+            boolean ready = Boolean.TRUE.equals(task.getResult());
+            if (!pay) {
+                finish(id, ready ? KIND_READY : KIND_NOT_READY, 0, false);
+                return;
+            }
+            if (!ready) {
+                finish(id, KIND_UNSUPPORTED, 0, false);
+                return;
+            }
+            ComponentActivity activity = activityRef.get();
+            if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
+                finish(id, KIND_FAILED, 0, false);
+                return;
+            }
+            // 背景で決済シートを出さない。
+            if (!activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
+                finish(id, KIND_FAILED, 0, false);
+                return;
+            }
+            try {
+                client.loadPaymentData(PaymentDataRequest.fromJson(paymentDataJson))
+                        .addOnCompleteListener(ContextCompat.getMainExecutor(activity),
+                                t -> onPaymentData(id, t));
+            } catch (RuntimeException e) {
+                finish(id, KIND_FAILED, 0, false);
+            }
         }
     }
 
-    private synchronized void onPaymentData(long id, Task<PaymentData> task) {
-        if (request.current() != id || destroyed) {
-            return;
-        }
-        if (task.isSuccessful()) {
-            // 決済シートを挟まず返った場合。中身は読まず有無だけ。
-            finish(id, KIND_ACTIVITY_RESULT, Activity.RESULT_OK, task.getResult() != null);
-            return;
-        }
-        Exception e = task.getException();
-        if (!(e instanceof ResolvableApiException)) {
-            finish(id, KIND_FAILED, 0, false);
-            return;
-        }
-        ComponentActivity activity = activityRef.get();
-        if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
-            finish(id, KIND_FAILED, 0, false);
-            return;
-        }
-        // 待機中にホームへ移動した場合に背景で決済シートを出さない。
-        if (!activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
-            finish(id, KIND_FAILED, 0, false);
-            return;
-        }
-        try {
-            launcher.launch(new IntentSenderRequest.Builder(
-                    ((ResolvableApiException) e).getResolution()).build());
-            launchedId = id;
-        } catch (RuntimeException ex) {
-            finish(id, KIND_FAILED, 0, false);
+    private void onPaymentData(long id, Task<PaymentData> task) {
+        synchronized (LOCK) {
+            if (request.current() != id || destroyed) {
+                return;
+            }
+            if (task.isSuccessful()) {
+                // 決済シートを挟まず返った場合。中身は読まず有無だけ。
+                finish(id, KIND_ACTIVITY_RESULT, Activity.RESULT_OK, task.getResult() != null);
+                return;
+            }
+            Exception e = task.getException();
+            if (!(e instanceof ResolvableApiException)) {
+                finish(id, KIND_FAILED, 0, false);
+                return;
+            }
+            ComponentActivity activity = activityRef.get();
+            if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
+                finish(id, KIND_FAILED, 0, false);
+                return;
+            }
+            // 待機中にホームへ移動した場合に背景で決済シートを出さない。
+            if (!activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
+                finish(id, KIND_FAILED, 0, false);
+                return;
+            }
+            try {
+                launcher.launch(new IntentSenderRequest.Builder(
+                        ((ResolvableApiException) e).getResolution()).build());
+                launchedId = id;
+            } catch (RuntimeException ex) {
+                finish(id, KIND_FAILED, 0, false);
+            }
         }
     }
 
     // 決済シートの結果（UI スレッド）。コードの解釈は Rust 側。
-    private synchronized void onActivityResult(ActivityResult result) {
-        long id = launchedId;
-        if (id == RequestTracker.NONE || request.current() != id) {
-            // 起動を記録した要求が無い（作り直し後の旧結果など）。データは読まず捨てる。
-            return;
-        }
-        launchedId = RequestTracker.NONE;
-        boolean hasData = false;
-        Intent data = result.getData();
-        // 起動失敗（SendIntentException）は RESULT_CANCELED で返るため、取り消しと区別して失敗にする。
-        if (data != null && data.hasExtra(
-                ActivityResultContracts.StartIntentSenderForResult.EXTRA_SEND_INTENT_EXCEPTION)) {
-            finish(id, KIND_FAILED, 0, false);
-            return;
-        }
-        if (data != null) {
-            try {
-                hasData = PaymentData.getFromIntent(data) != null;
-            } catch (RuntimeException e) {
-                hasData = false;
+    private void onActivityResult(ActivityResult result) {
+        synchronized (LOCK) {
+            long id = launchedId;
+            launchedId = RequestTracker.NONE;
+            if (id == RequestTracker.NONE || request.current() != id) {
+                // 起動を記録した要求が無い（作り直し後の旧結果など）。データは読まず捨てる。
+                return;
             }
+            boolean hasData = false;
+            Intent data = result.getData();
+            // 起動失敗（SendIntentException）は RESULT_CANCELED で返るため、取り消しと区別して失敗にする。
+            if (data != null && data.hasExtra(
+                    ActivityResultContracts.StartIntentSenderForResult.EXTRA_SEND_INTENT_EXCEPTION)) {
+                finish(id, KIND_FAILED, 0, false);
+                return;
+            }
+            if (data != null) {
+                try {
+                    hasData = PaymentData.getFromIntent(data) != null;
+                } catch (RuntimeException e) {
+                    hasData = false;
+                }
+            }
+            finish(id, KIND_ACTIVITY_RESULT, result.getResultCode(), hasData);
         }
-        finish(id, KIND_ACTIVITY_RESULT, result.getResultCode(), hasData);
     }
 
     // first-wins: complete に成功したときだけ Rust へ送る。
@@ -266,11 +292,24 @@ final class PaymentRequestHelper {
         }
     }
 
-    // Activity 破棄。結果は送らず追跡を外す（Rust 側が slot を捨てる）。
-    synchronized void onDestroy() {
-        destroyed = true;
-        request.take();
-        launchedId = RequestTracker.NONE;
-        paymentDataJson = null;
+    // Activity 破棄（UI スレッド）。シート起動後かつ終了ではない破棄は結果が新 helper へ届くため何も捨てない。
+    // それ以外（起動前の Task 待ち、終了による破棄）は結果が届かないため、中断として失敗を 1 度だけ届ける。
+    void onDestroy(boolean finishing) {
+        synchronized (LOCK) {
+            destroyed = true;
+            paymentDataJson = null;
+            if (launchedId != RequestTracker.NONE && !finishing) {
+                return;
+            }
+            launchedId = RequestTracker.NONE;
+            long id = request.take();
+            if (id != RequestTracker.NONE) {
+                if (pay) {
+                    nativeOnPayResult(id, KIND_FAILED, 0, false);
+                } else {
+                    nativeOnCheckResult(id, KIND_FAILED);
+                }
+            }
+        }
     }
 }
