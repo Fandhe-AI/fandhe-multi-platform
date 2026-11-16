@@ -427,7 +427,9 @@ fn all_selected_still_checks_structure() {
     assert!(check("android", &m, "").is_err());
 }
 
-/// 実 APK（aapt2 2.20 の `dump xmltree --file AndroidManifest.xml`）から取った行。識別子は一般化済み。
+/// aapt2 2.20 の `dump xmltree --file AndroidManifest.xml` の実出力の形に合わせて組んだ行（識別子は一般化済み）。
+/// 値の形（`"v" (Raw: "v")`・素の `true`/`false`・`0x%08x`・`@0x7f…`）は実 APK で確かめたものだが、
+/// `usesPermissionFlags` の行は手元の APK に無かったため、AOSP の `BinaryPrimitive::PrettyPrint`（`TYPE_INT_HEX`）に従った合成。
 #[test]
 fn real_aapt2_output_forms_pass_through_verify_scope() {
     let m = make_ws("real-forms", &deps(&["cam", "ble", "pip"]), &[]);
