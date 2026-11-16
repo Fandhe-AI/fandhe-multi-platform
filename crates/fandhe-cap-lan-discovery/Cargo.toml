@@ -38,6 +38,8 @@ id = "lan-discovery"
 [package.metadata.fandhe.android]
 # mDNS 応答を受ける MulticastLock 用（API 31 以下。通常権限）。
 permissions = [
+  # NsdManager の接続時に NsdService が INTERNET を強制する（無いと SecurityException で探索も解決もできない）。通常権限。
+  { name = "android.permission.INTERNET" },
   { name = "android.permission.CHANGE_WIFI_MULTICAST_STATE" },
   # 接続中ネットワークの確認（ConnectivityManager.getActiveNetwork）用。通常権限。
   { name = "android.permission.ACCESS_NETWORK_STATE" },
