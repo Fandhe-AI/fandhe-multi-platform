@@ -1772,6 +1772,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-local-storage-kv"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-managed-app-config"
 version = "0.2.0"
 dependencies = [
@@ -2603,6 +2613,7 @@ dependencies = [
  "fandhe-cap-launch-at-login",
  "fandhe-cap-live-activity",
  "fandhe-cap-local-fonts",
+ "fandhe-cap-local-storage-kv",
  "fandhe-cap-managed-app-config",
  "fandhe-cap-map-view",
  "fandhe-cap-media-cast",

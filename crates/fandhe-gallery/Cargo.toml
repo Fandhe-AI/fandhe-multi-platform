@@ -72,6 +72,7 @@ device = [
   "dep:fandhe-cap-launch-at-login",
   "dep:fandhe-cap-live-activity",
   "dep:fandhe-cap-local-fonts",
+  "dep:fandhe-cap-local-storage-kv",
   "dep:fandhe-cap-managed-app-config",
   "dep:fandhe-cap-map-view",
   "dep:fandhe-cap-media-cast",
@@ -244,6 +245,7 @@ fandhe-cap-lan-discovery = { path = "../fandhe-cap-lan-discovery", optional = tr
 fandhe-cap-launch-at-login = { path = "../fandhe-cap-launch-at-login", optional = true }
 fandhe-cap-live-activity = { path = "../fandhe-cap-live-activity", optional = true }
 fandhe-cap-local-fonts = { path = "../fandhe-cap-local-fonts", optional = true }
+fandhe-cap-local-storage-kv = { path = "../fandhe-cap-local-storage-kv", optional = true }
 fandhe-cap-managed-app-config = { path = "../fandhe-cap-managed-app-config", optional = true }
 fandhe-cap-map-view = { path = "../fandhe-cap-map-view", optional = true }
 fandhe-cap-media-cast = { path = "../fandhe-cap-media-cast", optional = true }

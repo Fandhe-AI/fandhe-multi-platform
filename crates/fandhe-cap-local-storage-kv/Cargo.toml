@@ -1,0 +1,27 @@
+[package]
+name = "fandhe-cap-local-storage-kv"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の local-storage-kv の機能 crate（保存先の解決・ノート保存の橋渡し。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# `Storage`・`FsStorage`・`DataDir` は他機能（secure-credential・file-watch・quick-settings-tile など）も使う
+# OS に触れない部品なので `fandhe-device` に残る（consumer-app-structure.md §8）。本 crate はそれを再公開する。
+fandhe-device = { path = "../fandhe-device" }
+# 画面の状態型（ノート保存の画面。参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+
+# 機能宣言（capability-declaration.md）。端末の保存領域はアプリ専用領域で、権限・framework は要らない。
+[package.metadata.fandhe]
+id = "local-storage-kv"
+
+[lints]
+workspace = true

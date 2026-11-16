@@ -10,9 +10,8 @@
 //! `mod` 宣言参照）。`fandhe-core` は `fandhe-device` を参照しない（依存方向はプロキシ →
 //! コアの一方向、coding-rust.md 準拠）ため、両者の橋渡しは本クレート側の責務にする。
 //!
-//! `screens/registry.rs` の `init "storage_note" => ..., crate::device::storage_note_state,`
-//! 行から [`storage_note_state`] が呼ばれ、`generated_screens!` マクロが構築時に
-//! 1 度だけ実行する（`screens.rs` の `init` 区画 doc 参照）。Issue #748（HTTP 取得）・
+//! ノート保存（`storage_note`）の橋渡しは機能 crate `fandhe-cap-local-storage-kv`（Issue #1332）へ移した。
+//! Issue #748（HTTP 取得）・
 //! #749（カメラ撮影）・#830（傾きで玉が転がる）の effect ドライバはそれぞれ
 //! [`http_fetch`] / [`tilt`] サブモジュールに置く（カメラ撮影は機能 crate `fandhe-cap-camera-capture`、#1170）
 //! （`registry.rs` の `effect` 区画から配線される）。
@@ -515,14 +514,6 @@ pub mod windows_web_auth_session;
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_window_management;
 
-use fandhe_core::screens::storage_note::{NoteStorage, NoteStorageError, StorageNoteState};
-use fandhe_device::{storage::Storage, DeviceError};
-
-/// `fandhe_device::DeviceError` を `fandhe_core::screens::storage_note::NoteStorageError`
-/// へ変換する（`fandhe-core` は `fandhe-device` に依存しないため、両者の型を橋渡しする
-/// のは本クレート側の責務）。`DeviceError` の内部構造（`std::io::Error` 等）は
-/// `fandhe-core` 側へ漏らさず、`Display` の文言のみを転送する
-/// （`DeviceError` の内部構造を漏らさない、security.md A09 準拠）。
 /// アプリ終了時に未移行の端末リソースを解放する（最終成果物（`fandhe-gallery`）の `register_teardown_hooks` 経由で `ProxyApp::on_exit` が呼ぶ契約、
 /// 機能 crate の停止は gallery の終了フックが本関数の後に呼ぶ。停止の順序は「未移行 → 機能 crate」になるが、相互に独立している。
 /// `fandhe-render-egui` の `app.rs` の `EguiApp::on_exit` 実装 doc 参照）。プロセスが終了すると
@@ -536,181 +527,4 @@ pub fn shutdown() {
     local_peer::stop_shared_exchange();
     picture_in_picture::shutdown();
     web_auth_session::shutdown();
-}
-
-fn to_note_storage_error(e: DeviceError) -> NoteStorageError {
-    match e {
-        // `DeviceError::Io` の `Display` は既に「入出力エラー: 」を前置するため、
-        // ここでは内側の `std::io::Error` の `Display` のみを転送する
-        // （`NoteStorageError::Io` 側の `#[error("入出力エラー: {0}")]` と二重にしない）。
-        DeviceError::Io(io_err) => NoteStorageError::Io(io_err.to_string()),
-        DeviceError::InvalidKey(key) => NoteStorageError::InvalidKey(key),
-        DeviceError::Unsupported(s) => NoteStorageError::Unsupported(s.to_string()),
-        DeviceError::Http(_)
-        | DeviceError::InvalidImageSize(_, _)
-        | DeviceError::PermissionDenied(_)
-        | DeviceError::Cancelled(_)
-        | DeviceError::Internal(_)
-        | DeviceError::InvalidInput(_)
-        | DeviceError::Disabled(_) => NoteStorageError::Other(e.to_string()),
-    }
-}
-
-/// `fandhe_device::storage::Storage` 実装を `fandhe_core::screens::storage_note::NoteStorage`
-/// へ橋渡しする newtype。エラーは [`to_note_storage_error`] で型付きのまま変換する
-/// （`.claude/rules/coding-rust.md`「ライブラリクレート: thiserror 等による型付きエラー」準拠）。
-pub struct DeviceNoteStorage(pub Box<dyn Storage>);
-
-impl NoteStorage for DeviceNoteStorage {
-    fn read(&self, key: &str) -> Result<Option<Vec<u8>>, NoteStorageError> {
-        self.0.read(key).map_err(to_note_storage_error)
-    }
-
-    fn write(&self, key: &str, bytes: &[u8]) -> Result<(), NoteStorageError> {
-        self.0.write(key, bytes).map_err(to_note_storage_error)
-    }
-}
-
-/// 任意の `Storage` 実装から `StorageNoteState` を構築する（テスト・#750/#751 が
-/// Android/iOS 向け `DataDir` 注入で差し替える入口）。
-pub fn storage_note_state_with(storage: Box<dyn Storage>) -> StorageNoteState {
-    StorageNoteState::with_storage(Box::new(DeviceNoteStorage(storage)))
-}
-
-/// レジストリの `init "storage_note"` 行から呼ばれる状態ファクトリ
-/// （`fn() -> StorageNoteState`）。
-///
-/// デスクトップ（macOS/Windows/Linux）は `FsStorage::desktop_default()`
-/// （`$HOME/.fandhe`）を保存先にする。Android は `AndroidApp::internal_data_path()`
-/// （`getFilesDir()` 相当、`device::android::data_dir()`、Issue #750）を起点にし、
-/// iOS は [`ios::documents_dir`]（アプリコンテナ内 `Documents/`、Issue #751）を
-/// 保存先にする。
-pub fn storage_note_state() -> StorageNoteState {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        use fandhe_device::storage::FsStorage;
-        match FsStorage::desktop_default() {
-            Ok(dir) => storage_note_state_with(Box::new(FsStorage::new(dir))),
-            Err(e) => {
-                StorageNoteState::default().with_status(format!("保存先の解決に失敗しました: {e}"))
-            }
-        }
-    }
-    #[cfg(target_os = "android")]
-    {
-        use fandhe_device::storage::FsStorage;
-        match android::data_dir() {
-            Some(dir) => storage_note_state_with(Box::new(FsStorage::new(dir))),
-            None => StorageNoteState::default()
-                .with_status("保存先（内部ストレージ）を取得できませんでした"),
-        }
-    }
-    #[cfg(target_os = "ios")]
-    {
-        use fandhe_device::storage::FsStorage;
-        match ios::documents_dir() {
-            Ok(dir) => storage_note_state_with(Box::new(FsStorage::new(dir))),
-            Err(e) => {
-                StorageNoteState::default().with_status(format!("保存先の解決に失敗しました: {e}"))
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use fandhe_device::{DataDir, DeviceError};
-    use std::sync::{Arc, Mutex};
-
-    /// `fandhe_device::storage::Storage` のインメモリ実装。`Storage` トレイト側で
-    /// 「保存 → 別状態インスタンスで復元」を満たすことを検証する（受入 (b) を
-    /// `Storage` 経由でも担保する。`fandhe-core` 側の `NoteStorage` 直接実装での検証は
-    /// `crates/fandhe-core/tests/storage_note.rs` を参照）。
-    #[derive(Clone, Default)]
-    struct MemStorage(Arc<Mutex<Option<Vec<u8>>>>);
-
-    impl Storage for MemStorage {
-        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, DeviceError> {
-            Ok(self.0.lock().expect("lock は成功する").clone())
-        }
-
-        fn write(&self, _key: &str, bytes: &[u8]) -> Result<(), DeviceError> {
-            *self.0.lock().expect("lock は成功する") = Some(bytes.to_vec());
-            Ok(())
-        }
-    }
-
-    /// 不正な key を要求して `DeviceError::InvalidKey` を返す `Storage`
-    /// （エラー文字列化の転送経路を検証する）。
-    struct RejectingStorage;
-
-    impl Storage for RejectingStorage {
-        fn read(&self, key: &str) -> Result<Option<Vec<u8>>, DeviceError> {
-            Err(DeviceError::InvalidKey(key.to_string()))
-        }
-
-        fn write(&self, key: &str, _bytes: &[u8]) -> Result<(), DeviceError> {
-            Err(DeviceError::InvalidKey(key.to_string()))
-        }
-    }
-
-    #[test]
-    fn memory_storage_round_trips_through_screen() {
-        use fandhe_core::click_button;
-        use fandhe_core::screens::storage_note::{set_input, storage_note_screen};
-
-        let mem = MemStorage::default();
-        let screen = storage_note_screen();
-        let mut state = storage_note_state_with(Box::new(mem.clone()));
-        set_input(&mut state, "メモ".to_string());
-        assert!(click_button(&screen, "保存", &mut state));
-
-        let restored = storage_note_state_with(Box::new(mem));
-        assert_eq!(restored.notes, vec!["メモ".to_string()]);
-    }
-
-    #[test]
-    fn fs_storage_survives_state_recreation() {
-        use fandhe_device::storage::FsStorage;
-
-        let dir = std::env::temp_dir().join(format!(
-            "fandhe-egui-proxy-device-test-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("システム時刻は UNIX epoch 以降")
-                .as_nanos()
-        ));
-
-        let first = storage_note_state_with(Box::new(FsStorage::new(DataDir(dir.clone()))));
-        assert!(first.notes.is_empty());
-
-        use fandhe_core::screens::storage_note::{encode_notes, NOTES_KEY};
-        FsStorage::new(DataDir(dir.clone()))
-            .write(NOTES_KEY, &encode_notes(&["復元されるメモ".to_string()]))
-            .expect("write は成功する");
-
-        // 新しい `FsStorage` インスタンス + 新しい状態でプロセス再起動を模す。
-        let restored = storage_note_state_with(Box::new(FsStorage::new(DataDir(dir))));
-        assert_eq!(restored.notes, vec!["復元されるメモ".to_string()]);
-    }
-
-    #[test]
-    fn device_error_message_is_forwarded() {
-        let bridged = DeviceNoteStorage(Box::new(RejectingStorage));
-        let err = bridged.read("../x").unwrap_err();
-        assert!(err.to_string().contains("../x"));
-    }
-
-    /// PR #787 Bugbot 指摘: `DeviceError::Io` の `Display` は既に「入出力エラー: 」を
-    /// 前置するため、`to_note_storage_error` がそれをそのまま `NoteStorageError::Io` へ
-    /// 格納すると「入出力エラー: 入出力エラー: ...」と二重表示になっていた。
-    #[test]
-    fn io_error_prefix_is_not_duplicated() {
-        let io_err = std::io::Error::other("disk full");
-        let err = to_note_storage_error(DeviceError::Io(io_err));
-        let msg = err.to_string();
-        assert_eq!(msg.matches("入出力エラー").count(), 1, "got: {msg}");
-    }
 }

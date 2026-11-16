@@ -39,7 +39,7 @@ generated_screens! {
     nav "confirm_dialog" => fandhe_core::screens::confirm_dialog::confirm_dialog_screen,
 
     init #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
-    "storage_note" => fandhe_core::screens::storage_note::storage_note_screen, fandhe_egui_proxy::device::storage_note_state,
+    "storage_note" => fandhe_core::screens::storage_note::storage_note_screen, fandhe_cap_local_storage_kv::storage_note_state,
 
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
