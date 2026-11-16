@@ -44,6 +44,10 @@ final class BiometricAuthHelper {
     // `FragmentActivity` でないとき（想定外）は null。要求は内部エラーで確定する。
     private final BiometricPrompt biometricPrompt;
     private boolean resumed;
+    // この helper が prompt を出した要求の id（UI スレッドで `present` が設定）。callback はこの id を照合付きで確定する。
+    // prompt を出していない helper（`attach` で作り直した直後）では `NONE` のため、旧 prompt の遅れて届く
+    // `ERROR_CANCELED` は no-op になり、後続の要求 B の id を横取りしない。
+    private long promptId = RequestTracker.NONE;
 
     // `biometricPrompt` 生成時に渡す唯一のコールバックインスタンス。先頭で `biometricRequest` を読んで
     // `RequestTracker.NONE` なら無視する（first-wins。二重通知防止）。`onAuthenticationFailed`（不一致・プロンプト継続）は
@@ -52,21 +56,13 @@ final class BiometricAuthHelper {
             new BiometricPrompt.AuthenticationCallback() {
                 @Override
                 public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result) {
-                    long id = biometricRequest.take();
-                    if (id == RequestTracker.NONE) {
-                        return;
-                    }
-                    nativeOnBiometricResult(id, BIOMETRIC_RESULT_AUTHENTICATED);
+                    finish(BIOMETRIC_RESULT_AUTHENTICATED);
                 }
 
                 @Override
                 public void onAuthenticationError(int errorCode, CharSequence errString) {
-                    long id = biometricRequest.take();
-                    if (id == RequestTracker.NONE) {
-                        return;
-                    }
                     // errString はログへ出さない（画面へ渡す情報も結果コードのみに絞る、security.md A09）。
-                    nativeOnBiometricResult(id, biometricErrorToResultCode(errorCode));
+                    finish(biometricErrorToResultCode(errorCode));
                 }
 
                 @Override
@@ -74,6 +70,15 @@ final class BiometricAuthHelper {
                     // 不一致（プロンプト継続）。最終結果は Succeeded/Error 側で確定するため、ここでは何もしない。
                 }
             };
+
+    // この helper の prompt の id が今も待っている要求のときだけ結果を 1 度届ける（first-wins）。
+    // 旧要求の遅延到着・破棄時の解放との二重通知は `complete` が false を返して no-op になる。
+    private void finish(int code) {
+        long id = promptId;
+        if (id != RequestTracker.NONE && biometricRequest.complete(id)) {
+            nativeOnBiometricResult(id, code);
+        }
+    }
 
     // `BiometricPrompt.ERROR_*` → `nativeOnBiometricResult` の code への写像（本ファイルがこの表の SSOT）。
     // 未知のコード（TIMEOUT/UNABLE_TO_PROCESS/NO_SPACE/VENDOR 等）は失敗側へ倒す（偽のキャンセル・偽の成功を作らない）。
@@ -118,9 +123,16 @@ final class BiometricAuthHelper {
         }
     }
 
+    // Activity 破棄。再生成が無い finish だけだと `android_main` が走らず Rust 側の破棄も起きず、OS が
+    // `ERROR_CANCELED` を返す保証もないため、この helper が出した追跡中の要求を 1 度だけ中断として届けて待ち手を解放する。
+    // 照合付き `complete` のため、後続 Activity が出した別の要求や、OS の cancel 通知との二重通知にはならない。
     static void detach(Activity activity) {
+        BiometricAuthHelper helper;
         synchronized (BiometricAuthHelper.class) {
-            HELPERS.remove(activity);
+            helper = HELPERS.remove(activity);
+        }
+        if (helper != null) {
+            helper.finish(BIOMETRIC_RESULT_CANCELLED);
         }
     }
 
@@ -174,6 +186,7 @@ final class BiometricAuthHelper {
             nativeOnBiometricResult(requestId, BIOMETRIC_RESULT_UNAVAILABLE);
             return;
         }
+        promptId = requestId;
         try {
             BiometricPrompt.PromptInfo promptInfo = new BiometricPrompt.PromptInfo.Builder()
                     .setTitle(reason)
