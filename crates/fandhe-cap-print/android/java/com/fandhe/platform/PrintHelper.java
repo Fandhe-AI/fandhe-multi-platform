@@ -337,10 +337,10 @@ final class PrintHelper {
                 return;
             }
             // 試行ごとに状態を作り直す。
-            writeFailed = false;
+            setWriteFailed(false);
             PageDrawer d = drawer;
             if (d == null) {
-                writeFailed = true;
+                setWriteFailed(true);
                 callback.onWriteFailed(null);
                 return;
             }
@@ -373,14 +373,23 @@ final class PrintHelper {
             if (ok) {
                 callback.onWriteFinished(new PageRange[] {PageRange.ALL_PAGES});
             } else {
-                writeFailed = true;
+                setWriteFailed(true);
                 callback.onWriteFailed(null);
+            }
+        }
+
+        // 置き換えられた古い要求の adapter が、今の要求の状態（stateId の要求のもの）を書き換えないようにする。
+        private void setWriteFailed(boolean failed) {
+            if (stateId == id) {
+                writeFailed = failed;
             }
         }
 
         @Override
         public void onFinish() {
-            finishedAt = SystemClock.elapsedRealtime();
+            if (stateId == id) {
+                finishedAt = SystemClock.elapsedRealtime();
+            }
             // 印刷フレームワークが adapter を握り続けても画素配列を解放させる。
             drawer = null;
             evaluate(id);
