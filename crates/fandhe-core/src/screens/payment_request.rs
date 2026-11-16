@@ -4,8 +4,8 @@
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod payment_request;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
-//! 置き場」節の制約どおり）。OS 呼び出しは `fandhe-egui-proxy` の effect ドライバ
-//! （`device/payment_request.rs`）が [`take_request`] で要求を観測して行い、[`finish`] で結果を注入する。
+//! 置き場」節の制約どおり）。OS 呼び出しは機能 crate の effect ドライバ
+//! （`fandhe-cap-payment-request` の `driver.rs`）が [`take_request`] で要求を観測して行い、[`finish`] で結果を注入する。
 //! Web・Android 分の状態・文言もここで定義済みで、後続の子（Web・Android）は画面に触らない。
 //! Android の GMS なしと `isReadyToPay` false は [`CoreOutcome::Unsupported`] に寄せ、状態は増やさない。
 //!

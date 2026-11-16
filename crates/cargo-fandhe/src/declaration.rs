@@ -160,6 +160,14 @@ impl PermissionFlag {
             Self::NeverForLocation => "neverForLocation",
         }
     }
+
+    /// 成果物（aapt2 の出力）の `usesPermissionFlags` に立つビット（`R.attr.usesPermissionFlags` の値）。
+    /// verify-scope が観測値と照合する。フラグを足すときは網羅的 match でここも定義させる。
+    pub fn bit(&self) -> u32 {
+        match self {
+            Self::NeverForLocation => 0x0001_0000,
+        }
+    }
 }
 
 /// `required` は省略不可（暗黙の既定値による端末の除外を防ぐ）。

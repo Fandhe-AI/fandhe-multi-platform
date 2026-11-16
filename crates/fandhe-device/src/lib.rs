@@ -31,8 +31,6 @@ pub mod barcode_scan;
 /// `fandhe-web-dom` が共有する純関数で、機能の契約は `fandhe-cap-camera-preview-stream` が持つ（Issue #812 / #1329、
 /// consumer-app-structure.md §8）。
 pub mod camera_preview_stream;
-/// Phase 11（端末機能の拡充ループ、親 #152、Issue #1116）: 車載ディスプレイの 1 行テキスト。
-pub mod car_display;
 /// Phase 11（端末機能の拡充ループ、親 #1154、Issue #1404）: 方位（コンパス）。
 pub mod compass;
 /// Phase 11（端末機能の拡充ループ、親 #153、Issue #1278）: ディープリンク（Universal Links / App Links）の受信。
@@ -49,13 +47,9 @@ pub mod file_association;
 pub mod file_picker;
 /// Phase 11（端末機能の拡充ループ、親 #1133、Issue #1312）: 全画面表示（システムバー非表示）。
 pub mod fullscreen_immersive;
-/// Phase 11（端末機能の拡充ループ、親 #149、Issue #1089）: ヘルスデータ（今日の歩数を 1 回読む）。
-pub mod health_data;
 pub mod http;
 /// Phase 11（端末機能の拡充ループ、親 #1120、Issue #1250）: 画像内の文字認識（OCR）。
 pub mod image_recognition;
-/// Phase 11（端末機能の拡充ループ、親 #110、Issue #511）: 近くの端末との直接通信（同じアプリを開いた 2 台が固定文字列を 1 回ずつ送り合う）。
-pub mod local_peer;
 /// Phase 11（端末機能の拡充ループ、親 #86、Issue #267）: 音声 1 本の再生・一時停止・停止。
 pub mod media_playback;
 /// Issue #1188: MP4 box 読みの共有部品（音声変換は機能 crate `fandhe-cap-media-transcode`、動画変換 `video_transcode` が使う）。
@@ -64,16 +58,12 @@ pub mod media_transcode;
 pub mod mic_record;
 /// Issue #1188: base64url の共有部品（パスキー本体は機能 crate `fandhe-cap-passkey-signin`）。
 pub mod passkey;
-/// Phase 11（端末機能の拡充ループ、親 #114、Issue #541）: 物・サービスの決済シート（Google Pay TEST 環境、課金なし）。
-pub mod payment_request;
 /// Phase 11（端末機能の拡充ループ、親 #95、Issue #355）: ペン・筆圧入力（種類・筆圧・傾き）。
 pub mod pen_stylus;
 /// Phase 11（端末機能の拡充ループ、親 #1121、Issue #1254）: 画像 1 枚の写真ライブラリ保存。
 pub mod photo_library;
 /// Phase 11（端末機能の拡充ループ）: 写真 1 枚の選択。
 pub mod photo_picker;
-/// Phase 11（端末機能の拡充ループ、親 #97、Issue #364）: ピクチャ・イン・ピクチャ（映像の小窓表示）。
-pub mod picture_in_picture;
 /// Phase 11（端末機能の拡充ループ、親 #94、Issue #325）: 印刷ダイアログを開く。
 pub mod print;
 /// Phase 11（端末機能の拡充ループ、親 #105、Issue #444）: セーフエリア・ディスプレイ切り欠き。

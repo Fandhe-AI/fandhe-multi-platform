@@ -133,7 +133,7 @@
   対応する entitlement `com.apple.developer.homekit` は `FandheIosApp.entitlements` で宣言する。
 
   NSHealthShareUsageDescription（Issue #1090）: 型サンプル「ヘルスデータ読み書き」画面が HealthKit
-  （`crates/fandhe-egui-proxy/ios/fandhe_ios_health_data.m`）で今日の歩数の合計を読むために必須。
+  （`crates/fandhe-cap-health-data/ios/fandhe_ios_health_data.m`）で今日の歩数の合計を読むために必須。
   未設定だと許可の要求でクラッシュする。書き込みはしないので NSHealthUpdateUsageDescription は足さない
   （security.md A05）。対応する entitlement `com.apple.developer.healthkit` は `FandheIosApp.entitlements`
   で宣言する。
@@ -146,9 +146,9 @@
 
   NSBonjourServices の `_fandhe-p2p`（Issue #512）: 型サンプル「近くの端末との直接通信」
   （`FANDHE_PROXY_APP=peer_connect`）が MultipeerConnectivity
-  （`crates/fandhe-egui-proxy/apple/fandhe_apple_local_peer.m` は iOS/macOS 共用）で
+  （`crates/fandhe-cap-local-peer-connect/apple/fandhe_apple_local_peer.m` は iOS/macOS 共用）で
   advertise・browse するために必須。未宣言だと `didNotStart*` が -72008（code 5）になる。
-  種別は `fandhe_device::local_peer::SERVICE_TYPE` と一致させる。最小権限（security.md A05）とし、
+  種別は `fandhe_cap_local_peer_connect::SERVICE_TYPE` と一致させる。最小権限（security.md A05）とし、
   multicast entitlement は足さない。
 
   NSNearbyInteractionUsageDescription / NSBonjourServices の `_fandhe-uwb`（Issue #654）: 型サンプル

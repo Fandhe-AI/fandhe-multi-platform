@@ -1333,6 +1333,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-car-display"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-clipboard"
 version = "0.2.0"
 dependencies = [
@@ -1672,6 +1683,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-health-data"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-home-widget"
 version = "0.2.0"
 dependencies = [
@@ -1796,6 +1819,18 @@ dependencies = [
  "thiserror 2.0.20",
  "ttf-parser",
  "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-local-peer-connect"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -2100,6 +2135,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-payment-request"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "serde_json",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-pdf-viewer"
 version = "0.2.0"
 dependencies = [
@@ -2153,6 +2200,18 @@ dependencies = [
  "jni 0.22.4",
  "thiserror 2.0.20",
  "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-picture-in-picture"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -2648,6 +2707,7 @@ dependencies = [
  "fandhe-cap-camera-capture",
  "fandhe-cap-camera-preview-stream",
  "fandhe-cap-capture-protection",
+ "fandhe-cap-car-display",
  "fandhe-cap-clipboard",
  "fandhe-cap-color-picker",
  "fandhe-cap-companion-device",
@@ -2675,6 +2735,7 @@ dependencies = [
  "fandhe-cap-geofence",
  "fandhe-cap-global-hotkey",
  "fandhe-cap-haptics",
+ "fandhe-cap-health-data",
  "fandhe-cap-home-widget",
  "fandhe-cap-http-get",
  "fandhe-cap-human-presence",
@@ -2685,6 +2746,7 @@ dependencies = [
  "fandhe-cap-launch-at-login",
  "fandhe-cap-live-activity",
  "fandhe-cap-local-fonts",
+ "fandhe-cap-local-peer-connect",
  "fandhe-cap-local-storage-kv",
  "fandhe-cap-location",
  "fandhe-cap-managed-app-config",
@@ -2708,10 +2770,12 @@ dependencies = [
  "fandhe-cap-open-in-shell",
  "fandhe-cap-open-system-settings",
  "fandhe-cap-passkey-signin",
+ "fandhe-cap-payment-request",
  "fandhe-cap-pdf-viewer",
  "fandhe-cap-pedometer",
  "fandhe-cap-per-app-language",
  "fandhe-cap-photo-library",
+ "fandhe-cap-picture-in-picture",
  "fandhe-cap-power-state",
  "fandhe-cap-quick-settings-tile",
  "fandhe-cap-radio-control",
@@ -2877,6 +2941,8 @@ dependencies = [
  "fandhe-cap-now-playing-controls",
  "fandhe-cap-on-device-llm",
  "fandhe-cap-passkey-signin",
+ "fandhe-cap-payment-request",
+ "fandhe-cap-picture-in-picture",
  "fandhe-cap-power-state",
  "fandhe-cap-screen-capture",
  "fandhe-cap-serial-port",

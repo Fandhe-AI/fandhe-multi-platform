@@ -1,0 +1,181 @@
+//! Phase 8（端末機能の型検証、親 #752 / Issue #746）: 端末機能（ローカル保存・HTTP・カメラ・
+//! 傾き検知）の抽象トレイトと desktop 向け共通実装を置くクレート。
+//!
+//! 依存方向は本クレート → `fandhe-core`（現時点では未使用）の一方向のみを許容し、`fandhe-core`
+//! から本クレートを参照することはない（coding-rust.md の二層アーキテクチャ原則）。
+//! 呼び出し元は `fandhe-egui-proxy` の feature `device`（既定 on）で、画面 ↔ 端末実装の
+//! 接続方法（`Box<dyn Storage>` 等をどう渡すか）は #747 以降の設計事項（本クレートは
+//! トレイトと同期実装の提供のみに責務を限定する）。
+//!
+//! Phase 8 が spec 要件化されなかった場合、本クレートと `fandhe-egui-proxy` 側の
+//! feature `device` を消せば元に戻せる構成にしている。切り離し手順は
+//! docs/architecture/device-feature-removal.md を参照。
+//!
+//! `#745`（StateStore の apply API + 完了キュー）は本クレートと並列で開発中のため、
+//! worker スレッド → mpsc → apply の配線はここでは行わない。各トレイトは
+//! `Send + Sync` なオブジェクトセーフの同期 API とし、非同期化・スレッド化は
+//! #745 の API が確定してから #747〜#749 側で行う。
+#![forbid(unsafe_code)]
+
+/// Phase 11（端末機能の拡充ループ、親 #101、Issue #424）: アプリショートカット（長押し・ジャンプリスト・Dock メニュー）の登録。
+pub mod app_shortcuts;
+/// Phase 11（端末機能の拡充ループ、親 #121、Issue #585）: ワンタイムコード（OTP）の自動入力のヒント。
+pub mod autofill_otp;
+/// Phase 11（端末機能の拡充ループ、親 #100、Issue #390）: OS 管理のバックグラウンドダウンロード。
+pub mod background_download;
+/// Phase 11（端末機能の拡充ループ、親 #1042、Issue #1043）: バックグラウンド処理。
+pub mod background_task;
+/// Phase 11 の拡充ループ（親 #170、Issue #835）: OS 管理のバックグラウンド送信の契約。
+pub mod background_upload;
+/// Phase 11（端末機能の拡充ループ、親 #116、Issue #557）: 画像内のバーコード・QR 読み取り。
+pub mod barcode_scan;
+/// カメラのライブ映像の縮小の部品（`downscale_packed`・`downscale_yuv420`・`preview_size`）だけ。`fandhe-cap-ar` と
+/// `fandhe-web-dom` が共有する純関数で、機能の契約は `fandhe-cap-camera-preview-stream` が持つ（Issue #812 / #1329、
+/// consumer-app-structure.md §8）。
+pub mod camera_preview_stream;
+/// Phase 11（端末機能の拡充ループ、親 #1154、Issue #1404）: 方位（コンパス）。
+pub mod compass;
+/// Phase 11（端末機能の拡充ループ、親 #153、Issue #1278）: ディープリンク（Universal Links / App Links）の受信。
+pub mod deep_link;
+/// Phase 11（端末機能の拡充ループ、親 #1131、Issue #1304）: 端末・OS 情報（機種・OS 版・空き容量）。
+pub mod device_info;
+/// Phase 11（端末機能の拡充ループ、親 #1013、Issue #1014）: ドラッグ & ドロップ受け取り。
+pub mod drag_drop;
+/// Phase 11（端末機能の拡充ループ、親 #148、Issue #762）: 画面のスポイト（画面上の 1 点の色を `#rrggbb` で返す）。
+pub mod eye_dropper;
+/// Phase 11（端末機能の拡充ループ、親 #102、Issue #416）: ファイルの関連付け（OS から渡されたファイルを開く）。
+pub mod file_association;
+/// Phase 11（端末機能の拡充ループ、Issue #872）: ファイル選択ダイアログ。
+pub mod file_picker;
+/// Phase 11（端末機能の拡充ループ、親 #1133、Issue #1312）: 全画面表示（システムバー非表示）。
+pub mod fullscreen_immersive;
+/// Phase 11（端末機能の拡充ループ）: location に乗せた Rust 側のジオフェンス判定。
+pub mod geofence;
+pub mod http;
+/// Phase 11（端末機能の拡充ループ、親 #1120、Issue #1250）: 画像内の文字認識（OCR）。
+pub mod image_recognition;
+/// Phase 11（端末機能の拡充ループ、親 #109、Issue #486）: LAN のサービス探索（mDNS / Bonjour、`_http._tcp` を固定窓で 1 回探す）。
+pub mod lan_discovery;
+/// Phase 11（端末機能の拡充ループ、親 #887、Issue #888）: 継続 push 型の位置情報取得。
+pub mod location;
+/// Phase 11（端末機能の拡充ループ、親 #85、Issue #273）: 地図の静止画 1 枚の取得。
+pub mod map_view;
+/// Phase 11（端末機能の拡充ループ、親 #86、Issue #267）: 音声 1 本の再生・一時停止・停止。
+pub mod media_playback;
+/// Issue #1188: MP4 box 読みの共有部品（音声変換は機能 crate `fandhe-cap-media-transcode`、動画変換 `video_transcode` が使う）。
+pub mod media_transcode;
+/// Phase 11（端末機能の拡充ループ、親 #953、Issue #954）: マイク録音。
+pub mod mic_record;
+/// Phase 11（端末機能の拡充ループ、親 #108、Issue #482）: 音楽ライブラリ（曲のタイトルとアーティストの先頭 20 件）。
+pub mod music_library;
+/// Phase 11（端末機能の拡充ループ、親 #1130、Issue #1282）: ネットワーク接続状態（有無・種別・従量制）。
+pub mod network_status;
+/// Issue #1188: base64url の共有部品（パスキー本体は機能 crate `fandhe-cap-passkey-signin`）。
+pub mod passkey;
+/// Phase 11（端末機能の拡充ループ、親 #95、Issue #355）: ペン・筆圧入力（種類・筆圧・傾き）。
+pub mod pen_stylus;
+/// Phase 11（端末機能の拡充ループ、親 #1121、Issue #1254）: 画像 1 枚の写真ライブラリ保存。
+pub mod photo_library;
+/// Phase 11（端末機能の拡充ループ）: 写真 1 枚の選択。
+pub mod photo_picker;
+/// Phase 11（端末機能の拡充ループ、親 #94、Issue #325）: 印刷ダイアログを開く。
+pub mod print;
+/// Phase 11（端末機能の拡充ループ、親 #105、Issue #444）: セーフエリア・ディスプレイ切り欠き。
+pub mod safe_area_insets;
+/// Phase 11（端末機能の拡充ループ、親 #128、Issue #655）: 画面向きの取得・固定。
+pub mod screen_orientation;
+/// Phase 11（端末機能の拡充ループ、親 #1023、Issue #1024）: 音声認識。
+pub mod speech_recognition;
+/// Phase 11（端末機能の拡充ループ、親 #117、Issue #560）: OS の検索への登録（固定のメモ 1 件の登録と全削除）。
+pub mod spotlight_index;
+pub mod storage;
+/// Phase 11（端末機能の拡充ループ、親 #115、Issue #535）: 端末内翻訳（固定の原文を 1 回訳す）。
+pub mod translation;
+/// Phase 11（端末機能の拡充ループ、Issue #865）: 任意テキストの読み上げ（TTS）。
+pub mod tts;
+/// Phase 11（端末機能の拡充ループ、親 #1116、Issue #1215）: カスタム URL scheme の受信。
+pub mod url_scheme;
+/// Phase 11（端末機能の拡充ループ、親 #113、Issue #530）: OAuth 用の Web 認証セッション（デモ認可ページ + コールバック検査）。
+pub mod web_auth_session;
+/// Wi-Fi の電源状態の判定（`radio_off`）だけ。wifi-info と wifi-connect が共有する純関数で、機能の契約は `fandhe-cap-wifi-info`
+/// が持つ（Issue #514 / #1329、consumer-app-structure.md §8）。
+pub mod wifi_info;
+/// Phase 11（端末機能の拡充ループ、親 #127、Issue #636）: ウィンドウ管理（位置・サイズ・最前面）。
+pub mod window_management;
+
+use std::path::PathBuf;
+
+/// 端末機能共通のエラー型。呼び出し元（画面・プラットフォームレイヤ）に実装詳細
+/// （ファイルシステムの内部構造・URL の生文字列全体）を漏らさないよう、
+/// メッセージには key 名やスキーム名程度に留める（security.md A09 ログ出力の方針）。
+#[derive(Debug, thiserror::Error)]
+pub enum DeviceError {
+    /// ファイル読み書きが失敗した（`storage` モジュール）。
+    #[error("入出力エラー: {0}")]
+    Io(#[from] std::io::Error),
+    /// `storage::Storage` に渡された key が許可文字集合・パストラバーサル制約に違反する。
+    #[error("不正な key: {0}")]
+    InvalidKey(String),
+    /// `http` モジュールの通信・許可 URL 検証・応答上限超過などの失敗。
+    #[error("HTTP エラー: {0}")]
+    Http(String),
+    /// 撮影画像のサイズが許容範囲外（0 または上限超過）。カメラ撮影は機能 crate `fandhe-cap-camera-capture` が自前の `CameraError` で返し、本バリアントは他機能（地図・PDF 等）の画像で使う。
+    #[error("画像サイズが不正または大きすぎます: {0}x{1}")]
+    InvalidImageSize(u32, u32),
+    /// 現在のプラットフォームでは該当機能を提供できない（例: `FsStorage::desktop_default` の
+    /// ホームディレクトリ取得不可）。
+    #[error("このプラットフォームでは未対応です: {0}")]
+    Unsupported(&'static str),
+    /// 端末側の権限設定でアクセスが拒否された（Issue #749。desktop の `DummyCamera` は
+    /// 常に成功するため到達しないが、Android/iOS の実カメラ実装（#750/#751）が
+    /// `Intent`/`UIImagePickerController` の権限拒否コールバックから返す想定の
+    /// バリアント）。第 1 引数は機能名（`"camera"` 等、内部識別子のみで端末固有情報は含めない）。
+    #[error("権限が拒否されました: {0}")]
+    PermissionDenied(&'static str),
+    /// ユーザーが端末側の選択 UI を能動的にキャンセルした（正常系。#751。
+    /// iOS の `UIImagePickerController` のキャンセル、Android の Intent
+    /// `RESULT_CANCELED`（#750）が返す想定のバリアント。第 1 引数は機能名
+    /// （`"camera"` 等、内部識別子のみ）。
+    #[error("操作がキャンセルされました: {0}")]
+    Cancelled(&'static str),
+    /// 端末機能自体は利用可能だが、今回の呼び出しが一時的な内部要因で失敗した
+    /// （PR #791 レビュー指摘: iOS の `fandhe_ios_camera_capture` コード 4 —
+    /// presenter 不在・エンコード失敗・二重呼び出し等。`Unsupported`（機種として
+    /// 非対応）と混同すると「カメラなし端末」という誤った案内になるため区別する。
+    /// 第 1 引数は機能名（`"camera"` 等、内部識別子のみ）で、呼び出し元は
+    /// `CaptureFailure::Other` 相当の汎用失敗表示へフォールバックする想定）。
+    #[error("内部エラーが発生しました: {0}")]
+    Internal(&'static str),
+    /// 端末機能へ渡した入力が契約違反（`tts::Tts::speak` に渡したテキストの NUL
+    /// 混入等）。第 1 引数は機能名（`"tts text"` 等、内部識別子のみ）。
+    #[error("入力が不正です: {0}")]
+    InvalidInput(&'static str),
+    /// 端末側で機能そのものが無効化されている（OS 設定で位置情報サービスが
+    /// OFF 等）。`Unsupported`（この機種・OS では非対応）とも `Internal`
+    /// （一時的な内部要因）とも意味が異なるため区別する（`location` モジュール
+    /// doc の対応表参照、Issue #888）。第 1 引数は機能名（`"location"` 等、
+    /// 内部識別子のみ）。
+    #[error("端末側で機能が無効化されています: {0}")]
+    Disabled(&'static str),
+}
+
+/// カメラ実装が返す静止画（RGBA・行優先・パディングなし）。
+///
+/// `rgba.len()` は常に `width * height * 4` になる契約（`fandhe-cap-camera-capture` の `DummyCamera` のテスト参照）。
+#[derive(Debug, Clone)]
+pub struct Image {
+    /// 画像の幅（ピクセル）。
+    pub width: u32,
+    /// 画像の高さ（ピクセル）。
+    pub height: u32,
+    /// RGBA・行優先・パディングなしの生バイト列（長さは `width * height * 4`）。
+    pub rgba: Vec<u8>,
+}
+
+/// `Storage` 実装がファイルを読み書きする起点ディレクトリ。
+///
+/// プラットフォームレイヤ（`fandhe-egui-proxy` 等）が構築して `storage::FsStorage::new` へ
+/// 渡す契約で、本クレート自身は Android / iOS のサンドボックスパスを知らない
+/// （依存方向の一方向性を保つため、プラットフォーム固有 API はここに置かない）。
+#[derive(Debug, Clone)]
+pub struct DataDir(pub PathBuf);

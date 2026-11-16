@@ -36,7 +36,7 @@ use crate::workspace::{collect, run_metadata, Found};
 
 /// 生成物の印。これがある `gen/` だけを次回の生成で置き換える（利用者のディレクトリを消さない）。
 const MARKER: &str = ".fandhe-gen";
-const MAIN_ACTIVITY: &str = "com.fandhe.platform.MainActivity";
+pub(crate) const MAIN_ACTIVITY: &str = "com.fandhe.platform.MainActivity";
 /// Android の MainActivity が受け取る設定変更。受け取らないと Activity が作り直され、winit が古い描画スレッドを
 /// 残して黒画面・ANR になる（#73）。Rust の実行層の前提でアプリ固有ではない。古い端末では未知の flag は無視される。
 const MAIN_ACTIVITY_CONFIG_CHANGES: &str = "orientation|screenSize|keyboardHidden|uiMode|fontScale|density|locale|layoutDirection|smallestScreenSize|screenLayout|colorMode|fontWeightAdjustment|keyboard|navigation|touchscreen|mcc|mnc|grammaticalGender";
