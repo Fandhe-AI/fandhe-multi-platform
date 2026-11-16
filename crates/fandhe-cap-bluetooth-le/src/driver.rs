@@ -298,13 +298,8 @@ fn take_waiter(request_id: u64) -> Option<WaiterTx> {
 static SCREEN_OWNER: fandhe_runtime::request_slot::SlotOwner =
     fandhe_runtime::request_slot::SlotOwner::new();
 
-/// 要求登録から OS への開始依頼までの直列化ロック（[`start_native_scan`]）。
-#[cfg(any(
-    target_os = "ios",
-    target_os = "macos",
-    target_os = "windows",
-    target_os = "android"
-))]
+/// 要求登録から OS への開始依頼までの直列化ロック（[`start_native_scan`]）。停止・再生成の状態の無効化
+/// （待ち手・観測・要求の追跡）も同じロックの内側で行い、停止と並行する新しい要求の登録を巻き込まない。
 static START: Mutex<()> = Mutex::new(());
 
 /// OS へスキャンの開始を依頼する（画面の effect と同期入口で共通）。依頼自体の失敗は [`finish`] へ流す。
@@ -521,6 +516,7 @@ pub fn ble_scan_effect(state: &BleScanState, sender: &CompletionSender<BleScanSt
 /// Java 側の追跡は Activity インスタンスのフィールドで、再生成で一緒に消える）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
+    let _guard = START.lock().unwrap_or_else(|e| e.into_inner());
     drop_waiter();
     bridge::SLOT.reset();
     OBSERVED.clear();
@@ -529,7 +525,12 @@ pub fn reset_pending_tracking() {
 /// アプリ終了時に進行中のスキャンを止める（`fandhe-gallery` の終了処理から呼ばれる）。
 /// Rust 側のロックを握ったまま OS 側の停止を呼ばない（OS 側コールバックが同じ
 /// ロックを取るため、`device-bridge-contracts.md` 11 節）。
+///
+/// 無効化も OS 側の停止も [`START`] の内側で行う。iOS / macOS の停止は専用キューへの同期ディスパッチで
+/// main を使わず、そのキューのコールバックも `START` を取らないためデッドロックしない。Windows の停止は
+/// 送信のみ。いずれも利用者コードは走らない（待ち手の通知は別スレッドの `recv` が起こされるだけ）。
 pub fn stop_shared_scan() {
+    let _guard = START.lock().unwrap_or_else(|e| e.into_inner());
     drop_waiter();
     OBSERVED.clear();
     #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -541,6 +542,27 @@ pub fn stop_shared_scan() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 停止が [`START`] の外で無効化すると、停止の途中で登録された新しい要求の待ち手と観測を消す。
+    /// `START` を保持した側が新しい要求を登録済みの状態で停止を並行させ、停止が解放を待つなら、
+    /// 新しい要求の完了は待ち手へ届く。
+    #[test]
+    fn stop_does_not_invalidate_request_registered_before_it_acquires_start() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let start = START.lock().unwrap_or_else(|e| e.into_inner());
+        let id = bridge::begin();
+        *WAITER.lock().unwrap() = Some((id, tx));
+        OBSERVED.begin(id);
+        let stopper = std::thread::spawn(stop_shared_scan);
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        finish(id, Ok(()));
+        assert!(
+            matches!(rx.try_recv(), Ok(Ok(_))),
+            "停止が START の外で新しい要求を無効化した"
+        );
+        drop(start);
+        stopper.join().unwrap();
+    }
 
     fn dev(id: &str, name: Option<&str>, rssi: Option<i16>) -> BleDevice {
         BleDevice {

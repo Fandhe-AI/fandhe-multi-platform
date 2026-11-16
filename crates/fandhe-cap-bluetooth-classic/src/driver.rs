@@ -482,19 +482,37 @@ pub fn bluetooth_classic_show_effect(
 /// Java 側の追跡は Activity インスタンスのフィールドで、再生成で一緒に消える）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
-    let old = take_pending_callback();
-    bridge::SLOT.reset();
-    OBSERVED.clear();
+    let old = {
+        // 通知・要求の追跡・観測を [`START`] の内側で一括無効化する（途中で新しい要求が登録されて、
+        // その観測だけ消えるのを防ぐ）。利用者の通知は解放後に呼ぶ。
+        let _guard = START.lock().unwrap_or_else(|e| e.into_inner());
+        let old = take_pending_callback();
+        bridge::SLOT.reset();
+        OBSERVED.clear();
+        old
+    };
     fire_cancelled(old);
+}
+
+/// 停止時の無効化（完了通知の取り出しと観測の破棄）を [`START`] の内側で一括して行う。取り出した通知は
+/// 呼び出し側が [`START`] 解放後に [`fire_cancelled`] で呼ぶ。
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
+fn invalidate_for_stop() -> Option<DiscoverCallback> {
+    let _guard = START.lock().unwrap_or_else(|e| e.into_inner());
+    let old = take_pending_callback();
+    OBSERVED.clear();
+    old
 }
 
 /// アプリ終了時に進行中の検索を止める（`fandhe-gallery` の終了処理から呼ばれる）。
 /// Rust 側のロックを握ったまま OS 側の停止を呼ばない（macOS の停止は main queue へ同期ディスパッチし、
 /// main 側のコールバックが同じロックを取るため、`device-bridge-contracts.md` 11 節）。
-/// `OBSERVED.clear()` はロックを解放してから OS 側を止める。
+/// 完了通知と観測の無効化は [`START`] の内側で一括して行い（停止と並行する新しい要求の登録を、途中で
+/// 巻き込まない）、`START` を解放してから OS 側を止める（macOS の停止は main へ同期ディスパッチする）。
 pub fn stop_shared_discovery() {
     #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
-    let old = take_pending_callback();
+    let old = invalidate_for_stop();
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
     OBSERVED.clear();
     #[cfg(target_os = "macos")]
     crate::macos::stop();
@@ -521,11 +539,44 @@ mod tests {
     };
     use std::sync::mpsc;
 
+    /// START・CALLBACK・OBSERVED は静的なので、これらを触るテストを直列化する。
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
+    static GLOBALS: Mutex<()> = Mutex::new(());
+
+    /// 停止の無効化と新しい要求の登録が入れ替わっても（停止の無効化が [`START`] の外だと、新しい要求の
+    /// 通知と観測を消す）、新しい要求は完了で戻る。`START` を保持した側が新しい要求を登録済みの状態で停止を
+    /// 並行させ、停止は `START` の解放を待ってから無効化する（その順なら新しい要求の完了は消されない）。
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
+    #[test]
+    fn stop_does_not_invalidate_request_registered_before_it_acquires_start() {
+        let _g = GLOBALS.lock().unwrap_or_else(|e| e.into_inner());
+        let (tx, rx) = mpsc::channel();
+        let start = START.lock().unwrap_or_else(|e| e.into_inner());
+        let id = bridge::begin();
+        *CALLBACK.lock().unwrap() = Some((
+            id,
+            Box::new(move |r| {
+                tx.send(r).unwrap();
+            }),
+        ));
+        OBSERVED.begin(id);
+        let stopper = std::thread::spawn(|| fire_cancelled(invalidate_for_stop()));
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        finish(id, Ok(()));
+        assert!(
+            matches!(rx.try_recv(), Ok(Ok(_))),
+            "停止が START の外で新しい要求を無効化した"
+        );
+        drop(start);
+        stopper.join().unwrap();
+    }
+
     /// `present` の中で完了が同期に届いても、利用者コールバックは [`START`] 解放後に走る
     /// （コールバック内の再入 `begin_and_present` が自己デッドロックしない）。
     #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
     #[test]
     fn sync_completion_in_present_reaches_callback_outside_start_lock() {
+        let _g = GLOBALS.lock().unwrap_or_else(|e| e.into_inner());
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
             let tx2 = tx.clone();
