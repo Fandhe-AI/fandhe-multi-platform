@@ -192,8 +192,6 @@ public class MainActivity extends GameActivity {
     // JPEG へ変換するときの長辺の目標（画素）。これ以下になるまで `inSampleSize` で縮める。
     private static final int PHOTO_CONVERT_SIDE = 4096;
 
-    }
-
     // OS の検索への登録（Issue #562）。実装は `SpotlightIndexHelper`。Rust の `android_spotlight_index.rs` がワーカースレッドから同期 JNI で呼ぶ。
     int spotlightIndex(String domain, String id, String title, String text, long remainingMs) {
         return SpotlightIndexHelper.index(getApplicationContext(), domain, id, title, text, remainingMs);
@@ -253,8 +251,6 @@ public class MainActivity extends GameActivity {
         super.onStart();
     }
 
-
-    }
 
     // OS 管理のバックグラウンドダウンロード（Issue #392）。実装は `BackgroundDownloadHelper`。Rust の
     // `android_background_download.rs` が同期 JNI で呼ぶ（コールバックは無い）。
