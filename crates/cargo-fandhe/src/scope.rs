@@ -171,13 +171,33 @@ fn android_elements(observed: &str) -> Vec<Element> {
             let lhs = lhs.split('(').next().unwrap_or(lhs);
             let name = lhs.rsplit(':').next().unwrap_or(lhs).to_string();
             let val = match rhs.strip_prefix('"') {
-                Some(r) => r.split('"').next().unwrap_or(""),
-                None => rhs.split_whitespace().next().unwrap_or(""),
+                Some(r) => r.split('"').next().unwrap_or("").to_string(),
+                None => typed_value(rhs),
             };
-            el.attrs.insert(name, val.to_string());
+            el.attrs.insert(name, val);
         }
     }
     out
+}
+
+/// 非クォートの値を読む。`(type 0x12)0xffffffff` のような型付き値は型接頭辞を外し、
+/// boolean（type 0x12）は `true` / `false` に正規化する。それ以外は値トークンをそのまま返す。
+fn typed_value(rhs: &str) -> String {
+    let rhs = rhs.trim();
+    let (ty, rest) = match rhs.strip_prefix("(type ").and_then(|r| r.split_once(')')) {
+        Some((t, r)) => (Some(t.trim()), r),
+        None => (None, rhs),
+    };
+    let tok = rest.split_whitespace().next().unwrap_or("");
+    if ty == Some("0x12") {
+        return if parse_u32(tok) == Some(0) {
+            "false"
+        } else {
+            "true"
+        }
+        .to_string();
+    }
+    tok.to_string()
 }
 
 /// aapt2 が出す数値（`0x…` 16 進または 10 進）を u32 にする。
@@ -418,6 +438,18 @@ mod tests {
             Some(0x10000)
         );
         assert_eq!(els[1].attrs["supportsPictureInPicture"], "true");
+    }
+
+    #[test]
+    fn parses_typed_values() {
+        let t = "E: uses-permission (line=1)\n  A: http://x/android:usesPermissionFlags(0x01010644)=(type 0x11)0x10000\nE: activity (line=2)\n  A: http://x/android:supportsPictureInPicture(0x010104f7)=(type 0x12)0xffffffff\n  A: http://x/android:resizeableActivity(0x010104f6)=(type 0x12)0x0\n";
+        let els = android_elements(t);
+        assert_eq!(
+            parse_u32(&els[0].attrs["usesPermissionFlags"]),
+            Some(0x10000)
+        );
+        assert_eq!(els[1].attrs["supportsPictureInPicture"], "true");
+        assert_eq!(els[1].attrs["resizeableActivity"], "false");
     }
 
     #[test]
