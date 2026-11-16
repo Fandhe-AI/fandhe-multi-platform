@@ -84,11 +84,11 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "location_show" => fandhe_core::screens::location_show::current_screen,
-    fandhe_egui_proxy::device::location::location_effect,
+    fandhe_cap_location::location_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "geofence_show" => fandhe_core::screens::geofence_show::current_screen,
-    fandhe_egui_proxy::device::geofence::geofence_effect,
+    fandhe_cap_geofence::geofence_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "share_text" => fandhe_core::screens::share_text::current_screen,

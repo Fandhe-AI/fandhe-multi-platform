@@ -1,21 +1,21 @@
-//! iOS / macOS 向け位置情報実装（Issue #889）。`device/location.rs` の Apple cfg 分岐
+//! iOS / macOS 向け位置情報実装（Issue #889）。`driver.rs` の Apple cfg 分岐
 //! （`any(target_os = "ios", target_os = "macos")`）から呼ばれ、CoreLocation
-//! （`CLLocationManager`）実装（`apple/fandhe_apple_location.m`、`build.rs` が
-//! iOS・macOS 双方の feature `device` 有効時のみコンパイル・リンクする）を
+//! （`CLLocationManager`）実装（`apple/fandhe_apple_location.m`、本 crate の `build.rs` が
+//! iOS・macOS 向けにコンパイル・リンクする）を
 //! `unsafe extern "C"` 1 関数（[`start`]）で呼ぶ。`unsafe` はこの呼び出し 1 箇所に閉じ
-//! `// SAFETY:` で契約を明記する（`ios.rs` の `IosCamera`/`IosMotion` と同型、
+//! `// SAFETY:` で契約を明記する（`fandhe-cap-camera-capture` の ios.rs と同型、
 //! `lib.rs` の macOS `deny(unsafe_code)` 緩和・coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `.m` 側の delegate コールバックから [`fandhe_rust_location_fix`] /
 //! [`fandhe_rust_location_failure`]（本モジュールが公開する `extern "C"` 関数）が
-//! 呼ばれ、`device/location.rs::SHARED` へ push する（push 型、`ios.rs` の
+//! 呼ばれ、`driver.rs::SHARED` へ push する（push 型、`ios.rs` の
 //! `fandhe_rust_tts_outcome` と同じ橋渡し方式）。
 //!
 //! 座標をログへ出力しない（security.md A09）。
 
-use fandhe_device::location::LocationFailure;
+use crate::contract::LocationFailure;
 
-use super::location::SHARED;
+use crate::driver::SHARED;
 
 // SAFETY: `apple/fandhe_apple_location.m` が定義する C ABI（`build.rs` が iOS・macOS
 // 両ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は
@@ -25,7 +25,7 @@ unsafe extern "C" {
     fn fandhe_apple_location_start();
 }
 
-/// `.m` 側の `fandhe_apple_location_start` を呼ぶ（`device/location.rs::location_effect`
+/// `.m` 側の `fandhe_apple_location_start` を呼ぶ（`driver.rs::location_effect`
 /// から、初回・再試行（「再試行」ボタン押下）の両方で呼ばれる契約）。冪等: `.m` 側は
 /// 初回のみ `CLLocationManager` を生成し、2 回目以降は現在の `authorizationStatus` を
 /// 再評価して結果を再 push する（`.m` ファイル冒頭コメント参照）。
@@ -56,10 +56,10 @@ fn failure_from_code(code: i32) -> Option<LocationFailure> {
 /// 関数。有効な 1 測位を [`SHARED`] へ push する。`SHARED` が未初期化（`start` が
 /// 一度も呼ばれていない）場合は no-op にする（起動前コールバックで panic しない）。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_location_fix(lat_deg: f64, lon_deg: f64, accuracy_m: f64) {
     if let Some(shared) = SHARED.get() {
-        shared.push_fix(fandhe_device::location::Fix {
+        shared.push_fix(crate::contract::Fix {
             latitude_deg: lat_deg,
             longitude_deg: lon_deg,
             accuracy_m,
@@ -71,7 +71,7 @@ extern "C" fn fandhe_rust_location_fix(lat_deg: f64, lon_deg: f64, accuracy_m: f
 /// から呼ばれる `extern "C"` 関数。未知のコードは無視し、`SHARED` が未初期化の場合も
 /// no-op にする（[`fandhe_rust_location_fix`] と同じ方針）。
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_location_failure(code: i32) {
     let Some(failure) = failure_from_code(code) else {
         return;

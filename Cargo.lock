@@ -1620,6 +1620,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-geofence"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-location",
+ "fandhe-core",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-global-hotkey"
 version = "0.2.0"
 dependencies = [
@@ -1778,6 +1788,18 @@ dependencies = [
  "fandhe-core",
  "fandhe-device",
  "fandhe-platform-android",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-location"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
  "thiserror 2.0.20",
 ]
 
@@ -2601,6 +2623,7 @@ dependencies = [
  "fandhe-cap-foldable-posture",
  "fandhe-cap-gamepad",
  "fandhe-cap-geocoding-search",
+ "fandhe-cap-geofence",
  "fandhe-cap-global-hotkey",
  "fandhe-cap-haptics",
  "fandhe-cap-home-widget",
@@ -2614,6 +2637,7 @@ dependencies = [
  "fandhe-cap-live-activity",
  "fandhe-cap-local-fonts",
  "fandhe-cap-local-storage-kv",
+ "fandhe-cap-location",
  "fandhe-cap-managed-app-config",
  "fandhe-cap-map-view",
  "fandhe-cap-media-cast",
@@ -2786,6 +2810,7 @@ dependencies = [
  "fandhe-cap-gamepad",
  "fandhe-cap-http-get",
  "fandhe-cap-local-fonts",
+ "fandhe-cap-location",
  "fandhe-cap-media-cast",
  "fandhe-cap-media-playback",
  "fandhe-cap-media-transcode",

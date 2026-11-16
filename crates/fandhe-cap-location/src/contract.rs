@@ -12,7 +12,7 @@
 //! OS ごとの差異を意識しない。
 //!
 //! Windows のみ本ファイルで実装する（本 issue のスコープ）。macOS/Linux は
-//! `fandhe-egui-proxy` 側（`device/location.rs`）が起動時に
+//! 本 crate の `driver.rs` が起動時に
 //! `push_failure(LocationFailure::Unsupported)` を 1 回入れる cfg カスケードで
 //! 「使えない」表示にする（デスクトップの CoreLocation 実装は別 issue、ダミー座標へ
 //! フォールバックしない）。
@@ -25,7 +25,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use crate::DeviceError;
+use crate::error::LocationError;
 
 /// 測位結果。緯度・経度は WGS84 の度、`accuracy_m` は水平精度（メートル）。
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -38,7 +38,7 @@ pub struct Fix {
     pub accuracy_m: f64,
 }
 
-/// 測位が失敗した理由。`DeviceError` への写像は本モジュール doc の対応表どおり
+/// 測位が失敗した理由。`LocationError` への写像は本モジュール doc の対応表どおり
 /// （[`SharedLocation::last_fix`] の実装 doc 参照）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LocationFailure {
@@ -58,7 +58,7 @@ pub enum LocationFailure {
 pub trait Location: Send + Sync {
     /// 最新の測位結果を返す。**まだ 1 度も測位できていなければ `Ok(None)`**
     /// （`(0.0, 0.0)` を「未取得」の代用にしない、モジュール doc 参照）。
-    fn last_fix(&self) -> Result<Option<Fix>, DeviceError>;
+    fn last_fix(&self) -> Result<Option<Fix>, LocationError>;
 }
 
 /// 測位状態。「未取得」「測位できた」「失敗した」を型で区別する
@@ -109,7 +109,7 @@ impl SharedLocation {
     }
 
     /// 「未取得」へ戻す。明示的な再試行でドライバを再起動する直前に呼ぶ契約
-    /// （`fandhe-egui-proxy` の `device/location.rs::ensure_windows_driver` 参照。
+    /// （本 crate の `driver.rs::ensure_windows_driver` 参照。
     /// 古い失敗・座標を保持したまま再起動すると、新ドライバが初回結果を出す前に
     /// 画面が旧結果へ一瞬戻ってしまうため、先に「取得中」へ倒す）。
     pub fn reset_to_waiting(&self) {
@@ -153,19 +153,19 @@ impl Default for SharedLocation {
     }
 }
 
-/// [`LocationFailure`] を [`DeviceError`] へ写す（モジュール doc の対応表）。
-fn failure_to_device_error(failure: LocationFailure) -> DeviceError {
+/// [`LocationFailure`] を [`LocationError`] へ写す（モジュール doc の対応表）。
+fn failure_to_device_error(failure: LocationFailure) -> LocationError {
     match failure {
-        LocationFailure::PermissionDenied => DeviceError::PermissionDenied("location"),
-        LocationFailure::ServiceDisabled => DeviceError::Disabled("location"),
-        LocationFailure::Timeout => DeviceError::Internal("location timeout"),
-        LocationFailure::Unsupported => DeviceError::Unsupported("location"),
-        LocationFailure::Failed => DeviceError::Internal("location"),
+        LocationFailure::PermissionDenied => LocationError::PermissionDenied,
+        LocationFailure::ServiceDisabled => LocationError::Disabled("location"),
+        LocationFailure::Timeout => LocationError::Internal("location timeout"),
+        LocationFailure::Unsupported => LocationError::Unsupported,
+        LocationFailure::Failed => LocationError::Internal("location"),
     }
 }
 
 impl Location for SharedLocation {
-    fn last_fix(&self) -> Result<Option<Fix>, DeviceError> {
+    fn last_fix(&self) -> Result<Option<Fix>, LocationError> {
         // 他所の panic に由来する poison を呼び出し側へ伝播させない
         // （coding-rust.md: unwrap/expect を本実装コードで使わない方針）。
         let state = self
@@ -403,17 +403,17 @@ pub struct CommandLocation {
 
 impl CommandLocation {
     /// 既定のプログラム（PowerShell）で起動する。`powershell.exe` が存在しなければ
-    /// `Err(DeviceError::Unsupported("location"))`（ダミーへ絶対にフォールバックしない）。
-    pub fn start(shared: SharedLocation) -> Result<Self, DeviceError> {
+    /// `Err(LocationError::Unsupported)`（ダミーへ絶対にフォールバックしない）。
+    pub fn start(shared: SharedLocation) -> Result<Self, LocationError> {
         let command = windows_location_command();
         if !command.program.is_file() {
-            return Err(DeviceError::Unsupported("location"));
+            return Err(LocationError::Unsupported);
         }
         Self::start_with(command, shared)
     }
 
     /// 任意のコマンドで起動する（テストから `/bin/sh` 等を注入する入口）。
-    fn start_with(command: LocationCommand, shared: SharedLocation) -> Result<Self, DeviceError> {
+    fn start_with(command: LocationCommand, shared: SharedLocation) -> Result<Self, LocationError> {
         let mut cmd = Command::new(&command.program);
         cmd.args(&command.args);
         cmd.stdout(Stdio::piped());
@@ -428,11 +428,11 @@ impl CommandLocation {
 
         let mut spawned = cmd
             .spawn()
-            .map_err(|_| DeviceError::Internal("location spawn"))?;
+            .map_err(|_| LocationError::Internal("location spawn"))?;
         let Some(stdout) = spawned.stdout.take() else {
             let _ = spawned.kill();
             let _ = spawned.wait();
-            return Err(DeviceError::Internal("location spawn"));
+            return Err(LocationError::Internal("location spawn"));
         };
 
         let stopping = Arc::new(AtomicBool::new(false));
@@ -469,7 +469,7 @@ impl CommandLocation {
 }
 
 impl Location for CommandLocation {
-    fn last_fix(&self) -> Result<Option<Fix>, DeviceError> {
+    fn last_fix(&self) -> Result<Option<Fix>, LocationError> {
         self.shared.last_fix()
     }
 }
@@ -514,7 +514,7 @@ mod tests {
         shared.push_failure(LocationFailure::PermissionDenied);
         assert!(matches!(
             shared.last_fix(),
-            Err(DeviceError::PermissionDenied("location"))
+            Err(LocationError::PermissionDenied)
         ));
     }
 
@@ -524,7 +524,7 @@ mod tests {
         shared.push_failure(LocationFailure::ServiceDisabled);
         assert!(matches!(
             shared.last_fix(),
-            Err(DeviceError::Disabled("location"))
+            Err(LocationError::Disabled("location"))
         ));
     }
 
@@ -533,7 +533,7 @@ mod tests {
         let shared = SharedLocation::new();
         shared.push_failure(LocationFailure::Timeout);
         match shared.last_fix() {
-            Err(DeviceError::Internal(msg)) => assert!(msg.contains("timeout")),
+            Err(LocationError::Internal(msg)) => assert!(msg.contains("timeout")),
             other => panic!("got: {other:?}"),
         }
     }
@@ -542,10 +542,7 @@ mod tests {
     fn push_failure_unsupported_does_not_become_success_or_waiting() {
         let shared = SharedLocation::new();
         shared.push_failure(LocationFailure::Unsupported);
-        assert!(matches!(
-            shared.last_fix(),
-            Err(DeviceError::Unsupported("location"))
-        ));
+        assert!(matches!(shared.last_fix(), Err(LocationError::Unsupported)));
     }
 
     #[test]
@@ -556,7 +553,7 @@ mod tests {
             longitude_deg: 0.0,
             accuracy_m: 0.0,
         });
-        assert!(matches!(shared.last_fix(), Err(DeviceError::Internal(_))));
+        assert!(matches!(shared.last_fix(), Err(LocationError::Internal(_))));
 
         let shared = SharedLocation::new();
         shared.push_fix(Fix {
@@ -564,7 +561,7 @@ mod tests {
             longitude_deg: 0.0,
             accuracy_m: 0.0,
         });
-        assert!(matches!(shared.last_fix(), Err(DeviceError::Internal(_))));
+        assert!(matches!(shared.last_fix(), Err(LocationError::Internal(_))));
 
         let shared = SharedLocation::new();
         shared.push_fix(Fix {
@@ -572,7 +569,7 @@ mod tests {
             longitude_deg: 0.0,
             accuracy_m: -1.0,
         });
-        assert!(matches!(shared.last_fix(), Err(DeviceError::Internal(_))));
+        assert!(matches!(shared.last_fix(), Err(LocationError::Internal(_))));
     }
 
     #[test]
@@ -685,7 +682,7 @@ mod tests {
         wait_until(|| shared.last_fix().is_err());
         assert!(matches!(
             shared.last_fix(),
-            Err(DeviceError::PermissionDenied("location"))
+            Err(LocationError::PermissionDenied)
         ));
         location.stop();
     }
@@ -724,7 +721,7 @@ mod tests {
         let location = CommandLocation::start_with(shell_command("exit 7"), shared.clone())
             .expect("起動できる");
         wait_until(|| shared.last_fix().is_err());
-        assert!(matches!(shared.last_fix(), Err(DeviceError::Internal(_))));
+        assert!(matches!(shared.last_fix(), Err(LocationError::Internal(_))));
         location.stop();
     }
 
@@ -802,7 +799,7 @@ mod tests {
         // `powershell.exe` が存在しないため必ず `Unsupported` になることを固定する。
         let result = CommandLocation::start(SharedLocation::new());
         #[cfg(not(target_os = "windows"))]
-        assert!(matches!(result, Err(DeviceError::Unsupported("location"))));
+        assert!(matches!(result, Err(LocationError::Unsupported)));
         #[cfg(target_os = "windows")]
         drop(result);
     }

@@ -51,8 +51,6 @@ pub mod file_association;
 pub mod file_picker;
 /// Phase 11（端末機能の拡充ループ、親 #1133、Issue #1312）: 全画面表示（システムバー非表示）。
 pub mod fullscreen_immersive;
-/// Phase 11（端末機能の拡充ループ）: location に乗せた Rust 側のジオフェンス判定。
-pub mod geofence;
 /// Phase 11（端末機能の拡充ループ、親 #149、Issue #1089）: ヘルスデータ（今日の歩数を 1 回読む）。
 pub mod health_data;
 pub mod http;
@@ -60,8 +58,6 @@ pub mod http;
 pub mod image_recognition;
 /// Phase 11（端末機能の拡充ループ、親 #110、Issue #511）: 近くの端末との直接通信（同じアプリを開いた 2 台が固定文字列を 1 回ずつ送り合う）。
 pub mod local_peer;
-/// Phase 11（端末機能の拡充ループ、親 #887、Issue #888）: 継続 push 型の位置情報取得。
-pub mod location;
 /// Phase 11（端末機能の拡充ループ、親 #86、Issue #267）: 音声 1 本の再生・一時停止・停止。
 pub mod media_playback;
 /// Issue #1188: MP4 box 読みの共有部品（音声変換は機能 crate `fandhe-cap-media-transcode`、動画変換 `video_transcode` が使う）。

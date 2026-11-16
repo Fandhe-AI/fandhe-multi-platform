@@ -163,10 +163,6 @@ pub mod apple_image_recognition;
 /// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_local_peer;
-/// Issue #889: iOS / macOS 共通の CoreLocation 実装（`apple/fandhe_apple_location.m`
-/// を呼ぶ C ABI ラッパー）。`device/location.rs` の Apple cfg 分岐から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_location;
 /// Issue #954（macOS）/ #956（iOS）: iOS / macOS 向けマイク録音実装（`apple/
 /// fandhe_apple_mic_record.m` を呼ぶ C ABI ラッパー）。`device/mic_record.rs` の
 /// iOS/macOS 経路から呼ばれる。
@@ -226,9 +222,6 @@ pub mod file_pick;
 /// eframe の viewport コマンド、iOS/Android は OS 別モジュール、他 OS は
 /// `UnsupportedFullscreen` 固定。Web は `fandhe-web-dom`）。
 pub mod fullscreen_immersive;
-/// Phase 11 の拡充ループ（親 #1056、Issue #1057）: ジオフェンスの effect ドライバ
-/// （location の継続取得に乗せて `GeofenceTracker` で判定する）。
-pub mod geofence;
 /// Phase 11 の拡充ループ（親 #149、Issue #1089）: ヘルスデータ（今日の歩数）の effect ドライバ
 /// （iOS・Android は OS 別モジュール。他 OS は `UnsupportedHealthData` 固定）。
 pub mod health_data;
@@ -324,8 +317,6 @@ pub mod ios_web_auth_session;
 /// Phase 11 の拡充ループ（親 #110、Issue #511）: 近くの端末との直接通信の effect ドライバ
 /// （macOS・iOS / Android 実装、他 OS は `UnsupportedLocalPeer` 固定）。
 pub mod local_peer;
-/// Phase 11 の拡充ループ（親 #887、Issue #888）: 位置情報の effect ドライバ（Windows のみ実装）。
-pub mod location;
 /// Issue #424: macOS 向けアプリショートカット実装（`macos/fandhe_macos_app_shortcuts.m` の Dock メニューを呼ぶ
 /// C ABI ラッパー）。`device/app_shortcuts.rs` の macOS 経路から呼ばれる。結果コードの写像をホストで
 /// テストできるよう cfg は `any(macos, test)`。
@@ -523,7 +514,6 @@ pub mod windows_window_management;
 /// ウィンドウを閉じても発話中の子プロセスが残る）。
 pub fn shutdown() {
     tts::stop_shared_tts();
-    location::stop_shared_location();
     local_peer::stop_shared_exchange();
     picture_in_picture::shutdown();
     web_auth_session::shutdown();

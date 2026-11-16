@@ -1,11 +1,11 @@
 //! Phase 11 の拡充ループ（親 #1056）型サンプル「ジオフェンス」（Issue #1057）の effect
 //! ドライバ。`fandhe_core::screens::geofence_show`（端末依存ゼロ）へ、location の最新 Fix を
-//! `fandhe_device::geofence::GeofenceTracker` で判定した結果のスナップショットを渡す
+//! `crate::contract::GeofenceTracker` で判定した結果のスナップショットを渡す
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`app::EffectFn` 参照）。
 //!
-//! オーナー判断（10/4）により OS の領域監視 API は使わず、[`super::location::shared_location`]
-//! の継続取得に乗せて Rust 側で判定する。`fandhe-core` は `fandhe-device` に依存できないため、
+//! オーナー判断（10/4）により OS の領域監視 API は使わず、[`fandhe_cap_location::shared_location`]
+//! の継続取得に乗せて Rust 側で判定する。`fandhe-core` は機能 crate の契約に依存できないため、
 //! 判定器は本モジュールの `static` が持つ（画面状態は表示用スナップショットだけ）。
 //!
 //! # 守る範囲と守らない範囲
@@ -18,19 +18,18 @@
 //! location の起動・停止は location 画面に揃える（Apple は [`start_apple_location_once`]、
 //! 停止はアプリ終了時の `stop_shared_location` のみ）。登録時に測位が失敗中または
 //! 失敗中のときは、偽の現在地で登録せず [`restart_location`] で測位を再起動して案内する。
-//! Fix の鮮度は判定しない（オーナー判断 10/4、`fandhe_device::geofence` 参照）。最新 Fix を
+//! Fix の鮮度は判定しない（オーナー判断 10/4、`crate::contract` 参照）。最新 Fix を
 //! そのまま登録・判定に使い、受信からの経過時間を画面に出して判断を利用者に任せる。
 //! Android は Activity 再生成のたびに [`reset_register_tracking`] で static 側の登録をすべて破棄する。
 
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use crate::contract::{GeofenceKind, GeofenceTracker};
+use fandhe_cap_location::{Location, SharedLocation};
 use fandhe_core::screens::geofence_show::{
     EventView, GeofenceShowState, GeofenceView, RegionView, RegisterNotice,
 };
-use fandhe_device::geofence::{GeofenceKind, GeofenceTracker};
-use fandhe_device::location::Location;
-use fandhe_device::location::SharedLocation;
 
 #[cfg(any(
     target_os = "windows",
@@ -38,11 +37,17 @@ use fandhe_device::location::SharedLocation;
     target_os = "ios",
     target_os = "macos"
 ))]
-use super::location::restart_location;
+use fandhe_cap_location::restart_location;
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-use super::location::start_apple_location_once;
-use super::location::{shared_location_precise, to_failure_kind, POLL_INTERVAL};
-use crate::app::CompletionSender;
+use fandhe_cap_location::start_apple_location_once;
+use fandhe_cap_location::{POLL_INTERVAL, shared_location_precise, to_failure_kind};
+use fandhe_runtime::CompletionSender;
+
+/// 画面の状態型に依存しない入口。判定器そのもの（[`GeofenceTracker`]）を新しく作って返す
+/// （プロセス共有の状態は持たない。画面は [`geofence_effect`] の static を使う）。
+pub fn platform_geofence() -> GeofenceTracker {
+    GeofenceTracker::new()
+}
 
 /// 判定器と、登録要求の処理済み世代・登録地点・案内の保持先。
 struct GeofenceDriver {
@@ -70,10 +75,10 @@ static DRIVER: Mutex<Option<GeofenceDriver>> = Mutex::new(None);
 
 /// Android: Activity 再生成で画面の `GeofenceShowState` が未登録の既定値に戻るのに合わせ、
 /// static 側の登録（判定器・登録地点・案内・履歴・処理済み世代）をまとめて破棄して未登録へ
-/// 揃える（永続化はしない。`device::location::reset_retry_tracking` と同じ位置づけで
-/// `android_main` から呼ぶ）。
+/// 揃える（永続化はしない。`fandhe_cap_location::reset_retry_tracking` と同じ位置づけで
+/// `fandhe-gallery` の `android_main` から呼ぶ）。
 #[cfg(any(target_os = "android", test))]
-pub(crate) fn reset_register_tracking() {
+pub fn reset_register_tracking() {
     *DRIVER.lock().unwrap_or_else(|p| p.into_inner()) = None;
 }
 
@@ -203,14 +208,23 @@ fn restart_if_supported(_location: &SharedLocation) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_device::location::{Fix, LocationFailure, SharedLocation};
+    use fandhe_cap_location::{Fix, LocationFailure, SharedLocation};
 
-    type Rx = std::sync::mpsc::Receiver<crate::app::Completion<GeofenceShowState>>;
+    type Rx = std::sync::mpsc::Receiver<fandhe_runtime::Completion<GeofenceShowState>>;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
 
     fn sender_with_channel() -> (CompletionSender<GeofenceShowState>, Rx) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     fn fix_at(lat: f64, accuracy_m: f64) -> Fix {
@@ -349,11 +363,12 @@ mod tests {
         loc.push_fix(fix_at(35.0, 5.0));
         step(&mut s, &loc, &mut d, 3);
         assert_eq!(s.view.inside, Some(true));
-        assert!(s
-            .view
-            .events
-            .last()
-            .is_some_and(|e| e.entered && e.at_unix_ms == 3));
+        assert!(
+            s.view
+                .events
+                .last()
+                .is_some_and(|e| e.entered && e.at_unix_ms == 3)
+        );
     }
 
     #[test]

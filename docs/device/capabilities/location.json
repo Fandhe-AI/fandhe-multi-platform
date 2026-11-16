@@ -21,7 +21,7 @@
         "位置情報取得（常時）"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_location.m + crates/fandhe-egui-proxy/src/device/apple_location.rs、Issue 旧#889"
+      "impl": "crates/fandhe-cap-location/apple/fandhe_apple_location.m + crates/fandhe-cap-location/src/apple.rs、Issue 旧#889"
     },
     "android": {
       "status": "done",
@@ -34,7 +34,7 @@
         "位置情報"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "`platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java` + `crates/fandhe-egui-proxy/src/device/android.rs` + `crates/fandhe-egui-proxy/src/device/location.rs`、Issue 旧#890"
+      "impl": "`crates/fandhe-cap-location/android/java/com/fandhe/platform/LocationHelper.java` + `crates/fandhe-cap-location/android/java/com/fandhe/platform/LocationLifecycle.java` + `crates/fandhe-cap-location/src/android.rs` + `crates/fandhe-cap-location/src/driver.rs`、Issue 旧#890"
     },
     "macos": {
       "status": "done",
@@ -47,7 +47,7 @@
         "位置情報"
       ],
       "implStatus": "実装済み",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_location.m + crates/fandhe-egui-proxy/src/device/apple_location.rs、Issue 旧#889"
+      "impl": "crates/fandhe-cap-location/apple/fandhe_apple_location.m + crates/fandhe-cap-location/src/apple.rs、Issue 旧#889"
     },
     "windows": {
       "status": "done",
@@ -60,7 +60,7 @@
         "位置情報"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "`crates/fandhe-device/src/location.rs`（`CommandLocation`）+ `crates/fandhe-egui-proxy/src/device/location.rs`、Issue 旧#888"
+      "impl": "`crates/fandhe-cap-location/src/contract.rs`（`CommandLocation`）+ `crates/fandhe-cap-location/src/driver.rs`、Issue 旧#888"
     },
     "web": {
       "status": "done",

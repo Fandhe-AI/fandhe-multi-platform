@@ -1,6 +1,6 @@
 //! Phase 11 の拡充ループ（親 #887）型サンプル「位置情報」（Issue #888、Android は #890）の
 //! effect ドライバ。`fandhe_core::screens::location_show`（端末依存ゼロ）へ、
-//! `fandhe_device::location::SharedLocation` から読んだ最新の測位結果を渡す
+//! `crate::contract::SharedLocation` から読んだ最新の測位結果を渡す
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)`
 //! として呼ばれる契約、`app::EffectFn` 参照）。
 //!
@@ -9,10 +9,10 @@
 //!
 //! # 実装スコープ（#888/#889/#890）
 //!
-//! Windows は [`shared_location`] が初回アクセス時に [`fandhe_device::location::CommandLocation`]
+//! Windows は [`shared_location`] が初回アクセス時に [`crate::contract::CommandLocation`]
 //! を起動し、書き込み先として `SHARED` を渡す（`tilt.rs` の `DummyMotion` と異なり、
 //! 本モジュールでは書き手も本ファイル側で確保する）。Android は [`shared_location`] が
-//! 初回アクセス時に [`crate::device::android::request_location_updates`] を 1 度だけ
+//! 初回アクセス時に [`crate::android::request_location_updates`] を 1 度だけ
 //! 呼び、以後の実測位は Java 側 `LocationListener` → `nativeOnLocationChanged`/
 //! `nativeOnLocationFailure` が [`shared_location_sink`] へ直接 push する
 //! （継続 push 型のため Windows のような「本ファイル側が子プロセスを起動して push する」
@@ -42,29 +42,29 @@
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
-use fandhe_core::screens::location_show::{apply_failure, apply_fix, apply_waiting, FailureKind};
 #[cfg(not(any(target_os = "ios", target_os = "macos")))]
-use fandhe_device::location::LocationFailure;
-use fandhe_device::location::{Location, SharedLocation};
-use fandhe_device::DeviceError;
+use crate::contract::LocationFailure;
+use crate::contract::{Location, SharedLocation};
+use crate::error::LocationError;
+use fandhe_core::screens::location_show::{FailureKind, apply_failure, apply_fix, apply_waiting};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// `drive` が変化無しのときに再描画予約する間隔（`tilt.rs` の
 /// `IOS_IDLE_POLL_INTERVAL` と同種の定期起床。測位は数秒間隔のため短すぎる
 /// ポーリングは不要）。
-pub(super) const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
+pub const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// プロセス内で共有する測位状態（読み手・書き手の橋渡し）。`device/apple_location.rs`
 /// からも push 元として参照するため `pub(super)`（Issue #889）。
-pub(super) static SHARED: OnceLock<SharedLocation> = OnceLock::new();
+pub(crate) static SHARED: OnceLock<SharedLocation> = OnceLock::new();
 
 /// Windows のみ生存する子プロセス駆動の書き手（`SHARED` への push 元）。
 /// 他ターゲットでは常に `None` のまま。`OnceLock` ではなく `Mutex` で保持する
 /// （denied/disabled 後・予期しない終了後の「再試行」でドライバごと差し替えるため。
 /// codex-review 指摘: `OnceLock` 固定だと初回失敗後は二度と再起動できない）。
 #[cfg(target_os = "windows")]
-static WINDOWS_DRIVER: Mutex<Option<fandhe_device::location::CommandLocation>> = Mutex::new(None);
+static WINDOWS_DRIVER: Mutex<Option<crate::contract::CommandLocation>> = Mutex::new(None);
 
 /// `location_effect` が最後に処理した `state.retry_seq`（Windows/Android/Apple のみ）。
 /// 「再試行」ボタン押下（[`fandhe_core::screens::location_show::retry`] による世代番号の
@@ -83,7 +83,7 @@ static WINDOWS_DRIVER: Mutex<Option<fandhe_device::location::CommandLocation>> =
 ))]
 static LAST_PROCESSED_RETRY_SEQ: Mutex<u64> = Mutex::new(0);
 
-/// Android 専用: [`crate::device::android::request_location_updates`] を初回のみ
+/// Android 専用: [`crate::android::request_location_updates`] を初回のみ
 /// 呼んだかどうか（Issue #890）。JNI 呼び出し自体の成否だけを扱う（実測位・失敗の
 /// 通知は Java 側コールバックが [`shared_location_sink`] へ非同期に push する）。
 #[cfg(target_os = "android")]
@@ -107,7 +107,7 @@ static ANDROID_PRECISE_STARTED: OnceLock<()> = OnceLock::new();
 /// 新しい画面 `S` を構築する前に本関数で基準値を作り直しておけば、両者は必ず `0` から
 /// 揃う。
 #[cfg(target_os = "android")]
-pub(crate) fn reset_retry_tracking() {
+pub fn reset_retry_tracking() {
     let mut last_seq = LAST_PROCESSED_RETRY_SEQ
         .lock()
         .unwrap_or_else(|p| p.into_inner());
@@ -128,6 +128,11 @@ static APPLE_STARTED: OnceLock<()> = OnceLock::new();
 )))]
 static UNSUPPORTED_PUSHED: OnceLock<()> = OnceLock::new();
 
+/// 画面の状態型に依存しない入口。共有の測位状態を返す（[`shared_location`] と同じ）。
+pub fn platform_location() -> &'static SharedLocation {
+    shared_location()
+}
+
 /// 共有 `SharedLocation` への参照を返す（Windows のみ未初期化時に書き手を起動・
 /// 登録する。Apple は `location_effect` 側が起動する、モジュール doc 参照）。
 /// `registry.rs` の `effect` 区画・`device.rs::shutdown` から参照される公開入口。
@@ -137,7 +142,7 @@ pub fn shared_location() -> &'static SharedLocation {
 
 /// [`shared_location`] のジオフェンス用。Android で精密位置（FINE）の許可を求める
 /// （位置情報画面は COARSE のみ、最小権限）。他 OS では [`shared_location`] と同じ。
-pub(super) fn shared_location_precise() -> &'static SharedLocation {
+pub fn shared_location_precise() -> &'static SharedLocation {
     shared_location_for(true)
 }
 
@@ -154,13 +159,13 @@ fn shared_location_for(_precise: bool) -> &'static SharedLocation {
         if _precise {
             ANDROID_PRECISE_STARTED.get_or_init(|| {
                 let _ = ANDROID_STARTED.set(());
-                if !crate::device::android::request_location_updates(true) {
+                if !crate::android::request_location_updates(true) {
                     shared.push_failure(LocationFailure::Failed);
                 }
             });
         } else {
             ANDROID_STARTED.get_or_init(|| {
-                if !crate::device::android::request_location_updates(false) {
+                if !crate::android::request_location_updates(false) {
                     shared.push_failure(LocationFailure::Failed);
                 }
             });
@@ -181,7 +186,7 @@ fn shared_location_for(_precise: bool) -> &'static SharedLocation {
     shared
 }
 
-/// Android の JNI コールバック（`crate::device::android` の `nativeOnLocationChanged`/
+/// Android の JNI コールバック（`crate::android` の `nativeOnLocationChanged`/
 /// `nativeOnLocationFailure`）専用の入口。[`shared_location`] と異なりドライバ起動処理
 /// （`ANDROID_STARTED` の初期化）を経ない（コールバックから `shared_location()` を呼ぶと
 /// 初期化処理が再入してしまうため分離する）。`SHARED` 自体は `shared_location()` と
@@ -193,7 +198,7 @@ pub(crate) fn shared_location_sink() -> &'static SharedLocation {
 
 /// Windows 専用: 測位ドライバを起動・必要なら再起動する。未起動（`None`）、または
 /// `force` が真（「再試行」で `location_effect` から呼ばれる）なら
-/// [`fandhe_device::location::CommandLocation::start`] を呼び直す。既存ドライバは
+/// [`crate::contract::CommandLocation::start`] を呼び直す。既存ドライバは
 /// `Drop`（内部で `stop()`）により子プロセス・読み取りスレッドを回収してから
 /// 差し替える。`force` 時は新ドライバが初回結果を出す前に画面が旧結果へ
 /// 一瞬戻らないよう、先に共有状態を「取得中」へ戻す。
@@ -207,7 +212,7 @@ fn ensure_windows_driver(shared: &SharedLocation, force: bool) {
     if force {
         shared.reset_to_waiting();
     }
-    match fandhe_device::location::CommandLocation::start(shared.clone()) {
+    match crate::contract::CommandLocation::start(shared.clone()) {
         Ok(driver) => *slot = Some(driver),
         Err(_) => {
             // 起動不能（unpackaged PowerShell から Geolocator に到達できない等）は
@@ -227,25 +232,24 @@ fn ensure_windows_driver(shared: &SharedLocation, force: bool) {
     target_os = "ios",
     target_os = "macos"
 ))]
-pub(super) fn restart_location(shared: &SharedLocation, _precise: bool) {
+pub fn restart_location(shared: &SharedLocation, _precise: bool) {
     #[cfg(target_os = "windows")]
     ensure_windows_driver(shared, true);
     #[cfg(target_os = "android")]
     {
         shared.reset_to_waiting();
-        if !crate::device::android::request_location_updates(_precise) {
+        if !crate::android::request_location_updates(_precise) {
             shared.push_failure(LocationFailure::Failed);
         }
     }
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     {
         shared.reset_to_waiting();
-        crate::device::apple_location::start();
+        crate::apple::start();
     }
 }
 
-/// アプリ終了時に Windows の測位子プロセスを止める（`crate::device::shutdown` →
-/// `ProxyApp::on_exit` から呼ばれる契約。`static` は `Drop` が走らないため、
+/// アプリ終了時に Windows の測位子プロセスを止める（`fandhe-gallery` の終了フック（`shutdown()`）から呼ばれる契約。`static` は `Drop` が走らないため、
 /// 明示停止が要る、`device/tts.rs::stop_shared_tts` と同じ理由）。
 pub fn stop_shared_location() {
     #[cfg(target_os = "windows")]
@@ -261,22 +265,22 @@ pub fn stop_shared_location() {
 /// Apple 専用: `apple_location::start()` を初回だけ呼ぶ。初回なら真。location と geofence の
 /// 両画面から呼ばれる（`CLLocationManager` は main スレッド = egui の update ループで起動する）。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-pub(super) fn start_apple_location_once() -> bool {
+pub fn start_apple_location_once() -> bool {
     let first = APPLE_STARTED.set(()).is_ok();
     if first {
-        crate::device::apple_location::start();
+        crate::apple::start();
     }
     first
 }
 
-/// `fandhe_device::DeviceError` を画面の [`FailureKind`] へ写す（`fandhe-core` は
+/// `crate::error::LocationError` を画面の [`FailureKind`] へ写す（`fandhe-core` は
 /// `fandhe-device` に依存しないため、両者の型を橋渡しするのは本クレート側の責務、
 /// `device.rs::to_note_storage_error` と同じ判断）。
-pub(super) fn to_failure_kind(e: &DeviceError) -> FailureKind {
+pub fn to_failure_kind(e: &LocationError) -> FailureKind {
     match e {
-        DeviceError::PermissionDenied(_) => FailureKind::PermissionDenied,
-        DeviceError::Disabled(_) => FailureKind::ServiceDisabled,
-        DeviceError::Unsupported(_) => FailureKind::Unsupported,
+        LocationError::PermissionDenied => FailureKind::PermissionDenied,
+        LocationError::Disabled(_) => FailureKind::ServiceDisabled,
+        LocationError::Unsupported => FailureKind::Unsupported,
         // タイムアウト・その他の内部要因は再試行の余地がある扱いにする
         // （`fandhe_device::location` モジュール doc の対応表: Timeout/Failed → Internal）。
         _ => FailureKind::Retryable,
@@ -413,16 +417,25 @@ pub fn location_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::{Fix, LocationFailure};
     use fandhe_core::screens::location_show::LocationShowState;
-    use fandhe_device::location::{Fix, LocationFailure};
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
 
     fn sender_with_channel() -> (
         CompletionSender<LocationShowState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<LocationShowState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<LocationShowState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
     }
 
     #[test]
@@ -597,10 +610,7 @@ mod tests {
         )))]
         {
             let shared = shared_location();
-            assert!(matches!(
-                shared.last_fix(),
-                Err(DeviceError::Unsupported("location"))
-            ));
+            assert!(matches!(shared.last_fix(), Err(LocationError::Unsupported)));
         }
     }
 

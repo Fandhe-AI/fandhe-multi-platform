@@ -1,7 +1,7 @@
 //! ジオフェンス（領域の出入り判定）の純粋ロジック（Phase 11 の拡充ループ、対応表
 //! `docs/device/capabilities/geofence.json`）。
 //!
-//! 扱う範囲は「地点（緯度・経度）と半径（m）を 1 件だけ登録し、[`crate::location`] の
+//! 扱う範囲は「地点（緯度・経度）と半径（m）を 1 件だけ登録し、[`fandhe_cap_location`] の
 //! 継続取得から読み取った [`Fix`]（[`GeofenceTracker::observe`] に渡されたもの）ごとに内外を判定して、内外が変わったら入った / 出た
 //! イベントを時刻付きで出す」ことに限る。前景中心で、アプリ停止中・背景での通知は
 //! 扱わない。複数領域・滞在判定・通知の発火も扱わない。
@@ -60,8 +60,8 @@
 
 use std::collections::VecDeque;
 
-use crate::DeviceError;
-use crate::location::Fix;
+use crate::error::GeofenceError;
+use fandhe_cap_location::{Fix, LocationError, is_valid_fix};
 
 /// 半径の下限（m）。
 pub const MIN_RADIUS_M: f64 = 1.0;
@@ -119,7 +119,7 @@ impl GeofenceTracker {
         latitude_deg: f64,
         longitude_deg: f64,
         radius_m: f64,
-    ) -> Result<(), DeviceError> {
+    ) -> Result<(), GeofenceError> {
         let valid = latitude_deg.is_finite()
             && (-90.0..=90.0).contains(&latitude_deg)
             && longitude_deg.is_finite()
@@ -127,7 +127,7 @@ impl GeofenceTracker {
             && radius_m.is_finite()
             && (MIN_RADIUS_M..=MAX_RADIUS_M).contains(&radius_m);
         if !valid {
-            return Err(DeviceError::InvalidInput("geofence region"));
+            return Err(GeofenceError::InvalidInput("geofence region"));
         }
         self.region = Some(Region {
             latitude_deg,
@@ -161,8 +161,8 @@ impl GeofenceTracker {
     pub fn observe(
         &mut self,
         now_unix_ms: u64,
-        last_fix: Result<Option<Fix>, DeviceError>,
-    ) -> Result<Option<GeofenceEvent>, DeviceError> {
+        last_fix: Result<Option<Fix>, LocationError>,
+    ) -> Result<Option<GeofenceEvent>, LocationError> {
         let fix = match last_fix {
             Ok(fix) => fix,
             Err(e) => {
@@ -173,7 +173,7 @@ impl GeofenceTracker {
         let (Some(region), Some(fix)) = (self.region, fix) else {
             return Ok(None);
         };
-        if !crate::location::is_valid_fix(fix) || fix.accuracy_m > region.radius_m {
+        if !is_valid_fix(fix) || fix.accuracy_m > region.radius_m {
             return Ok(None);
         }
         let now_inside = distance_m(&region, &fix) <= region.radius_m;
@@ -212,7 +212,7 @@ mod tests {
     use super::*;
 
     /// 緯度 0 度では経度 1 度が約 111.19 km なので、経度 0.001 度は約 111 m。
-    fn fix(lon: f64, accuracy_m: f64) -> Result<Option<Fix>, DeviceError> {
+    fn fix(lon: f64, accuracy_m: f64) -> Result<Option<Fix>, LocationError> {
         Ok(Some(Fix {
             latitude_deg: 0.0,
             longitude_deg: lon,
@@ -266,7 +266,7 @@ mod tests {
         ] {
             assert!(matches!(
                 t.register(lat, lon, r),
-                Err(DeviceError::InvalidInput(_))
+                Err(GeofenceError::InvalidInput(_))
             ));
         }
         t.observe(1, fix(0.0, 10.0)).unwrap();
@@ -287,8 +287,8 @@ mod tests {
     fn location_failure_is_surfaced_and_state_becomes_unknown() {
         let mut t = tracker();
         t.observe(1, fix(0.0, 10.0)).unwrap();
-        let r = t.observe(2, Err(DeviceError::PermissionDenied("location")));
-        assert!(matches!(r, Err(DeviceError::PermissionDenied(_))));
+        let r = t.observe(2, Err(LocationError::PermissionDenied));
+        assert!(matches!(r, Err(LocationError::PermissionDenied)));
         assert_eq!(t.is_inside(), None);
         // 回復後の最初の Fix は初期状態の確定でイベントにならない。
         assert_eq!(t.observe(3, fix(0.01, 10.0)).unwrap(), None);

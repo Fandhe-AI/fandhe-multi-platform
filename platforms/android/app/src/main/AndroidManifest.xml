@@ -599,6 +599,10 @@
             android:authorities="${applicationId}.fandhe.lan-discovery"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.LocationLifecycle"
+            android:authorities="${applicationId}.fandhe.location"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.ActivityRecognitionLifecycle"
             android:authorities="${applicationId}.fandhe.activity-recognition"
             android:exported="false" />
