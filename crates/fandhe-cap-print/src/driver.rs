@@ -132,11 +132,11 @@ fn build_request(view: &PrintRequestView) -> Result<PrintRequest, PrintError> {
 pub(crate) mod bridge {
     use crate::contract::PrintOutcome;
     use crate::error::PrintError;
-    use fandhe_core::screens::print_page::{CoreOutcome, PrintFailure};
 
     use fandhe_runtime::request_slot::RequestSlot;
 
-    pub(crate) type Outcome = Result<CoreOutcome, PrintFailure>;
+    /// OS の生の結果。画面用への写像は取り出す側が行う（画面経由でも公開入口でも同じ slot を使う）。
+    pub(crate) type Outcome = Result<PrintOutcome, PrintError>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
@@ -149,7 +149,7 @@ pub(crate) mod bridge {
     /// 捨てて `false`（先に届いたものだけを採る）。
     #[allow(dead_code)] // 後続 issue（b-ios / b-android）の受け口が使う
     pub(crate) fn deliver(request_id: u64, result: Result<PrintOutcome, PrintError>) -> bool {
-        SLOT.deliver(request_id, super::to_outcome(result))
+        SLOT.deliver(request_id, result)
     }
 
     /// Android: Activity 再生成直後に `android_main` から呼ぶ。保留中の要求は復元せず破棄し、
@@ -193,6 +193,34 @@ fn begin_print_image(request_id: u64, img: &PrintImage) -> Result<(), PrintError
     crate::android::begin_print_image(request_id, img)
 }
 
+/// 画面の状態型に依存しない公開入口（iOS / Android）。文章の印刷を依頼して要求 id を返す。
+/// 結果は [`poll_print`] で取り出す。先行の要求（画面の保留を含む）が未取得のあいだは `Internal` で拒否し、置き換えない。
+/// 依頼自体が失敗したときは保留を残さず `Err` を返す。
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub fn begin_print_request(req: &PrintRequest) -> Result<u64, PrintError> {
+    let id = bridge::SLOT
+        .try_begin()
+        .ok_or(PrintError::Internal("print busy"))?;
+    begin_print(id, req).inspect_err(|_| bridge::SLOT.clear(id))?;
+    Ok(id)
+}
+
+/// [`begin_print_request`] の画面の画像版。
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub fn begin_print_image_request(img: &PrintImage) -> Result<u64, PrintError> {
+    let id = bridge::SLOT
+        .try_begin()
+        .ok_or(PrintError::Internal("print busy"))?;
+    begin_print_image(id, img).inspect_err(|_| bridge::SLOT.clear(id))?;
+    Ok(id)
+}
+
+/// 要求 id の結果が届いていれば取り出して返す（取り出すと保留は消える）。未着・別の id・再生成で破棄済みは `None`。
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub fn poll_print(request_id: u64) -> Option<Result<PrintOutcome, PrintError>> {
+    bridge::SLOT.take_ready(request_id)
+}
+
 /// iOS / Android 版の effect ドライバ本体。保留中（`Printing`）は新規要求を受けない
 /// （画面の phase が二重押しを止める。iOS の共有印刷コントローラの再 present 対策）。
 #[cfg(any(target_os = "ios", target_os = "android"))]
@@ -228,7 +256,7 @@ fn poll_bridge(state: &PrintPageState, sender: &CompletionSender<PrintPageState>
         move |s: &mut PrintPageState, outcome| {
             // 反映できたとき（`Idle` へ戻っていないとき）だけ `true` を返す。
             if s.phase != PrintPhase::Idle {
-                finish_print(s, generation, outcome);
+                finish_print(s, generation, to_outcome(outcome));
                 true
             } else {
                 false
@@ -892,7 +920,7 @@ mod bridge_tests {
         assert!(bridge::deliver(id, Ok(PrintOutcome::Cancelled)));
         assert!(!bridge::deliver(id, Ok(PrintOutcome::Submitted)));
         let (_, ready) = bridge::SLOT.snapshot().expect("begin 済み");
-        assert_eq!(ready, Some(Ok(CoreOutcome::Cancelled)));
+        assert_eq!(ready, Some(Ok(PrintOutcome::Cancelled)));
         bridge::SLOT.clear(id);
     }
 }

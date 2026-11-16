@@ -13,7 +13,6 @@
 //! - 実機の目視確認（正常系・失敗系・複数画面）は #629
 
 use crate::contract::{WindowFrame, WindowManager, frame_from_cocoa};
-use fandhe_core::screens::window_management_show::WindowManagementState;
 use fandhe_runtime::WindowState;
 
 use fandhe_runtime::CompletionSender;
@@ -61,9 +60,7 @@ impl NativeReads for MacosReads {
 }
 
 /// macOS の `WindowManager` を返す。`device/window_management.rs::implementation` から呼ばれる。
-pub(crate) fn implementation(
-    sender: &CompletionSender<WindowManagementState>,
-) -> Box<dyn WindowManager + '_> {
+pub(crate) fn implementation<S>(sender: &CompletionSender<S>) -> Box<dyn WindowManager + '_> {
     Box::new(ViewportWindowManager {
         sender,
         reads: MacosReads,

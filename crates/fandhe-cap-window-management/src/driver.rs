@@ -63,8 +63,8 @@ pub(crate) trait NativeReads: Send + Sync {
 /// 呼ぶたびに `host_view()` を引く。
 #[cfg(any(target_os = "macos", target_os = "windows", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub(crate) struct ViewportWindowManager<'a, R: NativeReads> {
-    pub(crate) sender: &'a CompletionSender<WindowManagementState>,
+pub(crate) struct ViewportWindowManager<'a, S, R: NativeReads> {
+    pub(crate) sender: &'a CompletionSender<S>,
     pub(crate) reads: R,
 }
 
@@ -80,7 +80,7 @@ fn frame_from_rect(r: WindowRect) -> WindowFrame {
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows", test))]
-impl<R: NativeReads> WindowManager for ViewportWindowManager<'_, R> {
+impl<S, R: NativeReads> WindowManager for ViewportWindowManager<'_, S, R> {
     fn support(&self) -> WindowSupport {
         WindowSupport {
             move_resize: true,
@@ -139,9 +139,7 @@ impl<R: NativeReads> WindowManager for ViewportWindowManager<'_, R> {
     not(any(target_os = "macos", target_os = "windows")),
     allow(unused_variables)
 )]
-pub fn platform_window_management(
-    sender: &CompletionSender<WindowManagementState>,
-) -> Box<dyn WindowManager + '_> {
+pub fn platform_window_management<S>(sender: &CompletionSender<S>) -> Box<dyn WindowManager + '_> {
     #[cfg(target_os = "macos")]
     {
         crate::macos::implementation(sender)

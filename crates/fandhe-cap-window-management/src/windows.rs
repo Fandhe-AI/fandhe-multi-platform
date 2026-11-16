@@ -73,7 +73,6 @@ fn topmost_from_exstyle(value: i32, last_error: u32) -> Option<bool> {
 #[cfg(target_os = "windows")]
 mod native {
     use crate::contract::{WindowFrame, WindowManager};
-    use fandhe_core::screens::window_management_show::WindowManagementState;
     use fandhe_runtime::WindowState;
     use windows::Win32::Foundation::{GetLastError, SetLastError, WIN32_ERROR};
     use windows::Win32::Graphics::Gdi::{
@@ -127,9 +126,7 @@ mod native {
     }
 
     /// Windows の `WindowManager` を返す。
-    pub(crate) fn implementation(
-        sender: &CompletionSender<WindowManagementState>,
-    ) -> Box<dyn WindowManager + '_> {
+    pub(crate) fn implementation<S>(sender: &CompletionSender<S>) -> Box<dyn WindowManager + '_> {
         Box::new(ViewportWindowManager {
             sender,
             reads: WindowsReads,
