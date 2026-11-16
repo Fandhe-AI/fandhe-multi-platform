@@ -4,7 +4,7 @@
 //! effect として駆動する。`take_request` で `(世代, 訳先タグ)` を観測し、Translator API
 //! （`Translator`）で固定の原文（`SOURCE_TEXT`、ja）を訳先へ 1 回訳して画面へ返す。
 //! `TextTranslator` trait（`Send + Sync`）は `JsValue` を持てないため通らず、契約
-//! （`fandhe_device::translation` の写像表）だけを共有する。`Translator` は web-sys に型が無いので
+//! （`fandhe_cap_translation` の写像表）だけを共有する。`Translator` は web-sys に型が無いので
 //! `js_sys::Reflect` で呼ぶ。Language Detector API は使わない（元言語は ja 固定）。
 //! `fandhe-egui-proxy` の wasm canvas 経路は対象外（`Unsupported`）。
 //!
@@ -29,9 +29,8 @@
 //! 複数タブ・複数マウント間の一致、egui-proxy の wasm canvas 経路。原文・訳文・例外の `message` は
 //! 画面にも console にも出さない（security.md A09）。
 
+use fandhe_cap_translation::{check_result, TranslationError, EMPTY};
 use fandhe_core::screens::translation::TranslateFailure;
-use fandhe_device::translation::{check_result, EMPTY};
-use fandhe_device::DeviceError;
 
 /// 失敗の固定文言（`fandhe-egui-proxy` の `FAILED_MESSAGE` と同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -62,7 +61,7 @@ pub(crate) fn failure_from_error_name(name: Option<&str>) -> TranslateFailure {
 pub(crate) fn result_outcome(v: Option<String>) -> Result<String, TranslateFailure> {
     match v.map(check_result) {
         Some(Ok(t)) => Ok(t),
-        Some(Err(DeviceError::Internal(EMPTY))) => Err(TranslateFailure::Empty),
+        Some(Err(TranslationError::Internal(EMPTY))) => Err(TranslateFailure::Empty),
         _ => Err(TranslateFailure::Failed(FAILED.to_string())),
     }
 }
@@ -70,7 +69,7 @@ pub(crate) fn result_outcome(v: Option<String>) -> Result<String, TranslateFailu
 /// 開始から期限以上経ったか（`performance.now()` の単調時計、ミリ秒）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn is_late(started_ms: f64, now_ms: f64) -> bool {
-    now_ms - started_ms >= fandhe_device::translation::TRANSLATE_DEADLINE.as_secs_f64() * 1000.0
+    now_ms - started_ms >= fandhe_cap_translation::TRANSLATE_DEADLINE.as_secs_f64() * 1000.0
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -85,11 +84,11 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    use fandhe_cap_translation::{validate_request, TRANSLATE_DEADLINE};
     use fandhe_core::screens::translation::{
         finish_translate, mark_running, take_request, TranslateFailure, TranslationState,
         SOURCE_LANG, SOURCE_TEXT,
     };
-    use fandhe_device::translation::{validate_request, TRANSLATE_DEADLINE};
     use js_sys::{Array, Function, Object, Promise, Reflect};
     use wasm_bindgen::prelude::*;
     use wasm_bindgen_futures::{spawn_local, JsFuture};

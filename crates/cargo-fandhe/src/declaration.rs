@@ -106,6 +106,17 @@ pub struct Android {
     /// `<application>` 直下の `<meta-data>`（`com.google.android.gms.wallet.api.enabled` 等）。
     #[serde(default)]
     pub application_meta_data: Vec<MetaData>,
+    /// `<queries>` の `<intent>`（Android 11 以降のパッケージ可視性。TTS エンジン・音声認識サービスの検出に要る）。
+    /// action だけを書ける。`<package>`・`categories`・`data` は受けない（最小公開）。
+    #[serde(default)]
+    pub queries: Vec<QueryIntent>,
+}
+
+/// `<queries>` 内の `<intent>` の宣言。`actions` の各要素が別々の `<intent>` になる。
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct QueryIntent {
+    pub actions: Vec<String>,
 }
 
 /// MainActivity に機能の宣言が足せる属性。`exported`・`launchMode`・`taskAffinity`・`permission`・`enabled` など
@@ -594,6 +605,17 @@ fn validate_android(c: &mut Ctx, a: &Android) {
     }
     c.paths("android.java", &a.java);
     c.paths("android.res", &a.res);
+    for (i, q) in a.queries.iter().enumerate() {
+        let f = format!("android.queries[{i}].actions");
+        c.check(!q.actions.is_empty(), &f, "1 件以上が必要です");
+        for act in &q.actions {
+            c.check(
+                is_java_name(act),
+                &f,
+                format!("`{act}` はドット区切りの識別子にしてください"),
+            );
+        }
+    }
     c.intent_filters(
         "android.main-activity-intent-filters",
         &a.main_activity_intent_filters,

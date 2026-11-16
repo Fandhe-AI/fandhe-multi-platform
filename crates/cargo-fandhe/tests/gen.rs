@@ -799,6 +799,7 @@ fn new_android_fields_reach_only_the_selecting_app() {
          permissions = [{ name = \"android.permission.NEARBY_WIFI_DEVICES\", flags = [\"neverForLocation\"] }]\n\
          main-activity-attributes = { supportsPictureInPicture = \"true\" }\n\
          application-meta-data = [{ name = \"com.example.flag\", value = \"a&b\" }]\n\
+         queries = [{ actions = [\"com.example.QUERY_ACTION\"] }]\n\
          [[package.metadata.fandhe.android.components]]\n\
          kind = \"activity-alias\"\nname = \"com.example.AAlias\"\nexported = true\n\
          target-activity = \"com.example.Zed\"\n\
@@ -830,6 +831,16 @@ fn new_android_fields_reach_only_the_selecting_app() {
     assert!(zed < alias, "{x}");
     assert!(
         x.contains("android:targetActivity=\"com.example.Zed\""),
+        "{x}"
+    );
+    // <queries> は <application> の前。
+    let (q, app) = (
+        x.find("<queries>").unwrap(),
+        x.find("<application>").unwrap(),
+    );
+    assert!(q < app, "{x}");
+    assert!(
+        x.contains("android:name=\"com.example.QUERY_ACTION\""),
         "{x}"
     );
     // meta-data は alias の後（application 直下）。

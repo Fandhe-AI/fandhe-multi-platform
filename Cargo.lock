@@ -1194,6 +1194,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-biometric-auth"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-core 0.61.2",
+ "windows-future",
+]
+
+[[package]]
 name = "fandhe-cap-ble-peripheral"
 version = "0.2.0"
 dependencies = [
@@ -1361,6 +1377,18 @@ dependencies = [
  "jni 0.22.4",
  "thiserror 2.0.20",
  "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-contacts"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -2132,6 +2160,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-secure-credential"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-serial-port"
 version = "0.2.0"
 dependencies = [
@@ -2261,6 +2303,19 @@ dependencies = [
  "fandhe-platform-android",
  "fandhe-platform-apple",
  "fandhe-runtime",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-translation"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
  "thiserror 2.0.20",
 ]
 
@@ -2464,6 +2519,7 @@ dependencies = [
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
  "fandhe-cap-audio-session",
+ "fandhe-cap-biometric-auth",
  "fandhe-cap-ble-peripheral",
  "fandhe-cap-bluetooth-classic",
  "fandhe-cap-bluetooth-le",
@@ -2477,6 +2533,7 @@ dependencies = [
  "fandhe-cap-companion-device",
  "fandhe-cap-compass-heading",
  "fandhe-cap-compose-mail-sms",
+ "fandhe-cap-contacts",
  "fandhe-cap-device-identifier",
  "fandhe-cap-device-info",
  "fandhe-cap-digital-credentials",
@@ -2536,6 +2593,7 @@ dependencies = [
  "fandhe-cap-screen-brightness",
  "fandhe-cap-screen-capture",
  "fandhe-cap-screen-wake-lock",
+ "fandhe-cap-secure-credential",
  "fandhe-cap-serial-port",
  "fandhe-cap-share-receive",
  "fandhe-cap-share-sheet",
@@ -2547,6 +2605,7 @@ dependencies = [
  "fandhe-cap-system-sound",
  "fandhe-cap-system-tray",
  "fandhe-cap-tilt-motion",
+ "fandhe-cap-translation",
  "fandhe-cap-usb-device",
  "fandhe-cap-user-idle",
  "fandhe-cap-uwb-ranging",
@@ -2663,6 +2722,7 @@ dependencies = [
  "fandhe-cap-color-picker",
  "fandhe-cap-compass-heading",
  "fandhe-cap-compose-mail-sms",
+ "fandhe-cap-contacts",
  "fandhe-cap-digital-credentials",
  "fandhe-cap-display-refresh-hdr",
  "fandhe-cap-dynamic-type",
@@ -2693,6 +2753,7 @@ dependencies = [
  "fandhe-cap-share-sheet",
  "fandhe-cap-sleep-lock-events",
  "fandhe-cap-system-accent-color",
+ "fandhe-cap-translation",
  "fandhe-cap-usb-device",
  "fandhe-cap-video-capture",
  "fandhe-cap-video-transcode",

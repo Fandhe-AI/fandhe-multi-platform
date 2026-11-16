@@ -29,8 +29,6 @@ pub mod background_task;
 pub mod background_upload;
 /// Phase 11（端末機能の拡充ループ、親 #116、Issue #557）: 画像内のバーコード・QR 読み取り。
 pub mod barcode_scan;
-/// Phase 11（端末機能の拡充ループ、親 #905、Issue #906）: 生体認証。
-pub mod biometric_auth;
 /// カメラのライブ映像の縮小の部品（`downscale_packed`・`downscale_yuv420`・`preview_size`）だけ。`fandhe-cap-ar` と
 /// `fandhe-web-dom` が共有する純関数で、機能の契約は `fandhe-cap-camera-preview-stream` が持つ（Issue #812 / #1329、
 /// consumer-app-structure.md §8）。
@@ -39,8 +37,6 @@ pub mod camera_preview_stream;
 pub mod car_display;
 /// Phase 11（端末機能の拡充ループ、親 #1154、Issue #1404）: 方位（コンパス）。
 pub mod compass;
-/// Phase 11（端末機能の拡充ループ、親 #1117、Issue #1220）: 連絡先を 1 件選ぶ。
-pub mod contact_picker;
 /// Phase 11（端末機能の拡充ループ、親 #153、Issue #1278）: ディープリンク（Universal Links / App Links）の受信。
 pub mod deep_link;
 /// Phase 11（端末機能の拡充ループ、親 #1131、Issue #1304）: 端末・OS 情報（機種・OS 版・空き容量）。
@@ -98,8 +94,6 @@ pub mod print;
 pub mod safe_area_insets;
 /// Phase 11（端末機能の拡充ループ、親 #128、Issue #655）: 画面向きの取得・固定。
 pub mod screen_orientation;
-/// Phase 11（端末機能の拡充ループ、親 #921、Issue #922）: 資格情報の安全な保存。
-pub mod secure_credential;
 /// Phase 11（端末機能の拡充ループ、親 #1023、Issue #1024）: 音声認識。
 pub mod speech_recognition;
 /// Phase 11（端末機能の拡充ループ、親 #117、Issue #560）: OS の検索への登録（固定のメモ 1 件の登録と全削除）。
