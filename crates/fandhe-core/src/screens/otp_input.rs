@@ -3,7 +3,7 @@
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod otp_input;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。ヒントの OS 呼び出しは effect ドライバ
-//! （`device/autofill_otp.rs`）が [`take_hint_request`] で観測して行い、[`finish_hint`] で結果を注入する。
+//! （`fandhe-cap-autofill-otp` の `driver.rs`）が [`take_hint_request`] で観測して行い、[`finish_hint`] で結果を注入する。
 //! Web の WebOTP 待ち受け（「SMS を待つ」）は `fandhe-web-dom`（c、#587）が [`take_wait_request`] /
 //! [`finish_wait`] で同じ形に乗せる。全 OS 分の状態・定数・文言は (a) で確定している。Web は
 //! 起動後に対応可否が決まるため、[`current_screen`] ではなく固定画面 [`fixed_screen`] を使う。
@@ -43,7 +43,7 @@ pub const HINT_FAILED_STATUS: &str = "OS に伝えられませんでした";
 pub const WAIT_BUTTON_LABEL: &str = "SMS を待つ";
 /// 「もう一度伝える」ボタンのラベル。
 pub const RETRY_BUTTON_LABEL: &str = "もう一度伝える";
-/// SMS 待ち受け中の案内。秒数は `fandhe_device::autofill_otp::WEBOTP_TIMEOUT_MS` と揃える（コアは device に依存できないため直書き）。
+/// SMS 待ち受け中の案内。秒数は `fandhe_cap_autofill_otp::WEBOTP_TIMEOUT_MS` と揃える（コアは device に依存できないため直書き）。
 pub const WAITING_STATUS: &str = "SMS を待っています（最大 120 秒）";
 /// コードを入れた案内（値は出さない）。
 pub const RECEIVED_STATUS: &str = "SMS からコードを受け取り、入力欄に入れました";
@@ -98,7 +98,7 @@ pub enum WaitPhase {
 /// 待ち受けの結果（写像は Web ドライバの責務）。
 #[derive(Clone, PartialEq, Eq)]
 pub enum CoreWaitOutcome {
-    /// コードを受け取った。`fill` は適用時点の入力欄が空かどうか（`fandhe_device::autofill_otp::should_fill`）。
+    /// コードを受け取った。`fill` は適用時点の入力欄が空かどうか（`fandhe_cap_autofill_otp::should_fill`）。
     Received {
         /// 受け取ったコード（加工しない）。
         code: String,

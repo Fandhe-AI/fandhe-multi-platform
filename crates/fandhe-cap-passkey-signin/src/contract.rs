@@ -5,7 +5,7 @@
 //! そのため結果名に「サインイン成立」を意味する語は使わない。応答が今回の要求のものかは、
 //! `clientDataJSON` の `type`・`challenge` と authenticatorData のフラグで確かめる
 //! （[`check_client_data`]・[`verify_response`]）。画面（`fandhe_core::screens::passkey_signin`、
-//! 端末依存ゼロ）へは `fandhe-egui-proxy` の effect ドライバ（`fandhe-cap-passkey-signin/src/driver.rs`）が写像する。
+//! 端末依存ゼロ）へは本クレートの effect ドライバ（`src/driver.rs`）が写像する。
 //! Windows（#343）・Web（#344）が [`Passkey`] を実装し、写像の純関数（[`outcome_from_dom_error`]・
 //! base64url・検証）を共有する。Android（#1280）は Credential Manager がコールバック型のため、画面の effect は
 //! 同じ写像・検証を使って bridge へ直接届け、`platform_passkey_signin()` は OS の完了まで `run` を block する。iOS・macOS は対応表で保留（`deferred`）のため配線しない。
@@ -285,7 +285,7 @@ pub fn verify_response(
 
 /// パスキーの登録・サインイン UI を出す。Android では画面の effect と `platform_passkey_signin()` が別々の待ち口を持ち、
 /// 併用時は先行が終わるまで後続を拒否する（画面側には「処理中」の失敗を表示する）。先行の結果は後続に落とされない。
-/// OS ごとの実装は `fandhe-egui-proxy`（Windows）/
+/// OS ごとの実装は本クレート（Windows は `src/windows.rs`、Android は `src/android.rs`）と
 /// `fandhe-web-dom`（Web）が持つ。
 pub trait Passkey: Send + Sync {
     /// ブロッキングで OS の UI を出し、結果を返す。ワーカースレッドから呼ぶ前提。

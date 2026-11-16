@@ -1,6 +1,6 @@
 //! egui 描画アプリの本体（TASK-1.2 / TASK-21.2 #1164）。`StateStore` を保持して毎フレーム
 //! [`crate::render_screen`] へ委譲する [`ProxyApp`] と、起床口（[`EguiWaker`]）、
-//! 端末機能ドライバ向けの egui 読み書き口（[`EguiSenderExt`]）を置く。
+//! 端末機能ドライバ向けの読み書き口（[`HostView`] の egui 実装）を置く。
 //!
 //! 起動（eframe）は [`crate::launch`] が担い、本モジュールは eframe に依存しない
 //! （[`EguiApp`] を実装するだけ）。`#[doc(hidden)]` の項目は旧構造（`fandhe-egui-proxy` の
@@ -165,8 +165,33 @@ impl HostView for EguiWaker {
             } else {
                 WindowLevel::Normal
             }),
+            WindowCommand::Fullscreen(on) => egui::ViewportCommand::Fullscreen(on),
         };
         self.0.send_viewport_cmd(cmd);
+    }
+
+    /// `Context::native_pixels_per_point`（OS 報告の画素密度。zoom を含まない）への委譲。
+    fn native_pixels_per_point(&self) -> Option<f32> {
+        self.0.native_pixels_per_point()
+    }
+
+    /// `lib.rs` の `CanvasWidget` 分岐が毎フレーム `ctx.data` へ書いた値を読む。
+    fn canvas_pointer(&self, id: fandhe_core::WidgetId) -> Option<(f32, f32)> {
+        self.0
+            .data(|d| d.get_temp::<Option<(f32, f32)>>(canvas_pointer_id(id.raw())))
+            .flatten()
+    }
+
+    fn canvas_pressed(&self, id: fandhe_core::WidgetId) -> bool {
+        self.0
+            .data(|d| d.get_temp::<bool>(canvas_pressed_id(id.raw())))
+            .unwrap_or(false)
+    }
+
+    fn canvas_released(&self, id: fandhe_core::WidgetId) -> Option<(f32, f32)> {
+        self.0
+            .data(|d| d.get_temp::<Option<(f32, f32)>>(canvas_released_id(id.raw())))
+            .flatten()
     }
 
     /// 登録済みのフック（[`set_text_input_hint_hook`]）へ委譲する。未登録は非対応。
@@ -188,77 +213,22 @@ pub fn egui_sender<S>(
     CompletionSender::new(tx, Arc::new(EguiWaker(ctx)))
 }
 
-/// [`CompletionSender`] が持つ egui 固有の読み書き口。起床以外の egui 依存が解消するまでの
-/// 暫定の橋渡しで、機能 crate からは使えない（一覧は Issue #1162 のコメント参照）。
-/// `sender.focused()` のような呼び出し側の書き方は従来のまま。
-#[doc(hidden)]
-pub trait EguiSenderExt {
-    /// sender の起床口が持つ `egui::Context`。
-    fn egui_ctx(&self) -> &egui::Context;
-
-    /// `egui::Context` の複製を返す。全画面表示（`device/fullscreen_immersive.rs`）が
-    /// `ViewportCommand::Fullscreen` の送信と `viewport().fullscreen` の読み戻しに使う専用の口で、
-    /// セーフエリア（`device/safe_area_insets.rs`）が Android の px→dp 換算に使う。
-    /// 他の機能での流用はしない（ctx を丸ごと渡す口になるため）。
-    #[cfg(not(target_arch = "wasm32"))]
-    fn egui_context(&self) -> egui::Context {
-        self.egui_ctx().clone()
-    }
-
-    /// キャンバス `id` 上で主ボタンを押下中のポインタ位置（キャンバス左上原点）。押していなければ
-    /// `None`。`lib.rs` の `CanvasWidget` 分岐が毎フレーム書いた値を `ctx.data` から読むだけの
-    /// 薄い委譲で、effect はフレーム末尾で呼ばれるため同じフレームの値が見える
-    /// （Issue #355 `device/pen_stylus.rs` 専用）。
-    fn canvas_pointer(&self, id: fandhe_core::WidgetId) -> Option<(f32, f32)> {
-        self.egui_ctx()
-            .data(|d| d.get_temp::<Option<(f32, f32)>>(canvas_pointer_id(id.raw())))
-            .flatten()
-    }
-
-    /// キャンバス `id` 上で、このフレームに接触が終わった位置（キャンバス左上原点）。押下から解放までが
-    /// 1 フレームに収まった短いタップも含む。終わっていなければ `None`（Issue #355）。
-    fn canvas_released(&self, id: fandhe_core::WidgetId) -> Option<(f32, f32)> {
-        self.egui_ctx()
-            .data(|d| d.get_temp::<Option<(f32, f32)>>(canvas_released_id(id.raw())))
-            .flatten()
-    }
-
-    /// キャンバス `id` 上で、このフレームに主ボタンが新しく押されたか（`canvas_pointer` と同じく
-    /// `lib.rs` の `CanvasWidget` 分岐が毎フレーム書く）。1 フレーム内の「離す → 押す」を
-    /// 新しい接触として扱うため（Issue #355）。
-    fn canvas_pressed(&self, id: fandhe_core::WidgetId) -> bool {
-        self.egui_ctx()
-            .data(|d| d.get_temp::<bool>(canvas_pressed_id(id.raw())))
-            .unwrap_or(false)
-    }
-}
-
-impl<S> EguiSenderExt for CompletionSender<S> {
-    fn egui_ctx(&self) -> &egui::Context {
-        let waker: &dyn std::any::Any = self.waker();
-        &waker
-            .downcast_ref::<EguiWaker>()
-            .expect("本 crate の CompletionSender は EguiWaker でのみ構築される")
-            .0
-    }
-}
-
 /// `CanvasWidget` のポインタ位置を `ctx.data` に置くときの `egui::Id`（`lib.rs` が書き、
-/// [`EguiSenderExt::canvas_pointer`] が読む）。
+/// [`HostView::canvas_pointer`] が読む）。
 #[doc(hidden)]
 pub fn canvas_pointer_id(widget_raw: u64) -> egui::Id {
     egui::Id::new(("fandhe_canvas_pointer", widget_raw))
 }
 
 /// `CanvasWidget` の「このフレームに押された」を `ctx.data` に置くときの `egui::Id`
-/// （`lib.rs` が書き、[`EguiSenderExt::canvas_pressed`] が読む）。
+/// （`lib.rs` が書き、[`HostView::canvas_pressed`] が読む）。
 #[doc(hidden)]
 pub fn canvas_pressed_id(widget_raw: u64) -> egui::Id {
     egui::Id::new(("fandhe_canvas_pressed", widget_raw))
 }
 
 /// `CanvasWidget` の「このフレームに接触が終わった位置」を `ctx.data` に置くときの `egui::Id`
-/// （`lib.rs` が書き、[`EguiSenderExt::canvas_released`] が読む）。
+/// （`lib.rs` が書き、[`HostView::canvas_released`] が読む）。
 #[doc(hidden)]
 pub fn canvas_released_id(widget_raw: u64) -> egui::Id {
     egui::Id::new(("fandhe_canvas_released", widget_raw))
@@ -694,22 +664,13 @@ pub fn set_teardown_hooks(on_exit: fn(), on_drop: fn()) {
 
 #[cfg(test)]
 mod completion_queue_tests {
-    use super::{egui_sender, Completion, EguiSenderExt};
+    use super::{egui_sender, Completion};
 
     /// テスト用の最小状態: カウンタとメモ欄を持つ（`fandhe_core::state::store::tests`
     /// の `Counter` と同じ構成、GPU 不要でロジックのみ検証する）。
     #[derive(Default)]
     struct Counter {
         count: u32,
-    }
-
-    /// `egui_ctx` の downcast が実際の `EguiWaker` へ届くこと（`&Arc<dyn _>` を
-    /// `&dyn Any` へ誤って強制すると実行時に失敗する）を固定する。
-    #[test]
-    fn egui_sender_ext_reaches_context() {
-        let (tx, _rx) = std::sync::mpsc::channel::<Completion<Counter>>();
-        let sender = egui_sender(tx, egui::Context::default());
-        let _ = sender.egui_context(); // downcast に失敗すると panic する
     }
 
     /// PR #920 の回帰チェック: 適用済み拡大率の記録は `egui::Context` 単位に分離される。
@@ -868,6 +829,7 @@ mod host_view_readback_tests {
         w.request_screenshot(1);
         w.request_window(WindowCommand::AlwaysOnTop(true));
         w.request_window(WindowCommand::OuterPosition { x: 1.0, y: 2.0 });
+        w.request_window(WindowCommand::Fullscreen(true));
         let out = w.0.run(egui::RawInput::default(), |_| {});
         let cmds = &out.viewport_output[&egui::ViewportId::ROOT].commands;
         assert!(cmds
@@ -880,6 +842,27 @@ mod host_view_readback_tests {
         assert!(cmds
             .iter()
             .any(|c| matches!(c, egui::ViewportCommand::OuterPosition(_))));
+        assert!(cmds
+            .iter()
+            .any(|c| matches!(c, egui::ViewportCommand::Fullscreen(true))));
+    }
+
+    /// キャンバスの入力は `ctx.data` に書かれた値をそのまま読み、書かれていなければ接触なし。
+    #[test]
+    fn canvas_values_read_from_context_data() {
+        let w = waker();
+        let id = fandhe_core::WidgetId::from_raw(9);
+        assert_eq!(w.canvas_pointer(id), None);
+        assert!(!w.canvas_pressed(id));
+        assert_eq!(w.canvas_released(id), None);
+        w.0.data_mut(|d| {
+            d.insert_temp(canvas_pointer_id(9), Some((1.0f32, 2.0f32)));
+            d.insert_temp(canvas_pressed_id(9), true);
+            d.insert_temp(canvas_released_id(9), Some((3.0f32, 4.0f32)));
+        });
+        assert_eq!(w.canvas_pointer(id), Some((1.0, 2.0)));
+        assert!(w.canvas_pressed(id));
+        assert_eq!(w.canvas_released(id), Some((3.0, 4.0)));
     }
 
     /// 新規の `Context` では位置・大きさは読めず、拡大率・画素密度は読める。

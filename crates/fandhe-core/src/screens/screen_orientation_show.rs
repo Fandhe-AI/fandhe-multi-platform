@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
 //! 置き場」節の制約どおり）。OS への要求・読み戻しは `fandhe-egui-proxy` の effect ドライバ
-//! （`device/screen_orientation.rs`）が [`take_request`] で要求を取り、[`mark_applying`] →
+//! （`fandhe-cap-screen-orientation` の `driver.rs`）が [`take_request`] で要求を取り、[`mark_applying`] →
 //! [`finish`] / [`apply_read`] で結果を注入する。Web（`fandhe-web-dom`、#658）も
 //! [`lock_satisfied`] など本モジュールの純関数を共有する。
 //!
@@ -77,7 +77,7 @@ pub const READBACK_FAILED_REASON: &str = "結果を確認できませんでし�
 pub const HINT: &str = "Web では固定すると全画面になり、解除すると全画面を抜けます。\
 Android の大画面やメーカー設定では固定が無視されることがあり、その場合は失敗と表示します";
 
-/// 向きの種類（`fandhe_device::screen_orientation::Orientation` の鏡像）。
+/// 向きの種類（`fandhe_cap_screen_orientation::Orientation` の鏡像）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Orientation {
     /// 縦。
@@ -86,7 +86,7 @@ pub enum Orientation {
     Landscape,
 }
 
-/// OS の読み戻し（`fandhe_device::screen_orientation::OrientationReading` の鏡像）。
+/// OS の読み戻し（`fandhe_cap_screen_orientation::OrientationReading` の鏡像）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Reading {
     /// 実際の向き。

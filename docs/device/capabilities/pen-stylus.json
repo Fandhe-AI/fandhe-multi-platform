@@ -14,7 +14,7 @@
       "note": "実装済み（#356）。位置は egui のポインタから、種類・筆圧・傾きは winit の base view に付けた観測専用 recognizer から取る（winit は種類と altitudeAngle を捨てる）。筆圧と傾きはペンのときだけ出し、指・ポインタは None（固定値を筆圧にしない）。離す・キャンセル・非アクティブ化・背景遷移で接触なしに戻す。守る範囲: 1 プロセス内の順序・嘘の値を出さないこと・離したら消すこと。守らない範囲: 1 フレーム内の複数点、主ポインタ 1 本以外、推定筆圧の後からの更新、方位角・ホバー、複数プロセス。シミュレータでは Apple Pencil を再現できない。実機確認（iPad と Apple Pencil）は #354",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#354）",
-      "impl": "crates/fandhe-egui-proxy/src/device/ios_pen_stylus.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_pen_stylus.m + crates/fandhe-egui-proxy/src/device/pen_stylus.rs + crates/fandhe-core/src/screens/pen_draw.rs + crates/fandhe-device/src/pen_stylus.rs、Issue #356"
+      "impl": "crates/fandhe-cap-pen-stylus/src/ios.rs + crates/fandhe-cap-pen-stylus/ios/fandhe_ios_pen_stylus.m + crates/fandhe-cap-pen-stylus/src/driver.rs + crates/fandhe-core/src/screens/pen_draw.rs + crates/fandhe-cap-pen-stylus/src/contract.rs、Issue #356"
     },
     "android": {
       "status": "done",
@@ -24,7 +24,7 @@
       "note": "実装済み（#357）。位置は egui のポインタから、種類・筆圧・傾きは `PenStylusHelper` が `HostInput`（#1327）経由で `dispatchTouchEvent` を観測した値から取る（winit は tool type と tilt を捨てる）。筆圧と傾きはペンのときだけ出し、指・マウスは None。傾きを報告しない機器は None（0 を垂直にしない）。離す・キャンセル・`onPause`・`onDestroy` で接触なしに戻す。守る範囲: 1 プロセス内の順序・嘘の値を出さないこと・離したら消すこと。守らない範囲: 主ポインタ 1 本以外、ホバー・消しゴムの区別、履歴サンプル、静止したままの筆圧変化、複数プロセス。未確認: エミュレータでペンを再現できるか。実機確認（スタイラス端末）は #354",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#354）",
-      "impl": "crates/fandhe-egui-proxy/src/device/android_pen_stylus.rs + platforms/android/app/src/main/java/com/fandhe/platform/PenStylusHelper.java + crates/fandhe-egui-proxy/src/device/pen_stylus.rs + crates/fandhe-core/src/screens/pen_draw.rs + crates/fandhe-device/src/pen_stylus.rs、Issue #357"
+      "impl": "crates/fandhe-cap-pen-stylus/src/android.rs + crates/fandhe-cap-pen-stylus/android/java/com/fandhe/platform/PenStylusHelper.java + crates/fandhe-cap-pen-stylus/src/driver.rs + crates/fandhe-core/src/screens/pen_draw.rs + crates/fandhe-cap-pen-stylus/src/contract.rs、Issue #357"
     },
     "macos": {
       "status": "done",
@@ -34,7 +34,7 @@
       "note": "実装済み（#355）。位置は egui のポインタから、ペンか否か・筆圧・傾きは local monitor から取る（winit は筆圧を届けない）。マウス・トラックパッドは種類=マウスで筆圧・傾きなし（固定値を筆圧にしない）。離す・近接の離脱・アプリの非アクティブ化で接触なしに戻す。守る範囲: 1 プロセス内の順序・嘘の値を出さないこと・離したら消すこと。守らない範囲: 1 フレーム内の複数点、主ポインタ 1 本以外、ホバー・消しゴムの区別、静止したままの筆圧変化（次のフレームまで反映しない）、複数プロセス。未確認: `tilt`（-1..1）の ×90° 換算の妥当性、winit 経由のイベントが local monitor に届く順序。Mac 目視（ペンタブレット）は #354",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#354）",
-      "impl": "crates/fandhe-egui-proxy/src/device/macos_pen_stylus.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_pen_stylus.m + crates/fandhe-egui-proxy/src/device/pen_stylus.rs + crates/fandhe-core/src/screens/pen_draw.rs + crates/fandhe-device/src/pen_stylus.rs、Issue #355"
+      "impl": "crates/fandhe-cap-pen-stylus/src/macos.rs + crates/fandhe-cap-pen-stylus/macos/fandhe_macos_pen_stylus.m + crates/fandhe-cap-pen-stylus/src/driver.rs + crates/fandhe-core/src/screens/pen_draw.rs + crates/fandhe-cap-pen-stylus/src/contract.rs、Issue #355"
     },
     "windows": {
       "status": "done",
@@ -44,7 +44,7 @@
       "note": "実装済み（#359）。位置は egui のポインタから、種類・筆圧・傾きは観測した `WM_POINTER*` から取る（winit は種類と傾きを捨てる）。筆圧と傾きはペンのときだけ出し、マスクが立たない値と片軸だけの傾きは None（0 を垂直にしない）。マウスは `WM_LBUTTON*` から Mouse として扱い、指は Touch で筆圧なし。離す・捕捉喪失・ホバー・非アクティブ化・ウィンドウ破棄で接触なしに戻す。守る範囲: 1 プロセス内の順序・嘘の値を出さないこと・離したら消すこと。守らない範囲: 主ポインタ 1 本以外、ホバー・消しゴムの区別、履歴サンプル、静止したままの筆圧変化、複数ウィンドウ。未確認: ペン対応端末での実測。MSVC ビルドと実機確認は #354",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#354）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_pen_stylus.rs + crates/fandhe-egui-proxy/src/device/pen_stylus.rs + crates/fandhe-core/src/screens/pen_draw.rs + crates/fandhe-device/src/pen_stylus.rs、Issue #359"
+      "impl": "crates/fandhe-cap-pen-stylus/src/windows.rs + crates/fandhe-cap-pen-stylus/src/driver.rs + crates/fandhe-core/src/screens/pen_draw.rs + crates/fandhe-cap-pen-stylus/src/contract.rs、Issue #359"
     },
     "web": {
       "status": "done",
@@ -55,7 +55,7 @@
       "note": "実装済み（#358）。root 要素の Pointer Events（down / move / up / cancel / lostpointercapture）を requestAnimationFrame 1 本でまとめて画面へ反映する。筆圧と傾き（tiltX / tiltY から高度角）は pointerType がペンのときだけ出し、マウス・指は None（マウスが返す固定の 0.5 を筆圧にしない）。離す・キャンセル・キャプチャ喪失・blur・pagehide・非表示で接触なしに戻す。PointerEvent が無ければ非対応として出す。守る範囲: 1 マウント内の順序・嘘の値を出さないこと・離したら消すこと・リスナーと rAF の解放。守らない範囲: 主ポインタ 1 本以外、coalesced / predicted events、筆圧を報告しないペンが返す 0.5、傾きを報告しない機器の 0、altitudeAngle / azimuthAngle・ホバー・消しゴム、点の上限 2000、複数タブ、egui-proxy の wasm canvas 経路。実ブラウザとペン実機の確認は #354",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実ブラウザ確認待ち（#354）",
-      "impl": "crates/fandhe-web-dom/src/pen_stylus.rs + crates/fandhe-web-dom/src/dom_tree.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/pen_draw.rs + crates/fandhe-device/src/pen_stylus.rs、Issue #358"
+      "impl": "crates/fandhe-web-dom/src/pen_stylus.rs + crates/fandhe-web-dom/src/dom_tree.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/pen_draw.rs + crates/fandhe-cap-pen-stylus/src/contract.rs、Issue #358"
     }
   },
   "note": "pen-stylus は筆圧・傾きの継続入力。keyboard-mouse（既存 id）との違い: 位置とクリックだけでなく、筆圧・角度・ペン / 指の区別を含む。winit が筆圧を届けるかは未調査のため、実装前に確認が要る。今回の範囲: 画面に線を描き、筆圧で太さを変える（筆圧が無い入力は一定の太さ）。"

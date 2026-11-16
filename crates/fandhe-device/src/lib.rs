@@ -17,8 +17,6 @@
 //! #745 の API が確定してから #747〜#749 側で行う。
 #![forbid(unsafe_code)]
 
-/// Phase 11（端末機能の拡充ループ、親 #121、Issue #585）: ワンタイムコード（OTP）の自動入力のヒント。
-pub mod autofill_otp;
 /// Phase 11（端末機能の拡充ループ、親 #116、Issue #557）: 画像内のバーコード・QR 読み取り。
 pub mod barcode_scan;
 /// カメラのライブ映像の縮小の部品（`downscale_packed`・`downscale_yuv420`・`preview_size`）だけ。`fandhe-cap-ar` と
@@ -35,8 +33,6 @@ pub mod drag_drop;
 pub mod eye_dropper;
 /// Phase 11（端末機能の拡充ループ、Issue #872）: ファイル選択ダイアログ。
 pub mod file_picker;
-/// Phase 11（端末機能の拡充ループ、親 #1133、Issue #1312）: 全画面表示（システムバー非表示）。
-pub mod fullscreen_immersive;
 pub mod http;
 /// Phase 11（端末機能の拡充ループ、親 #1120、Issue #1250）: 画像内の文字認識（OCR）。
 pub mod image_recognition;
@@ -48,18 +44,10 @@ pub mod media_transcode;
 pub mod mic_record;
 /// Issue #1188: base64url の共有部品（パスキー本体は機能 crate `fandhe-cap-passkey-signin`）。
 pub mod passkey;
-/// Phase 11（端末機能の拡充ループ、親 #95、Issue #355）: ペン・筆圧入力（種類・筆圧・傾き）。
-pub mod pen_stylus;
 /// Phase 11（端末機能の拡充ループ、親 #1121、Issue #1254）: 画像 1 枚の写真ライブラリ保存。
 pub mod photo_library;
 /// Phase 11（端末機能の拡充ループ）: 写真 1 枚の選択。
 pub mod photo_picker;
-/// Phase 11（端末機能の拡充ループ、親 #94、Issue #325）: 印刷ダイアログを開く。
-pub mod print;
-/// Phase 11（端末機能の拡充ループ、親 #105、Issue #444）: セーフエリア・ディスプレイ切り欠き。
-pub mod safe_area_insets;
-/// Phase 11（端末機能の拡充ループ、親 #128、Issue #655）: 画面向きの取得・固定。
-pub mod screen_orientation;
 /// Phase 11（端末機能の拡充ループ、親 #1023、Issue #1024）: 音声認識。
 pub mod speech_recognition;
 pub mod storage;
@@ -72,8 +60,6 @@ pub mod url_scheme;
 /// Wi-Fi の電源状態の判定（`radio_off`）だけ。wifi-info と wifi-connect が共有する純関数で、機能の契約は `fandhe-cap-wifi-info`
 /// が持つ（Issue #514 / #1329、consumer-app-structure.md §8）。
 pub mod wifi_info;
-/// Phase 11（端末機能の拡充ループ、親 #127、Issue #636）: ウィンドウ管理（位置・サイズ・最前面）。
-pub mod window_management;
 
 use std::path::PathBuf;
 

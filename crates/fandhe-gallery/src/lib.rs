@@ -158,6 +158,56 @@ extern "system" fn Java_com_fandhe_platform_TiltMotionHelper_nativeOnMotionChang
 ) {
 }
 
+/// `device` feature 無効ビルド向けの `nativeOnFullscreenChanged` no-op フォールバック（Issue #1314）。
+/// `FullscreenLifecycle`（#1334）は feature を知らず、`FullscreenHelper` は insets の配り先から必ず呼ぶため、
+/// 実体を持つ `fandhe-cap-fullscreen-immersive`（`device` 有効時のみ依存）が無いと `UnsatisfiedLinkError` になる。
+/// 実体との二重定義を避けるため cfg は `device` 無効のときだけ。署名は Java 宣言・実体と一致（`(int) -> void`）。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、シンボル名は JNI 命名規約上の固定名。
+#[cfg(all(target_os = "android", not(feature = "device")))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_FullscreenHelper_nativeOnFullscreenChanged(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _state: i32,
+) {
+}
+
+/// `device` feature 無効ビルド向けの `nativeOnPenSample` no-op フォールバック（Issue #357）。
+/// `PenStylusLifecycle`（#1334）は feature を知らず、`PenStylusHelper` は画面に関係なくタッチのたびに呼ぶため、
+/// 実体を持つ `fandhe-cap-pen-stylus`（`device` 有効時のみ依存）が無いと `UnsatisfiedLinkError` になる。
+/// 署名は Java 宣言・実体と一致（`(int, float, float, boolean) -> void`）。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、シンボル名は JNI 命名規約上の固定名。
+#[cfg(all(target_os = "android", not(feature = "device")))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_PenStylusHelper_nativeOnPenSample(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _tool_type: i32,
+    _pressure: f32,
+    _tilt_rad: f32,
+    _has_tilt: u8,
+) {
+}
+
+/// `device` feature 無効ビルド向けの `nativeOnPenClear` no-op フォールバック（Issue #357）。
+///
+/// # Safety
+/// `nativeOnPenSample` の no-op と同じ（unsafe 操作なし、固定シンボル名）。
+#[cfg(all(target_os = "android", not(feature = "device")))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_PenStylusHelper_nativeOnPenClear(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+) {
+}
+
 /// `device` feature 無効ビルド向けの `nativeOnForegroundChanged` no-op フォールバック（Issue #611）。
 /// `EnvironmentSensorsLifecycle`（#1331）は feature を知らず、`EnvironmentSensorsHelper.onPause` / `onResume` は
 /// 背景遷移を無条件に通知するため、実体を持つ `fandhe-cap-environment-sensors`（`device` 有効時のみ依存）が無いと
@@ -295,6 +345,10 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     fandhe_cap_app_badge::reset_pending_tracking();
     #[cfg(feature = "device")]
     fandhe_cap_midi::reset_pending_tracking();
+    // 印刷の保留中の要求と画面の取り込み待ちも破棄する（Activity 再生成で印刷の保留は復元しない。
+    // `fandhe_cap_print::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_print::reset_pending_tracking();
     #[cfg(feature = "device")]
     fandhe_cap_passkey_signin::reset_pending_tracking();
     #[cfg(feature = "device")]

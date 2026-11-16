@@ -9,11 +9,6 @@ use fandhe_render_egui::app::central_panel_with_insets;
 #[cfg(test)]
 #[cfg_attr(not(feature = "device"), allow(unused_imports))]
 pub(crate) use fandhe_render_egui::app::egui_sender;
-#[cfg_attr(
-    not(all(feature = "device", not(target_arch = "wasm32"))),
-    allow(unused_imports)
-)]
-pub(crate) use fandhe_render_egui::app::EguiSenderExt;
 pub use fandhe_render_egui::app::{
     insets_px_to_margin, Completion, CompletionSender, EffectFn, EguiWaker, InsetMarginSupplier,
     ProxyApp, ProxyAppDyn,

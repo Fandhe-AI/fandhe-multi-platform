@@ -1,0 +1,398 @@
+package com.fandhe.platform;
+
+import android.app.Activity;
+import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.graphics.RectF;
+import android.graphics.Typeface;
+import android.graphics.pdf.PdfDocument;
+import android.os.Bundle;
+import android.os.CancellationSignal;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.ParcelFileDescriptor;
+import android.os.SystemClock;
+import android.print.PageRange;
+import android.print.PrintAttributes;
+import android.print.PrintDocumentAdapter;
+import android.print.PrintDocumentInfo;
+import android.print.PrintJob;
+import android.print.PrintJobInfo;
+import android.print.PrintManager;
+import android.print.pdf.PrintedPdfDocument;
+
+import androidx.activity.ComponentActivity;
+import androidx.lifecycle.Lifecycle;
+
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.Map;
+import java.util.WeakHashMap;
+
+// 印刷ダイアログ（Issue #328、親 #94）の Android 実装ヘルパー。`PrintLifecycle` が Activity ごとに生成・破棄する
+// （Rust の `fandhe-cap-print/src/android.rs` が static メソッド `print` / `printImage` を JNI で呼び、結果を
+// `nativeOnPrintResult` で受けて `print::outcome_from_android_code` で契約の結果へ写像する）。
+//
+// `PrintManager.print` に `PrintDocumentAdapter` を渡し、`PrintedPdfDocument` で 1 ページ描く。
+// 印刷 UI は別 Activity なので提示直後に必ず `onPause` が来る。よって `onPause` では取り消さない。
+// 結果は `onFinish` の後に `PrintJob` の状態で決める。CREATED のまま残る場合に備え、`onFinish` から
+// 2 秒（単調時計）だけ再確認し、それでも CREATED なら UNCONFIRMED（嘘の成功にしない）。
+// 利用者が操作するダイアログなので固定の期限は掛けない。
+// Helper が無い Activity（生成前・破棄後）への要求は、結果が来ないまま待たせず RESULT_PRESENT_FAILED で確定する。
+// 破棄は `PrintLifecycle.onHostDestroyed`（`Activity.onDestroy()` の `super` の中）から届く。従来の `MainActivity` は
+// `super.onDestroy()` の前に呼んでいたため、`super` に対する前後だけが違う。
+// ライフサイクル: `request` はインスタンスフィールド。Activity の破棄で印刷ダイアログは閉じ、結果は再生成後の
+// Activity へ引き継がれない（AOSP `PrintManager.PrintDocumentAdapterDelegate.onActivityDestroyed` が adapter を
+// 手放し、保留中の onLayout / onWrite / onFinish を捨てる）。よって `onDestroy` で追跡中の id があれば、
+// ジョブの状態（`PrintJob.getInfo().getState()` を 1 回だけ読む。失敗は決められない扱い）から通常の `evaluate` と同じ写像で
+// 結果を 1 回だけ届け、Rust の `SLOT` を解放する。状態が CREATED で決められないときは、onFinish 後なら
+// RESULT_UNCONFIRMED、ダイアログ表示中なら RESULT_PRESENT_FAILED。外部アプリは `reset_pending_tracking()` を
+// 呼ばないため、この確定が無いと busy が残る。破棄後に届く `onFinish` は `complete` が false になり何も送らない。
+// 限界: プロセスごと消えた場合は届かないが、Rust 側の状態も同時に消えるので busy は残らない。
+// 画面の内容の印刷（#1012）は `printImage`。ARGB の int[] を受け、`onWrite` の試行ごとに Bitmap を作って
+// 印刷可能領域へ縦横比を保って描き、必ず recycle する（色は不透明前提。色の正確さは守らない範囲）。
+// ダイアログ・結果の写像・ライフサイクルは文章の印刷と共用する。画素・例外はログに出さない。
+// 守る範囲: 1 プロセス内の要求順序・取り消しを失敗にしないこと・嘘の成功の禁止・資源の解放。
+// 守らない範囲: 紙に出たか、2 秒を超えてからの状態変化、プリンタ側の失敗。
+// 権限・`<queries>` は宣言しない。ジョブ名は固定で、見出し・本文・例外はログにも OS のキューにも出さない。
+// no-op スタブは置かない: native は Rust の入口（`print` / `printImage`）を経た後でしか呼ばれない。
+final class PrintHelper {
+    // 結果コードの SSOT。Rust 側 `print::outcome_from_android_code` が同じ値で写像する。
+    static final int RESULT_SUBMITTED = 0;
+    static final int RESULT_CANCELLED = 1;
+    static final int RESULT_UNCONFIRMED = 2;
+    static final int RESULT_FAILED = 3;
+    static final int RESULT_PRESENT_FAILED = 4;
+
+    private static final long RECHECK_WINDOW_MS = 2000L;
+    private static final long RECHECK_INTERVAL_MS = 100L;
+
+    private static native void nativeOnPrintResult(long requestId, int code);
+
+    private final ComponentActivity activity;
+    private final RequestTracker request = new RequestTracker();
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    // 以下は UI スレッドだけが触る。
+    private PrintJob job;
+    private boolean writeFailed;
+    private long finishedAt;
+    // writeFailed・finishedAt がどの要求のものか。start() 前に破棄された要求が前の要求の残りを読まないための印。
+    private long stateId = RequestTracker.NONE;
+
+    // Activity ごとの helper。再生成後は新しい Activity に新しい helper が付き、旧 Activity の分は破棄時に外す。
+    private static final Map<Activity, PrintHelper> HELPERS = new WeakHashMap<>();
+
+    private PrintHelper(ComponentActivity activity) {
+        this.activity = activity;
+    }
+
+    static void attach(ComponentActivity activity) {
+        synchronized (HELPERS) {
+            HELPERS.put(activity, new PrintHelper(activity));
+        }
+    }
+
+    static void detach(Activity activity) {
+        PrintHelper helper;
+        synchronized (HELPERS) {
+            helper = HELPERS.remove(activity);
+        }
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    private static PrintHelper of(Activity activity) {
+        synchronized (HELPERS) {
+            return HELPERS.get(activity);
+        }
+    }
+
+    // JNI スレッドから呼ばれる入口。helper が無いときは失敗で確定する。
+    static void print(Activity activity, long id, String title, String body) {
+        PrintHelper helper = of(activity);
+        if (helper == null) {
+            nativeOnPrintResult(id, RESULT_PRESENT_FAILED);
+            return;
+        }
+        helper.printText(id, title, body);
+    }
+
+    // JNI スレッドから呼ばれる入口。helper が無いときは失敗で確定する。
+    static void printImage(Activity activity, long id, int[] argb, int width, int height) {
+        PrintHelper helper = of(activity);
+        if (helper == null) {
+            nativeOnPrintResult(id, RESULT_PRESENT_FAILED);
+            return;
+        }
+        helper.printArgb(id, argb, width, height);
+    }
+
+    // 1 ページの描画を差し替える（文章 / 画像）。
+    private interface PageDrawer {
+        // 描画に使った Bitmap を返す（無ければ null）。PdfDocument は writeTo で再生するため、
+        // 呼び出し側が writeTo 完了後に recycle する。
+        Bitmap draw(PdfDocument.Page page);
+    }
+
+    // JNI スレッドから呼ばれる。
+    private void printText(long id, String title, String body) {
+        request.track(id);
+        activity.runOnUiThread(() -> start(id, page -> {
+            draw(page, title, body);
+            return null;
+        }));
+    }
+
+    // JNI スレッドから呼ばれる。
+    private void printArgb(long id, int[] argb, int width, int height) {
+        request.track(id);
+        activity.runOnUiThread(() -> start(id, page -> drawImage(page, argb, width, height)));
+    }
+
+    // UI スレッド。take した id には、例外が出ても必ず 1 回だけ結果を届ける（届かないと Rust の SLOT が busy のまま残る）。
+    private void onDestroy() {
+        handler.removeCallbacksAndMessages(null);
+        long id = request.take();
+        if (id == RequestTracker.NONE) {
+            job = null;
+            return;
+        }
+        // 状態がまだ CREATED（または問い合わせ失敗）のとき: onFinish 後（印刷フレームワークの手を離れた）なら
+        // 確認できなかったので UNCONFIRMED、ダイアログ表示中・未開始なら提示は途中で終わったので PRESENT_FAILED。
+        // writeFailed・finishedAt は start() が stateId に書いた要求のものだけを使う（前の要求の残りを読まない）。
+        int code = RESULT_PRESENT_FAILED;
+        try {
+            if (stateId == id) {
+                code = decide();
+                if (code < 0) {
+                    code = finishedAt != 0L ? RESULT_UNCONFIRMED : RESULT_PRESENT_FAILED;
+                }
+            }
+        } finally {
+            job = null;
+            nativeOnPrintResult(id, code);
+        }
+    }
+
+    private void finish(long id, int code) {
+        if (request.complete(id)) {
+            job = null;
+            nativeOnPrintResult(id, code);
+        }
+    }
+
+    private void start(long id, PageDrawer drawer) {
+        // 差し替え済みの旧要求は何もしない。
+        if (request.current() != id) {
+            return;
+        }
+        if (activity.isFinishing() || activity.isDestroyed()
+                || !activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
+            finish(id, RESULT_PRESENT_FAILED);
+            return;
+        }
+        PrintManager manager = (PrintManager) activity.getSystemService(Context.PRINT_SERVICE);
+        if (manager == null) {
+            finish(id, RESULT_PRESENT_FAILED);
+            return;
+        }
+        writeFailed = false;
+        finishedAt = 0L;
+        stateId = id;
+        try {
+            job = manager.print("fandhe", new Adapter(id, drawer), null);
+        } catch (RuntimeException e) {
+            finish(id, RESULT_PRESENT_FAILED);
+            return;
+        }
+        // 印刷ジョブを作れない・ダイアログを開けないと null が返り、adapter の onFinish も来ない。
+        if (job == null) {
+            finish(id, RESULT_PRESENT_FAILED);
+        }
+    }
+
+    // ジョブの現在の状態から結果コードを決める。CREATED 等でまだ決められないときは -1。
+    // 状態は `PrintJob.getInfo().getState()`（スプーラへ binder で問い合わせる）を 1 回だけ読んで分岐する
+    // （判定ごとに読むと main で同期 binder を重ね、間で状態が変わる）。Activity 破棄後も読める。
+    // 問い合わせの失敗（RuntimeException。DeadSystemException 等）は決められない（-1）として扱う。
+    // 取り消しを失敗より先に見る（利用者の取り消しを失敗に化けさせない。契約表 10）。
+    // writeFailed は直近の onWrite 試行の結果で、再試行が成功すれば false に戻っている。
+    private int decide() {
+        int state = PrintJobInfo.STATE_CREATED;
+        PrintJob j = job;
+        if (j != null) {
+            try {
+                state = j.getInfo().getState();
+            } catch (RuntimeException e) {
+                return -1;
+            }
+        }
+        if (state == PrintJobInfo.STATE_CANCELED) {
+            return RESULT_CANCELLED;
+        } else if (writeFailed || state == PrintJobInfo.STATE_FAILED) {
+            return RESULT_FAILED;
+        } else if (state == PrintJobInfo.STATE_QUEUED || state == PrintJobInfo.STATE_STARTED
+                || state == PrintJobInfo.STATE_BLOCKED || state == PrintJobInfo.STATE_COMPLETED) {
+            return RESULT_SUBMITTED;
+        }
+        return -1;
+    }
+
+    // `onFinish` の後に結果を確定する。CREATED のままなら 2 秒まで再確認する。
+    private void evaluate(long id) {
+        if (request.current() != id) {
+            return;
+        }
+        int code = decide();
+        if (code >= 0) {
+            finish(id, code);
+        } else if (SystemClock.elapsedRealtime() - finishedAt < RECHECK_WINDOW_MS) {
+            handler.postDelayed(() -> evaluate(id), RECHECK_INTERVAL_MS);
+        } else {
+            finish(id, RESULT_UNCONFIRMED);
+        }
+    }
+
+    // 見出し（太字・大きめ）と本文（`\n` 区切りの行）を 1 ページに描く。
+    private static void draw(PdfDocument.Page page, String title, String body) {
+        Canvas canvas = page.getCanvas();
+        Paint head = new Paint();
+        head.setAntiAlias(true);
+        head.setTypeface(Typeface.DEFAULT_BOLD);
+        head.setTextSize(20f);
+        Paint text = new Paint();
+        text.setAntiAlias(true);
+        text.setTextSize(12f);
+        float x = 36f;
+        float y = 56f;
+        canvas.drawText(title, x, y, head);
+        y += 32f;
+        for (String line : body.split("\n", -1)) {
+            canvas.drawText(line, x, y, text);
+            y += 18f;
+        }
+    }
+
+    // 画像を印刷可能領域へ縦横比を保って中央寄せで収める。Bitmap は writeTo 完了まで生かす（呼び出し側が recycle）。
+    private static Bitmap drawImage(PdfDocument.Page page, int[] argb, int w, int h) {
+        Bitmap bmp = Bitmap.createBitmap(argb, w, h, Bitmap.Config.ARGB_8888);
+        boolean ok = false;
+        try {
+            // Canvas の原点は contentRect の左上（ページの角ではない）。根拠: AOSP の
+            // PdfDocument.cpp は contentRect の幅・高さで原点 (0,0) から記録を始め、書き出し時に
+            // beginPage(.., &contentRect) で印刷可能領域へ配置する。よって left/top は足さず、
+            // area の幅・高さ内の余白だけで中央寄せする（足すと余白の二重加算）。
+            Rect area = page.getInfo().getContentRect();
+            float s = Math.min(area.width() / (float) w, area.height() / (float) h);
+            float dw = w * s;
+            float dh = h * s;
+            float left = (area.width() - dw) / 2f;
+            float top = (area.height() - dh) / 2f;
+            page.getCanvas().drawBitmap(bmp, null, new RectF(left, top, left + dw, top + dh),
+                    new Paint(Paint.FILTER_BITMAP_FLAG));
+            ok = true;
+            return bmp;
+        } finally {
+            if (!ok) {
+                bmp.recycle();
+            }
+        }
+    }
+
+    // UI スレッドで呼ばれる（コールバックのハンドラ既定）。
+    private final class Adapter extends PrintDocumentAdapter {
+        private final long id;
+        private PageDrawer drawer;
+        private PrintAttributes attrs;
+
+        Adapter(long id, PageDrawer drawer) {
+            this.id = id;
+            this.drawer = drawer;
+        }
+
+        @Override
+        public void onLayout(PrintAttributes oldAttrs, PrintAttributes newAttrs,
+                CancellationSignal signal, LayoutResultCallback callback, Bundle extras) {
+            if (signal.isCanceled()) {
+                callback.onLayoutCancelled();
+                return;
+            }
+            attrs = newAttrs;
+            PrintDocumentInfo info = new PrintDocumentInfo.Builder("fandhe-print.pdf")
+                    .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                    .setPageCount(1)
+                    .build();
+            callback.onLayoutFinished(info, !newAttrs.equals(oldAttrs));
+        }
+
+        @Override
+        public void onWrite(PageRange[] pages, ParcelFileDescriptor destination,
+                CancellationSignal signal, WriteResultCallback callback) {
+            if (signal.isCanceled()) {
+                callback.onWriteCancelled();
+                return;
+            }
+            // 試行ごとに状態を作り直す。
+            setWriteFailed(false);
+            PageDrawer d = drawer;
+            if (d == null) {
+                setWriteFailed(true);
+                callback.onWriteFailed(null);
+                return;
+            }
+            PrintedPdfDocument pdf = new PrintedPdfDocument(activity, attrs);
+            boolean ok = false;
+            Bitmap used = null;
+            try {
+                PdfDocument.Page page = pdf.startPage(0);
+                try {
+                    used = d.draw(page);
+                } finally {
+                    // 描画の成否によらずページを終える（未終了だと close が IllegalStateException）。
+                    pdf.finishPage(page);
+                }
+                // destination の fd は framework の持ち物なので閉じない（公式サンプルと同じ）。
+                pdf.writeTo(new FileOutputStream(destination.getFileDescriptor()));
+                ok = true;
+            } catch (IOException | RuntimeException | OutOfMemoryError e) {
+                ok = false;
+            } finally {
+                try {
+                    pdf.close();
+                } catch (RuntimeException e) {
+                    ok = false;
+                }
+                if (used != null) {
+                    used.recycle();
+                }
+            }
+            if (ok) {
+                callback.onWriteFinished(new PageRange[] {PageRange.ALL_PAGES});
+            } else {
+                setWriteFailed(true);
+                callback.onWriteFailed(null);
+            }
+        }
+
+        // 置き換えられた古い要求の adapter が、今の要求の状態（stateId の要求のもの）を書き換えないようにする。
+        private void setWriteFailed(boolean failed) {
+            if (stateId == id) {
+                writeFailed = failed;
+            }
+        }
+
+        @Override
+        public void onFinish() {
+            if (stateId == id) {
+                finishedAt = SystemClock.elapsedRealtime();
+            }
+            // 印刷フレームワークが adapter を握り続けても画素配列を解放させる。
+            drawer = null;
+            evaluate(id);
+        }
+    }
+}

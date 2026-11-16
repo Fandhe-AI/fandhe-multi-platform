@@ -4,7 +4,7 @@
 //! `screens/registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod pen_draw;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。位置は
-//! `device/pen_stylus.rs` がキャンバス上のポインタから、種類・筆圧・傾きは OS 層から取り、
+//! `fandhe-cap-pen-stylus` の `driver.rs` がキャンバス上のポインタから、種類・筆圧・傾きは OS 層から取り、
 //! [`apply_sample`] / [`end_stroke`] / [`apply_failure`] で注入する。全 OS 分の状態・定数・
 //! 文言をここで定義する（OS 固有の登録・解除 UI は要らず、操作はクリアボタンだけ）。
 //!

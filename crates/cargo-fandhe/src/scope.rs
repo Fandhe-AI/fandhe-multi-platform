@@ -33,6 +33,11 @@ type Owner = (String, &'static str);
 /// 機能固有でなく、クリーンな成果物にも OS・署名が付ける entitlement。禁止集合に入れない。
 const GENERIC_KEYS: &[&str] = &["com.apple.security.app-sandbox"];
 
+/// どのアプリも必ずリンクする基盤の framework（描画・起動の土台）。選んだ機能に関係なく成果物へ出るため、
+/// 禁止集合に入れない。宣言に書いても書かなくてもよい（既存の機能 crate は書き方が揺れている）。
+/// 基盤の一覧はここだけに持つ。`docs/operations/capability-crate-migration.md` の記述と合わせる。
+const BASE_FRAMEWORKS: &[&str] = &["Foundation", "UIKit", "AppKit", "CoreGraphics"];
+
 fn apple_tokens(a: &Apple, out: &mut Vec<(&'static str, String)>) {
     let groups = |g: &[String], out: &mut Vec<(&'static str, String)>| {
         if !g.is_empty() {
@@ -112,7 +117,10 @@ pub(crate) fn forbidden_tokens(
         .filter(|d| !reached_ids.contains(d.id.as_str()))
     {
         for (kind, v) in tokens(d, os) {
-            if !allowed.contains(&v) && !GENERIC_KEYS.contains(&v.as_str()) {
+            if !allowed.contains(&v)
+                && !GENERIC_KEYS.contains(&v.as_str())
+                && !(kind == "framework" && BASE_FRAMEWORKS.contains(&v.as_str()))
+            {
                 out.entry(v).or_insert((d.id.clone(), kind));
             }
         }
@@ -408,6 +416,24 @@ mod tests {
         assert!(android.contains_key("android.permission.NFC"));
         assert!(!android.contains_key("android.permission.CAMERA"));
         assert!(forbidden_tokens(&reached, &cat, "ios").contains_key("VisionKit"));
+    }
+
+    /// print だけを選び、カタログに UIKit / AppKit を宣言する color-picker を含めても、
+    /// 基盤の framework（どのアプリも必ずリンクする）は禁止集合に入らない。
+    #[test]
+    fn base_frameworks_are_never_forbidden() {
+        let m = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.toml");
+        let decls = crate::check_workspace(Some(&m)).unwrap();
+        let cat: Vec<&Declaration> = decls
+            .iter()
+            .filter(|d| ["print", "color-picker"].contains(&d.id.as_str()))
+            .collect();
+        assert_eq!(cat.len(), 2);
+        let reached: Vec<&Declaration> = cat.iter().copied().filter(|d| d.id == "print").collect();
+        let ios = forbidden_tokens(&reached, &cat, "ios");
+        let macos = forbidden_tokens(&reached, &cat, "macos");
+        assert!(!ios.contains_key("UIKit"));
+        assert!(!macos.contains_key("AppKit"));
     }
 
     #[test]

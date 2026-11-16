@@ -82,17 +82,6 @@ fn build() {
     compile_apple_image_recognition();
     // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
     compile_apple_barcode_scan();
-
-    // `ios/fandhe_ios_fullscreen_immersive.m`（Issue #1313）。iOS 分岐のみ。
-    compile_ios_fullscreen_immersive();
-    // `ios/fandhe_ios_screen_orientation.m`（Issue #656）。iOS 分岐のみ。
-    compile_ios_screen_orientation();
-    // `ios/fandhe_ios_print.m`（Issue #327）。iOS 分岐のみ。
-    compile_ios_print();
-    // `ios/fandhe_ios_safe_area_insets.m`（Issue #445）。iOS 分岐のみ。
-    compile_ios_safe_area_insets();
-    // `ios/fandhe_ios_pen_stylus.m`（Issue #356）。iOS 分岐のみ。
-    compile_ios_pen_stylus();
 }
 
 /// `apple/fandhe_apple_mic_record.m` を `cc` でコンパイルし AVFoundation・
@@ -143,66 +132,6 @@ fn compile_apple_image_recognition() {
     );
 }
 
-/// `macos/fandhe_macos_print.m` を `cc` でコンパイルする（Issue #325）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_print.rs` が使う）。
-fn compile_macos_print() {
-    compile_objc("macos/fandhe_macos_print.m", &["AppKit"]);
-}
-
-/// `macos/fandhe_macos_window_management.m` を `cc` でコンパイルする（Issue #636）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_window_management.rs` が使う）。
-fn compile_macos_window_management() {
-    compile_objc("macos/fandhe_macos_window_management.m", &["AppKit"]);
-}
-
-/// `macos/fandhe_macos_safe_area_insets.m` を `cc` でコンパイルする（Issue #444）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_safe_area_insets.rs` が使う）。
-fn compile_macos_safe_area_insets() {
-    compile_objc("macos/fandhe_macos_safe_area_insets.m", &["AppKit"]);
-}
-
-/// `macos/fandhe_macos_pen_stylus.m` を `cc` でコンパイルする（Issue #355）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_pen_stylus.rs` が使う）。
-fn compile_macos_pen_stylus() {
-    compile_objc("macos/fandhe_macos_pen_stylus.m", &["AppKit"]);
-}
-
-/// `ios/fandhe_ios_fullscreen_immersive.m` を `cc` でコンパイルする（Issue #1313）。**iOS 分岐のみ**
-/// から呼ばれる（`src/device/ios_fullscreen_immersive.rs` が使う）。`fandhe_ios_common.h` を使う。
-fn compile_ios_fullscreen_immersive() {
-    compile_objc(
-        "ios/fandhe_ios_fullscreen_immersive.m",
-        &["Foundation", "UIKit"],
-    );
-}
-
-/// `ios/fandhe_ios_screen_orientation.m` を `cc` でコンパイルする（Issue #656）。**iOS 分岐のみ**
-/// から呼ばれる（`src/device/ios_screen_orientation.rs` が使う）。`fandhe_ios_common.h` を使う。
-fn compile_ios_screen_orientation() {
-    compile_objc(
-        "ios/fandhe_ios_screen_orientation.m",
-        &["Foundation", "UIKit"],
-    );
-}
-
-/// `ios/fandhe_ios_print.m` を `cc` でコンパイルする（Issue #327）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_print.rs` が使う）。
-fn compile_ios_print() {
-    compile_objc("ios/fandhe_ios_print.m", &["UIKit"]);
-}
-
-/// `ios/fandhe_ios_safe_area_insets.m` を `cc` でコンパイルする（Issue #445）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_safe_area_insets.rs` が使う）。
-fn compile_ios_safe_area_insets() {
-    compile_objc("ios/fandhe_ios_safe_area_insets.m", &["UIKit"]);
-}
-
-/// `ios/fandhe_ios_pen_stylus.m` を `cc` でコンパイルする（Issue #356）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_pen_stylus.rs` が使う）。
-fn compile_ios_pen_stylus() {
-    compile_objc("ios/fandhe_ios_pen_stylus.m", &["UIKit"]);
-}
-
 /// macOS ターゲット向けビルド（Issue #889・#897）。iOS と異なり macOS は位置情報
 /// （機能 crate `fandhe-cap-location` が持つ）などの `apple/*.m` だけを対象とする。既存の `ios/*.m` 群（文字入力・カメラ・傾き・クリップボード・読み上げ・
 /// ファイル選択）は iOS 専用のため対象外。
@@ -226,13 +155,6 @@ fn build_macos() {
     compile_apple_image_recognition();
     // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
     compile_apple_barcode_scan();
-    // `macos/fandhe_macos_safe_area_insets.m`（Issue #444）も macOS 専用。
-    compile_macos_safe_area_insets();
-    // `macos/fandhe_macos_window_management.m`（Issue #636）も macOS 専用。
-    compile_macos_window_management();
-    // `macos/fandhe_macos_print.m`（Issue #325）も macOS 専用。
-    compile_macos_print();
-    compile_macos_pen_stylus();
 
     // 素の実行体（`fandhe-gallery` の bin）へ `macos/Info.plist`
     // （`CFBundleIdentifier` + `NSLocationUsageDescription`）を埋め込む。macOS 10.15+

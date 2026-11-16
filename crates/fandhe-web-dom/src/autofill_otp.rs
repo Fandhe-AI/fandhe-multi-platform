@@ -10,8 +10,8 @@
 //!
 //! # `AutofillOtp` トレイトを通らない理由
 //!
-//! `fandhe_device::autofill_otp::AutofillOtp` は同期で、wasm のメインスレッドは DOM を直接触る。
-//! `passkey.rs` と同じく Web は effect で非同期に処理し、`fandhe_device::autofill_otp` の
+//! `fandhe_cap_autofill_otp::AutofillOtp` は同期で、wasm のメインスレッドは DOM を直接触る。
+//! `passkey.rs` と同じく Web は effect で非同期に処理し、`fandhe_cap_autofill_otp` の
 //! 純関数（`wait_outcome_from_dom_error`・`should_fill`）と定数だけを共有する。
 //!
 //! # ヒントの付け方
@@ -44,14 +44,14 @@
 //! 複数タブ、サーバー検証。
 
 #[cfg(any(test, target_arch = "wasm32"))]
+use fandhe_cap_autofill_otp::AutofillOtpError;
+#[cfg(any(test, target_arch = "wasm32"))]
+use fandhe_cap_autofill_otp::{should_fill, OtpCode, WaitOutcome, WEBOTP_TIMEOUT_MS};
+#[cfg(any(test, target_arch = "wasm32"))]
 use fandhe_core::screens::otp_input::{
     CoreWaitFailure, CoreWaitOutcome, HintPhase, CODE_FIELD_LABEL, RETRY_BUTTON_LABEL,
     WAIT_BUTTON_LABEL,
 };
-#[cfg(any(test, target_arch = "wasm32"))]
-use fandhe_device::autofill_otp::{should_fill, OtpCode, WaitOutcome, WEBOTP_TIMEOUT_MS};
-#[cfg(any(test, target_arch = "wasm32"))]
-use fandhe_device::DeviceError;
 
 /// `autocomplete` に付ける値。
 #[cfg(any(test, target_arch = "wasm32"))]
@@ -117,8 +117,8 @@ fn sms_wait_supported(
 #[cfg(any(test, target_arch = "wasm32"))]
 fn settle(
     timed_out: bool,
-    raw: Result<WaitOutcome, DeviceError>,
-) -> Result<WaitOutcome, DeviceError> {
+    raw: Result<WaitOutcome, AutofillOtpError>,
+) -> Result<WaitOutcome, AutofillOtpError> {
     if timed_out {
         Ok(WaitOutcome::TimedOut)
     } else {
@@ -126,11 +126,11 @@ fn settle(
     }
 }
 
-/// 待ち受け結果を画面用の結果へ写す。`fandhe-egui-proxy/src/device/autofill_otp.rs` と同じ写像。
+/// 待ち受け結果を画面用の結果へ写す。`fandhe-cap-autofill-otp/src/driver.rs` と同じ写像。
 /// `current_code` は適用時点の入力値で、`should_fill` に渡す。
 #[cfg(any(test, target_arch = "wasm32"))]
 fn to_core_wait(
-    r: Result<WaitOutcome, DeviceError>,
+    r: Result<WaitOutcome, AutofillOtpError>,
     current_code: &str,
 ) -> Result<CoreWaitOutcome, CoreWaitFailure> {
     match r {
@@ -140,15 +140,15 @@ fn to_core_wait(
         }),
         Ok(WaitOutcome::Cancelled) => Ok(CoreWaitOutcome::Cancelled),
         Ok(WaitOutcome::TimedOut) => Ok(CoreWaitOutcome::TimedOut),
-        Err(DeviceError::Unsupported(_)) => Err(CoreWaitFailure::Unsupported),
+        Err(AutofillOtpError::Unsupported) => Err(CoreWaitFailure::Unsupported),
         Err(_) => Err(CoreWaitFailure::Failed),
     }
 }
 
 /// JS の `OTPCredential.code` を受信結果へ。取れない・空は失敗側（成功に畳まない）。加工しない。
 #[cfg(any(test, target_arch = "wasm32"))]
-fn code_from_js(v: Option<String>) -> Result<WaitOutcome, DeviceError> {
-    let s = v.ok_or(DeviceError::Internal("autofill_otp webotp"))?;
+fn code_from_js(v: Option<String>) -> Result<WaitOutcome, AutofillOtpError> {
+    let s = v.ok_or(AutofillOtpError::Internal("autofill_otp webotp"))?;
     OtpCode::new(s).map(WaitOutcome::Received)
 }
 
@@ -158,11 +158,11 @@ mod web {
     use std::collections::HashMap;
     use std::rc::Rc;
 
+    use fandhe_cap_autofill_otp::wait_outcome_from_dom_error;
     use fandhe_core::screens::otp_input::{
         finish_hint, finish_wait, mark_hint_applying, mark_waiting, set_sms_wait_available,
         take_hint_request, take_wait_request, HintOutcome, OtpInputState, HINT_FAILED_STATUS,
     };
-    use fandhe_device::autofill_otp::wait_outcome_from_dom_error;
     use js_sys::{Array, Object, Reflect};
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
@@ -252,7 +252,7 @@ mod web {
     }
 
     /// 例外の `name` だけを結果へ写す（`message` は読まない）。
-    fn outcome_of_error(err: &JsValue) -> Result<WaitOutcome, DeviceError> {
+    fn outcome_of_error(err: &JsValue) -> Result<WaitOutcome, AutofillOtpError> {
         let name = Reflect::get(err, &JsValue::from_str("name"))
             .ok()
             .and_then(|v| v.as_string())
@@ -323,7 +323,7 @@ mod web {
     fn deliver(
         applier: &Applier<OtpInputState>,
         generation: u64,
-        r: Result<WaitOutcome, DeviceError>,
+        r: Result<WaitOutcome, AutofillOtpError>,
     ) {
         applier.apply(move |s| {
             let out = to_core_wait(r, &s.code);
@@ -507,8 +507,8 @@ pub(crate) use web::release_mount;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fandhe_cap_autofill_otp::wait_outcome_from_dom_error;
     use fandhe_core::screens::otp_input::WAITING_STATUS;
-    use fandhe_device::autofill_otp::wait_outcome_from_dom_error;
 
     fn received(s: &str) -> WaitOutcome {
         WaitOutcome::Received(OtpCode::new(s.to_string()).expect("非空"))
@@ -560,15 +560,15 @@ mod tests {
             Ok(CoreWaitOutcome::TimedOut)
         );
         assert_eq!(
-            to_core_wait(Err(DeviceError::Unsupported("autofill_otp")), ""),
+            to_core_wait(Err(AutofillOtpError::Unsupported), ""),
             Err(CoreWaitFailure::Unsupported)
         );
         assert_eq!(
-            to_core_wait(Err(DeviceError::Internal("x")), ""),
+            to_core_wait(Err(AutofillOtpError::Internal("x")), ""),
             Err(CoreWaitFailure::Failed)
         );
         assert_eq!(
-            to_core_wait(Err(DeviceError::InvalidInput("x")), ""),
+            to_core_wait(Err(AutofillOtpError::InvalidInput("x")), ""),
             Err(CoreWaitFailure::Failed)
         );
     }
@@ -641,7 +641,7 @@ mod tests {
             Ok(CoreWaitOutcome::Cancelled)
         );
         assert_eq!(
-            to_core_wait(Err(DeviceError::Internal("autofill_otp webotp")), ""),
+            to_core_wait(Err(AutofillOtpError::Internal("autofill_otp webotp")), ""),
             Err(CoreWaitFailure::Failed)
         );
     }

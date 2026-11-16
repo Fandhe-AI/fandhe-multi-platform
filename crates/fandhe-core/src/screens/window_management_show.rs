@@ -5,9 +5,9 @@
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod window_management_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは本モジュール外
-//! （`fandhe-egui-proxy` の `device/window_management.rs`、Web は `fandhe-web-dom`）が
+//! （`fandhe-cap-window-management` の `driver.rs`、Web は `fandhe-web-dom`）が
 //! [`take_request`] で要求を観測し、[`finish`] / [`apply_observed`] / [`apply_support`] で読み戻した値を
-//! 注入する（`fullscreen_toggle.rs` と同型）。契約の SSOT は `fandhe_device::window_management`。
+//! 注入する（`fullscreen_toggle.rs` と同型）。契約の SSOT は `fandhe_cap_window_management`。
 //! 後続の OS 実装（Windows #637・Web #638）が共通コア画面を触らないよう、状態・定数・文言は
 //! 全対象 OS 分をここに置く。
 //!

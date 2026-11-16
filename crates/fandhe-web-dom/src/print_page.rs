@@ -20,7 +20,7 @@
 //!
 //! # 結果の写像
 //!
-//! - 入力不正: `print()` を呼ばず `Invalid`（文言は `fandhe-egui-proxy/src/device/print.rs` の
+//! - 入力不正: `print()` を呼ばず `Invalid`（文言は `fandhe-cap-print/src/driver.rs` の
 //!   `to_outcome` と同期する）
 //! - `window` が無い: `Unsupported`
 //! - `document` / `body` が無い・ブロック作成失敗・`print()` が例外: 固定文言の `Failed`
@@ -46,10 +46,10 @@
 //! 守らない: sandbox（`allow-modals` なし）やブラウザ設定で `print()` が黙って無視される場合、
 //! 紙に出たか、ブラウザごとの余白・書体・ヘッダーの差、複数タブ、wasm canvas 経路。
 
+use fandhe_cap_print::PrintError;
+use fandhe_cap_print::PrintRequest;
 use fandhe_core::screens::print_page::{CoreOutcome, PrintFailure, PrintRequestView};
 use fandhe_core::screens::print_screen_page::CAPTURE_FAILED_TEXT;
-use fandhe_device::print::PrintRequest;
-use fandhe_device::DeviceError;
 
 /// 印刷用ブロックの `id`。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -68,17 +68,17 @@ const PRINT_FAILED: &str = "OS の印刷を開始できませんでした";
 
 /// 画面の要求を検証済みの `PrintRequest` にする。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-fn build_request(view: &PrintRequestView) -> Result<PrintRequest, DeviceError> {
+fn build_request(view: &PrintRequestView) -> Result<PrintRequest, PrintError> {
     PrintRequest::new(&view.title, &view.body)
 }
 
 /// 入力不正を画面用の失敗にする。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-fn invalid_failure(e: DeviceError) -> PrintFailure {
+fn invalid_failure(e: PrintError) -> PrintFailure {
     PrintFailure::Invalid(
         match e {
-            DeviceError::InvalidInput("print title") => "見出し",
-            DeviceError::InvalidInput("print body") => "本文",
+            PrintError::InvalidInput("print title") => "見出し",
+            PrintError::InvalidInput("print body") => "本文",
             _ => "入力",
         }
         .to_string(),
@@ -105,11 +105,11 @@ mod web {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
+    use fandhe_cap_print::PrintRequest;
     use fandhe_core::screens::print_page::{
         finish_print, mark_printing, take_request, CoreOutcome, PrintFailure, PrintPageState,
     };
     use fandhe_core::screens::print_screen_page::take_request as take_screen_request;
-    use fandhe_device::print::PrintRequest;
     use wasm_bindgen::JsCast;
     use web_sys::{Document, Element, Window};
 
@@ -322,7 +322,7 @@ mod tests {
             PrintFailure::Invalid("本文".into())
         );
         assert_eq!(
-            invalid_failure(DeviceError::InvalidInput("x")),
+            invalid_failure(PrintError::InvalidInput("x")),
             PrintFailure::Invalid("入力".into())
         );
     }

@@ -3,7 +3,7 @@
 //! `fandhe_core::screens::safe_area_insets_show`（端末依存ゼロ）の画面を
 //! [`super::mount::mount_with_effect`] の effect として駆動する。値の取得は CSS `env()` の
 //! `safe-area-inset-*` を非表示の探り用要素の `padding` に指定し、`getComputedStyle` で読み戻す。
-//! `SafeAreaSource` トレイトは経由しない。共有するのは `fandhe_device::safe_area_insets` の
+//! `SafeAreaSource` トレイトは経由しない。共有するのは `fandhe_cap_safe_area_insets` の
 //! `READ_INTERVAL` と値域検査 `insets_from_raw`（SSOT）だけ。
 //!
 //! # 方式
@@ -21,9 +21,9 @@
 //! 守らない範囲: 反映の遅れ（最大 `READ_INTERVAL` + 1 フレーム。背景タブではさらに遅れる）、
 //! viewport の `env()` を見ること、zoom が 1 でないときのずれ、複数タブ間の食い違い。
 
+use fandhe_cap_safe_area_insets::insets_from_raw;
+use fandhe_cap_safe_area_insets::SafeAreaInsetsError;
 use fandhe_core::screens::safe_area_insets_show::{Insets, ReadFailure};
-use fandhe_device::safe_area_insets::insets_from_raw;
-use fandhe_device::DeviceError;
 
 /// 取得失敗時の固定文言（ブラウザ固有の値を含めない）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -58,7 +58,7 @@ pub(crate) fn classify(
             bottom: i.bottom,
             left: i.left,
         })),
-        Err(DeviceError::Unsupported(_)) => Err(ReadFailure::Unsupported),
+        Err(SafeAreaInsetsError::Unsupported(_)) => Err(ReadFailure::Unsupported),
         Err(_) => Err(failed()),
     }
 }
@@ -76,10 +76,10 @@ mod web {
     use std::collections::HashMap;
     use std::rc::Rc;
 
+    use fandhe_cap_safe_area_insets::READ_INTERVAL;
     use fandhe_core::screens::safe_area_insets_show::{
         apply_read, Insets, ReadFailure, SafeAreaInsetsShowState,
     };
-    use fandhe_device::safe_area_insets::READ_INTERVAL;
     use wasm_bindgen::prelude::*;
 
     use super::{classify, FAILED_LABEL};

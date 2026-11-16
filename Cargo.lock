@@ -1209,6 +1209,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-autofill-otp"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-background-download"
 version = "0.2.0"
 dependencies = [
@@ -1688,6 +1697,18 @@ version = "0.2.0"
 dependencies = [
  "fandhe-core",
  "fandhe-platform-android",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-fullscreen-immersive"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
  "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
@@ -2245,6 +2266,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-pen-stylus"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-per-app-language"
 version = "0.2.0"
 dependencies = [
@@ -2291,6 +2325,20 @@ dependencies = [
  "fandhe-core",
  "fandhe-platform-android",
  "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-print"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
  "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
@@ -2352,6 +2400,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-safe-area-insets"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-scanner-devices"
 version = "0.2.0"
 dependencies = [
@@ -2392,6 +2452,18 @@ dependencies = [
  "thiserror 2.0.20",
  "windows 0.61.3",
  "windows-future",
+]
+
+[[package]]
+name = "fandhe-cap-screen-orientation"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -2732,6 +2804,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-window-management"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-core"
 version = "0.2.0"
 dependencies = [
@@ -2810,6 +2894,7 @@ dependencies = [
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
  "fandhe-cap-audio-session",
+ "fandhe-cap-autofill-otp",
  "fandhe-cap-background-download",
  "fandhe-cap-background-task",
  "fandhe-cap-background-upload",
@@ -2847,6 +2932,7 @@ dependencies = [
  "fandhe-cap-flashlight",
  "fandhe-cap-focus-mode-status",
  "fandhe-cap-foldable-posture",
+ "fandhe-cap-fullscreen-immersive",
  "fandhe-cap-gamepad",
  "fandhe-cap-geocoding-search",
  "fandhe-cap-geofence",
@@ -2890,17 +2976,21 @@ dependencies = [
  "fandhe-cap-payment-request",
  "fandhe-cap-pdf-viewer",
  "fandhe-cap-pedometer",
+ "fandhe-cap-pen-stylus",
  "fandhe-cap-per-app-language",
  "fandhe-cap-photo-library",
  "fandhe-cap-picture-in-picture",
  "fandhe-cap-power-state",
+ "fandhe-cap-print",
  "fandhe-cap-quick-settings-tile",
  "fandhe-cap-radio-control",
  "fandhe-cap-recent-documents",
  "fandhe-cap-removable-storage",
+ "fandhe-cap-safe-area-insets",
  "fandhe-cap-scanner-devices",
  "fandhe-cap-screen-brightness",
  "fandhe-cap-screen-capture",
+ "fandhe-cap-screen-orientation",
  "fandhe-cap-screen-wake-lock",
  "fandhe-cap-secure-credential",
  "fandhe-cap-serial-port",
@@ -2927,6 +3017,7 @@ dependencies = [
  "fandhe-cap-web-auth-session",
  "fandhe-cap-wifi-connect",
  "fandhe-cap-wifi-info",
+ "fandhe-cap-window-management",
  "fandhe-core",
  "fandhe-egui-proxy",
  "fandhe-platform-android",
@@ -3029,6 +3120,7 @@ dependencies = [
  "fandhe-cap-app-lifecycle",
  "fandhe-cap-ar",
  "fandhe-cap-audio-devices",
+ "fandhe-cap-autofill-otp",
  "fandhe-cap-background-download",
  "fandhe-cap-background-task",
  "fandhe-cap-bluetooth-le",
@@ -3064,9 +3156,13 @@ dependencies = [
  "fandhe-cap-on-device-llm",
  "fandhe-cap-passkey-signin",
  "fandhe-cap-payment-request",
+ "fandhe-cap-pen-stylus",
  "fandhe-cap-picture-in-picture",
  "fandhe-cap-power-state",
+ "fandhe-cap-print",
+ "fandhe-cap-safe-area-insets",
  "fandhe-cap-screen-capture",
+ "fandhe-cap-screen-orientation",
  "fandhe-cap-serial-port",
  "fandhe-cap-share-receive",
  "fandhe-cap-share-sheet",
@@ -3076,6 +3172,7 @@ dependencies = [
  "fandhe-cap-usb-device",
  "fandhe-cap-video-capture",
  "fandhe-cap-video-transcode",
+ "fandhe-cap-window-management",
  "fandhe-core",
  "fandhe-device",
  "fandhe-platform-apple",

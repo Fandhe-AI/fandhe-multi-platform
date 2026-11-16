@@ -100,9 +100,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // 無視させる（`device::photo_pick::bridge::reset` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::photo_pick::reset_pending_tracking();
-    // Issue #325: `print::bridge::SLOT` も同様に破棄する（Activity 再生成で印刷の保留は復元しない）。
-    #[cfg(feature = "device")]
-    crate::device::print::reset_pending_tracking();
 
     // TASK-17.2（REQ-17）/ Issue #715: `FANDHE_PROXY_APP=<名前>` で描画対象を切り替える
     // （`main.rs`/`web.rs`/`ios.rs` と同じ契約、A03 対策・security.md 準拠の固定文字列
@@ -376,58 +373,6 @@ extern "system" fn Java_com_fandhe_platform_DeepLinkHelper_nativeOnDeepLinkRecei
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
     _url: *mut core::ffi::c_void,
-) {
-}
-
-/// `device` feature 無効ビルド向けの `nativeOnFullscreenChanged` no-op フォールバック
-/// （Issue #1314）。`FullscreenHelper` は insets リスナーから必ず呼ぶため、スタブが無いと
-/// feature 無効ビルドで `UnsatisfiedLinkError` になる。JNI 署名は Java 宣言・
-/// `device/android_fullscreen_immersive.rs` の実体と 3 か所で `(int) -> void` に揃える。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
-/// シンボル名は JNI 命名規約上の固定名（`nativeOnMotionChanged` と同じ根拠）。
-#[cfg(not(feature = "device"))]
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_FullscreenHelper_nativeOnFullscreenChanged(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    _state: i32,
-) {
-}
-
-/// `device` feature 無効ビルド向けの `nativeOnPenSample` no-op フォールバック（Issue #357）。
-/// `PenStylusHelper` は画面に関係なくタッチのたびに呼ぶため、スタブが無いと
-/// `UnsatisfiedLinkError` になる。JNI 署名は Java 宣言・`device/android_pen_stylus.rs` の実体と
-/// 3 か所で `(int, float, float, boolean) -> void` に揃える。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
-/// シンボル名は JNI 命名規約上の固定名（`nativeOnMotionChanged` と同じ根拠）。
-#[cfg(not(feature = "device"))]
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_PenStylusHelper_nativeOnPenSample(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    _tool_type: i32,
-    _pressure: f32,
-    _tilt_rad: f32,
-    _has_tilt: u8,
-) {
-}
-
-/// `device` feature 無効ビルド向けの `nativeOnPenClear` no-op フォールバック（Issue #357）。
-///
-/// # Safety
-/// `nativeOnPenSample` の no-op と同じ（unsafe 操作なし、固定シンボル名）。
-#[cfg(not(feature = "device"))]
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_PenStylusHelper_nativeOnPenClear(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
 ) {
 }
 
