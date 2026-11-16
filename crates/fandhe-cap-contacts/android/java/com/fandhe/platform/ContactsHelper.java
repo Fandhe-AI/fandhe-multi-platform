@@ -23,10 +23,16 @@ import java.util.WeakHashMap;
 // 3 = 失敗（`launch()` 例外・連絡先アプリ無し・読み取り失敗・名前なし・helper 無しを一律ここへ畳む。インテント経由に
 // 権限拒否は無く 2 は送らない）。name は選ばれた連絡先の表示名のみで、ログには出さない。
 //
-// 要求 id と「連絡先アプリを開いている」フラグは static: Activity 再生成をまたいで残る。契約は「保留中の要求は
-// 復元せず破棄」で、Rust 側（`android_main`）が再生成のたびに受け皿を捨てるため、再生成をまたいで届いた結果は
-// Rust 側の id 照合で捨てられる。`contactPickerOpen` は旧ピッカーの結果が新インスタンスへ届くまで true のまま残し、
-// 新しい起動を断る（断らないと、再生成後に始めた要求 B の id を旧要求 A の結果が消費して B の成功に見える）。
+// 要求 id と「連絡先アプリを開いている」フラグは static: Activity 再生成をまたいで残る。
+// 再生成と結果（androidx.activity 1.8.0 の `ActivityResultRegistry` / `ComponentActivity` で確認）:
+// - registry は `onSaveInstanceState` で登録キー・要求コードを保存し、新 Activity の `onCreate` で復元する。ピッカーの結果が
+//   再生成の最中に届くと registry が保留し、新 Activity が同じキーで `register` した後、STARTED で新しい callback へ届ける。
+//   よって再生成では何も捨てない。要求 id は残し、新 helper の callback が static の tracker から id を 1 度だけ取って
+//   結果を届ける（Rust 側の待ち手は id 照合で受け取る）。`contactPickerOpen` はその結果が届くまで true のまま残し、
+//   新しい起動を断る（断らないと、再生成後に始めた要求 B の id を旧要求 A の結果が消費して B の成功に見える）。
+// - 再生成を伴わない破棄（`isChangingConfigurations()` が偽）では registry ごと消え、結果は二度と届かない。
+//   `detach` が中断として失敗（3）を 1 度だけ届け、`contactPickerOpen` を下ろす。Rust 側は 3 を `Internal` にする。
+// Rust 側 `reset_pending_tracking`（gallery の `android_main`）が待ち手を先に戻していれば、引き継いだ結果は旧 id として捨てられる。
 // 読み書きは UI スレッドだけで行う。
 final class ContactsHelper {
     private static native void nativeOnContactPickerResult(long requestId, int code, String name);
@@ -47,17 +53,25 @@ final class ContactsHelper {
     private static final Map<Activity, ContactsHelper> HELPERS = new WeakHashMap<>();
 
     static void attach(ComponentActivity activity) {
-        // 再生成: 保留中の要求 id を捨てる。旧ピッカーの結果は新インスタンスへ届き得るが、id が NONE なので捨てられる。
-        contactPickRequest.take();
+        // 再生成: 要求 id は捨てない（旧ピッカーの結果は新インスタンスの callback が受け、その id で届ける）。
         ContactsHelper helper = new ContactsHelper(activity);
         synchronized (ContactsHelper.class) {
             HELPERS.put(activity, helper);
         }
     }
 
+    // 再生成なら何もしない（結果は新 helper へ届く）。再生成を伴わない破棄では結果が届かないため、
+    // 待ち手へ失敗を 1 度だけ届け、開閉状態を下ろす。`take` が first-wins なので callback との二重通知にならない。
     static void detach(Activity activity) {
         synchronized (ContactsHelper.class) {
             HELPERS.remove(activity);
+        }
+        if (!activity.isChangingConfigurations()) {
+            contactPickerOpen = false;
+            long requestId = contactPickRequest.take();
+            if (requestId != RequestTracker.NONE) {
+                nativeOnContactPickerResult(requestId, CODE_FAILED, null);
+            }
         }
     }
 

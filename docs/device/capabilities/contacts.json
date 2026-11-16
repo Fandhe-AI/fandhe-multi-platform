@@ -25,7 +25,7 @@
       "api": "`Intent.ACTION_PICK`（`ContactsContract.Contacts.CONTENT_URI`）/ `ContactsContract` + `ContentResolver`",
       "perm": "ピッカー（インテント）経由なら権限不要。`ContentResolver` で直接読むなら `READ_CONTACTS`、書き込みは `WRITE_CONTACTS`",
       "url": "https://developer.android.com/guide/topics/providers/contacts-provider",
-      "note": "実装済み（旧#1222）。`ACTION_PICK` 相当（androidx の `PickContact`）で連絡先アプリを開き、選んだ 1 件の `DISPLAY_NAME` だけを読む。インテント経由で選択した 1 件の読み取り権限が委譲されるため `READ_CONTACTS` は宣言しない（マニフェスト・依存・`queries` の追加なし）。電話・メール・識別子・一覧取得は扱わない。キャンセルは失敗にせず、連絡先アプリ無し・読み取り失敗・名前なし・空白だけの名前は Internal として成功に畳まない（権限拒否は Android では発生しない）。Activity 再生成で保留中の要求は復元せず破棄し、古い要求の完了は要求 id の照合と first-wins で捨てる。再生成前に開いた連絡先アプリの結果が届くまでは、新しい要求を起動せず失敗で返す（旧結果が新しい要求の id を消費しないため）。名前・Uri はログに出さない。守る範囲: 1 プロセス内の要求と完了の順序、偽の成功の禁止。守らない範囲: 複数プロセスの同時操作、再生成直後の一時的な表示の食い違い。実機確認（正常系・キャンセル・連絡先アプリ無し）は #9 で確認済み",
+      "note": "実装済み（旧#1222）。`ACTION_PICK` 相当（androidx の `PickContact`）で連絡先アプリを開き、選んだ 1 件の `DISPLAY_NAME` だけを読む。インテント経由で選択した 1 件の読み取り権限が委譲されるため `READ_CONTACTS` は宣言しない（マニフェスト・依存・`queries` の追加なし）。電話・メール・識別子・一覧取得は扱わない。キャンセルは失敗にせず、連絡先アプリ無し・読み取り失敗・名前なし・空白だけの名前は Internal として成功に畳まない（権限拒否は Android では発生しない）。Activity 再生成では要求を取り消さない（`ActivityResultRegistry` が結果を保留し、新しい Activity が同じキーで登録した callback へ届ける）。要求 id は static に残して新しい helper が引き継ぎ、結果を id 照合付きで 1 度だけ届ける（`android_main` の `reset_pending_tracking()` が先に待ち手を戻していれば旧 id として捨てる）。再生成を伴わない Activity 破棄は中断として `Err(Internal)` を 1 度だけ届け、開閉状態も下ろす。再生成前に開いた連絡先アプリの結果が届くまでは、新しい要求を起動せず失敗で返す（旧結果が新しい要求の id を消費しないため）。名前・Uri はログに出さない。守る範囲: 1 プロセス内の要求と完了の順序、偽の成功の禁止。守らない範囲: 複数プロセスの同時操作、再生成直後の一時的な表示の食い違い。実機確認（正常系・キャンセル・連絡先アプリ無し）は #9 で確認済み",
       "sourceName": [
         "連絡先・カレンダー"
       ],

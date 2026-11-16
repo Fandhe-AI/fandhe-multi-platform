@@ -16,8 +16,10 @@
 //!
 //! `bridge` は macOS / iOS と共有。提示は `crate::android::request_contact_pick`、結果は
 //! `nativeOnContactPickerResult` が Java のコード 0（選択）/ 1（キャンセル）/ 3（提示・
-//! 読み取り失敗）で届ける（インテント経由なので 2 = 権限拒否は送られない）。Activity 再生成で
-//! 保留中の要求は復元せず破棄する（`android_main` が [`reset_pending_tracking`] を呼ぶ）。
+//! 読み取り失敗）で届ける（インテント経由なので 2 = 権限拒否は送られない）。Activity 再生成では
+//! Java 側が要求 id を引き継いで結果を 1 度だけ届ける。再生成を伴わない破棄は Java 側が中断（3）を 1 度だけ届ける。
+//! どちらも待ち手は機能 crate 自身で確定する。`android_main` が [`reset_pending_tracking`] を呼ぶ構成では、
+//! 待ち手を先に `Internal` で戻し、引き継いだ結果は旧 id として捨てる。
 //!
 //! # macOS / iOS / Android 以外
 //!
@@ -100,7 +102,7 @@ pub(crate) mod bridge {
     }
 
     /// Activity 再生成直後に `android_main` から呼ぶ。保留中の要求を捨て、以後届く旧
-    /// `request_id` の [`deliver`] を不一致で無視させる（契約は「復元せず破棄」）。
+    /// `request_id` の [`deliver`] を不一致で無視させる（再生成前の待ち手は `Internal` で戻る）。
     #[cfg_attr(not(target_os = "android"), allow(dead_code))]
     pub(crate) fn reset() {
         SLOT.reset()
