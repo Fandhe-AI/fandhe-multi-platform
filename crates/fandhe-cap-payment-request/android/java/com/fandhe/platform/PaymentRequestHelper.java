@@ -135,6 +135,11 @@ final class PaymentRequestHelper {
 
     private boolean begin(long id, boolean pay, String isReadyJson, String paymentDataJson) {
         synchronized (LOCK) {
+            // `request` が helper を取ってから LOCK を取るまでに破棄された場合は断る（追跡したまま
+            // `start` が黙って戻り、誰も確定しなくなるのを防ぐ。false なら Rust が失敗で確定する）。
+            if (destroyed) {
+                return false;
+            }
             // 再生成前のシートの結果がまだ届いていない間は断る（旧結果が新しい要求を確定させない）。
             if (launchedId != RequestTracker.NONE) {
                 return false;
