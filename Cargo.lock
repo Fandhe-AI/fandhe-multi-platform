@@ -2008,6 +2008,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-payment-request"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "serde_json",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-pdf-viewer"
 version = "0.2.0"
 dependencies = [
@@ -2593,6 +2605,7 @@ dependencies = [
  "fandhe-cap-open-in-shell",
  "fandhe-cap-open-system-settings",
  "fandhe-cap-passkey-signin",
+ "fandhe-cap-payment-request",
  "fandhe-cap-pdf-viewer",
  "fandhe-cap-pedometer",
  "fandhe-cap-per-app-language",
@@ -2758,6 +2771,7 @@ dependencies = [
  "fandhe-cap-now-playing-controls",
  "fandhe-cap-on-device-llm",
  "fandhe-cap-passkey-signin",
+ "fandhe-cap-payment-request",
  "fandhe-cap-power-state",
  "fandhe-cap-screen-capture",
  "fandhe-cap-serial-port",

@@ -539,6 +539,10 @@
             android:authorities="${applicationId}.fandhe.gamepad"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.PaymentRequestLifecycle"
+            android:authorities="${applicationId}.fandhe.payment-request"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.BiometricAuthLifecycle"
             android:authorities="${applicationId}.fandhe.biometric-auth"
             android:exported="false" />
@@ -703,7 +707,7 @@
             android:name="android.content.APP_RESTRICTIONS"
             android:resource="@xml/app_restrictions" />
         <!-- Issue #1131: Google Pay API（play-services-wallet）の有効化。AAR の manifest には含まれない。
-             決済リクエストを切り離すときに削除する。 -->
+             決済リクエストを切り離すときに、この meta-data と `crates/fandhe-cap-payment-request/` を削除する。 -->
         <meta-data
             android:name="com.google.android.gms.wallet.api.enabled"
             android:value="true" />

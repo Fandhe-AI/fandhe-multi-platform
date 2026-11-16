@@ -1,8 +1,8 @@
 //! Phase 11（親 #114）型サンプル「物・サービスの決済」（Issue #541）の effect ドライバ。
-//! `fandhe_core::screens::payment_request`（端末依存ゼロ）の要求を観測し、`fandhe_device::payment_request`
+//! `fandhe_core::screens::payment_request`（端末依存ゼロ）の要求を観測し、`contract.rs`
 //! の [`PaymentSheet`] を呼んで結果を `CompletionSender` 経由で返す
 //! （`screens/registry.rs` の `effect` 区画から呼ばれる契約）。契約と守る範囲は
-//! `fandhe_device::payment_request` のモジュール doc を参照。
+//! `contract.rs` のモジュール doc を参照。
 //!
 //! - Android（Issue #1130 で骨格、#1131 で実装）: コールバック型のため pull 型 [`bridge`]
 //!   （`RequestSlot` の facade）で毎フレーム [`drive_callback`] が結果を反映する。
@@ -12,32 +12,40 @@
 //!
 //! **dispatch はこれが最終形**で、後続の子は触らない。Web は `fandhe-web-dom`。
 
+use crate::contract::{PaymentOutcome, PaymentSheet, UnsupportedPaymentSheet};
+use crate::error::PaymentRequestError;
 use fandhe_core::screens::payment_request::{
-    finish, mark_running, take_request, CoreOutcome, PaymentAction, PaymentRequestState,
+    CoreOutcome, PaymentAction, PaymentRequestState, finish, mark_running, take_request,
 };
-use fandhe_device::payment_request::PaymentOutcome;
-#[cfg(any(not(target_os = "android"), test))]
-use fandhe_device::payment_request::{PaymentSheet, UnsupportedPaymentSheet};
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
+
+/// 現在のプラットフォームに応じた `PaymentSheet` 実装を返す。
+///
+/// Android は Google Pay API がコールバック型のため `PaymentSheet` を実装せず（pull 型 `bridge` で
+/// [`payment_request_effect`] が扱う）、iOS・macOS は対応表で保留、Windows は非対応のため、どの OS でも
+/// `Unsupported` 固定を返す。Web の実装は `fandhe-web-dom` にあり、この契約の定数と写像だけを共有する。
+/// 画面の状態型に依存しない入口（`docs/architecture/consumer-app-structure.md` §8.2）。
+pub fn platform_payment_request() -> std::sync::Arc<dyn PaymentSheet> {
+    std::sync::Arc::new(UnsupportedPaymentSheet)
+}
 
 /// 内部名を出さない固定文言（security.md A09）。
 const FAILED_TEXT: &str = "決済シートを完了できませんでした";
 
-fn check_outcome(result: Result<bool, DeviceError>) -> Result<CoreOutcome, String> {
+fn check_outcome(result: Result<bool, PaymentRequestError>) -> Result<CoreOutcome, String> {
     match result {
         Ok(true) => Ok(CoreOutcome::Available),
-        Ok(false) | Err(DeviceError::Unsupported(_)) => Ok(CoreOutcome::Unsupported),
+        Ok(false) | Err(PaymentRequestError::Unsupported) => Ok(CoreOutcome::Unsupported),
         Err(_) => Err(FAILED_TEXT.to_string()),
     }
 }
 
-fn pay_outcome(result: Result<PaymentOutcome, DeviceError>) -> Result<CoreOutcome, String> {
+fn pay_outcome(result: Result<PaymentOutcome, PaymentRequestError>) -> Result<CoreOutcome, String> {
     match result {
         Ok(PaymentOutcome::TestAuthorized) => Ok(CoreOutcome::TestAuthorized),
         Ok(PaymentOutcome::Cancelled) => Ok(CoreOutcome::Cancelled),
-        Err(DeviceError::Unsupported(_)) => Ok(CoreOutcome::Unsupported),
+        Err(PaymentRequestError::Unsupported) => Ok(CoreOutcome::Unsupported),
         Ok(PaymentOutcome::Failed) | Err(_) => Err(FAILED_TEXT.to_string()),
     }
 }
@@ -47,23 +55,26 @@ fn pay_outcome(result: Result<PaymentOutcome, DeviceError>) -> Result<CoreOutcom
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub(crate) mod bridge {
-    use super::{check_outcome, pay_outcome, CoreOutcome, PaymentOutcome};
-    use crate::device::request_slot::RequestSlot;
-    use fandhe_device::DeviceError;
+    use super::{CoreOutcome, PaymentOutcome, check_outcome, pay_outcome};
+    use crate::error::PaymentRequestError;
+    use fandhe_runtime::request_slot::RequestSlot;
 
     pub(crate) type Outcome = Result<CoreOutcome, String>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
     /// 「使えるか」の結果を置く。不一致・未登録・既に結果ありは捨てて `false`。
-    pub(crate) fn deliver_check(request_id: u64, result: Result<bool, DeviceError>) -> bool {
+    pub(crate) fn deliver_check(
+        request_id: u64,
+        result: Result<bool, PaymentRequestError>,
+    ) -> bool {
         SLOT.deliver(request_id, check_outcome(result))
     }
 
     /// 「決済シート」の結果を置く。規則は [`deliver_check`] と同じ。
     pub(crate) fn deliver_pay(
         request_id: u64,
-        result: Result<PaymentOutcome, DeviceError>,
+        result: Result<PaymentOutcome, PaymentRequestError>,
     ) -> bool {
         SLOT.deliver(request_id, pay_outcome(result))
     }
@@ -77,7 +88,7 @@ pub(crate) mod bridge {
 
 /// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
 #[cfg(target_os = "android")]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     bridge::reset();
 }
 
@@ -87,8 +98,8 @@ pub(crate) fn reset_pending_tracking() {
 fn drive_callback(
     state: &PaymentRequestState,
     sender: &CompletionSender<PaymentRequestState>,
-    slot: &'static crate::device::request_slot::RequestSlot<bridge::Outcome>,
-    begin: fn(u64, PaymentAction) -> Result<(), DeviceError>,
+    slot: &'static fandhe_runtime::request_slot::RequestSlot<bridge::Outcome>,
+    begin: fn(u64, PaymentAction) -> Result<(), PaymentRequestError>,
 ) {
     use fandhe_core::screens::payment_request::PaymentPhase;
 
@@ -108,7 +119,7 @@ fn drive_callback(
         return;
     }
     let generation = state.generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         slot,
         sender,
         |_request_id| {},
@@ -149,12 +160,7 @@ pub fn payment_request_effect(
     state: &PaymentRequestState,
     sender: &CompletionSender<PaymentRequestState>,
 ) {
-    drive_callback(
-        state,
-        sender,
-        &bridge::SLOT,
-        super::android_payment_request::begin,
-    );
+    drive_callback(state, sender, &bridge::SLOT, crate::android::begin);
 }
 
 /// `registry.rs` から配線される effect ドライバ（Android 以外。常に「使えない」を表示する）。
@@ -163,7 +169,7 @@ pub fn payment_request_effect(
     state: &PaymentRequestState,
     sender: &CompletionSender<PaymentRequestState>,
 ) {
-    drive_sync(state, sender, &UnsupportedPaymentSheet);
+    drive_sync(state, sender, platform_payment_request().as_ref());
 }
 
 #[cfg(test)]
@@ -171,16 +177,23 @@ mod tests {
     use super::*;
     use fandhe_core::screens::payment_request as screen;
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
     #[test]
     fn outcomes_cover_all_arms() {
         assert_eq!(check_outcome(Ok(true)), Ok(CoreOutcome::Available));
         assert_eq!(check_outcome(Ok(false)), Ok(CoreOutcome::Unsupported));
         assert_eq!(
-            check_outcome(Err(DeviceError::Unsupported("payment_request"))),
+            check_outcome(Err(PaymentRequestError::Unsupported)),
             Ok(CoreOutcome::Unsupported)
         );
         assert_eq!(
-            check_outcome(Err(DeviceError::Internal("payment_request failed"))),
+            check_outcome(Err(PaymentRequestError::Internal("payment_request failed"))),
             Err(FAILED_TEXT.to_string())
         );
         assert_eq!(
@@ -196,7 +209,7 @@ mod tests {
             Err(FAILED_TEXT.to_string())
         );
         assert_eq!(
-            pay_outcome(Err(DeviceError::Unsupported("payment_request"))),
+            pay_outcome(Err(PaymentRequestError::Unsupported)),
             Ok(CoreOutcome::Unsupported)
         );
         assert!(!FAILED_TEXT.contains("payment"));
@@ -206,7 +219,7 @@ mod tests {
         let mut s = PaymentRequestState::default();
         press(&mut s);
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = crate::app::egui_sender(tx, egui::Context::default());
+        let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
         drive_sync(&s, &sender, sheet);
         while let Ok(apply) = rx.try_recv() {
             apply(&mut s);
@@ -214,12 +227,12 @@ mod tests {
         s
     }
 
-    struct Stub(fn() -> Result<PaymentOutcome, DeviceError>);
+    struct Stub(fn() -> Result<PaymentOutcome, PaymentRequestError>);
     impl PaymentSheet for Stub {
-        fn can_make_payments(&self) -> Result<bool, DeviceError> {
+        fn can_make_payments(&self) -> Result<bool, PaymentRequestError> {
             (self.0)().map(|_| true)
         }
-        fn request(&self) -> Result<PaymentOutcome, DeviceError> {
+        fn request(&self) -> Result<PaymentOutcome, PaymentRequestError> {
             (self.0)()
         }
     }
@@ -235,7 +248,7 @@ mod tests {
 
     #[test]
     fn failure_goes_to_error() {
-        let stub = Stub(|| Err(DeviceError::Internal("payment_request failed")));
+        let stub = Stub(|| Err(PaymentRequestError::Internal("payment_request failed")));
         for press in [screen::check, screen::pay] {
             let s = run(&stub, press);
             assert!(s.status.is_empty() && s.error.starts_with(screen::FAILED_PREFIX));
@@ -252,27 +265,27 @@ mod tests {
     /// フェイク begin を使い、独立 slot で bridge 経路を 1 フレームずつ進める。
     fn frame(
         s: &mut PaymentRequestState,
-        slot: &'static crate::device::request_slot::RequestSlot<bridge::Outcome>,
-        begin: fn(u64, PaymentAction) -> Result<(), DeviceError>,
+        slot: &'static fandhe_runtime::request_slot::RequestSlot<bridge::Outcome>,
+        begin: fn(u64, PaymentAction) -> Result<(), PaymentRequestError>,
     ) {
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = crate::app::egui_sender(tx, egui::Context::default());
+        let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
         drive_callback(s, &sender, slot, begin);
         while let Ok(apply) = rx.try_recv() {
             apply(s);
         }
     }
 
-    fn accept(_: u64, _: PaymentAction) -> Result<(), DeviceError> {
+    fn accept(_: u64, _: PaymentAction) -> Result<(), PaymentRequestError> {
         Ok(())
     }
 
     #[test]
     fn host_begin_shows_unsupported_never_success() {
-        use crate::device::android_payment_request::begin;
+        use crate::android::begin;
         for press in [screen::check, screen::pay] {
-            static SLOT: crate::device::request_slot::RequestSlot<bridge::Outcome> =
-                crate::device::request_slot::RequestSlot::new();
+            static SLOT: fandhe_runtime::request_slot::RequestSlot<bridge::Outcome> =
+                fandhe_runtime::request_slot::RequestSlot::new();
             let mut s = PaymentRequestState::default();
             press(&mut s);
             frame(&mut s, &SLOT, begin);
@@ -285,8 +298,8 @@ mod tests {
 
     #[test]
     fn cancelled_via_bridge_is_not_error() {
-        static SLOT: crate::device::request_slot::RequestSlot<bridge::Outcome> =
-            crate::device::request_slot::RequestSlot::new();
+        static SLOT: fandhe_runtime::request_slot::RequestSlot<bridge::Outcome> =
+            fandhe_runtime::request_slot::RequestSlot::new();
         let mut s = PaymentRequestState::default();
         screen::pay(&mut s);
         frame(&mut s, &SLOT, accept);
@@ -304,20 +317,20 @@ mod tests {
             (PaymentAction::Pay, pay_outcome(Ok(PaymentOutcome::Failed))),
             (
                 PaymentAction::Check,
-                check_outcome(Err(DeviceError::PermissionDenied("payment_request"))),
+                check_outcome(Err(PaymentRequestError::PermissionDenied)),
             ),
             (
                 PaymentAction::Pay,
-                pay_outcome(Err(DeviceError::InvalidInput("payment_request"))),
+                pay_outcome(Err(PaymentRequestError::InvalidInput)),
             ),
             (
                 PaymentAction::Check,
-                check_outcome(Err(DeviceError::Internal("payment_request failed"))),
+                check_outcome(Err(PaymentRequestError::Internal("payment_request failed"))),
             ),
         ];
         for (action, outcome) in cases {
-            static SLOT: crate::device::request_slot::RequestSlot<bridge::Outcome> =
-                crate::device::request_slot::RequestSlot::new();
+            static SLOT: fandhe_runtime::request_slot::RequestSlot<bridge::Outcome> =
+                fandhe_runtime::request_slot::RequestSlot::new();
             let mut s = PaymentRequestState::default();
             match action {
                 PaymentAction::Check => screen::check(&mut s),
@@ -335,8 +348,8 @@ mod tests {
 
     #[test]
     fn stale_request_id_is_dropped() {
-        static SLOT: crate::device::request_slot::RequestSlot<bridge::Outcome> =
-            crate::device::request_slot::RequestSlot::new();
+        static SLOT: fandhe_runtime::request_slot::RequestSlot<bridge::Outcome> =
+            fandhe_runtime::request_slot::RequestSlot::new();
         let mut s = PaymentRequestState::default();
         screen::pay(&mut s);
         frame(&mut s, &SLOT, accept);
@@ -355,8 +368,8 @@ mod tests {
 
     #[test]
     fn reset_drops_pending_and_old_completion() {
-        static SLOT: crate::device::request_slot::RequestSlot<bridge::Outcome> =
-            crate::device::request_slot::RequestSlot::new();
+        static SLOT: fandhe_runtime::request_slot::RequestSlot<bridge::Outcome> =
+            fandhe_runtime::request_slot::RequestSlot::new();
         let mut s = PaymentRequestState::default();
         screen::pay(&mut s);
         frame(&mut s, &SLOT, accept);
@@ -370,8 +383,8 @@ mod tests {
 
     #[test]
     fn ready_false_is_unsupported_not_available() {
-        static SLOT: crate::device::request_slot::RequestSlot<bridge::Outcome> =
-            crate::device::request_slot::RequestSlot::new();
+        static SLOT: fandhe_runtime::request_slot::RequestSlot<bridge::Outcome> =
+            fandhe_runtime::request_slot::RequestSlot::new();
         let mut s = PaymentRequestState::default();
         screen::check(&mut s);
         frame(&mut s, &SLOT, accept);
@@ -385,7 +398,7 @@ mod tests {
     fn no_request_never_calls_os() {
         let s = PaymentRequestState::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = crate::app::egui_sender(tx, egui::Context::default());
+        let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
         drive_sync(&s, &sender, &Stub(|| Ok(PaymentOutcome::TestAuthorized)));
         assert!(rx.try_recv().is_err());
     }

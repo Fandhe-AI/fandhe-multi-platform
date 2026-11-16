@@ -288,14 +288,7 @@ public class MainActivity extends GameActivity {
 
     byte[] webAuthSha256(byte[] data) {
         return WebAuthSessionHelper.sha256(data);
-    }
 
-    // 物・サービスの決済（Issue #1131）。実装は `PaymentRequestHelper`（結果ランチャーを STARTED 前に登録）。
-    private final PaymentRequestHelper paymentRequestHelper = new PaymentRequestHelper(this);
-
-    void requestPayment(long requestId, boolean pay, String isReadyToPayJson, String paymentDataRequestJson) {
-        paymentRequestHelper.request(requestId, pay, isReadyToPayJson, paymentDataRequestJson);
-    }
 
     // 印刷ダイアログ（Issue #328）。実装は `PrintHelper`。
     // Rust の `android_print.rs` が JNI で呼ぶ。
@@ -2641,7 +2634,6 @@ public class MainActivity extends GameActivity {
         penStylusHelper.onDestroy();
         // UI キューを待つネイティブ終了処理（clear）が super.onDestroy() の後ろで詰まらないよう先に解放する。
         super.onDestroy();
-        paymentRequestHelper.onDestroy();
         healthDataHelper.onDestroy();
         lanDiscoveryHelper.onDestroy();
         localPeerHelper.onDestroy();

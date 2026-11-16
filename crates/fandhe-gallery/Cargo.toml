@@ -90,6 +90,7 @@ device = [
   "dep:fandhe-cap-open-in-shell",
   "dep:fandhe-cap-open-system-settings",
   "dep:fandhe-cap-passkey-signin",
+  "dep:fandhe-cap-payment-request",
   "dep:fandhe-cap-pdf-viewer",
   "dep:fandhe-cap-pedometer",
   "dep:fandhe-cap-per-app-language",
@@ -260,6 +261,7 @@ fandhe-cap-on-device-llm = { path = "../fandhe-cap-on-device-llm", optional = tr
 fandhe-cap-open-in-shell = { path = "../fandhe-cap-open-in-shell", optional = true }
 fandhe-cap-open-system-settings = { path = "../fandhe-cap-open-system-settings", optional = true }
 fandhe-cap-passkey-signin = { path = "../fandhe-cap-passkey-signin", optional = true }
+fandhe-cap-payment-request = { path = "../fandhe-cap-payment-request", optional = true }
 fandhe-cap-pdf-viewer = { path = "../fandhe-cap-pdf-viewer", optional = true }
 fandhe-cap-pedometer = { path = "../fandhe-cap-pedometer", optional = true }
 fandhe-cap-per-app-language = { path = "../fandhe-cap-per-app-language", optional = true }

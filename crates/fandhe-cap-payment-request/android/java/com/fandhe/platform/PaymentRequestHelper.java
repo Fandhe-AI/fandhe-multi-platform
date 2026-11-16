@@ -1,6 +1,7 @@
 package com.fandhe.platform;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Handler;
 import android.os.Looper;
@@ -13,6 +14,8 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.Lifecycle;
 
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.api.ResolvableApiException;
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.wallet.IsReadyToPayRequest;
@@ -23,16 +26,19 @@ import com.google.android.gms.wallet.Wallet;
 import com.google.android.gms.wallet.WalletConstants;
 
 import java.lang.ref.WeakReference;
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 // 物・サービスの決済（Issue #1131、親 #114 の b-android）の Android 実装ヘルパー。範囲は Google Pay API の
 // TEST 環境で「使えるか」の確認と固定 1 円の決済シートを出し、結果の種別だけを Rust へ返すこと。
-// MainActivity から生成・委譲される。Rust の `device/android_payment_request.rs` が
-// `MainActivity.requestPayment(id, pay, isReadyJson, paymentDataJson)` を JNI で呼び、結果を
-// `nativeOnCheckResult` / `nativeOnPayResult` で受けて `payment_request::bridge::deliver_*` へ渡す。
+// `PaymentRequestLifecycle`（`FeatureLifecycleProvider` 派生）が Activity ごとに生成・破棄し、Rust の `android.rs` が
+// static の `request(Activity, id, pay, isReadyJson, paymentDataJson)` を JNI（`with_activity_class`）で呼び、結果を
+// `nativeOnCheckResult` / `nativeOnPayResult` で受けて `driver.rs` の `bridge::deliver_*` へ渡す。
 //
-// 要求 JSON は Rust の `fandhe_device::payment_request::ANDROID_*_JSON` を引数で受ける（ここに複製しない）。
+// 要求 JSON は Rust の `contract.rs` の `ANDROID_*_JSON` を引数で受ける（ここに複製しない）。
 // 結果コードの解釈（RESULT_OK かつデータありだけが承認）は Rust の `outcome_from_android_result`（SSOT）が
-// 行い、ここでは (resultCode, hasPaymentData) を取り出すだけ。KIND_* は `android_payment_request.rs` の
+// 行い、ここでは (resultCode, hasPaymentData) を取り出すだけ。KIND_* は `android.rs` の
 // 定数と同じ値（SSOT はこの Java 側）。
 //
 // 環境は ENVIRONMENT_TEST に固定する。PRODUCTION へ切り替える分岐・設定は作らない。返った PaymentData は
@@ -69,14 +75,51 @@ final class PaymentRequestHelper {
     private String paymentDataJson;
     private boolean destroyed;
 
-    PaymentRequestHelper(ComponentActivity activity) {
+    // Activity ごとの helper。`PaymentRequestLifecycle` が生成（attach）と破棄（detach）を知らせる。
+    private static final Map<Activity, PaymentRequestHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`PaymentRequestLifecycle.onHostCreated`
+    // （`Activity.onCreate` の中）から `attach` で生成する。
+    private PaymentRequestHelper(ComponentActivity activity) {
         this.activityRef = new WeakReference<>(activity);
         this.launcher = activity.getActivityResultRegistry().register("fandhe:PaymentRequestHelper:1", activity,
                 new ActivityResultContracts.StartIntentSenderForResult(), this::onActivityResult);
     }
 
-    // JNI スレッドから呼ばれる。pay が false のとき paymentDataJson は null。
-    void request(long id, boolean pay, String isReadyJson, String paymentDataJson) {
+    // Activity の生成時（`PaymentRequestLifecycle` から、UI スレッド）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new PaymentRequestHelper(activity));
+    }
+
+    // Activity の破棄時（同上）。結果は送らず追跡を外す。
+    static void detach(Activity activity) {
+        PaymentRequestHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // Google Play services が使えるか。SUCCESS だけを可とし、それ以外（無い・古い・無効）は非対応にする。
+    // 更新ダイアログは出さない。共通層へ置かない理由は、GMS を使わない機能を選んだ利用者に
+    // Play services の依存を乗せないため（document-scan の `DocumentScanHelper` と同じ）。
+    private static boolean isGmsAvailable(Context ctx) {
+        return GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(ctx)
+                == ConnectionResult.SUCCESS;
+    }
+
+    // Rust から呼ぶ入口（JNI スレッド）。helper が無い（生成前・破棄後）要求は false を返し、
+    // Rust が失敗で確定する（結果が来ないまま待たせない）。pay が false のとき paymentDataJson は null。
+    static boolean request(Activity activity, long id, boolean pay, String isReadyJson, String paymentDataJson) {
+        PaymentRequestHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            return false;
+        }
+        helper.begin(id, pay, isReadyJson, paymentDataJson);
+        return true;
+    }
+
+    private void begin(long id, boolean pay, String isReadyJson, String paymentDataJson) {
         synchronized (this) {
             request.track(id);
             launchedId = RequestTracker.NONE;
@@ -97,7 +140,7 @@ final class PaymentRequestHelper {
         }
         try {
             // SUCCESS 以外（無い・古い・無効）は非対応（GmsAvailability の doc 参照）。
-            if (!GmsAvailability.isAvailable(activity)) {
+            if (!isGmsAvailable(activity)) {
                 finish(id, KIND_UNSUPPORTED, 0, false);
                 return;
             }

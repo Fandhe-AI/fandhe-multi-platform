@@ -3,11 +3,11 @@
 //!
 //! 範囲は「Google Pay の TEST 環境で固定金額の決済シートを出し、結果を返す」まで。**実決済はしない**。
 //! PSP 連携は範囲外。画面（`fandhe_core::screens::payment_request`、端末依存ゼロ）へは
-//! `fandhe-egui-proxy` の effect ドライバ（`device/payment_request.rs`）が写像する。
+//! 本 crate の effect ドライバ（`driver.rs`）が写像する。
 //! Web（`fandhe-web-dom`、後続の (c)）は wasm で [`PaymentSheet`]（ブロッキング）を呼べないため
 //! trait を実装せず、const と [`outcome_from_dom_error`] だけを共有する。
-//! Android（Issue #1130 の骨格、実装は #1131）は Google Pay API（TEST 環境）のコールバック型のため
-//! [`PaymentSheet`] を実装せず、`fandhe-egui-proxy` の pull 型 bridge から Android 用 const と
+//! Android（Issue #1130 の骨格、実装は #1131、`android.rs`）は Google Pay API（TEST 環境）のコールバック型のため
+//! [`PaymentSheet`] を実装せず、`driver.rs` の pull 型 bridge から Android 用 const と
 //! [`outcome_from_android_result`] を共有する。iOS・macOS は対応表で保留、Windows は非対応のため配線しない。
 //!
 //! # 課金を起こさない設計
@@ -69,7 +69,7 @@
 //! Android も同じ範囲を守り、再生成時の旧要求の破棄とトークンを読まない・出さないことを加える。
 //! 守らない: プロセス死をまたぐ結果、GMS の Task が返らない場合の処理中表示、複数プロセス。
 
-use crate::DeviceError;
+use crate::error::PaymentRequestError;
 
 /// 対応する支払い方法の識別子（Google Pay）。
 pub const SUPPORTED_METHOD: &str = "https://google.com/pay";
@@ -100,10 +100,10 @@ pub enum PaymentOutcome {
 }
 
 /// DOM 例外名（Web の `DOMException.name`）を結果へ写す SSOT。どの名前も `TestAuthorized` にならない。
-pub fn outcome_from_dom_error(name: &str) -> Result<PaymentOutcome, DeviceError> {
+pub fn outcome_from_dom_error(name: &str) -> Result<PaymentOutcome, PaymentRequestError> {
     match name {
         "AbortError" => Ok(PaymentOutcome::Cancelled),
-        "NotSupportedError" | "SecurityError" => Err(DeviceError::Unsupported("payment_request")),
+        "NotSupportedError" | "SecurityError" => Err(PaymentRequestError::Unsupported),
         _ => Ok(PaymentOutcome::Failed),
     }
 }
@@ -120,23 +120,23 @@ pub fn outcome_from_android_result(result_code: i32, has_payment_data: bool) -> 
 }
 
 /// 決済シートを出す。実装は OS ごとに持たず、現状は [`UnsupportedPaymentSheet`] のみ
-/// （`fandhe-egui-proxy` の Android 以外のネイティブが使う。Android は pull 型 bridge）。
+/// （Android 以外のネイティブの `driver.rs` が使う。Android は pull 型 bridge）。
 pub trait PaymentSheet: Send + Sync {
     /// 支払いに使えるかを調べる。`Ok(false)` は使えない、非対応環境は `Err(Unsupported)`。
-    fn can_make_payments(&self) -> Result<bool, DeviceError>;
+    fn can_make_payments(&self) -> Result<bool, PaymentRequestError>;
     /// 決済シートを出して結果を返す。使えない環境では `Err(Unsupported)`。
-    fn request(&self) -> Result<PaymentOutcome, DeviceError>;
+    fn request(&self) -> Result<PaymentOutcome, PaymentRequestError>;
 }
 
 /// 非対応 OS 用。常に `Unsupported` を返し、成功を作らない。
 pub struct UnsupportedPaymentSheet;
 
 impl PaymentSheet for UnsupportedPaymentSheet {
-    fn can_make_payments(&self) -> Result<bool, DeviceError> {
-        Err(DeviceError::Unsupported("payment_request"))
+    fn can_make_payments(&self) -> Result<bool, PaymentRequestError> {
+        Err(PaymentRequestError::Unsupported)
     }
-    fn request(&self) -> Result<PaymentOutcome, DeviceError> {
-        Err(DeviceError::Unsupported("payment_request"))
+    fn request(&self) -> Result<PaymentOutcome, PaymentRequestError> {
+        Err(PaymentRequestError::Unsupported)
     }
 }
 
@@ -255,7 +255,7 @@ mod tests {
         for n in ["NotSupportedError", "SecurityError"] {
             assert!(matches!(
                 outcome_from_dom_error(n),
-                Err(DeviceError::Unsupported("payment_request"))
+                Err(PaymentRequestError::Unsupported)
             ));
         }
         for n in ["NotAllowedError", "TypeError", "", "x"] {
@@ -270,11 +270,11 @@ mod tests {
     fn unsupported_is_never_success() {
         assert!(matches!(
             UnsupportedPaymentSheet.can_make_payments(),
-            Err(DeviceError::Unsupported("payment_request"))
+            Err(PaymentRequestError::Unsupported)
         ));
         assert!(matches!(
             UnsupportedPaymentSheet.request(),
-            Err(DeviceError::Unsupported("payment_request"))
+            Err(PaymentRequestError::Unsupported)
         ));
     }
 }

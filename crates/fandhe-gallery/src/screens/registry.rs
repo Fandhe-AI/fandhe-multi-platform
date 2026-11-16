@@ -152,7 +152,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "payment_request" => fandhe_core::screens::payment_request::current_screen,
-    fandhe_egui_proxy::device::payment_request::payment_request_effect,
+    fandhe_cap_payment_request::payment_request_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "digital_credentials" => fandhe_core::screens::digital_credentials::current_screen,
