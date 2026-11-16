@@ -167,7 +167,7 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 
 | 機能 | 理由 | 解消の見込み |
 |------|------|--------------|
-| network-status | 未移行の `fandhe_apple_lan_discovery.m` が `fandhe_apple_network_status_read` を呼ぶ | lan-discovery と一緒に移す |
+| network-status | 未移行の `fandhe_apple_lan_discovery.m` が `fandhe_apple_network_status_read` を呼ぶ | lan-discovery と一緒に移す （第 12 束 #1332 で移した、§22） |
 | device-info | 未移行の `apple_quick_settings_tile.rs` が `macos_device_info::implementation()` を呼ぶ | quick-settings-tile の後 （第 11 束 #1331 で移した、§20） |
 | now-playing-controls | `media_playback`（egui-proxy・web-dom の両方）が `now_playing::sync*` を呼ぶ | media-playback と同じ PR で移す （第 11 束 #1331 で移した、§20） |
 | pen-stylus | Android が `MainActivity.dispatchTouchEvent` の上書きを要する。provider では置き換えられない | 口は #1327 で入った（§18）。`HostInput.addTouchObserver` で移せる |
@@ -204,12 +204,12 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | file-association | `windows_url_scheme` の内部（`win::`・`map_registry_error`）を使う。iOS・macOS は url_scheme の `.m` が受け口 | url-scheme と同時に移す。口は #1325 で入った（§16） |
 | spotlight-index | driver が `url_scheme::platform_url_scheme()` を使い、apple の `.m` が `fandhe_rust_url_scheme_received` を呼ぶ | url-scheme と同時に移す。口は #1325 で入った（§16） |
 | barcode-scan | `photo_pick::implementation`・`ios::present_photo_picker`・`image_recognition::precheck` を使う。photo-picker 側も barcode_scan の参照で止まっていて循環している | photo-picker・image-recognition と同じ PR で移す |
-| lan-discovery | apple の `.m` が `fandhe_apple_network_status_read` を、Windows が `windows_network_status` を使う。network-status も `map_view.rs` が OS 実装を使うため移せない | network-status・map-view と同時に移す |
+| lan-discovery | apple の `.m` が `fandhe_apple_network_status_read` を、Windows が `windows_network_status` を使う。network-status も `map_view.rs` が OS 実装を使うため移せない | network-status・map-view と同時に移す （第 12 束 #1332 で移した、§22） |
 | wifi-info | 未移行の wifi-connect の Windows 実装（`windows_wifi_connect.rs`）が `windows_wifi_info::radio_off` を使う | wifi-connect と同時に移す（第 9 束 #1329 で移した） |
 | local-peer-connect | `NEARBY_WIFI_DEVICES` の `usesPermissionFlags="neverForLocation"` を宣言の `Permission`（name・max-sdk のみ）で表せず、`cargo-fandhe` の `tests/gen.rs` が通らない | 宣言に権限フラグを足してから |
 | web-auth-session | Android は `MainActivity.onNewIntent` が `WebAuthSessionHelper.onNewIntent` を先に呼び、url-scheme の受信箱へ流さない分岐を持つ（provider に onNewIntent の口が無い）。Windows は `windows_compose_mail_sms::{open_url, SE_ERR_NOASSOC}` を使う | Activity の Intent を配る口の設計が先。`open_url` は #1192 で `fandhe-platform-windows` へ上げた。口は #1325 で入った（§16） |
 | payment-request | Google Pay の `<application>` 直下の `meta-data`（`com.google.android.gms.wallet.api.enabled`）を宣言で表せない（`meta-data` はコンポーネント単位だけ） | 宣言に application の meta-data を足してから |
-| music-library | Android が許可ランチャーと `onDestroy` を持つ（provider と JNI エクスポートが要る）。Windows の `windows_photo_library::known_folder` を `fandhe-platform-windows` へ上げる共通層の変更も要る | 共通層の先行変更とあわせて別の周で |
+| music-library | Android が許可ランチャーと `onDestroy` を持つ（provider と JNI エクスポートが要る）。Windows の `windows_photo_library::known_folder` を `fandhe-platform-windows` へ上げる共通層の変更も要る | 共通層の先行変更とあわせて別の周で （第 12 束 #1332 で移した、§22） |
 | translation | Android がランチャーと `onDestroy`・`reset_pending_tracking` を持ち、Apple は Swift の薄層（`links` と `import_link_args`）が要る | 別の周で |
 | flashlight | Android の Helper が `onStart` / `onStop` / `onDestroy` に参加する。`FeatureLifecycleProvider` の Started / Stopped の口は #1192 で足した | 口が `main` に入った後に移せる（app-lifecycle と同じ形）（第 9 束 #1329 で移した） |
 | safe-area-insets | insets の static と JNI エクスポートは #1327 で `fandhe-platform-android` へ上がった（§18） | 移せる（`fandhe_platform_android::window_insets_px()` を読む） |
@@ -580,3 +580,30 @@ notification・alarm・device-info・quick-settings-tile・media-playback・now-
 | `OsascriptNotifier`（notification） | 契約の trait と検証から OS 実装を分け、`src/macos.rs` へ移す。ホストの `cargo test` で純関数・子プロセスの挙動を検証できるよう、cfg は `any(target_os = "macos", test)` のまま |
 | `AlarmHelper` の起動 Intent | `MainActivity.class` を直接参照せず、`getLaunchIntentForPackage` を使う。取れなければ予約を作らず失敗にする |
 | 後回しの解消 | §9・§10・§11・§14 の後回し表のうち、device-info・now-playing-controls・compass-heading・environment-sensors・bluetooth-classic・motion-raw-sensors・quick-settings-tile・alarm・ble-peripheral を本束で移した。残りの notification・bluetooth-le・media-playback・tilt-motion は後回し表に載っていなかった機能 |
+
+## 22. 第 12 束（#1332）で出た型と未了の機能
+
+第 12 束（local-storage-kv・location・network-status・geofence・background-task・map-view・lan-discovery・photo-picker・
+image-recognition・barcode-scan・photo-library・music-library）のうち、互いの OS 実装を参照していた組を解いて 9 機能を移した。
+photo-picker・image-recognition・barcode-scan の 3 機能は未了（下の表）。はじめて出た型と、その扱いは次のとおり。
+
+| 型 | 扱い |
+|----|------|
+| 保存先の解決を他機能が使う（local-storage-kv → background-task） | `fandhe-cap-local-storage-kv` が `data_dir()`（Android は `getFilesDir()` 相当、iOS は `Documents/`、デスクトップは `$HOME/.fandhe`）を公開し、`Storage`・`FsStorage`・`DataDir` は `fandhe-device` に残して契約から再公開する。保存先を使う機能 crate は全 OS で依存する。Web の保存は `fandhe-web-dom` が `NoteStorage` を直接実装する |
+| 機能 crate の失敗型が保存層の `DeviceError` を受ける（background-task・photo-library） | 契約の補助関数は `fandhe-device` の `Storage`・`PngImage` を呼ぶため、機能 crate の失敗型へ `From<DeviceError>` を足す。固定識別子を持つ種別は同じ種別へ、それ以外は文言を転送する `Storage(String)` か内部エラーへ畳む。この型は `Copy` にできない（background-task） |
+| 測位を共用する（location → geofence） | location が `shared_location_precise`・`restart_location`・`start_apple_location_once`・`to_failure_kind`・`POLL_INTERVAL` を `pub` で公開し、geofence が依存する。geofence の判定器は location の `LocationError` をそのまま受ける。`ACCESS_FINE_LOCATION` は geofence が、`ACCESS_COARSE_LOCATION` は location が宣言する |
+| 継続 push 型で権限ランチャーと static の要求状態を持つ Android 実装（location） | `LocationHelper`（`HELPERS` + static 入口 `requestLocationUpdates(Activity, boolean)`）と `LocationLifecycle`（`onHostCreated` / `onHostResumed` / `onHostPaused` / `onHostDestroyed`）。「測位を続けたい」意思・権限ダイアログの結果待ち・失敗通知済みの印は Activity 再生成を跨ぐため static のまま持つ。resumed の写し（`activityResumed`）は Helper のインスタンスが持つ。`MainActivity` の同名フィールドは他機能（マイク録音など）が使うため残す |
+| `.m` が他機能の `.m` の記号を呼ぶ（lan-discovery → network-status） | lan-discovery が network-status へ iOS・macOS・Windows の target 依存を張り、`lib.rs` で依存先の公開関数を `const _` で実際に参照して、依存先の rlib と `.m` がリンク対象から外れないようにする |
+| 同期 trait の実装を持たないコールバック型の機能の入口（lan-discovery・photo-library） | `platform_<stem>()` は結果が非同期に届く OS では `Unsupported` 固定の同期実装を返し（成功を偽装しない）、画面は effect の経路を使う。doc と `ponytail:` コメントに「同期 trait の実装は要求が出たら足す」と書いた |
+| 2 機能が共有していた Windows の Known Folder（photo-library・music-library） | `fandhe-platform-windows::known_folder` として共通層へ上げた（`unsafe` を SAFETY つきで移し、共通層の `unsafe` の件数を更新した） |
+| 保存先・識別子が OS 側の設定に固定されている iOS の宣言 | `BGTaskSchedulerPermittedIdentifiers`・`UIBackgroundModes`（`fetch` だけ。PiP 用の `audio` は別機能）は機能の宣言の `info-plist` に書き、識別子は `.m` の定数と一致させる。`NSBonjourServices`（`_http._tcp`）も同様。usage description の文言は `fandhe-gallery` の `fandhe-app.<os>.usage-descriptions` に現行の Info.plist と同じ文を置く |
+| WorkManager（background-task） | 宣言の `gradle` に `androidx.work:work-runtime:<WORK_RUNTIME_VERSION>` を書く。アプリの `build.gradle.kts` の直書きは背景アップロードも使うため残す。`MainActivity.awaitOperation` も背景アップロードが使うため残し、`BackgroundTaskHelper` に同じ待ちの複製を置いた（`ponytail:`。背景アップロードを移すときに寄せる） |
+| 終了・再生成・起動時の入口（location・geofence・lan-discovery・photo-library・background-task） | `shutdown` 系（`stop_shared_location`・`stop_shared_discovery`）、`reset_*_tracking` 系（`reset_retry_tracking`・`reset_register_tracking`・`reset_pending_tracking`）、Windows の `parse_scheduled_args` / `run_scheduled`、iOS の `register` は機能 crate が `pub` で公開し、`fandhe-gallery` の `android_main`・終了フック・`main` が呼ぶ |
+| Web と共有する契約の失敗型（background-task） | `fandhe-web-dom` の `background_task.rs` が契約の型へ付け替わるため、`DeviceError` で返す別機能（背景ダウンロード）への橋渡し `to_device_error` を置いた |
+
+### 未了の機能
+
+| 機能 | 残っている作業 |
+|------|----------------|
+| photo-picker・image-recognition・barcode-scan | 3 機能が循環している（iOS の PHPicker の受け口 `fandhe_rust_photo_picker_outcome` が 3 機能へ振り分け、barcode-scan が `image_recognition::precheck` と `photo_pick::implementation` を使う）。iOS の受け口は photo-picker の crate が持ち、要求ごとに `deliver` を登録する形へ直す。寸法検査（`precheck`）は `fandhe-device::photo_picker` へ上げ、表示用の復号（photo-picker・document-scan・scanner-devices の 3 か所の複製）は `fandhe-device` の任意 feature へ 1 つにまとめる。Android の `pickPhoto`・`photoPickRequest`・`convertPhotoToJpeg` は `MainActivity` から `PhotoPickerHelper` + `PhotoPickerLifecycle` へ切り出す。`fandhe-device::file_picker` の `PickCommand`・`windows_pick_command`・`run_windows_pick`・`BusyGuard` を `pub` にする |
+| bluetooth-le・bluetooth-classic の `ACCESS_FINE_LOCATION` | location の crate が `main` に入ったので、`max-sdk = 30` へ狭められる（§21 の申し送り。geofence が FINE を宣言するため、現行 Manifest の属性なしの 1 行は geofence の宣言と一致させる必要があり、狭める PR で Manifest と宣言を合わせて直す） |
