@@ -28,7 +28,7 @@
 //!   （[`frame_from_cocoa`]、winit の `flip_window_screen_coordinates` と同じ）。
 //!   Windows は `rcWork`（物理 px）を `pixels_per_point` で割る（#637）
 //! - **既定サイズの SSOT** は `fandhe_core::screens::window_management_show::DEFAULT_INNER_SIZE`。
-//!   `fandhe-core` は本クレートに依存できず、`main.rs` は feature `device` 無効時も使うため、
+//!   `fandhe-core` は本クレートに依存できず、`main.rs` も同じ値を使うため、
 //!   ここへは複製せず [`WindowOp::ResizeInner`] が目標値を持つ
 //! - **スレッド**: UI スレッドから同期で呼ぶ。ワーカーは作らない（契約表 11）
 //!
@@ -124,8 +124,9 @@ pub trait WindowManager: Send + Sync {
     fn target(&self) -> Result<WindowFrame, WindowManagementError>;
 
     /// 操作を依頼する。完了は待たない。
-    /// `Ok` は依頼を出しただけで、成否は [`WindowManager::snapshot`] の読み戻しで確認する
-    /// （描画層が処理しない場合も `Ok` になりうる）。
+    /// 実装は macOS・Windows のみ（描画層へコマンドを積む）。`Ok` は依頼を出しただけを表し、
+    /// 描画層が処理しなくても `Ok` になる。成否は [`WindowManager::snapshot`] の読み戻しで確認する。
+    /// 入力値の検査に落ちた場合だけ `Err` を返す。
     fn request(&self, op: WindowOp) -> Result<(), WindowManagementError>;
 }
 
