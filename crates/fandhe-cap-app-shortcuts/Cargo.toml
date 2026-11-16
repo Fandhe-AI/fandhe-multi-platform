@@ -51,7 +51,7 @@ id = "app-shortcuts"
 
 # iOS のホーム画面ショートカットは Info.plist の静的宣言（type を URL として url-scheme の受信箱へ渡す。受信は
 # fandhe-platform-apple の scene delegate）。title・type は `fandhe_core::screens::url_scheme_show` の
-# `SHORTCUT_TITLE`・`SHORTCUT_URL` と一致させる（`driver.rs` のテストが照合する）。アイコンは付けない。
+# `SHORTCUT_TITLE`・`SHORTCUT_URL` と一致させる（`driver.rs` のテストが Info.plist とこの宣言を照合する）。アイコンは付けない。
 [package.metadata.fandhe.ios]
 info-plist = { UIApplicationShortcutItems = [{ UIApplicationShortcutItemTitle = "デモを開く", UIApplicationShortcutItemType = "fandhe://shortcut/open-demo" }] }
 

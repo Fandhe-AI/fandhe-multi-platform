@@ -5,7 +5,8 @@
 //! 登録は Info.plist の `UIApplicationShortcutItems`（静的）だけで、OS がインストール時に行う。
 //! 受信は scene delegate（`ios/fandhe_ios_scene.m`）→ 通知 → `fandhe-cap-url-scheme` の `UrlInbox`
 //! で、新しい受け口は持たない。表示されたかはアプリから確かめられないため `Declared` を返し、
-//! `Installed` は返さない（嘘の成功を避ける）。
+//! `Installed` は返さない（嘘の成功を避ける）。`spec` は入力検査だけに使い、OS へは渡さない
+//! （実際に出る項目は Info.plist の宣言の値で、`spec` との一致は呼び出し側が保つ）。
 //! 守らない範囲: 他アプリが同じ URL を送った場合との区別、表示数の上限（OS 次第）、
 //! 項目の動的な書き換え。
 
@@ -15,7 +16,8 @@ use crate::error::AppShortcutsError;
 struct IosAppShortcuts;
 
 impl AppShortcuts for IosAppShortcuts {
-    fn install(&self, _spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError> {
+    fn install(&self, spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError> {
+        spec.validate()?;
         Ok(Registration::Declared)
     }
 }
@@ -28,29 +30,15 @@ pub(crate) fn implementation() -> &'static dyn AppShortcuts {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const SHORTCUT_TITLE: &str = "デモを開く";
-    const SHORTCUT_URL: &str = "fandhe://shortcut/open-demo";
 
     #[test]
     fn install_is_declared_only() {
         assert!(matches!(
             implementation().install(&ShortcutSpec {
-                title: SHORTCUT_TITLE,
-                url: SHORTCUT_URL
+                title: "t",
+                url: "x://y"
             }),
             Ok(Registration::Declared)
         ));
-    }
-
-    /// Info.plist の静的項目がCargo.toml の宣言とずれていないこと。
-    #[test]
-    fn info_plist_matches_screen_constants() {
-        let plist = include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../platforms/apple/FandheIosApp/Resources/Info.plist"
-        ));
-        assert!(plist.contains("<key>UIApplicationShortcutItems</key>"));
-        assert!(plist.contains(&format!("<string>{SHORTCUT_URL}</string>")));
-        assert!(plist.contains(&format!("<string>{SHORTCUT_TITLE}</string>")));
     }
 }

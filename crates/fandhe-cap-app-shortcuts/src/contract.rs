@@ -49,10 +49,48 @@ pub struct ShortcutSpec<'a> {
     pub url: &'a str,
 }
 
+/// ラベルの最大バイト数。
+pub const MAX_TITLE_BYTES: usize = 256;
+/// URL の最大バイト数。
+pub const MAX_URL_BYTES: usize = 2048;
+
+impl ShortcutSpec<'_> {
+    /// 入力検査（全 OS 実装が `install` の先頭で通す、唯一の場所）。外部アプリの値が起動引数（Windows のタスク）・
+    /// JNI・C ABI へ渡るため、空・長すぎる値・制御文字、URL の `"` と空白・scheme の欠落を `InvalidInput` で拒否する。
+    pub fn validate(&self) -> Result<(), AppShortcutsError> {
+        let bad = AppShortcutsError::InvalidInput("app_shortcuts spec");
+        if self.title.is_empty()
+            || self.title.len() > MAX_TITLE_BYTES
+            || self.title.chars().any(char::is_control)
+        {
+            return Err(bad);
+        }
+        let scheme_ok = self.url.split_once("://").is_some_and(|(s, rest)| {
+            s.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+                && s.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '.' | '-'))
+                && !rest.is_empty()
+        });
+        if !scheme_ok
+            || self.url.len() > MAX_URL_BYTES
+            || self
+                .url
+                .chars()
+                .any(|c| c.is_control() || c.is_whitespace() || c == '"')
+        {
+            return Err(bad);
+        }
+        Ok(())
+    }
+}
+
 /// ショートカットを OS に登録する抽象。各 OS 実装は本 crate が持つ。
 pub trait AppShortcuts: Send + Sync {
-    /// ショートカット 1 件を登録する。契約はモジュール doc 参照。
-    /// iOS は `spec` を使わず宣言済みとして返す（`Registration::Declared`）。
+    /// ショートカット 1 件を登録する。契約はモジュール doc 参照。`spec` は [`ShortcutSpec::validate`] を通らなければ
+    /// `InvalidInput`（OS は呼ばない）。
+    ///
+    /// iOS は実際に出る項目が Info.plist の静的宣言（`Cargo.toml` の `info-plist`）の値で、`spec` は OS へ渡さず
+    /// 検査だけに使い、宣言との一致も照合しない（`Registration::Declared` を返す）。
     fn install(&self, spec: &ShortcutSpec<'_>) -> Result<Registration, AppShortcutsError>;
 }
 
@@ -197,6 +235,29 @@ mod tests {
         ] {
             assert_eq!(InstallOutcome::from(&r), want);
         }
+    }
+
+    #[test]
+    fn spec_validation_rejects_injection_and_malformed_values() {
+        fn ok(t: &str, u: &str) -> bool {
+            ShortcutSpec { title: t, url: u }.validate().is_ok()
+        }
+        assert!(ok("デモを開く", "fandhe://shortcut/open-demo"));
+        for (t, u) in [
+            ("", "x://y"),
+            ("t\n", "x://y"),
+            ("t", ""),
+            ("t", "x://"),
+            ("t", "nourl"),
+            ("t", "1x://y"),
+            ("t", "x://y\" --evil"),
+            ("t", "x://y z"),
+            ("t", "x://y\u{7}"),
+        ] {
+            assert!(!ok(t, u), "{t:?} {u:?}");
+        }
+        assert!(!ok(&"a".repeat(MAX_TITLE_BYTES + 1), "x://y"));
+        assert!(!ok("t", &format!("x://{}", "a".repeat(MAX_URL_BYTES))));
     }
 
     #[test]
