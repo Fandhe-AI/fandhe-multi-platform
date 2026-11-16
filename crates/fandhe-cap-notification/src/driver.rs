@@ -176,6 +176,9 @@ fn implementation_desktop() -> Arc<dyn Notifier> {
 /// | 4 | `addNotificationRequest` の error が非 nil | `notify()` が
 ///     `SecurityException` 以外の `RuntimeException` を送出 | `Err(Internal("notification
 ///     add"))` |
+/// | 5 | **出ない** | 権限ダイアログ待ちの Activity 破棄（利用者のキャンセルではない。
+///     公開入口の待ち手を残さないため破棄時に 1 回だけ確定する） |
+///     `Err(Internal("notification interrupted"))` |
 /// | それ以外 | 未知のコード | 未知のコード | `Err(Internal("notification"))`（偽の成功・
 ///     偽のキャンセルを作らない、`outcome_from_reply` と同じ方針） |
 #[cfg_attr(not(any(target_os = "ios", target_os = "android")), allow(dead_code))]
@@ -186,6 +189,7 @@ pub(crate) fn outcome_from_code(code: i32) -> Result<NotifyOutcome, Notification
         2 => Err(NotificationError::PermissionDenied("notification")),
         3 => Err(NotificationError::Internal("notification authorization")),
         4 => Err(NotificationError::Internal("notification add")),
+        5 => Err(NotificationError::Internal("notification interrupted")),
         _ => Err(NotificationError::Internal("notification")),
     }
 }
@@ -621,8 +625,16 @@ mod outcome_from_code_tests {
     }
 
     #[test]
+    fn maps_five_to_internal_interrupted_not_cancelled() {
+        assert!(matches!(
+            outcome_from_code(5),
+            Err(NotificationError::Internal("notification interrupted"))
+        ));
+    }
+
+    #[test]
     fn maps_unknown_codes_to_internal_error() {
-        for code in [-1, 5, 42, i32::MAX] {
+        for code in [-1, 6, 42, i32::MAX] {
             assert!(
                 matches!(
                     outcome_from_code(code),

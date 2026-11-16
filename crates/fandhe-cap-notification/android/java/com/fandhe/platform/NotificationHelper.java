@@ -29,9 +29,11 @@ import java.util.WeakHashMap;
 //   2=権限拒否（実行時許可の拒否・通知オフ・チャンネルブロックを区別せず畳む）
 //   3=内部エラー（権限確認自体の失敗）
 //   4=内部エラー（`notify()` 呼び出し自体の失敗）
+//   5=中断（権限ダイアログ待ちの Activity 破棄。利用者のキャンセルとは区別し、Rust 側で内部エラーに写す）
 //
 // 許可ランチャーは `attach`（`Activity.onCreate` の中、STARTED より前）で登録する。登録キーは従来の文字列のまま。
-// 権限ダイアログ待ちの要求は Activity の破棄で捨てる（復元しない。Rust 側 `android_main` の `reset_pending_tracking` と対）。
+// 権限ダイアログ待ちの要求は Activity の破棄で `RESULT_INTERRUPTED` として確定する（復元しない。公開入口の待ち手を残さないため。
+// Rust 側 `android_main` の `reset_pending_tracking` と対）。後から届く許可コールバックは `take()` が NONE で no-op（二重確定しない）。
 // ダイアログ自体が Activity を pause させるため、許可コールバックでは前面かどうかを見ない（通知の投稿は背景でも正当）。
 // 守る範囲: 1 プロセス内の要求の照合（旧要求の遅延到着は捨てる）・嘘の成功の禁止。
 // 守らない範囲: 通知の表示の確認（`Shown` は返さない）・通知タップへの応答（contentIntent を付けない）。
@@ -44,6 +46,7 @@ final class NotificationHelper {
     private static final int RESULT_PERMISSION_DENIED = 2;
     private static final int RESULT_AUTH_ERROR = 3;
     private static final int RESULT_POST_ERROR = 4;
+    private static final int RESULT_INTERRUPTED = 5;
 
     // 通知チャンネル ID。
     private static final String CHANNEL_ID = "fandhe_default";
@@ -77,13 +80,16 @@ final class NotificationHelper {
         HELPERS.put(activity, new NotificationHelper(activity));
     }
 
-    // Activity の破棄時（同上）。保留中の要求は復元せず捨てる。
+    // Activity の破棄時（同上）。保留中の要求は復元せず、中断として 1 回だけ確定する。
     static void detach(Activity activity) {
         NotificationHelper helper = HELPERS.remove(activity);
         if (helper != null) {
-            helper.request.take();
+            long id = helper.request.take();
             helper.pendingTitle = null;
             helper.pendingBody = null;
+            if (id != RequestTracker.NONE) {
+                nativeOnNotificationResult(id, RESULT_INTERRUPTED);
+            }
         }
     }
 

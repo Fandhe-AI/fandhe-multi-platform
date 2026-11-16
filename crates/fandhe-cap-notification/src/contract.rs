@@ -20,6 +20,8 @@
 //!   - OS 全体・グループポリシーで通知が無効 → `Disabled("notification")`
 //!   - API・コマンドが無い（Linux、`osascript` 不在等） → `Unsupported("notification")`
 //!   - 子プロセス異常終了・期限超過・OS 呼び出し失敗 → `Internal("notification ...")`
+//!   - Android で権限ダイアログの回答前に Activity が破棄された → `Internal("notification interrupted")`
+//!     （利用者のキャンセルではない。待ち手を残さないため破棄時に 1 回だけ確定する）
 //! - タイトル・本文はログにも、エラーの文言にも出さない（security.md A09）
 //! - 初期化に失敗した実装は `Unsupported` を返し、ダミーの成功実装へは倒さない
 //!   （`device-bridge-contracts.md` の「6. 嘘の成功」参照。[`UnsupportedNotifier`] を使う）
