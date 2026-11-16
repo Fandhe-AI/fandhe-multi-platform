@@ -39,10 +39,10 @@
 //! Windows ターゲットでは起動引数がファイルなら `file_association_show` 画面を既定にする。
 //!
 //! Issue #1044: Windows ターゲット（feature `device` 有効時）では、通常の画面
-//! 起動より前に `device::windows_background_task::parse_scheduled_args` で
+//! 起動より前に `fandhe_cap_background_task::parse_scheduled_args` で
 //! コマンドライン引数を見る。Windows タスク スケジューラが専用引数付きで本 exe を
 //! 再起動した場合はそちらに一致し、`run_scheduled` が画面を出さずに実行結果を
-//! 書いて終了する（`windows_background_task.rs` モジュール doc 参照）。
+//! 書いて終了する（`fandhe-cap-background-task` の `windows.rs` モジュール doc 参照）。
 //!
 // TASK-2.3（#54）計測マーカー: プロトタイプ描画対象切替（TASK-2.2-S5 / #52）の
 // モジュール doc。プラットフォーム別コードとして計上する。
@@ -118,13 +118,13 @@ fn main() -> Result<(), fandhe_render_egui::LaunchError> {
     // Issue #1044: Windows のタスク スケジューラが専用引数付きで本 exe を
     // 再起動したときの入口。通常の画面起動（`FANDHE_PROXY_APP` の解決等）より
     // 前に判定し、一致したら画面を出さずに実行結果を書いて終了する
-    // （`device/windows_background_task.rs` モジュール doc「契約の簡略化」参照）。
+    // （`fandhe-cap-background-task` の `windows.rs` モジュール doc「契約の簡略化」参照）。
     // feature `device` 無効時はこの経路自体が存在しない。
     #[cfg(all(target_os = "windows", feature = "device"))]
     {
         let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
-        if fandhe_egui_proxy::device::windows_background_task::parse_scheduled_args(&args) {
-            std::process::exit(fandhe_egui_proxy::device::windows_background_task::run_scheduled());
+        if fandhe_cap_background_task::parse_scheduled_args(&args) {
+            std::process::exit(fandhe_cap_background_task::run_scheduled());
         }
     }
 
@@ -281,7 +281,7 @@ fn main() -> Result<(), fandhe_render_egui::LaunchError> {
     // この 1 箇所で覆う、実装計画 §3.5）。feature `device`（既定 on）無効時は
     // `fandhe-device` への依存自体が無いため呼ばない。
     #[cfg(feature = "device")]
-    fandhe_egui_proxy::device::ios_background_task::register();
+    fandhe_cap_background_task::register();
 
     // Issue #1217: カスタム URL scheme の observer も `UIApplicationMain` より前に登録する。
     // `UIApplicationDidFinishLaunchingNotification` に間に合わないと、コールドスタートの

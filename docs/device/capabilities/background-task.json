@@ -16,7 +16,7 @@
         "バックグラウンド処理"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/ios/fandhe_ios_background_task.m + crates/fandhe-egui-proxy/src/device/ios_background_task.rs + crates/fandhe-egui-proxy/src/device/background_task.rs + crates/fandhe-gallery/src/main.rs、Issue 旧#1045"
+      "impl": "crates/fandhe-cap-background-task/ios/fandhe_ios_background_task.m + crates/fandhe-cap-background-task/src/ios.rs + crates/fandhe-cap-background-task/src/driver.rs + crates/fandhe-gallery/src/main.rs、Issue 旧#1045"
     },
     "android": {
       "status": "done",
@@ -29,7 +29,7 @@
         "バックグラウンド処理"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-device/src/background_task.rs + crates/fandhe-egui-proxy/src/device/android_background_task.rs + crates/fandhe-egui-proxy/src/device/background_task.rs + platforms/android/app/src/main/java/com/fandhe/platform/BackgroundTaskWorker.java + platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java、Issue 旧#1046"
+      "impl": "crates/fandhe-cap-background-task/src/contract.rs + crates/fandhe-cap-background-task/src/android.rs + crates/fandhe-cap-background-task/src/driver.rs + crates/fandhe-cap-background-task/android/java/com/fandhe/platform/BackgroundTaskWorker.java + crates/fandhe-cap-background-task/android/java/com/fandhe/platform/BackgroundTaskHelper.java、Issue 旧#1046"
     },
     "macos": {
       "status": "done",
@@ -42,7 +42,7 @@
         "バックグラウンド処理"
       ],
       "implStatus": "実装済み",
-      "impl": "crates/fandhe-device/src/background_task.rs + crates/fandhe-egui-proxy/src/device/macos_background_task.rs + crates/fandhe-egui-proxy/macos/fandhe_macos_background_task.m + crates/fandhe-egui-proxy/src/device/background_task.rs、Issue 旧#1043"
+      "impl": "crates/fandhe-cap-background-task/src/contract.rs + crates/fandhe-cap-background-task/src/macos.rs + crates/fandhe-cap-background-task/macos/fandhe_macos_background_task.m + crates/fandhe-cap-background-task/src/driver.rs、Issue 旧#1043"
     },
     "windows": {
       "status": "done",
@@ -55,7 +55,7 @@
         "バックグラウンド処理"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_background_task.rs + crates/fandhe-egui-proxy/src/device/background_task.rs + crates/fandhe-gallery/src/main.rs + crates/fandhe-egui-proxy/src/device.rs + crates/fandhe-cap-notification/src/windows.rs + crates/fandhe-core/src/screens/background_task.rs、Issue 旧#1044"
+      "impl": "crates/fandhe-cap-background-task/src/windows.rs + crates/fandhe-cap-background-task/src/driver.rs + crates/fandhe-gallery/src/main.rs + crates/fandhe-cap-notification/src/windows.rs + crates/fandhe-core/src/screens/background_task.rs、Issue 旧#1044"
     },
     "web": {
       "status": "done",

@@ -20,6 +20,8 @@
 //!   手を入れない）
 //! - `tsv`（親 #979、Issue #980）: TSV（タブ区切り値）の純粋関数パーサ。端末依存ゼロで、
 //!   myIme 設定画面のユーザー辞書読み込みや `screens::tsv_import` 型サンプルから使う
+//! - `utc_date`: UTC の暦日計算（`civil_from_days`）。画面の表示と Windows の
+//!   タスク境界文字列が共有する
 //!
 //! # 横断的な契約
 //!
@@ -55,6 +57,7 @@ pub mod state;
 pub mod token;
 pub mod tsv;
 pub mod ui;
+pub mod utc_date;
 
 pub use state::{
     Event, ReadAccessor, ReadFn, ReadIndexedFn, StateStore, WidgetValue, WriteAccessor, WriteFn,

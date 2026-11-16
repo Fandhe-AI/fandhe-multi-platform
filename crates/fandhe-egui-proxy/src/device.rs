@@ -10,20 +10,14 @@
 //! `mod` 宣言参照）。`fandhe-core` は `fandhe-device` を参照しない（依存方向はプロキシ →
 //! コアの一方向、coding-rust.md 準拠）ため、両者の橋渡しは本クレート側の責務にする。
 //!
-//! `screens/registry.rs` の `init "storage_note" => ..., crate::device::storage_note_state,`
-//! 行から [`storage_note_state`] が呼ばれ、`generated_screens!` マクロが構築時に
-//! 1 度だけ実行する（`screens.rs` の `init` 区画 doc 参照）。Issue #748（HTTP 取得）・
+//! ノート保存（`storage_note`）の橋渡しは機能 crate `fandhe-cap-local-storage-kv`（Issue #1332）へ移した。
+//! Issue #748（HTTP 取得）・
 //! #749（カメラ撮影）・#830（傾きで玉が転がる）の effect ドライバはそれぞれ
 //! [`http_fetch`] / [`tilt`] サブモジュールに置く（カメラ撮影は機能 crate `fandhe-cap-camera-capture`、#1170）
 //! （`registry.rs` の `effect` 区画から配線される）。
 
 #[cfg(target_os = "android")]
 pub mod android;
-/// Issue #1046: Android 向けバックグラウンド処理実装（`WorkManager`/
-/// `OneTimeWorkRequest` を呼ぶ Java 側 `MainActivity` の JNI 受け口）。状態変換の
-/// 純関数はホストでテストできるよう cfg を付けない（`fandhe-cap-gamepad` の `android.rs` と同じ
-/// 判断）。`device/background_task.rs` の Android 経路から使われる。
-pub mod android_background_task;
 /// Issue #1314: Android 向け全画面表示実装（`FullscreenHelper` との JNI 橋渡し）。
 /// `device/fullscreen_immersive.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -33,29 +27,11 @@ pub mod android_fullscreen_immersive;
 /// `device/image_recognition.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_image_recognition;
-/// Issue #489: Android 向け LAN のサービス探索（`NsdManager`。Java 側は `LanDiscoveryHelper`、親 #109 の b-android）。
-/// `device/lan_discovery.rs` の Android 経路から呼ばれる。
-#[cfg(target_os = "android")]
-pub mod android_lan_discovery;
-/// Issue #485: Android 向け音楽ライブラリ実装（`MediaStore.Audio.Media` を JNI 経由で読む）。
-/// `device/music_library.rs` の Android 経路から呼ばれる。純関数をホストでテストするため test でも載せる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_music_library;
-/// Issue #1284: Android 向けネットワーク接続状態実装（`ConnectivityManager` を JNI で読む）。
-/// `device/network_status.rs` の Android 経路から呼ばれる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_network_status;
 /// Issue #355: Android 向けペン・筆圧入力実装。`device/pen_stylus.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_pen_stylus;
-/// Issue #1254（骨格）/ #1256（実装）: Android 向け写真ライブラリ保存実装。
-/// `device/photo_save.rs` の Android 経路から呼ばれる。
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_photo_library;
 /// Issue #328: Android 向け印刷（`PrintHelper` + JNI）。`device/print.rs` の
 /// Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -81,35 +57,11 @@ pub mod apple_barcode_scan;
 /// macOS 経路と `ios_image_recognition` から呼ばれる。`build.rs` のコンパイル条件と同じ OS 集合に保つ。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_image_recognition;
-/// Issue #486 macOS: LAN のサービス探索実装（`apple/fandhe_apple_lan_discovery.m` を呼ぶ C ABI ラッパー）。
-/// `device/lan_discovery.rs` の macOS 経路と、b-ios が委譲する `ios_lan_discovery` から呼ばれる。
-/// `build.rs` のコンパイル条件と同じ OS 集合に保つ。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_lan_discovery;
-/// Issue #889: iOS / macOS 共通の CoreLocation 実装（`apple/fandhe_apple_location.m`
-/// を呼ぶ C ABI ラッパー）。`device/location.rs` の Apple cfg 分岐から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_location;
-/// Issue #273（macOS）/ #274（iOS）: macOS / iOS 向け地図スナップショット実装
-/// （`apple/fandhe_apple_map_view.m` を呼ぶ C ABI ラッパー。iOS も同じ実装を共用）。
-/// `device/map_view.rs` の macOS / iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_map_view;
 /// Issue #954（macOS）/ #956（iOS）: iOS / macOS 向けマイク録音実装（`apple/
 /// fandhe_apple_mic_record.m` を呼ぶ C ABI ラッパー）。`device/mic_record.rs` の
 /// iOS/macOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_mic_record;
-/// Issue #1282: macOS / iOS 向けネットワーク接続状態（`apple/fandhe_apple_network_status.m` を
-/// 呼ぶ C ABI ラッパー）。`device/network_status.rs` の macOS / iOS 経路から呼ばれる。
-/// 純関数をホストの `cargo test` で検査するため cfg に `test` を含める（FFI 部分は macOS 限定）。
-#[cfg(any(target_os = "ios", target_os = "macos", test))]
-pub mod apple_network_status;
-/// Issue #1254（macOS）/ #1255（iOS）: iOS / macOS 向け写真ライブラリ保存実装
-/// （`apple/fandhe_apple_photo_library.m` を呼ぶ C ABI ラッパー。iOS は実装済み）。
-/// `device/photo_save.rs` の iOS / macOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_photo_library;
 /// Issue #1024（macOS）/ #1025（iOS）: iOS / macOS 向け音声認識実装（`apple/
 /// fandhe_apple_speech_recognition.m` を呼ぶ C ABI ラッパー）。`device/
 /// speech_recognition.rs` の iOS/macOS 経路から呼ばれる。
@@ -119,9 +71,6 @@ pub mod apple_speech_recognition;
 /// （`HostView::set_text_input_hint`、実装は `ios_text_input.rs`）で実装、Android・macOS は保留、Windows は非対応で `UnsupportedAutofillOtp` 固定。
 /// Web は `fandhe-web-dom` が担う）。
 pub mod autofill_otp;
-/// Phase 11 の拡充ループ（親 #1042、Issue #1043）: バックグラウンド処理の effect
-/// ドライバ（macOS 実装、他 OS は兄弟 issue #1044〜#1047）。
-pub mod background_task;
 /// Phase 11（端末機能の拡充ループ、親 #116、Issue #557）: 画像内のバーコード・QR 読み取りの effect ドライバ。
 pub mod barcode_scan;
 pub mod file_pick;
@@ -129,21 +78,12 @@ pub mod file_pick;
 /// eframe の viewport コマンド、iOS/Android は OS 別モジュール、他 OS は
 /// `UnsupportedFullscreen` 固定。Web は `fandhe-web-dom`）。
 pub mod fullscreen_immersive;
-/// Phase 11 の拡充ループ（親 #1056、Issue #1057）: ジオフェンスの effect ドライバ
-/// （location の継続取得に乗せて `GeofenceTracker` で判定する）。
-pub mod geofence;
 /// Phase 11 の拡充ループ（親 #1120、Issue #1250）: 画像の文字認識の effect ドライバ
 /// （macOS・Windows / iOS 実装、Android は骨格のスタブ（対応表で `no`）、他 OS は
 /// `UnsupportedTextRecognizer` 固定。Web は対象外）。
 pub mod image_recognition;
 #[cfg(target_os = "ios")]
 pub mod ios;
-/// Issue #1045: iOS 向けバックグラウンド処理実装（`ios/
-/// fandhe_ios_background_task.m` を呼ぶ C ABI ラッパー）。`device/
-/// background_task.rs` の iOS 経路から呼ばれる。モジュール自体は `cfg(any(ios, test))`
-/// で host の `cargo test` から状態機械を検証できる（モジュール doc 参照）。
-#[cfg(any(target_os = "ios", test))]
-pub mod ios_background_task;
 /// Issue #557: iOS 向けバーコード・QR 読み取りの骨格（実装は #558）。
 #[cfg(target_os = "ios")]
 pub mod ios_barcode_scan;
@@ -156,19 +96,6 @@ pub mod ios_fullscreen_immersive;
 /// Issue #1252: iOS 向け文字認識（PHPicker + Vision）の effect ドライバ。
 #[cfg(target_os = "ios")]
 pub mod ios_image_recognition;
-/// Issue #488: iOS 向け LAN のサービス探索（`apple_lan_discovery` へ委譲する）。
-/// `device/lan_discovery.rs` の iOS 経路から呼ばれる。
-#[cfg(target_os = "ios")]
-pub mod ios_lan_discovery;
-/// Issue #484: iOS 向け音楽ライブラリ実装（`ios/fandhe_ios_music_library.m` の MediaPlayer を呼ぶ
-/// C ABI ラッパー）。`device/music_library.rs` の iOS 経路から呼ばれる。
-#[cfg(target_os = "ios")]
-pub mod ios_music_library;
-/// Issue #1283: iOS 向けネットワーク接続状態実装（`apple_network_status` を返す）。
-/// `device/network_status.rs` の iOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", test))]
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
-pub mod ios_network_status;
 /// Issue #356: iOS 向けペン・筆圧入力実装（`ios/fandhe_ios_pen_stylus.m` の観測専用
 /// `UIGestureRecognizer` が値を置く C ABI ラッパー）。`device/pen_stylus.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -189,20 +116,6 @@ pub mod ios_safe_area_insets;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod ios_screen_orientation;
-/// Phase 11 の拡充ループ（親 #109、Issue #486）: LAN のサービス探索の effect ドライバ
-/// （macOS・iOS / Android 実装、Windows は `DnsServiceBrowse`、他 OS は `UnsupportedLanDiscovery` 固定。Web は対象外）。
-pub mod lan_discovery;
-/// Phase 11 の拡充ループ（親 #887、Issue #888）: 位置情報の effect ドライバ（Windows のみ実装）。
-pub mod location;
-/// Issue #1043: macOS 向けバックグラウンド処理実装（`macos/
-/// fandhe_macos_background_task.m` を呼ぶ C ABI ラッパー）。`device/
-/// background_task.rs` の macOS 経路から呼ばれる。
-#[cfg(target_os = "macos")]
-pub mod macos_background_task;
-/// Issue #482: macOS 向け音楽ライブラリ実装（`macos/fandhe_macos_music_library.m` の `ITLibrary` を
-/// 呼ぶ C ABI ラッパー）。`device/music_library.rs` の macOS 経路から呼ばれる。
-#[cfg(target_os = "macos")]
-pub mod macos_music_library;
 /// Issue #355: macOS 向けペン・筆圧入力実装（`macos/fandhe_macos_pen_stylus.m` の `NSEvent` local
 /// monitor を呼ぶ C ABI ラッパー）。`device/pen_stylus.rs` の macOS 経路から呼ばれる。写像の純関数を
 /// ホストでテストできるよう cfg は `any(macos, test)`。
@@ -223,21 +136,10 @@ pub mod macos_safe_area_insets;
 /// C ABI ラッパー）。`device/window_management.rs` の macOS 経路から呼ばれる。
 #[cfg(target_os = "macos")]
 pub mod macos_window_management;
-/// Phase 11 の拡充ループ（親 #85、Issue #273）: 地図表示の effect ドライバ（macOS / iOS は
-/// pull 型 `bridge`、他 OS は `UnsupportedMapSnapshotter` 固定）。
-pub mod map_view;
 /// Phase 11 の拡充ループ（親 #953、Issue #954・#955・#956・#957）: マイク録音の
 /// effect ドライバ（macOS/iOS/Windows/Android 実装、他 OS は `UnsupportedMicRecorder`
 /// 固定）。
 pub mod mic_record;
-/// Phase 11 の拡充ループ（親 #108、Issue #482）: 音楽ライブラリの effect ドライバ（macOS・iOS 実装、
-/// Windows・Android は #483・#485 の担当、他 OS は `UnsupportedMusicLibrary` 固定。
-/// Web は対象外）。
-pub mod music_library;
-/// Phase 11 の拡充ループ（親 #1130、Issue #1282）: ネットワーク接続状態の effect ドライバ
-/// （Windows / macOS / iOS 実装、Android は #1284、他 OS は
-/// `UnsupportedNetworkStatus` 固定。Web は `fandhe-web-dom`）。
-pub mod network_status;
 /// Phase 11 の拡充ループ（親 #95、Issue #355）: ペン・筆圧入力の effect ドライバ（macOS・iOS・Android・Windows 実装、
 /// 他 OS は `UnsupportedPenStylus` 固定。
 /// Web は `fandhe-web-dom`）。
@@ -247,10 +149,6 @@ pub mod pen_stylus;
 /// `UnsupportedPhotoPicker` 固定。Web は `fandhe-web-dom`）。選んだ画像は復号を確かめてから
 /// `image_store` 経由で描く。
 pub mod photo_pick;
-/// Phase 11 の拡充ループ（親 #1121、Issue #1254）: 写真の保存の effect ドライバ（macOS /
-/// iOS / Android は pull 型 `bridge`、Windows は Pictures フォルダへ同期書き込み、
-/// Linux は `UnsupportedPhotoLibrary` 固定。iOS / Android は兄弟 issue #1255 / #1256 まで非対応）。
-pub mod photo_save;
 /// Phase 11 の拡充ループ（親 #94、Issue #325）: 印刷ダイアログの effect ドライバ（macOS 実装、
 /// Windows / iOS / Android 実装、他 OS は `UnsupportedPrint` 固定。
 /// Web は `fandhe-web-dom`）。画面の内容の印刷（print-screen、親 #341、Issue #1010）の取り込み段と
@@ -287,47 +185,19 @@ pub mod tts;
 /// Phase 11 の拡充ループ（親 #127、Issue #636）: ウィンドウ管理（位置・サイズ・最前面）の effect ドライバ
 /// （macOS 実装、Windows は #637、他 OS は `UnsupportedWindowManager` 固定。Web は `fandhe-web-dom`）。
 pub mod window_management;
-/// Issue #1044: Windows 向けバックグラウンド処理実装（Task Scheduler 2.0 COM
-/// `ITaskService` ラッパー）。`device/background_task.rs` の Windows 経路から
-/// 呼ばれる。HRESULT 写像・引数解析・時刻整形等の純関数はホストの `cargo test`
-/// から検証できるよう `cfg(target_os = "windows")` を付けず、COM 呼び出しだけを
-/// モジュール内の `cfg(target_os = "windows")` に閉じる（`speech_recognition.rs::
-/// error_from_hresult` と同じ方針）。Windows 以外では利用者が無いため
-/// `dead_code` を許容する。
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_background_task;
 /// Issue #1250: Windows 向け文字認識の骨格（#1251 が WinRT `OcrEngine` 実装に置き換える）。
 /// `device/image_recognition.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_image_recognition;
-/// Issue #487: Windows 向け LAN のサービス探索（Win32 `DnsServiceBrowse`。親 #109 の windows の子）。
-/// `device/lan_discovery.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_lan_discovery;
 /// Issue #955: Windows 向けマイク録音実装（WinRT `MediaCapture` ラッパー）。
 /// `device/mic_record.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_mic_record;
-/// Issue #483: Windows 向け音楽ライブラリ実装（Music フォルダの走査 + プロパティストア）。
-/// `device/music_library.rs` の Windows 経路から呼ばれる。走査の純関数をホストの `cargo test` で
-/// 検査するため cfg は `any(windows, test)`。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_music_library;
-/// Issue #1282: Windows 向けネットワーク接続状態実装（WinRT `NetworkInformation` ラッパー）。
-/// `device/network_status.rs` の Windows 経路から呼ばれる。写像の純関数はホストの
-/// `cargo test` で検査するため cfg を付けず、WinRT 呼び出しだけをモジュール内に閉じる。
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_network_status;
 /// Issue #359: Windows 向けペン・筆圧入力実装（`SetWindowSubclass` の観測専用サブクラスが
 /// `WM_POINTER*` から値を置く）。`device/pen_stylus.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_pen_stylus;
-/// Issue #1254: Windows 向け写真保存実装（`SHGetKnownFolderPath(FOLDERID_Pictures)` で解決した
-/// フォルダへ `FolderPhotoLibrary` で書く）。`device/photo_save.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_photo_library;
 /// Issue #326: Windows 向け印刷実装（`PrintDlgExW` + GDI）。`device/print.rs` の Windows 経路から
 /// 呼ばれる。結果の写像は純関数でホストでもテストできる（ffi 部分は `cfg(target_os = "windows")`）。
 #[cfg(any(target_os = "windows", test))]
@@ -343,14 +213,6 @@ pub mod windows_speech_recognition;
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_window_management;
 
-use fandhe_core::screens::storage_note::{NoteStorage, NoteStorageError, StorageNoteState};
-use fandhe_device::{storage::Storage, DeviceError};
-
-/// `fandhe_device::DeviceError` を `fandhe_core::screens::storage_note::NoteStorageError`
-/// へ変換する（`fandhe-core` は `fandhe-device` に依存しないため、両者の型を橋渡しする
-/// のは本クレート側の責務）。`DeviceError` の内部構造（`std::io::Error` 等）は
-/// `fandhe-core` 側へ漏らさず、`Display` の文言のみを転送する
-/// （`DeviceError` の内部構造を漏らさない、security.md A09 準拠）。
 /// アプリ終了時に未移行の端末リソースを解放する（最終成果物（`fandhe-gallery`）の `register_teardown_hooks` 経由で `ProxyApp::on_exit` が呼ぶ契約、
 /// 機能 crate の停止は gallery の終了フックが本関数の後に呼ぶ。停止の順序は「未移行 → 機能 crate」になるが、相互に独立している。
 /// `fandhe-render-egui` の `app.rs` の `EguiApp::on_exit` 実装 doc 参照）。プロセスが終了すると
@@ -360,183 +222,4 @@ use fandhe_device::{storage::Storage, DeviceError};
 /// ウィンドウを閉じても発話中の子プロセスが残る）。
 pub fn shutdown() {
     tts::stop_shared_tts();
-    location::stop_shared_location();
-    lan_discovery::stop_shared_discovery();
-}
-
-fn to_note_storage_error(e: DeviceError) -> NoteStorageError {
-    match e {
-        // `DeviceError::Io` の `Display` は既に「入出力エラー: 」を前置するため、
-        // ここでは内側の `std::io::Error` の `Display` のみを転送する
-        // （`NoteStorageError::Io` 側の `#[error("入出力エラー: {0}")]` と二重にしない）。
-        DeviceError::Io(io_err) => NoteStorageError::Io(io_err.to_string()),
-        DeviceError::InvalidKey(key) => NoteStorageError::InvalidKey(key),
-        DeviceError::Unsupported(s) => NoteStorageError::Unsupported(s.to_string()),
-        DeviceError::Http(_)
-        | DeviceError::InvalidImageSize(_, _)
-        | DeviceError::PermissionDenied(_)
-        | DeviceError::Cancelled(_)
-        | DeviceError::Internal(_)
-        | DeviceError::InvalidInput(_)
-        | DeviceError::Disabled(_) => NoteStorageError::Other(e.to_string()),
-    }
-}
-
-/// `fandhe_device::storage::Storage` 実装を `fandhe_core::screens::storage_note::NoteStorage`
-/// へ橋渡しする newtype。エラーは [`to_note_storage_error`] で型付きのまま変換する
-/// （`.claude/rules/coding-rust.md`「ライブラリクレート: thiserror 等による型付きエラー」準拠）。
-pub struct DeviceNoteStorage(pub Box<dyn Storage>);
-
-impl NoteStorage for DeviceNoteStorage {
-    fn read(&self, key: &str) -> Result<Option<Vec<u8>>, NoteStorageError> {
-        self.0.read(key).map_err(to_note_storage_error)
-    }
-
-    fn write(&self, key: &str, bytes: &[u8]) -> Result<(), NoteStorageError> {
-        self.0.write(key, bytes).map_err(to_note_storage_error)
-    }
-}
-
-/// 任意の `Storage` 実装から `StorageNoteState` を構築する（テスト・#750/#751 が
-/// Android/iOS 向け `DataDir` 注入で差し替える入口）。
-pub fn storage_note_state_with(storage: Box<dyn Storage>) -> StorageNoteState {
-    StorageNoteState::with_storage(Box::new(DeviceNoteStorage(storage)))
-}
-
-/// レジストリの `init "storage_note"` 行から呼ばれる状態ファクトリ
-/// （`fn() -> StorageNoteState`）。
-///
-/// デスクトップ（macOS/Windows/Linux）は `FsStorage::desktop_default()`
-/// （`$HOME/.fandhe`）を保存先にする。Android は `AndroidApp::internal_data_path()`
-/// （`getFilesDir()` 相当、`device::android::data_dir()`、Issue #750）を起点にし、
-/// iOS は [`ios::documents_dir`]（アプリコンテナ内 `Documents/`、Issue #751）を
-/// 保存先にする。
-pub fn storage_note_state() -> StorageNoteState {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        use fandhe_device::storage::FsStorage;
-        match FsStorage::desktop_default() {
-            Ok(dir) => storage_note_state_with(Box::new(FsStorage::new(dir))),
-            Err(e) => {
-                StorageNoteState::default().with_status(format!("保存先の解決に失敗しました: {e}"))
-            }
-        }
-    }
-    #[cfg(target_os = "android")]
-    {
-        use fandhe_device::storage::FsStorage;
-        match android::data_dir() {
-            Some(dir) => storage_note_state_with(Box::new(FsStorage::new(dir))),
-            None => StorageNoteState::default()
-                .with_status("保存先（内部ストレージ）を取得できませんでした"),
-        }
-    }
-    #[cfg(target_os = "ios")]
-    {
-        use fandhe_device::storage::FsStorage;
-        match ios::documents_dir() {
-            Ok(dir) => storage_note_state_with(Box::new(FsStorage::new(dir))),
-            Err(e) => {
-                StorageNoteState::default().with_status(format!("保存先の解決に失敗しました: {e}"))
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use fandhe_device::{DataDir, DeviceError};
-    use std::sync::{Arc, Mutex};
-
-    /// `fandhe_device::storage::Storage` のインメモリ実装。`Storage` トレイト側で
-    /// 「保存 → 別状態インスタンスで復元」を満たすことを検証する（受入 (b) を
-    /// `Storage` 経由でも担保する。`fandhe-core` 側の `NoteStorage` 直接実装での検証は
-    /// `crates/fandhe-core/tests/storage_note.rs` を参照）。
-    #[derive(Clone, Default)]
-    struct MemStorage(Arc<Mutex<Option<Vec<u8>>>>);
-
-    impl Storage for MemStorage {
-        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, DeviceError> {
-            Ok(self.0.lock().expect("lock は成功する").clone())
-        }
-
-        fn write(&self, _key: &str, bytes: &[u8]) -> Result<(), DeviceError> {
-            *self.0.lock().expect("lock は成功する") = Some(bytes.to_vec());
-            Ok(())
-        }
-    }
-
-    /// 不正な key を要求して `DeviceError::InvalidKey` を返す `Storage`
-    /// （エラー文字列化の転送経路を検証する）。
-    struct RejectingStorage;
-
-    impl Storage for RejectingStorage {
-        fn read(&self, key: &str) -> Result<Option<Vec<u8>>, DeviceError> {
-            Err(DeviceError::InvalidKey(key.to_string()))
-        }
-
-        fn write(&self, key: &str, _bytes: &[u8]) -> Result<(), DeviceError> {
-            Err(DeviceError::InvalidKey(key.to_string()))
-        }
-    }
-
-    #[test]
-    fn memory_storage_round_trips_through_screen() {
-        use fandhe_core::click_button;
-        use fandhe_core::screens::storage_note::{set_input, storage_note_screen};
-
-        let mem = MemStorage::default();
-        let screen = storage_note_screen();
-        let mut state = storage_note_state_with(Box::new(mem.clone()));
-        set_input(&mut state, "メモ".to_string());
-        assert!(click_button(&screen, "保存", &mut state));
-
-        let restored = storage_note_state_with(Box::new(mem));
-        assert_eq!(restored.notes, vec!["メモ".to_string()]);
-    }
-
-    #[test]
-    fn fs_storage_survives_state_recreation() {
-        use fandhe_device::storage::FsStorage;
-
-        let dir = std::env::temp_dir().join(format!(
-            "fandhe-egui-proxy-device-test-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("システム時刻は UNIX epoch 以降")
-                .as_nanos()
-        ));
-
-        let first = storage_note_state_with(Box::new(FsStorage::new(DataDir(dir.clone()))));
-        assert!(first.notes.is_empty());
-
-        use fandhe_core::screens::storage_note::{encode_notes, NOTES_KEY};
-        FsStorage::new(DataDir(dir.clone()))
-            .write(NOTES_KEY, &encode_notes(&["復元されるメモ".to_string()]))
-            .expect("write は成功する");
-
-        // 新しい `FsStorage` インスタンス + 新しい状態でプロセス再起動を模す。
-        let restored = storage_note_state_with(Box::new(FsStorage::new(DataDir(dir))));
-        assert_eq!(restored.notes, vec!["復元されるメモ".to_string()]);
-    }
-
-    #[test]
-    fn device_error_message_is_forwarded() {
-        let bridged = DeviceNoteStorage(Box::new(RejectingStorage));
-        let err = bridged.read("../x").unwrap_err();
-        assert!(err.to_string().contains("../x"));
-    }
-
-    /// PR #787 Bugbot 指摘: `DeviceError::Io` の `Display` は既に「入出力エラー: 」を
-    /// 前置するため、`to_note_storage_error` がそれをそのまま `NoteStorageError::Io` へ
-    /// 格納すると「入出力エラー: 入出力エラー: ...」と二重表示になっていた。
-    #[test]
-    fn io_error_prefix_is_not_duplicated() {
-        let io_err = std::io::Error::other("disk full");
-        let err = to_note_storage_error(DeviceError::Io(io_err));
-        let msg = err.to_string();
-        assert_eq!(msg.matches("入出力エラー").count(), 1, "got: {msg}");
-    }
 }

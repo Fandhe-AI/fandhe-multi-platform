@@ -74,18 +74,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // `device` feature 無効時（`android_app()` の cfg 撤廃済み）に本 static を必要とするため、
     // `set_android_app` 呼び出し自体は feature に関わらず常に行う。
     set_android_app(app.clone());
-    // Issue #890 cursor Bugbot 指摘（PR #894 discussion_r4015098279）: `location.rs` の
-    // `LAST_PROCESSED_RETRY_SEQ` はプロセス static のため `Activity` 再生成をまたいで残る。
-    // 新しい画面 `S`（`LocationShowState::default()` = `retry_seq: 0`）を構築する前に
-    // ここで基準値を作り直し、再生成前に「再試行」を複数回押していた場合でも、
-    // 再生成後に改めて「再試行」を押したときに正しく再要求が発火するようにする
-    // （`device::location::reset_retry_tracking` doc 参照）。`device` feature 無効ビルドは
-    // `location` モジュール自体が存在しないため呼ばない。
-    #[cfg(feature = "device")]
-    crate::device::location::reset_retry_tracking();
-    // geofence 画面の状態も再生成で未登録へ戻るため、static 側の登録もまとめて破棄する。
-    #[cfg(feature = "device")]
-    crate::device::geofence::reset_register_tracking();
     // Issue #957: `mic_record::bridge::SLOT`/`STARTED_REQUEST_ID` も同じ理由で
     // プロセス static のため Activity 再生成をまたいで残る。新しい画面
     // `MicRecordState::default()`（`Idle`）を構築する前にここで捨て、再生成前に
@@ -106,20 +94,12 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // 同じ理由）。
     #[cfg(feature = "device")]
     crate::device::speech_recognition::reset_pending_tracking();
-    // Issue #486: `lan_discovery::bridge::SLOT` / `OBSERVED` も同じ理由でプロセス static のため、
-    // Activity 再生成をまたいで残る旧要求の保留をここで捨てる。
-    #[cfg(feature = "device")]
-    crate::device::lan_discovery::reset_pending_tracking();
     // Issue #1104: `photo_pick::bridge::SLOT` もプロセス static のため再生成をまたいで残る。
     // 写真選択の契約は「保留中の要求は復元せず破棄」（`fandhe_device::photo_picker` モジュール
     // doc）なので、新しい `Idle` の画面状態を作る前に捨て、旧要求の遅延完了を id 不一致で
     // 無視させる（`device::photo_pick::bridge::reset` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::photo_pick::reset_pending_tracking();
-    // Issue #1254: `photo_save::bridge::SLOT` も同様。保留中の保存要求は復元せず破棄し、
-    // 旧要求の遅延完了を id 不一致で無視させる（`device::photo_save::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::photo_save::reset_pending_tracking();
     // Issue #325: `print::bridge::SLOT` も同様に破棄する（Activity 再生成で印刷の保留は復元しない）。
     #[cfg(feature = "device")]
     crate::device::print::reset_pending_tracking();
@@ -362,15 +342,42 @@ fn read_debug_proxy_app_property() -> String {
     String::new()
 }
 
-// `nativeOnLocationChanged`/`nativeOnLocationFailure`（Issue #890）は上記
-// `nativeOnMotionChanged` と異なり feature 無効ビルド向けの no-op フォールバックを
-// 追加しない。`motionListener` は `onResume` で無条件にセンサ登録するため Java 側は
-// ビルド feature を問わず必ず呼ぶが、位置情報は Rust 側 `request_location_updates()`
-// （feature `device` 内のみ存在、`device/location.rs::shared_location` から呼ばれる）
-// の呼び出しを経て初めて `locationWanted` が真になり、Java 側もそれより前に
-// `nativeOnLocationChanged`/`nativeOnLocationFailure` を呼ぶ経路を持たない。
-// よって feature 無効ビルドではこれらのシンボルへ到達しえず、
-// `UnsatisfiedLinkError` の心配がない（codex-review の同種再指摘の予防）。
+/// `device` feature 無効ビルド向けの `nativeOnUrlSchemeReceived` no-op フォールバック
+/// （Issue #1218）。`MainActivity.java` は feature を知らず `onCreate` / `onNewIntent` から
+/// 必ず呼ぶため、スタブが無いと feature 無効ビルドで `UnsatisfiedLinkError` になる。
+/// 引数の並びは Java 宣言・`device/android_url_scheme.rs` の実体と 3 か所で一致させる。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
+/// シンボル名は JNI 命名規約上の固定名（`nativeOnMotionChanged` と同じ根拠）。
+#[cfg(not(feature = "device"))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnUrlSchemeReceived(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _url: *mut core::ffi::c_void,
+) {
+}
+
+/// `device` feature 無効ビルド向けの `nativeOnDeepLinkReceived` no-op フォールバック
+/// （Issue #1279）。`MainActivity` が feature を知らず https の `ACTION_VIEW` で
+/// `DeepLinkHelper.deliver` を呼ぶため、スタブが無いと feature 無効ビルドで
+/// `UnsatisfiedLinkError` になる。署名は Java 宣言・`device/android_deep_link.rs` の実体と
+/// 3 か所で一致させる。
+///
+/// # Safety
+/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
+/// シンボル名は JNI 命名規約上の固定名（`nativeOnUrlSchemeReceived` と同じ根拠）。
+#[cfg(not(feature = "device"))]
+#[allow(unsafe_code)]
+#[no_mangle]
+extern "system" fn Java_com_fandhe_platform_DeepLinkHelper_nativeOnDeepLinkReceived(
+    _env: *mut core::ffi::c_void,
+    _class: *mut core::ffi::c_void,
+    _url: *mut core::ffi::c_void,
+) {
+}
 
 /// `device` feature 無効ビルド向けの `nativeOnFullscreenChanged` no-op フォールバック
 /// （Issue #1314）。`FullscreenHelper` は insets リスナーから必ず呼ぶため、スタブが無いと

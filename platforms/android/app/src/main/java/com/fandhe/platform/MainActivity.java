@@ -13,7 +13,6 @@
 // Phase 8（端末機能、Issue #750）のカメラ Intent 中継、Phase 10（Issue #831）の
 // 重力センサ中継、Phase 11（Issue #859）のクリップボード中継、Phase 11（Issue #866）の
 // 読み上げ（TTS）中継、Phase 11（Issue #874）のファイル選択（SAF）中継、
-// Phase 11（Issue #890）の位置情報（`LocationManager`）中継、
 // （いずれも feature `device` 切り離し時に削除）。
 // 機能 crate へ移した機能（カメラ撮影・書類スキャン・NFC カードエミュレーション・ホーム画面ウィジェット・
 // 共有テキスト受信・ゲームコントローラ・カスタム URL scheme・ディープリンク・Web 認証セッション・アプリショートカット・
@@ -45,9 +44,6 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.icu.text.BreakIterator;
-import android.location.Location;
-import android.location.LocationListener;
-import android.location.LocationManager;
 import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Build;
@@ -82,10 +78,6 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
-import androidx.core.location.LocationManagerCompat;
-import androidx.work.ExistingWorkPolicy;
-import androidx.work.OneTimeWorkRequest;
-import androidx.work.WorkManager;
 import com.google.androidgamesdk.GameActivity;
 import java.io.File;
 import java.io.FileDescriptor;
@@ -165,42 +157,6 @@ public class MainActivity extends GameActivity {
     private static native void nativeOnPhotoPickerResult(
             long requestId, int code, String name, int fd);
 
-    // Rust 側（crates/fandhe-egui-proxy/src/device/android.rs）の JNI エクスポート関数
-    // （Issue #890、Phase 11 型サンプル「位置情報」の Android 経路に限り追加。
-    // Phase 8 の feature `device` 切り離し時に削除する）。継続 push 型
-    // （`fandhe_device::location::SharedLocation` 契約）のため requestId を持たない。
-    // latitude/longitude: 度（WGS84）。accuracy: 水平精度（メートル）。
-    private static native void nativeOnLocationChanged(
-            double latitude, double longitude, float accuracy);
-
-    // 同上。code の対応表（Rust 側 `decode_location_failure` と対で決める）:
-    // 1=権限拒否／2=位置情報サービス無効（設定 OFF・provider 無効）／
-    // 3=その他の失敗（`requestLocationUpdates` の例外・`LocationManager` 取得不能等）。
-    private static native void nativeOnLocationFailure(int code);
-
-    // 失敗からの回復（権限再取得・provider 再有効化）に、直前の失敗状態を「未取得」へ
-    // 戻す（cursor Bugbot 指摘、PR #894）。Rust 側 `SharedLocation::reset_to_waiting`
-    // を呼ぶだけで、`nativeOnLocationChanged`/`nativeOnLocationFailure` と異なり値を
-    // 運ばない。coarse/network provider は再登録後も新しい fix が届くとは限らないため、
-    // 「再開した」事実そのものを届けて古い Denied/Disabled 表示を残留させない。
-    // 呼び出し口は `notifyLocationRecoveredIfNeeded` のみ（`locationFailurePosted`
-    // doc 参照）。平常な `onResume` 再登録（直前が `Fixed`、失敗を挟んでいない）では
-    // 呼ばない。無条件に呼ぶと取得済みの Fix を破棄してしまう。Rust 側
-    // `location_effect` は `LocationShowState.retry_seq`（「再試行」ボタン押下のみが
-    // 進む世代番号）でしか再要求を出さないため、本メソッドの呼び出し自体は
-    // 「利用者のボタン再試行」と誤認されない（codex-review P1 指摘 / cursor Bugbot
-    // 指摘、PR #894）。
-    private static native void nativeOnLocationRetrying();
-
-    // 上記 `nativeOnLocationFailure` の code 定数（Java 側でも同じ表を参照するため）。
-    private static final int LOCATION_FAILURE_PERMISSION_DENIED = 1;
-    private static final int LOCATION_FAILURE_SERVICE_DISABLED = 2;
-    private static final int LOCATION_FAILURE_FAILED = 3;
-
-    // 位置情報の更新間隔（Issue #890、ponytail: 型サンプルの表示更新用途で強い実測
-    // 根拠はない。頻度が問題になったら見直す）。
-    private static final long LOCATION_UPDATE_INTERVAL_MS = 1000L;
-
     // コールバック時に requestId を思い出すためだけの唯一の static（仕様書「決定事項」
     // 参照）。「進行中か」「中断されたか」を表すフラグ・ロックは持たない（単一飛行は
     // コアが「ファイルを選ぶ」ボタンを隠すことで保証済み）。static にする理由（reviewer
@@ -235,18 +191,6 @@ public class MainActivity extends GameActivity {
     // JPEG へ変換するときの長辺の目標（画素）。これ以下になるまで `inSampleSize` で縮める。
     private static final int PHOTO_CONVERT_SIDE = 4096;
 
-    // 音楽ライブラリ画面（Issue #485）。実装は `MusicLibraryHelper`（許可ランチャーを STARTED 前に登録）。
-    // Rust の `android_music_library.rs` が JNI で呼ぶ。
-    private final MusicLibraryHelper musicLibraryHelper = new MusicLibraryHelper(this);
-
-    void requestMusicLibraryList(long requestId) {
-        musicLibraryHelper.read(requestId);
-    }
-
-    void cancelMusicLibraryList(long requestId) {
-        musicLibraryHelper.cancel(requestId);
-    }
-
     // 印刷ダイアログ（Issue #328）。実装は `PrintHelper`。
     // Rust の `android_print.rs` が JNI で呼ぶ。
     private final PrintHelper printHelper = new PrintHelper(this);
@@ -277,13 +221,6 @@ public class MainActivity extends GameActivity {
         super.onStart();
     }
 
-
-    // LAN のサービス探索（Issue #489）。実装は `LanDiscoveryHelper`。Rust の `android_lan_discovery.rs` が JNI で呼ぶ。
-    private final LanDiscoveryHelper lanDiscoveryHelper = new LanDiscoveryHelper(this);
-
-    void requestLanDiscovery(long requestId, int durationMs) {
-        lanDiscoveryHelper.request(requestId, durationMs);
-    }
 
     // ペン・筆圧入力（Issue #357）。実装は `PenStylusHelper`。
     private final PenStylusHelper penStylusHelper = new PenStylusHelper();
@@ -607,164 +544,11 @@ public class MainActivity extends GameActivity {
                 new Thread(() -> deliverPickedPhoto(requestId, uri), "fandhe-photo-pick").start();
             });
 
-    // 測位の開始・停止を UI スレッド上の resumed 状態と一致させるための可視性フラグ
-    // （codex-review P1 指摘、PR #894）。`requestLocationUpdates()` は Rust スレッドから
-    // JNI 経由で呼ばれ `runOnUiThread` へ開始要求を積むが、その Runnable の実行前に
-    // `onPause` が `removeUpdates` を済ませてしまうと、Runnable が停止済み Activity へ
-    // リスナーを再登録してしまい「バックグラウンドでは測位しない」契約
-    // （`onPause` doc 参照）が崩れる。Runnable・権限結果コールバックの両方で本フラグを
-    // 確認し、resumed でなければ登録・通知を行わず次の `onResume` まで保留する。
-    // UI スレッドでのみ読み書きする（`onResume`/`onPause`/上記 Runnable 群はすべて
-    // UI スレッド上）ため volatile は不要。
-    // フィールド初期化子（`requestLocationPermission` 等のラムダ）から先読みされるため、
-    // それらより前で宣言する必要がある（javac の forward reference 制限、PR #894）。
+    // UI スレッド上の resumed 状態の可視性フラグ。非前景中に届いた権限結果・開始要求（マイク録音・音声認識など）を
+    // 次の `onResume` まで保留するために、`onResume` / `onPause` が更新する（UI スレッドでのみ読み書きする）。
+    // フィールド初期化子（権限ランチャーのラムダ）から先読みされるため、それらより前で宣言する必要がある
+    // （javac の forward reference 制限）。位置情報の同種の判定は `fandhe-cap-location` の `LocationHelper` が自前で持つ。
     private boolean activityResumed;
-
-    // 位置情報のランタイム許可要求（Issue #890、`CameraCaptureHelper` の `requestCameraPermission` と同型）。
-    // 位置情報画面は `ACCESS_COARSE_LOCATION` のみを要求する（最小権限、security.md A05）。
-    // ジオフェンス（Issue #1058）が半径より良い精度を要るため `locationPreciseWanted` が立った
-    // ときだけ `ACCESS_FINE_LOCATION` を COARSE と同時に要求する（Android 12 以降は FINE の
-    // 単独要求不可）。
-    // 利用者が「おおよそ」だけ許可した場合も許可扱いで測位を始める（精度不足は Rust 側が
-    // 登録時に Inaccurate として示す）。BACKGROUND は要求しない（`AndroidManifest.xml` 参照）。
-    //
-    // `awaitingLocationPermission` を解除した後、resumed 状態を確認してから結果を配送する
-    // （codex-review P1 指摘: 開始側と結果側の両方で resumed を確認する、PR #894）。
-    // paused 中に届いた場合はここでは何もしない。granted なら `locationWanted` が立った
-    // ままなので次の `onResume` が `startLocationUpdates` を呼ぶ。denied なら
-    // `awaitingLocationPermission` を解除済みのため次の `onResume` が通常どおり
-    // `nativeOnLocationFailure` を送る（cursor Bugbot 指摘の解消経路と同じ）。
-    private final ActivityResultLauncher<String[]> requestLocationPermission =
-            getActivityResultRegistry().register("fandhe:MainActivity:8", this, new ActivityResultContracts.RequestMultiplePermissions(), result -> {
-                awaitingLocationPermission = false;
-                if (!activityResumed) {
-                    return;
-                }
-                // 取消（空 Map）は拒否扱い。FINE か COARSE のどちらかが許可されれば進む。
-                // 昇格ダイアログの取消で空 Map が返っても、COARSE 許可済みなら拒否扱いにしない。
-                boolean granted = Boolean.TRUE.equals(result.get(Manifest.permission.ACCESS_FINE_LOCATION))
-                        || Boolean.TRUE.equals(result.get(Manifest.permission.ACCESS_COARSE_LOCATION))
-                        || hasLocationPermission();
-                if (granted) {
-                    startLocationUpdates();
-                } else {
-                    notifyLocationFailure(LOCATION_FAILURE_PERMISSION_DENIED);
-                }
-            });
-
-    // 実測位（Issue #890）。`LocationManager`（`android.location`、フレームワーク同梱、
-    // Play services 不使用。対応表 `docs/device/capabilities/location.json` の
-    // `api` 節参照）から `getSystemService` で取得する（`onCreate` で初期化）。
-    private LocationManager locationManager;
-
-    // 「測位を続けたい」という意思を Activity 再生成を跨いで保持する static フラグ
-    // （`filePickRequest` と同じ理由。`requestLocationUpdates()`（JNI から呼ばれる）が
-    // true にし、`onResume` がこれを見て再登録する）。`onPause` では `removeUpdates` する
-    // だけで false へは戻さない（バックグラウンドから復帰したら測位を再開する契約）。
-    private static boolean locationWanted;
-
-    // 権限ダイアログの結果待ちを Activity 再生成を跨いで保持する static フラグ
-    // （cursor Bugbot 指摘、PR #894）。`RequestPermission` ダイアログは configChanges の
-    // 対象外で、Activity が再生成されてもダイアログ自体は表示され続ける
-    // （`registerForActivityResult` は同一キーで新インスタンスへ結果を配送する契約、
-    // `pendingCaptureRequest` doc 参照）。この間に新インスタンスの `onResume` が走ると
-    // `checkSelfPermission` はまだ未許可のままのため、ユーザーが応答する前に
-    // `PermissionDenied` を誤って push してしまう。このフラグが立っている間は
-    // `onResume` の権限確認をスキップし、ダイアログの結果を待つ。
-    private static boolean awaitingLocationPermission;
-
-    // COARSE のみ許可済みの利用者へ FINE への昇格ダイアログを出し済みか（プロセス内）。
-    // 繰り返し開始要求のたびに同じダイアログを出さないための印。UI スレッドでのみ読み書きする。
-    private static boolean fineUpgradeAsked;
-
-    // ジオフェンス画面が精密位置（FINE）を要求済みか。`requestLocationUpdates(true)` が立て、
-    // プロセス内は下ろさない（位置情報画面へ戻っても FINE 許可は取り消さないため、測位の
-    // 再開時に FINE を再要求し続けても利用者への追加ダイアログは `fineUpgradeAsked` で 1 回に
-    // 抑える）。UI スレッドでのみ読み書きする。
-    private static volatile boolean locationPreciseWanted;
-
-    // `requestLocationUpdates()` が積んだ開始要求のうち、まだ「権限確認 → 必要なら
-    // ダイアログ起動」まで実行できていないものがあるかの可視性フラグ
-    // （codex-review P1 指摘 / cursor Bugbot 指摘、PR #894）。`onPause` が先に走って
-    // Runnable が resumed 状態を見て早期 return した場合、この意思を握り潰さずに
-    // 保持し、次の `onResume` で `ensureLocationPermissionAndStart()` を代わりに
-    // 実行させる（`onResume` の通常経路は権限失効チェックのみで自動的にダイアログを
-    // 出さない設計のため、区別が要る）。UI スレッドでのみ読み書きする。
-    private static boolean locationStartRequestPending;
-
-    // 直近で Rust 側へ失敗（権限拒否・サービス無効・その他失敗）を通知済みかどうか
-    // （codex-review P1 指摘 / cursor Bugbot 指摘、PR #894）。`nativeOnLocationRetrying`
-    // （`SharedLocation::reset_to_waiting`）は「失敗からの回復」専用のシグナルであり、
-    // 平常の `onResume` 再登録（前回も `Fixed` のまま・失敗を挟んでいない）でまで
-    // 呼ぶと、取得済みの Fix が理由なく破棄される。Rust 側 `location_effect` は
-    // `LocationShowState.retry_seq`（「再試行」ボタン押下のみが進む世代番号）でしか
-    // 再要求を出さないため、この Java 側の OS 起点回復通知が「利用者がボタンで
-    // 再試行した」と誤認されて二重に測位開始要求を発行することはない
-    // （`crates/fandhe-egui-proxy/src/device/location.rs` の `LAST_PROCESSED_RETRY_SEQ`
-    // 契約参照）。本フラグは失敗通知の唯一の出口 `notifyLocationFailure` が立て、
-    // 回復通知の出口 `notifyLocationRecoveredIfNeeded` が「直前が失敗のときだけ」
-    // `nativeOnLocationRetrying` を呼んで下ろす。UI スレッドでのみ読み書きする
-    // （`locationListener` の各コールバックは `requestLocationUpdates` の登録時に渡す
-    // `Looper.getMainLooper()` 経由で UI スレッドへ届く）。
-    private static boolean locationFailurePosted;
-
-    // `nativeOnLocationFailure` の唯一の呼び出し口（`locationFailurePosted` doc 参照）。
-    // 呼び出し元を横断してこの経由に一本化することで、フラグの立て忘れを防ぐ。
-    private void notifyLocationFailure(int code) {
-        locationFailurePosted = true;
-        nativeOnLocationFailure(code);
-    }
-
-    // 「失敗からの回復」を確定できるときだけ `nativeOnLocationRetrying` を呼ぶ
-    // （`locationFailurePosted` doc 参照）。直前に失敗を通知していなければ
-    // （＝前回も `Fixed`/`Waiting` のまま）何もしない。`startLocationUpdates`
-    // （権限再取得後・`onResume` 再登録の両方）と `onProviderEnabled` から呼ばれる。
-    private void notifyLocationRecoveredIfNeeded() {
-        if (locationFailurePosted) {
-            locationFailurePosted = false;
-            nativeOnLocationRetrying();
-        }
-    }
-
-    // OS からの継続コールバック（Issue #890）。`hasAccuracy()` が偽のサンプルは
-    // `Fix.accuracy_m`「有限・0 以上」の契約（`fandhe_device::location` モジュール doc）を
-    // 偽装しないため捨てる（network provider が精度なしの結果を返す天井、
-    // `location.json` の note 参照）。
-    private final LocationListener locationListener = new LocationListener() {
-        @Override
-        public void onLocationChanged(Location location) {
-            if (!location.hasAccuracy()) {
-                return;
-            }
-            // 実測位が届いた時点で「失敗通知済み」ではなくなる（`locationFailurePosted`
-            // doc 参照）。以後の平常な `onResume` 再登録が誤って回復通知を送らないよう
-            // ここで明示的に下ろす。
-            locationFailurePosted = false;
-            nativeOnLocationChanged(
-                    location.getLatitude(), location.getLongitude(), location.getAccuracy());
-        }
-
-        @Override
-        public void onProviderDisabled(String provider) {
-            notifyLocationFailure(LOCATION_FAILURE_SERVICE_DISABLED);
-        }
-
-        @Override
-        public void onProviderEnabled(String provider) {
-            // provider 再有効化時に古い ServiceDisabled 状態を残さない（cursor Bugbot
-            // 指摘、PR #894）。listener は登録済みのままのため `startLocationUpdates`
-            // は再度呼ばれず、ここで明示的に「未取得」へ戻さないと、coarse/network
-            // provider が次の fix を返すまで（届かないことすらある）画面が Disabled の
-            // まま固定されてしまう。`onProviderDisabled` を経ていなければ
-            // （`locationFailurePosted` が false）何もしない。
-            notifyLocationRecoveredIfNeeded();
-        }
-
-        @Override
-        public void onStatusChanged(String provider, int status, Bundle extras) {
-            // 非推奨 API（API 29 以降呼ばれない）。使わない。
-        }
-    };
 
     // 読み上げ（TTS、Issue #866）。`TextToSpeech` は最初の要求で遅延生成し（`onCreate`
     // では作らない。読み上げを 1 度も使わない画面ではエンジン起動コストを払わない）、
@@ -961,6 +745,7 @@ public class MainActivity extends GameActivity {
         installAccessibilityOffGuard();
         fullscreenHelper.register();
 
+
         // マイク録音（Issue #957）: `micRecordRequest` は static のため Activity 再生成を
         // またいで残るが、`MediaRecorder`（`micRecorder`）はインスタンスフィールドで
         // 旧 Activity インスタンスとともに失われている（新インスタンスでは常に
@@ -978,8 +763,6 @@ public class MainActivity extends GameActivity {
         // 順序非依存）。
         speechRequest.take();
 
-
-        locationManager = getSystemService(LocationManager.class);
 
         // ファイル選択（Issue #874）は `filePickRequest` を Bundle へ保存・復元
         // しない（案 B の決定事項）。`filePickRequest` は static のため Activity
@@ -1003,40 +786,6 @@ public class MainActivity extends GameActivity {
     protected void onResume() {
         super.onResume();
         activityResumed = true;
-        // 測位継続の意思（Issue #890）があり、かつ権限が既にあるなら再登録する
-        // （`onPause` で解除済みのため、フォアグラウンド復帰のたびに要る。傾き（#831）
-        // の motionListener と同型の対）。権限が無ければここでは要求しない
-        // （ダイアログはユーザー操作起点の `requestLocationUpdates` 経由のみで出す）。
-        //
-        // 権限が無い場合は nativeOnLocationFailure を発行する（cursor Bugbot 指摘、
-        // PR #894）。設定画面等でバックグラウンド中に権限が取り消された場合、
-        // onPause で removeUpdates 済みのため以降 onLocationChanged/onLocationFailure
-        // が届かず、Rust 側 `SharedLocation` が古い Fix を保持し続けてしまう
-        // （`push_failure` が呼ばれて初めて古い Fix を破棄する契約、location.rs
-        // モジュール doc 参照）。ここで明示的に PermissionDenied を push して
-        // 画面が失効済みの古い座標を表示し続けないようにする。
-        //
-        // ただし `awaitingLocationPermission` が立っている間（権限ダイアログの
-        // 結果待ち）は権限確認をスキップする（cursor Bugbot 指摘、PR #894）。
-        // Activity 再生成中もダイアログ自体は表示され続けるため、ここで
-        // `checkSelfPermission` の未許可を見て即座に PermissionDenied を push すると、
-        // ユーザーがまだダイアログに応答していないのに拒否扱いになってしまう。
-        // 結果は `requestLocationPermission` のコールバックが確定させる。
-        if (locationWanted && !awaitingLocationPermission) {
-            if (locationStartRequestPending) {
-                // `requestLocationUpdates()` の Runnable が paused 中で早期 return し、
-                // まだ権限確認・ダイアログ起動を一度も行えていない未実行要求
-                // （codex-review P1 指摘 / cursor Bugbot 指摘、PR #894）。単純な失効
-                // チェックではなく、実際に開始要求を再開する（未許可ならここで初めて
-                // ダイアログを出す。ユーザーは実際には拒否していないため）。
-                locationStartRequestPending = false;
-                ensureLocationPermissionAndStart();
-            } else if (hasLocationPermission()) {
-                startLocationUpdates();
-            } else {
-                notifyLocationFailure(LOCATION_FAILURE_PERMISSION_DENIED);
-            }
-        }
         // マイク録音（Issue #957）: 許可結果が非前景中に届き `startMicRecorder` を
         // 保留していた要求を再開する（cursor Bugbot 指摘、PR #962。
         // `micStartPendingResume` doc 参照）。
@@ -1066,17 +815,8 @@ public class MainActivity extends GameActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        // `requestLocationUpdates`/`requestLocationPermission` の Runnable・コールバックが
-        // ここより後に UI スレッドで実行される場合に、停止済み Activity へリスナーを
-        // 再登録しないようにするための可視性フラグ（codex-review P1 指摘、PR #894）。
-        // `removeUpdates` より先に false へ落としておく。
         activityResumed = false;
         penStylusHelper.onPause();
-        lanDiscoveryHelper.onPause();
-        // 「使用中のみ」の権限のため、バックグラウンドでは測位しない（Issue #890）。
-        if (locationManager != null) {
-            locationManager.removeUpdates(locationListener);
-        }
         // マイク録音（Issue #957）: バックグラウンド遷移で録音中なら破棄する（保留要求を
         // 残さない、device-bridge-contracts.md「ライフサイクル境界」節）。権限ダイアログ
         // 表示中（`micRecorder == null` だが `micRecordRequest` は追跡中）は誤破棄しない
@@ -1704,12 +1444,6 @@ public class MainActivity extends GameActivity {
         nativeOnMicRecordStarted(requestId);
     }
 
-    // 写真ライブラリ保存（Issue #1256）。Rust 側 `device/android_photo_library.rs` から JNI で
-    // 呼ばれる。実処理は `PhotoSaveHelper`（Activity を握らない。再生成時の破棄は Rust 側 reset と対）。
-    private void requestPhotoSave(long requestId, byte[] png) {
-        PhotoSaveHelper.save(getApplicationContext().getContentResolver(), requestId, png);
-    }
-
     // Rust 側（`device/mic_record.rs` の「停止」ボタンハンドラ）から JNI 経由で呼ばれる
     // （Issue #957）。`requestId` が現在の要求と一致しない場合は no-op（旧要求の遅延
     // 到着、`apple_mic_record.rs::request_stop` の Android 版）。
@@ -2165,152 +1899,6 @@ public class MainActivity extends GameActivity {
         }
     }
 
-    // Rust 側（`device/location.rs::shared_location`）から JNI 経由で呼ばれる
-    // （Issue #890）。「使用中のみ」の権限のため、開始要求は Rust 起点にする
-    // （位置情報画面が動いているときにだけ測位・権限ダイアログを出す。傾き（#831）の
-    // ように常時センサ登録はしない、実装計画 §2.3 参照）。結果を待たず即座に戻る
-    // （`requestFilePick` と同じ形。実測位は `nativeOnLocationChanged`/
-    // `nativeOnLocationFailure` で非同期に届く）。
-    //
-    // `precise` はジオフェンスからの要求で真（FINE が要る）、位置情報画面からは偽（COARSE のみ）。
-    // JNI 署名は `(Z)V`（Rust 側 `device/android.rs::request_location_updates` と一致させる）。
-    private void requestLocationUpdates(boolean precise) {
-        // `locationWanted`・`locationStartRequestPending` より先に、同じ JNI スレッドで設定する
-        // （UI スレッドへ遅れて立てると、先に走った `onResume` が COARSE だけで要求してしまう）。
-        // 現在の開始要求が求める精度で毎回上書きする（ジオフェンスの後に位置情報画面から
-        // 要求した場合は COARSE だけを求める、最小権限）。
-        locationPreciseWanted = precise;
-        locationWanted = true;
-        // paused 中に Runnable が早期 return しても要求を握り潰さないための印
-        // （`onResume` 側の分岐参照、codex-review P1 指摘 / cursor Bugbot 指摘、PR #894）。
-        locationStartRequestPending = true;
-        runOnUiThread(() -> {
-            // この Runnable の実行前に `onPause` が走っていれば、停止済み Activity へ
-            // リスナーを再登録しない（codex-review P1 指摘、PR #894）。`locationWanted`・
-            // `locationStartRequestPending` は立てたままのため、次の `onResume` が
-            // 改めて拾って `ensureLocationPermissionAndStart()` を実行する。
-            //
-            // この Runnable の実行前に `onResume` が先に `locationStartRequestPending`
-            // を消費済み（権限確認・ダイアログ起動まで進めた）場合は、ここでは何もしない
-            // （codex-review P1 指摘 / cursor Bugbot 指摘、PR #894）。`activityResumed` だけ
-            // 見て無条件に `ensureLocationPermissionAndStart()` を呼ぶと、ユーザーが
-            // まだ権限ダイアログに応答していないのに `requestPermissions` を再 launch し、
-            // AOSP 実装が返す空の取消結果で `PermissionDenied` が誤通知される。
-            if (!activityResumed || !locationStartRequestPending) {
-                return;
-            }
-            locationStartRequestPending = false;
-            ensureLocationPermissionAndStart();
-        });
-    }
-
-    // 権限確認 → 未許可ならダイアログ起動、を行う（`requestLocationUpdates` の
-    // Runnable と `onResume` の未実行要求再開の両方から呼ばれる共通処理、PR #894）。
-    // UI スレッド・resumed 状態を呼び出し元が保証すること。
-    // 「おおよそ」だけ許可済みの利用者にも、プロセスにつき 1 回 FINE への昇格ダイアログを
-    // 出す（ジオフェンスの半径 100 m に FINE が要る。旧版で COARSE のみ許可した利用者が
-    // `hasLocationPermission()` で素通りし Inaccurate 拒否が続くのを防ぐ、codex-review P1）。
-    // 拒否されても COARSE が許可済みなら結果コールバックが測位を始める（精度不足は
-    // Rust 側が Inaccurate で示す）。FINE 未許可のまま `onResume` が再要求することは
-    // ない（本関数は新規開始要求と保留要求の再開だけから呼ばれる）。
-    private void ensureLocationPermissionAndStart() {
-        // FINE が要るのはジオフェンスの要求があったときだけ（位置情報画面は COARSE のみ要求）。
-        // COARSE のみ許可済みで昇格ダイアログを既に出したプロセスでは再要求せず COARSE で
-        // 続ける（開始要求のたびにダイアログを出し続けない。利用者が「おおよそ」のままを
-        // 選んだ場合の精度不足は Rust 側が Inaccurate で示す）。何も許可されていない場合は
-        // 従来どおり常に要求する。
-        if (hasFineLocationPermission()
-                || (hasLocationPermission() && (!locationPreciseWanted || fineUpgradeAsked))) {
-            startLocationUpdates();
-        } else {
-            boolean askFine = locationPreciseWanted;
-            awaitingLocationPermission = true;
-            try {
-                requestLocationPermission.launch(askFine
-                        ? new String[] {
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
-                        }
-                        : new String[] {Manifest.permission.ACCESS_COARSE_LOCATION});
-                // FINE を含むダイアログを実際に出せたら（初回・昇格とも）「精密位置を聞いた」とする。
-                // 利用者が「おおよそ」を選んだ後は、ジオフェンスの再試行でも位置情報画面でも
-                // 再度 FINE を求めない（launch 失敗では立てず、聞く機会を失わない）。
-                if (askFine) {
-                    fineUpgradeAsked = true;
-                }
-            } catch (RuntimeException e) {
-                // `launch()` 自体が例外を送出した場合（`onSaveInstanceState` 後の
-                // 呼び出し等、`CameraCaptureHelper.begin` と同じ理由）。
-                awaitingLocationPermission = false;
-                notifyLocationFailure(LOCATION_FAILURE_FAILED);
-            }
-        }
-    }
-
-    private boolean hasFineLocationPermission() {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED;
-    }
-
-    // FINE か COARSE のどちらかが許可済みか（「おおよそ」のみ許可でも true）。
-    // `onResume` の再登録分岐と `ensureLocationPermissionAndStart` が共有する。
-    private boolean hasLocationPermission() {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                        == PackageManager.PERMISSION_GRANTED
-                || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
-                        == PackageManager.PERMISSION_GRANTED;
-    }
-
-    // 権限確認後（`requestLocationUpdates`/`requestLocationPermission` 許可コールバック/
-    // `onResume` 再登録）に呼ばれる。UI スレッド前提（Issue #890）。
-    private void startLocationUpdates() {
-        if (locationManager == null) {
-            notifyLocationFailure(LOCATION_FAILURE_FAILED);
-            return;
-        }
-        String provider = currentLocationProvider();
-        boolean serviceEnabled = LocationManagerCompat.isLocationEnabled(locationManager)
-                && locationManager.isProviderEnabled(provider);
-        if (serviceEnabled) {
-            // 権限再取得・`onResume` 再登録のたびに呼ばれる本関数の入口で、直前の失敗状態
-            // （PermissionDenied 等）を「未取得」へ戻す（cursor Bugbot 指摘、PR #894）。
-            // ただし「直前に失敗を通知済み」のときだけ行う（`locationFailurePosted` doc
-            // 参照）。平常な `onResume` 再登録（直前が `Fixed`、失敗を挟んでいない）では
-            // 何もしないため、取得済みの Fix を理由なく破棄しない（codex-review P1 指摘
-            // / cursor Bugbot 指摘、PR #894）。
-            notifyLocationRecoveredIfNeeded();
-        } else {
-            // サービスが無効なままの `onResume` では回復通知を出さない。先に
-            // `notifyLocationRecoveredIfNeeded()` を呼んでから直後に
-            // `notifyLocationFailure(SERVICE_DISABLED)` を呼ぶと、サービス無効のまま
-            // `onResume` するたびに Disabled → 取得中 → Disabled と表示が明滅する
-            // （cursor Low 指摘、PR #894）。サービス無効を通知したうえで登録自体は
-            // 行う。有効化後に OS が自然に `onLocationChanged`/`onProviderEnabled` を
-            // 届けるため回復できる（実装計画 §3 startLocationUpdates 参照）。
-            notifyLocationFailure(LOCATION_FAILURE_SERVICE_DISABLED);
-        }
-        try {
-            locationManager.requestLocationUpdates(
-                    provider,
-                    LOCATION_UPDATE_INTERVAL_MS,
-                    0f,
-                    locationListener,
-                    Looper.getMainLooper());
-        } catch (SecurityException | IllegalArgumentException e) {
-            notifyLocationFailure(LOCATION_FAILURE_FAILED);
-        }
-    }
-
-    // provider 選択（実装計画 §2.1）: API 31（S）以降は `FUSED_PROVIDER`、それ未満
-    // （minSdk 24）は `NETWORK_PROVIDER`。GPS は使わない。FINE が許可されていれば
-    // fused / network は精密な値を返し、COARSE のみなら間引かれた値になる。
-    private static String currentLocationProvider() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            return LocationManager.FUSED_PROVIDER;
-        }
-        return LocationManager.NETWORK_PROVIDER;
-    }
-
     // SAF の DISPLAY_NAME を解決する共通ヘルパー（`deliverPickedDocument`（Issue #874）と
     // ドラッグ & ドロップ（`deliverDropItem`、Issue #1016）の両方から呼ぶ。実装計画
     // §4「DISPLAY_NAME 解決を `resolveDisplayName(Uri)` に切り出して共有する」）。
@@ -2370,13 +1958,7 @@ public class MainActivity extends GameActivity {
         }
     }
 
-    // バックグラウンド処理（Issue #1046）。`WorkManager` の一意名。予約の実体
-    // （記録の書き込み）は `BackgroundTaskWorker` が `getFilesDir()` 直下へ直接行う
-    // （Rust 側 JNI 呼び出しは `schedule`/`cancel`/`state` の橋渡しのみ、
-    // `device/android_background_task.rs` モジュール doc「記録を書く主体」参照）。
-    private static final String BACKGROUND_TASK_WORK_NAME = "fandhe.background-task";
-
-    // `schedule`/`cancel` の結果（`Operation.getResult()`）を、確定するまで待つ。
+    // WorkManager の `Operation`（背景アップロードの予約・取り消し）の結果を、確定するまで待つ。
     // 待ち上限を設けると、上限を過ぎた後に操作が確定して戻り値と実際の予約が
     // 食い違い、取り消しで巻き戻そうとすると置き換え前の予約まで失う（PR #1052
     // codex 指摘）。呼び出し元（Rust 側 `AndroidBackgroundTask`）は UI スレッド外の
@@ -2403,45 +1985,6 @@ public class MainActivity extends GameActivity {
         }
     }
 
-    // Rust 側（`device/android_background_task.rs::AndroidBackgroundTask::call_schedule`、
-    // Issue #1046）から JNI 経由で呼ばれる同期メソッド。処理 1 件を一意名で予約する。
-    // 二重予約は常に置き換える（`ExistingWorkPolicy.REPLACE`、
-    // `fandhe_device::background_task` の契約）。戻り値: 0 = 成功、それ以外 = 失敗。
-    private int backgroundTaskSchedule() {
-        try {
-            androidx.work.OneTimeWorkRequest request =
-                    new OneTimeWorkRequest.Builder(BackgroundTaskWorker.class).build();
-            return awaitOperation(
-                    WorkManager.getInstance(getApplicationContext())
-                            .enqueueUniqueWork(
-                                    BACKGROUND_TASK_WORK_NAME,
-                                    ExistingWorkPolicy.REPLACE,
-                                    request));
-        } catch (RuntimeException e) {
-            return 1;
-        }
-    }
-
-    // Rust 側（`AndroidBackgroundTask::call_cancel`）から JNI 経由で呼ばれる同期
-    // メソッド。予約を取り消す。未予約でも `cancelUniqueWork` 自体は成功する
-    // （べき等、`fandhe_device::background_task` の契約。Rust 側はこの戻り値
-    // 0 をそのまま `Ok(())` として扱う）。戻り値: 0 = 成功、それ以外 = 失敗。
-    private int backgroundTaskCancel() {
-        try {
-            return awaitOperation(
-                    WorkManager.getInstance(getApplicationContext())
-                            .cancelUniqueWork(BACKGROUND_TASK_WORK_NAME));
-        } catch (RuntimeException e) {
-            return 1;
-        }
-    }
-
-    // Rust 側（`AndroidNetworkStatus::call_read`、JNI 署名 `()I`）から 1 秒間隔で呼ばれる
-    // 同期メソッド（Issue #1284）。結果コードの意味は `NetworkStatusHelper` を参照。
-    private int networkStatusRead() {
-        return NetworkStatusHelper.read(getApplicationContext());
-    }
-
     // `TextToSpeech` はプロセス内リソース（音声エンジンへの接続）を持つため、
     // Activity 破棄時に明示的に手放す（Issue #866）。保留中の要求（`INITIALIZING`
     // 中に Activity が破棄されたケース）は `onInit` が届かなくなるため、ここで
@@ -2459,8 +2002,6 @@ public class MainActivity extends GameActivity {
         penStylusHelper.onDestroy();
         // UI キューを待つネイティブ終了処理（clear）が super.onDestroy() の後ろで詰まらないよう先に解放する。
         super.onDestroy();
-        lanDiscoveryHelper.onDestroy();
-        musicLibraryHelper.onDestroy();
         printHelper.onDestroy();
         screenOrientationHelper.onDestroy();
         // マイク録音（Issue #957）: `onPause` で録音中なら既に破棄済みのため
