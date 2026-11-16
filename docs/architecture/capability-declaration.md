@@ -301,11 +301,12 @@ cargo fandhe verify-scope --catalog <全機能を含む Cargo.toml> \
 - 到達した機能と同じ値を宣言する未選択機能の値は、正当に現れるため禁止にしません
 - 観測ファイルは成果物から外部ツールで取り出したテキストです。いずれかの禁止値が現れたら、機能 id・種別・値を出して終了コード 1 で終わります
 - 照合はトークン境界つきです。`android.hardware.camera` は `android.hardware.camera.autofocus` に、`group:artifact` は `group:artifact-ktx` に一致しません
-- 観測テキストが空なら失敗します（ツールの失敗の見逃し防止）。未選択の機能が 0 件なら検査対象なしで成功します
+- 観測テキストが空なら失敗します（ツールの失敗の見逃し防止）。未選択の機能が 0 件でも、禁止トークンの照合対象が空になるだけで、空の観測の検出と Android の構造照合は行います
 - 対象は次の値です
   - Android: 権限名、`uses-feature` 名、コンポーネント名（`activity-alias` を含む）、`application-meta-data` の名前、Gradle の `group:artifact`。`application-meta-data` の名前が、選んだ機能の依存 library の Manifest にも現れると誤検知しうる（実例が出たら `GENERIC_KEYS` と同じ除外で扱う）
+  - Android の構造照合（aapt2 xmltree を要素単位で読む）: カタログにある権限の `usesPermissionFlags` が、その権限を宣言した選んだ機能のフラグの和集合に収まるか。MainActivity の `main-activity-attributes`（許可リストの属性）が、選んだ機能の宣言値だけか。MainActivity が観測テキストに無ければ失敗します。カタログ外の権限は見ません。全機能を選んだアプリでも構造照合は走ります（トークン照合の禁止集合が空になるだけ）。検出は片方向で、宣言にあるのに成果物に無いフラグ・属性は見ません。依存 library が同名の権限にフラグを付けた場合は誤検知になりえます
   - iOS・macOS: entitlement キー（App Group は `com.apple.security.application-groups`）、framework 名、`*UsageDescription` キー、`info-plist` のキー、拡張（`<name>.appex`）
 - 観測ファイルの集め方は `scripts/audit/verify-capability-scope.sh` が担います（aapt2・codesign・otool・plutil。Gradle の依存ツリーは任意）
 - 判定ロジックは `cargo test -p cargo-fandhe` で守ります。実成果物への実行は CI の必須経路には載せていません
 
-範囲外: `queries`（統合後の Manifest には他 library 由来の同じ action が正当に現れうる）、権限の `flags`（権限名が対象で、フラグ名は他の権限にも正当に現れる）、`main-activity-attributes`、`main-activity-intent-filters`（他 library の manifest にも正当に現れるため。漏れは機能のコンポーネント名で検出します）、Windows の identity（#1208）、AAB の直接検査。
+範囲外: `queries`（統合後の Manifest には他 library 由来の同じ action が正当に現れうる）、`main-activity-intent-filters`（他 library の manifest にも正当に現れるため。漏れは機能のコンポーネント名で検出します）、Windows の identity（#1208）、AAB の直接検査。
