@@ -103,10 +103,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // 無視させる（`device::photo_pick::bridge::reset` doc 参照）。
     #[cfg(feature = "device")]
     crate::device::photo_pick::reset_pending_tracking();
-    // Issue #1254: `photo_save::bridge::SLOT` も同様。保留中の保存要求は復元せず破棄し、
-    // 旧要求の遅延完了を id 不一致で無視させる（`device::photo_save::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::photo_save::reset_pending_tracking();
     // Issue #534: `web_auth_session::bridge` の `ACTIVE`（デモサーバー）と `SLOT` も同様に破棄する。
     // 残ると次の要求が開けなくなる（`device::android_web_auth_session::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]

@@ -1,6 +1,7 @@
 package com.fandhe.platform;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.os.Build;
@@ -13,11 +14,16 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 
-// 音楽ライブラリ画面（Issue #485）の Android 実装ヘルパー。MainActivity から生成・委譲される
-// （Rust の `device/android_music_library.rs` が `MainActivity.requestMusicLibraryList` /
-// `cancelMusicLibraryList` を JNI で呼び、結果を `nativeOnMusicLibraryResult` で受ける）。
+// 音楽ライブラリ画面（Issue #485）の Android 実装ヘルパー。Rust の `fandhe-cap-music-library/src/android.rs` が
+// static の `read(Activity, long)` / `cancel(Activity, long)` を JNI で呼び、結果を `nativeOnMusicLibraryResult` で受ける。
+// Activity のライフサイクルへは `MusicLibraryLifecycle`（非公開 ContentProvider、`FeatureLifecycleProvider` 継承）が
+// `attach` / `detach` で知らせる。Activity ごとの helper は `HELPERS` に持つ（JNI スレッドと UI スレッドの両方から
+// 触るので同期化し、Activity が GC されれば項目も消える）。
 //
 // 1 要求 = 実行時許可の確認 → `MediaStore.Audio.Media` を OS の返す順に最大 21 行
 // （契約の MAX_TRACKS + 1。21 行目の有無で Rust 側が truncated を決める）読む。
@@ -25,12 +31,12 @@ import java.util.List;
 // 開始・許可結果は UI スレッドで直列化し、クエリは名前付きスレッドで実行する。
 // `cancel` は UI キューの停滞に依存しないよう呼び出しスレッドで即時に処理する。
 //
-// ライフサイクル: `onPause` では破棄しない（許可ダイアログ自体が pause を起こすため。クエリは
-// Rust 側の期限後の `cancel` で必ず止まる）。`onDestroy`（Activity 再生成を含む）では保留中の
+// ライフサイクル: pause では破棄しない（許可ダイアログ自体が pause を起こすため。クエリは
+// Rust 側の期限後の `cancel` で必ず止まる）。`detach`（Activity 再生成を含む破棄）では保留中の
 // 要求を FAILED で確定して破棄する。`request` はインスタンスフィールドなので、再生成後の
 // 新インスタンスは NONE から始まり、旧スレッドの結果は `complete(id)` に失敗して捨てられる。
 final class MusicLibraryHelper {
-    // 結果コード。SSOT は Rust 側 `fandhe_device::music_library::decode_code`。
+    // 結果コード。SSOT は Rust 側 `fandhe_cap_music_library::decode_code`。
     // 3（Timeout）は Rust の期限だけが出すので Java からは送らない。
     static final int RESULT_OK = 0;
     static final int RESULT_UNSUPPORTED = 1;
@@ -55,23 +61,53 @@ final class MusicLibraryHelper {
     // UI スレッドで最後に受理した id。これ以下の開始要求は追い越された古い要求として捨てる。
     private long latestId = RequestTracker.NONE;
 
-    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、MainActivity の
-    // フィールド初期化子から本クラスを生成してここで登録する。
+    // `registerForActivityResult` は STARTED より前に呼ぶ契約のため、`MusicLibraryLifecycle.onHostCreated`
+    // （`Activity.onCreate` の中）から `attach` で本クラスを生成してここで登録する。
     private final ActivityResultLauncher<String> permissionLauncher;
 
-    MusicLibraryHelper(ComponentActivity activity) {
+    private static final Map<Activity, MusicLibraryHelper> HELPERS =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    // 許可ランチャーの登録は `attach`（`Activity.onCreate` の中、STARTED より前）で行う。キーは従来の文字列のまま。
+    private MusicLibraryHelper(ComponentActivity activity) {
         this.activity = activity;
         this.permissionLauncher = activity.getActivityResultRegistry().register("fandhe:MusicLibraryHelper:1", activity,
                 new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
     }
 
-    // JNI スレッドから呼ばれる。
-    void read(long id) {
-        activity.runOnUiThread(() -> start(id));
+    // Activity の生成時（`MusicLibraryLifecycle` から、UI スレッド）。
+    static void attach(ComponentActivity activity) {
+        HELPERS.put(activity, new MusicLibraryHelper(activity));
     }
 
-    // Rust 側の期限切れから呼ばれる。戻る前にクエリを取り消す（UI キューへ post しない）。
-    void cancel(long id) {
+    // Activity の破棄時（同上）。保留中の要求を RESULT_FAILED で確定して破棄する。
+    static void detach(ComponentActivity activity) {
+        MusicLibraryHelper helper = HELPERS.remove(activity);
+        if (helper != null) {
+            helper.onDestroy();
+        }
+    }
+
+    // JNI スレッドから呼ばれる。helper が無い（生成前・破棄後）ときは結果が来ないまま待たせず、RESULT_FAILED で確定する。
+    static void read(Activity activity, long id) {
+        MusicLibraryHelper helper = HELPERS.get(activity);
+        if (helper == null) {
+            nativeOnMusicLibraryResult(id, RESULT_FAILED, null);
+            return;
+        }
+        helper.activity.runOnUiThread(() -> helper.start(id));
+    }
+
+    // Rust 側の期限切れから呼ばれる。helper が無ければ取り消す対象も無い。
+    static void cancel(Activity activity, long id) {
+        MusicLibraryHelper helper = HELPERS.get(activity);
+        if (helper != null) {
+            helper.cancelInternal(id);
+        }
+    }
+
+    // 戻る前にクエリを取り消す（UI キューへ post しない）。
+    private void cancelInternal(long id) {
         synchronized (lock) {
             cancelledId = Math.max(cancelledId, id);
             if (request.complete(id) && signal != null) {
@@ -80,8 +116,8 @@ final class MusicLibraryHelper {
         }
     }
 
-    // MainActivity.onDestroy から UI スレッドで呼ぶ。
-    void onDestroy() {
+    // `detach` から UI スレッドで呼ぶ。
+    private void onDestroy() {
         long id;
         synchronized (lock) {
             id = request.take();

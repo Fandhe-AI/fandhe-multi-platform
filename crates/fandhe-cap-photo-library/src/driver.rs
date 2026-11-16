@@ -2,7 +2,7 @@
 //! `fandhe_core::screens::photo_save`（端末依存ゼロ）の要求を観測し、アプリが生成した PNG
 //! （[`sample_png`]）を `fandhe_device::photo_library::PngImage` で検査してから OS へ渡し、
 //! 結果を `CompletionSender` 経由で返す（`screens/registry.rs` の `effect` 区画から呼ばれる契約、
-//! `device/calendar.rs` と同型）。契約と守る範囲は `fandhe_device::photo_library` の
+//! `fandhe-cap-calendar` の driver と同型）。契約と守る範囲は `crate::contract` の
 //! モジュール doc を参照。
 //!
 //! - macOS（#1254）/ iOS（#1255）/ Android（#1256）: コールバック型のため pull 型 [`bridge`]
@@ -11,13 +11,13 @@
 //! - Windows（#1254）/ それ以外: [`PhotoLibrary`] を同期に呼ぶ。Windows は Pictures フォルダへ
 //!   書き、Linux は `UnsupportedPhotoLibrary` で「非対応」を表示する
 
+use crate::contract::{PhotoLibrary, PngImage, SavedTo};
+use crate::error::PhotoLibraryError;
 use fandhe_core::screens::photo_save::{
-    finish_save, mark_saving, take_request, PhotoSaveState, SaveOutcome, SavedPlace,
+    PhotoSaveState, SaveOutcome, SavedPlace, finish_save, mark_saving, take_request,
 };
-use fandhe_device::photo_library::{PngImage, SavedTo};
-use fandhe_device::DeviceError;
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 保存する見本画像（256x256 のグラデーション PNG）。
 pub(crate) fn sample_png() -> Vec<u8> {
@@ -29,16 +29,16 @@ pub(crate) fn sample_png() -> Vec<u8> {
     out.into_inner()
 }
 
-/// `DeviceError` を画面用の結果へ写像する。内部構造は出さず固定文言だけにする
+/// `PhotoLibraryError` を画面用の結果へ写像する。内部構造は出さず固定文言だけにする
 /// （security.md A09）。
-fn to_outcome(result: Result<SavedTo, DeviceError>) -> Result<SaveOutcome, String> {
+fn to_outcome(result: Result<SavedTo, PhotoLibraryError>) -> Result<SaveOutcome, String> {
     match result {
         Ok(SavedTo::PhotoLibrary) => Ok(SaveOutcome::Saved(SavedPlace::PhotoLibrary)),
         Ok(SavedTo::MediaStore) => Ok(SaveOutcome::Saved(SavedPlace::Gallery)),
         Ok(SavedTo::PicturesFolder) => Ok(SaveOutcome::Saved(SavedPlace::PicturesFolder)),
-        Err(DeviceError::PermissionDenied(_)) => Ok(SaveOutcome::Denied),
-        Err(DeviceError::Unsupported(_)) => Ok(SaveOutcome::Unsupported),
-        Err(DeviceError::InvalidInput(_)) => Err("画像が不正です".to_string()),
+        Err(PhotoLibraryError::PermissionDenied(_)) => Ok(SaveOutcome::Denied),
+        Err(PhotoLibraryError::Unsupported(_)) => Ok(SaveOutcome::Unsupported),
+        Err(PhotoLibraryError::InvalidInput(_)) => Err("画像が不正です".to_string()),
         Err(_) => Err("OS の保存処理に失敗しました".to_string()),
     }
 }
@@ -56,25 +56,25 @@ fn to_outcome(result: Result<SavedTo, DeviceError>) -> Result<SaveOutcome, Strin
 ///
 /// ホストでもテストできるよう cfg は割かない。呼び出し元は macOS / iOS。
 #[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
-pub(crate) fn outcome_from_apple_code(code: i32) -> Result<SavedTo, DeviceError> {
+pub(crate) fn outcome_from_apple_code(code: i32) -> Result<SavedTo, PhotoLibraryError> {
     match code {
         0 => Ok(SavedTo::PhotoLibrary),
-        1 => Err(DeviceError::PermissionDenied("photo_library")),
-        2 => Err(DeviceError::Unsupported("photo_library")),
-        3 => Err(DeviceError::Internal("photo_library save")),
-        4 => Err(DeviceError::Internal("photo_library access")),
-        _ => Err(DeviceError::Internal("photo_library outcome")),
+        1 => Err(PhotoLibraryError::PermissionDenied("photo_library")),
+        2 => Err(PhotoLibraryError::Unsupported("photo_library")),
+        3 => Err(PhotoLibraryError::Internal("photo_library save")),
+        4 => Err(PhotoLibraryError::Internal("photo_library access")),
+        _ => Err(PhotoLibraryError::Internal("photo_library outcome")),
     }
 }
 
 /// OS 側コールバックとの橋渡し（macOS / iOS / Android、pull 型、`RequestSlot` の facade）。
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub(crate) mod bridge {
+    use crate::contract::SavedTo;
+    use crate::error::PhotoLibraryError;
     use fandhe_core::screens::photo_save::SaveOutcome;
-    use fandhe_device::photo_library::SavedTo;
-    use fandhe_device::DeviceError;
 
-    use crate::device::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::RequestSlot;
 
     pub(crate) type Outcome = Result<SaveOutcome, String>;
 
@@ -87,7 +87,7 @@ pub(crate) mod bridge {
 
     /// OS からの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果ありは
     /// 捨てて `false`（先に届いたものだけを採る）。
-    pub(crate) fn deliver(request_id: u64, result: Result<SavedTo, DeviceError>) -> bool {
+    pub(crate) fn deliver(request_id: u64, result: Result<SavedTo, PhotoLibraryError>) -> bool {
         SLOT.deliver(request_id, super::to_outcome(result))
     }
 
@@ -102,20 +102,31 @@ pub(crate) mod bridge {
 
 /// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
 #[cfg(target_os = "android")]
-pub(crate) fn reset_pending_tracking() {
+pub fn reset_pending_tracking() {
     bridge::reset();
+}
+
+/// 画面の状態型に依存しない入口。Windows は Pictures フォルダへ同期に書く実装、それ以外は `Unsupported` 固定。
+/// iOS・macOS・Android は OS がコールバック型で結果が非同期に届くため、同期の [`PhotoLibrary`] 実装は提供せず
+/// （成功の偽装を避けるため「未対応」を返す）、画面は [`photo_save_effect`] の経路を使う。
+// ponytail: コールバック型 OS の同期 trait 実装は要求が出たら足す（`bridge` の結果を待つワーカーが要る）。
+pub fn platform_photo_library() -> Box<dyn PhotoLibrary> {
+    #[cfg(target_os = "windows")]
+    return Box::new(crate::windows::WindowsPhotoLibrary);
+    #[cfg(not(target_os = "windows"))]
+    return Box::new(crate::contract::UnsupportedPhotoLibrary);
 }
 
 /// OS へ保存を依頼する。`Ok` は受理済みで結果は後から [`bridge::deliver`] で届く。
 /// `Err` は依頼自体の失敗（呼び出し元がその場で `deliver` する）。
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-fn begin_save(request_id: u64, image: &PngImage) -> Result<(), DeviceError> {
-    super::apple_photo_library::begin_save(request_id, image)
+fn begin_save(request_id: u64, image: &PngImage) -> Result<(), PhotoLibraryError> {
+    crate::apple::begin_save(request_id, image)
 }
 
 #[cfg(target_os = "android")]
-fn begin_save(request_id: u64, image: &PngImage) -> Result<(), DeviceError> {
-    super::android_photo_library::begin_save(request_id, image)
+fn begin_save(request_id: u64, image: &PngImage) -> Result<(), PhotoLibraryError> {
+    crate::android::begin_save(request_id, image)
 }
 
 /// macOS / iOS / Android 版の effect ドライバ本体。
@@ -127,7 +138,9 @@ fn drive_callback(state: &PhotoSaveState, sender: &CompletionSender<PhotoSaveSta
         let _ = sender.send(Box::new(mark_saving));
         let request_id = bridge::begin();
         // 検査を通らない画像は OS へ渡さずその場で画面へ返す。
-        let accepted = PngImage::new(sample_png()).and_then(|png| begin_save(request_id, &png));
+        let accepted = PngImage::new(sample_png())
+            .map_err(PhotoLibraryError::from)
+            .and_then(|png| begin_save(request_id, &png));
         if let Err(e) = accepted {
             bridge::deliver(request_id, Err(e));
         }
@@ -138,7 +151,7 @@ fn drive_callback(state: &PhotoSaveState, sender: &CompletionSender<PhotoSaveSta
         return;
     }
     let generation = state.generation;
-    super::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish(
         &bridge::SLOT,
         sender,
         |_request_id| {},
@@ -165,13 +178,15 @@ pub fn photo_save_effect(state: &PhotoSaveState, sender: &CompletionSender<Photo
 fn drive(
     state: &PhotoSaveState,
     sender: &CompletionSender<PhotoSaveState>,
-    lib: &dyn fandhe_device::photo_library::PhotoLibrary,
+    lib: &dyn crate::contract::PhotoLibrary,
 ) {
     let Some(request) = take_request(state) else {
         return;
     };
     let _ = sender.send(Box::new(mark_saving));
-    let result = PngImage::new(sample_png()).and_then(|png| lib.save_png(&png));
+    let result = PngImage::new(sample_png())
+        .map_err(PhotoLibraryError::from)
+        .and_then(|png| lib.save_png(&png));
     let outcome = to_outcome(result);
     let generation = request.generation;
     let _ = sender.send(Box::new(move |s: &mut PhotoSaveState| {
@@ -186,22 +201,22 @@ fn drive(
 #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
 pub fn photo_save_effect(state: &PhotoSaveState, sender: &CompletionSender<PhotoSaveState>) {
     #[cfg(target_os = "windows")]
-    drive(
-        state,
-        sender,
-        &super::windows_photo_library::WindowsPhotoLibrary,
-    );
+    drive(state, sender, &crate::windows::WindowsPhotoLibrary);
     #[cfg(not(target_os = "windows"))]
-    drive(
-        state,
-        sender,
-        &fandhe_device::photo_library::UnsupportedPhotoLibrary,
-    );
+    drive(state, sender, &crate::contract::UnsupportedPhotoLibrary);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    #[allow(dead_code)] // 非対応 OS の同期経路のテストだけが使う
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
 
     #[test]
     fn to_outcome_covers_all_paths() {
@@ -218,15 +233,15 @@ mod tests {
             Ok(SaveOutcome::Saved(SavedPlace::PicturesFolder))
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::PermissionDenied("photo_library"))),
+            to_outcome(Err(PhotoLibraryError::PermissionDenied("photo_library"))),
             Ok(SaveOutcome::Denied)
         );
         assert_eq!(
-            to_outcome(Err(DeviceError::Unsupported("photo_library"))),
+            to_outcome(Err(PhotoLibraryError::Unsupported("photo_library"))),
             Ok(SaveOutcome::Unsupported)
         );
-        assert!(to_outcome(Err(DeviceError::InvalidInput("photo_library png"))).is_err());
-        assert!(to_outcome(Err(DeviceError::Internal("photo_library save"))).is_err());
+        assert!(to_outcome(Err(PhotoLibraryError::InvalidInput("photo_library png"))).is_err());
+        assert!(to_outcome(Err(PhotoLibraryError::Internal("photo_library save"))).is_err());
     }
 
     #[test]
@@ -237,16 +252,16 @@ mod tests {
         ));
         assert!(matches!(
             outcome_from_apple_code(1),
-            Err(DeviceError::PermissionDenied("photo_library"))
+            Err(PhotoLibraryError::PermissionDenied("photo_library"))
         ));
         assert!(matches!(
             outcome_from_apple_code(2),
-            Err(DeviceError::Unsupported("photo_library"))
+            Err(PhotoLibraryError::Unsupported("photo_library"))
         ));
         for code in [3, 4, 5, -1, i32::MAX] {
             assert!(matches!(
                 outcome_from_apple_code(code),
-                Err(DeviceError::Internal(_))
+                Err(PhotoLibraryError::Internal(_))
             ));
         }
     }
@@ -259,15 +274,15 @@ mod tests {
     #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
     mod sync_path {
         use super::*;
-        use fandhe_core::screens::photo_save::{save, SavePhase};
-        use fandhe_device::photo_library::UnsupportedPhotoLibrary;
+        use crate::contract::UnsupportedPhotoLibrary;
+        use fandhe_core::screens::photo_save::{SavePhase, save};
 
         #[test]
         fn unsupported_is_shown_and_never_saved() {
             let mut s = PhotoSaveState::default();
             save(&mut s);
             let (tx, rx) = std::sync::mpsc::channel();
-            let sender = crate::app::egui_sender(tx, egui::Context::default());
+            let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
             drive(&s, &sender, &UnsupportedPhotoLibrary);
             while let Ok(apply) = rx.try_recv() {
                 apply(&mut s);
@@ -291,7 +306,7 @@ mod bridge_tests {
         assert!(bridge::SLOT.snapshot().is_some_and(|(_, r)| r.is_none()));
         assert!(bridge::deliver(
             id,
-            Err(DeviceError::PermissionDenied("photo_library"))
+            Err(PhotoLibraryError::PermissionDenied("photo_library"))
         ));
         assert!(!bridge::deliver(id, Ok(SavedTo::PhotoLibrary)));
         let (_, ready) = bridge::SLOT.snapshot().expect("begin 済み");

@@ -1,12 +1,12 @@
 //! iOS 向け音楽ライブラリ実装（Issue #484、親 #108）。`ios/fandhe_ios_music_library.m`
 //! （MediaPlayer `MPMediaQuery songsQuery` + `MPMediaLibrary requestAuthorization:`。`build.rs` が iOS 分岐で
 //! feature `device` 有効時にコンパイルする。MediaPlayer はリンク済み）を `unsafe extern "C"` 1 関数で呼ぶ。
-//! `unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。`device/music_library.rs` の iOS 経路から
-//! ワーカースレッドで呼ばれ、契約は `fandhe_device::music_library`。macOS 版 `macos_music_library` と同形で、
+//! `unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。`driver.rs` の iOS 経路から
+//! ワーカースレッドで呼ばれ、契約は `crate::contract`。macOS 版 `macos.rs` と同形で、
 //! 違いは OS API だけ。
 //!
-//! バッファの解釈は `device/music_library.rs` の `tracks_from_nul_buffer`（macOS と共用）、戻りコードの
-//! 写像は `fandhe_device::music_library::decode_code`。
+//! バッファの解釈は `driver.rs` の `tracks_from_nul_buffer`（macOS と共用）、戻りコードの
+//! 写像は `crate::contract::decode_code`。
 //!
 //! # 守る範囲 / 守らない範囲
 //!
@@ -20,7 +20,7 @@
 //!
 //! OS の handler は semaphore で同じワーカーへ戻るだけで共有状態を書かない。結果を画面へ入れるのは
 //! `CompletionSender::send` で、そこで `ctx.request_repaint()` が呼ばれるため
-//! `crate::ios::request_repaint` は呼ばない（`ios_pedometer` と同じ根拠）。
+//! `fandhe_runtime::request_repaint` は呼ばない（`ios_pedometer` と同じ根拠）。
 //!
 //! # 未確認事項（iOS 実機確認 #480 で確認）
 //!
@@ -31,9 +31,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use fandhe_device::music_library::{decode_code, MusicLibrary, MusicLibraryFailure, TrackList};
+use crate::contract::{MusicLibrary, MusicLibraryFailure, TrackList, decode_code};
 
-use super::music_library::tracks_from_nul_buffer;
+use crate::driver::tracks_from_nul_buffer;
 
 /// 受け取りバッファ。20 件 × 2 要素 × 1024 バイトが収まる。
 const BUF_CAP: usize = 64 * 1024;
@@ -42,7 +42,7 @@ mod ffi {
     // SAFETY: `ios/fandhe_ios_music_library.m`（`build.rs` が iOS 分岐で feature `device` 有効時に
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_ios_music_library_list(
             timeout_ms: u64,
             buf: *mut u8,
@@ -91,7 +91,7 @@ impl MusicLibrary for IosMusicLibrary {
     }
 }
 
-/// iOS の `MusicLibrary` 実装を返す（`device/music_library.rs` の dispatch から呼ばれる）。
+/// iOS の `MusicLibrary` 実装を返す（`driver.rs` の dispatch から呼ばれる）。
 pub(crate) fn implementation() -> Arc<dyn MusicLibrary> {
     Arc::new(IosMusicLibrary)
 }

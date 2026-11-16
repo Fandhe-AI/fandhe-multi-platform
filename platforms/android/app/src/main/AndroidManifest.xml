@@ -603,6 +603,10 @@
             android:authorities="${applicationId}.fandhe.location"
             android:exported="false" />
         <provider
+            android:name="com.fandhe.platform.MusicLibraryLifecycle"
+            android:authorities="${applicationId}.fandhe.music-library"
+            android:exported="false" />
+        <provider
             android:name="com.fandhe.platform.ActivityRecognitionLifecycle"
             android:authorities="${applicationId}.fandhe.activity-recognition"
             android:exported="false" />

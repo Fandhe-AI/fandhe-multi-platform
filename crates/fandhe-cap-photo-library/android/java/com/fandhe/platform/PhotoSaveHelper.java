@@ -1,6 +1,7 @@
 package com.fandhe.platform;
 
 import android.content.ContentResolver;
+import android.content.Context;
 import android.content.ContentValues;
 import android.net.Uri;
 import android.os.Build;
@@ -12,10 +13,10 @@ import java.io.OutputStream;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-// 写真ライブラリ保存（Issue #1256）の Java 側ヘルパー。Rust 側
-// `device/android_photo_library.rs` の `begin_save` が `MainActivity.requestPhotoSave` 経由で
-// `save` を呼び、結果を `nativeOnPhotoSaveResult` で返す（`device/photo_save.rs::bridge` と
-// pull 型の橋渡し）。MainActivity を肥大させないため機能ごとに分けたクラス。
+// 写真ライブラリ保存（Issue #1256）の Java 側ヘルパー。Rust 側 `fandhe-cap-photo-library/src/android.rs` の
+// `begin_save` が static の `save(Context, long, byte[])` を JNI で呼び、結果を `nativeOnPhotoSaveResult` で返す
+// （`driver.rs::bridge` と pull 型の橋渡し）。Activity を握らないため provider は作らない（再生成時の破棄は
+// Rust 側の `reset_pending_tracking` と対）。
 //
 // 結果コード表の SSOT（Rust 側 `outcome_from_android_code` が写像する）:
 //   0 = IS_PENDING=0 で確定 / 1 = API 28 以下（非対応）/ 2 = insert・書き込み・確定の失敗（片付け済み）
@@ -42,7 +43,8 @@ final class PhotoSaveHelper {
     static native void nativeOnPhotoSaveResult(long requestId, int code);
 
     /** 保存を直列キューへ積んで即 return する。結果は `nativeOnPhotoSaveResult` で届く。 */
-    static void save(ContentResolver resolver, long requestId, byte[] png) {
+    static void save(Context activity, long requestId, byte[] png) {
+        final ContentResolver resolver = activity.getApplicationContext().getContentResolver();
         TRACKER.track(requestId);
         EXECUTOR.execute(() -> {
             int code = doSave(resolver, png);

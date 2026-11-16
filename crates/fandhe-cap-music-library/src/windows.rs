@@ -1,11 +1,11 @@
 //! Windows 向け音楽ライブラリ実装（Issue #483、親 #108、#482 が骨格）。
-//! `device/music_library.rs::implementation` の Windows 経路から呼ばれ、ワーカースレッド上で
+//! `driver.rs::platform_music_library` の Windows 経路から呼ばれ、ワーカースレッド上で
 //! [`MusicLibrary::list_tracks`] が走る。契約（0 曲と失敗の区別・期限・曲名を出さない）の SSOT は
-//! `fandhe_device::music_library`。
+//! `crate::contract`。
 //!
 //! # 方式
 //!
-//! `SHGetKnownFolderPath(FOLDERID_Music)`（[`super::windows_photo_library::known_folder`]）で
+//! `SHGetKnownFolderPath(FOLDERID_Music)`（[`fandhe_platform_windows::known_folder`]）で
 //! Music フォルダを得て、`std::fs` でパスの名前順に深さ優先で列挙し、音声ファイルの
 //! `PKEY_Title` / `PKEY_Music_Artist` をプロパティストア（`SHGetPropertyStoreFromParsingName`）で
 //! 読む。WinRT の `KnownFolders.MusicLibrary` は capability `musicLibrary` が要り、
@@ -38,15 +38,15 @@ use std::fs;
 use std::path::Path;
 use std::time::Instant;
 
-use fandhe_device::music_library::{tracks_from, MusicLibraryFailure, TrackList, MAX_TRACKS};
+use crate::contract::{MAX_TRACKS, MusicLibraryFailure, TrackList, tracks_from};
 
 #[cfg(target_os = "windows")]
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 #[cfg(target_os = "windows")]
 use std::time::Duration;
 
 #[cfg(target_os = "windows")]
-use fandhe_device::music_library::MusicLibrary;
+use crate::contract::MusicLibrary;
 
 /// 走査の最大深さ（root を 0 とする）。
 const MAX_DEPTH: usize = 8;
@@ -186,15 +186,15 @@ fn skip_entry(entry: &fs::DirEntry) -> bool {
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
 fn read_tags(path: &Path) -> Tags {
-    use windows::core::HSTRING;
     use windows::Win32::Storage::EnhancedStorage::{PKEY_Music_Artist, PKEY_Title};
     use windows::Win32::System::Com::CoTaskMemFree;
     use windows::Win32::System::Com::StructuredStorage::{
         PropVariantClear, PropVariantToStringAlloc,
     };
     use windows::Win32::UI::Shell::PropertiesSystem::{
-        IPropertyStore, SHGetPropertyStoreFromParsingName, GPS_DEFAULT,
+        GPS_DEFAULT, IPropertyStore, SHGetPropertyStoreFromParsingName,
     };
+    use windows::core::HSTRING;
 
     let name = HSTRING::from(path.as_os_str());
     // SAFETY: `name` は NUL 終端の有効な UTF-16 で、呼び出しの間だけ生きる。
@@ -238,7 +238,7 @@ impl MusicLibrary for WindowsMusicLibrary {
                 let result = (|| {
                     let _com = fandhe_platform_windows::ComInit::new()
                         .map_err(|_| MusicLibraryFailure::Failed)?;
-                    let root = super::windows_photo_library::known_folder(
+                    let root = fandhe_platform_windows::known_folder(
                         &windows::Win32::UI::Shell::FOLDERID_Music,
                     )
                     .ok_or(MusicLibraryFailure::Failed)?;
@@ -255,7 +255,7 @@ impl MusicLibrary for WindowsMusicLibrary {
     }
 }
 
-/// Windows の `MusicLibrary` 実装を返す（`device/music_library.rs` の dispatch から呼ばれる）。
+/// Windows の `MusicLibrary` 実装を返す（`driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "windows")]
 pub(crate) fn implementation() -> Arc<dyn MusicLibrary> {
     Arc::new(WindowsMusicLibrary)

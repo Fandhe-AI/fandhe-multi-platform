@@ -205,18 +205,6 @@ public class MainActivity extends GameActivity {
         healthDataHelper.cancel(requestId);
     }
 
-    // 音楽ライブラリ画面（Issue #485）。実装は `MusicLibraryHelper`（許可ランチャーを STARTED 前に登録）。
-    // Rust の `android_music_library.rs` が JNI で呼ぶ。
-    private final MusicLibraryHelper musicLibraryHelper = new MusicLibraryHelper(this);
-
-    void requestMusicLibraryList(long requestId) {
-        musicLibraryHelper.read(requestId);
-    }
-
-    void cancelMusicLibraryList(long requestId) {
-        musicLibraryHelper.cancel(requestId);
-    }
-
     // OS の検索への登録（Issue #562）。実装は `SpotlightIndexHelper`。Rust の `android_spotlight_index.rs` がワーカースレッドから同期 JNI で呼ぶ。
     int spotlightIndex(String domain, String id, String title, String text, long remainingMs) {
         return SpotlightIndexHelper.index(getApplicationContext(), domain, id, title, text, remainingMs);
@@ -1641,12 +1629,6 @@ public class MainActivity extends GameActivity {
         nativeOnMicRecordStarted(requestId);
     }
 
-    // 写真ライブラリ保存（Issue #1256）。Rust 側 `device/android_photo_library.rs` から JNI で
-    // 呼ばれる。実処理は `PhotoSaveHelper`（Activity を握らない。再生成時の破棄は Rust 側 reset と対）。
-    private void requestPhotoSave(long requestId, byte[] png) {
-        PhotoSaveHelper.save(getApplicationContext().getContentResolver(), requestId, png);
-    }
-
     // Rust 側（`device/mic_record.rs` の「停止」ボタンハンドラ）から JNI 経由で呼ばれる
     // （Issue #957）。`requestId` が現在の要求と一致しない場合は no-op（旧要求の遅延
     // 到着、`apple_mic_record.rs::request_stop` の Android 版）。
@@ -2214,7 +2196,6 @@ public class MainActivity extends GameActivity {
         paymentRequestHelper.onDestroy();
         healthDataHelper.onDestroy();
         localPeerHelper.onDestroy();
-        musicLibraryHelper.onDestroy();
         pictureInPictureHelper.onDestroy();
         printHelper.onDestroy();
         screenOrientationHelper.onDestroy();

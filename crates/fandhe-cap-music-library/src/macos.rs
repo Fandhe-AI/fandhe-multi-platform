@@ -1,11 +1,11 @@
 //! macOS 向け音楽ライブラリ実装（Issue #482、親 #108）。`macos/fandhe_macos_music_library.m`
 //! （iTunesLibrary `ITLibrary`。`build.rs` が macOS 分岐で feature `device` 有効時にコンパイルし
 //! iTunesLibrary をリンクする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ
-//! `// SAFETY:` で契約を明記する。`device/music_library.rs` の macOS 経路からワーカースレッドで
-//! 呼ばれ、契約は `fandhe_device::music_library`。
+//! `// SAFETY:` で契約を明記する。`driver.rs` の macOS 経路からワーカースレッドで
+//! 呼ばれ、契約は `crate::contract`。
 //!
-//! バッファの解釈は `device/music_library.rs` の `tracks_from_nul_buffer`（iOS と共用）、戻りコードの
-//! 写像は `fandhe_device::music_library::decode_code`。
+//! バッファの解釈は `driver.rs` の `tracks_from_nul_buffer`（iOS と共用）、戻りコードの
+//! 写像は `crate::contract::decode_code`。
 //!
 //! # 守る範囲 / 守らない範囲
 //!
@@ -26,9 +26,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use fandhe_device::music_library::{decode_code, MusicLibrary, MusicLibraryFailure, TrackList};
+use crate::contract::{MusicLibrary, MusicLibraryFailure, TrackList, decode_code};
 
-use super::music_library::tracks_from_nul_buffer;
+use crate::driver::tracks_from_nul_buffer;
 
 /// 受け取りバッファ。20 件 × 2 要素 × 1024 バイトが収まる。
 const BUF_CAP: usize = 64 * 1024;
@@ -37,7 +37,7 @@ mod ffi {
     // SAFETY: `macos/fandhe_macos_music_library.m`（`build.rs` が macOS 分岐で feature `device` 有効時に
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
-    extern "C" {
+    unsafe extern "C" {
         fn fandhe_macos_music_library_list(
             timeout_ms: u64,
             buf: *mut u8,
@@ -86,7 +86,7 @@ impl MusicLibrary for MacMusicLibrary {
     }
 }
 
-/// macOS の `MusicLibrary` 実装を返す（`device/music_library.rs` の dispatch から呼ばれる）。
+/// macOS の `MusicLibrary` 実装を返す（`driver.rs` の dispatch から呼ばれる）。
 pub(crate) fn implementation() -> Arc<dyn MusicLibrary> {
     Arc::new(MacMusicLibrary)
 }

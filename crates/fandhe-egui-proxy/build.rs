@@ -70,9 +70,6 @@ fn build() {
         &["ImageIO", "PhotosUI", "UIKit", "UniformTypeIdentifiers"],
     );
 
-    // `apple/fandhe_apple_photo_library.m`（Issue #1254 macOS + #1255 iOS）も macOS 分岐と共用する。
-    compile_apple_photo_library();
-
     // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）も macOS 分岐と
     // 共用する。
     compile_apple_mic_record();
@@ -103,8 +100,6 @@ fn build() {
     compile_ios_print();
     // `ios/fandhe_ios_safe_area_insets.m`（Issue #445）。iOS 分岐のみ。
     compile_ios_safe_area_insets();
-    // `ios/fandhe_ios_music_library.m`（Issue #484）。iOS 分岐のみ。
-    compile_ios_music_library();
     // `ios/fandhe_ios_health_data.m`（Issue #1090）。iOS 分岐のみ（macOS は対応表で n-a）。
     compile_ios_health_data();
     // `ios/fandhe_ios_pen_stylus.m`（Issue #356）。iOS 分岐のみ。
@@ -131,15 +126,6 @@ fn compile_apple_spotlight_index() {
         } else {
             &["AppKit", "CoreSpotlight", "Foundation"]
         },
-    );
-}
-
-/// `apple/fandhe_apple_photo_library.m` を `cc` でコンパイルし Photos をリンクする
-/// （Issue #1254 macOS・#1255 iOS。両分岐から呼ぶ）。
-fn compile_apple_photo_library() {
-    compile_objc(
-        "apple/fandhe_apple_photo_library.m",
-        &["Foundation", "Photos"],
     );
 }
 
@@ -279,15 +265,6 @@ fn compile_apple_picture_in_picture() {
     );
 }
 
-/// `macos/fandhe_macos_music_library.m` を `cc` でコンパイルし iTunesLibrary をリンクする（Issue #482）。
-/// **macOS 分岐のみ**から呼ばれる（`src/device/macos_music_library.rs` が使う）。
-fn compile_macos_music_library() {
-    compile_objc(
-        "macos/fandhe_macos_music_library.m",
-        &["Foundation", "iTunesLibrary"],
-    );
-}
-
 /// `macos/fandhe_macos_web_auth_session.m` を `cc` でコンパイルし AuthenticationServices をリンクする（Issue #530）。
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_web_auth_session.rs` が使う）。
 fn compile_macos_web_auth_session() {
@@ -319,15 +296,6 @@ fn compile_macos_safe_area_insets() {
 /// **macOS 分岐のみ**から呼ばれる（`src/device/macos_pen_stylus.rs` が使う）。
 fn compile_macos_pen_stylus() {
     compile_objc("macos/fandhe_macos_pen_stylus.m", &["AppKit"]);
-}
-
-/// `ios/fandhe_ios_music_library.m` を `cc` でコンパイルする（Issue #484）。
-/// **iOS 分岐のみ**から呼ばれる（`src/device/ios_music_library.rs` が使う）。
-fn compile_ios_music_library() {
-    compile_objc(
-        "ios/fandhe_ios_music_library.m",
-        &["Foundation", "MediaPlayer"],
-    );
 }
 
 /// `ios/fandhe_ios_health_data.m` を `cc` でコンパイルし HealthKit をリンクする（Issue #1090）。**iOS 分岐のみ**
@@ -392,8 +360,6 @@ fn build_macos() {
         return;
     }
 
-    compile_apple_photo_library();
-
     // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）は iOS 分岐と
     // 共用する。
     compile_apple_mic_record();
@@ -429,8 +395,6 @@ fn build_macos() {
     compile_apple_background_upload();
     // `apple/fandhe_apple_file_association.m`（Issue #416）。macOS・iOS 両分岐から呼ぶ（b-ios は build.rs を触らずに済む）。
     compile_apple_file_association();
-    // `macos/fandhe_macos_music_library.m`（Issue #482）も macOS 専用。iTunesLibrary を使う。
-    compile_macos_music_library();
     // `macos/fandhe_macos_web_auth_session.m`（Issue #530）も macOS 専用。AuthenticationServices を使う。
     compile_macos_web_auth_session();
     compile_macos_pen_stylus();

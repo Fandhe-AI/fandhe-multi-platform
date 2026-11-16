@@ -1,4 +1,4 @@
-//! Android 向け音楽ライブラリ実装（Issue #485、親 #108）。`device/music_library.rs::implementation`
+//! Android 向け音楽ライブラリ実装（Issue #485、親 #108）。`driver.rs::platform_music_library`
 //! の Android 経路から呼ばれ、`MediaStore.Audio.Media` の曲のタイトルとアーティストを
 //! 期限付きで 1 回読む。Java 側は `MusicLibraryHelper`（許可確認・クエリ・取り消し）。
 //!
@@ -18,11 +18,11 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use fandhe_device::music_library::{
-    decode_code, tracks_from, MusicLibrary, MusicLibraryFailure, TrackList, MAX_TRACKS,
+use crate::contract::{
+    MAX_TRACKS, MusicLibrary, MusicLibraryFailure, TrackList, decode_code, tracks_from,
 };
 
-use super::request_slot::{RequestSlot, POLL_INTERVAL};
+use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot};
 
 type Outcome = Result<TrackList, MusicLibraryFailure>;
 
@@ -106,41 +106,37 @@ impl MusicLibrary for AndroidMusicLibrary {
     }
 }
 
-/// `MainActivity.requestMusicLibraryList(long)`（`cancel=false`）または
-/// `cancelMusicLibraryList(long)`（`cancel=true`）を JNI で呼ぶ。`false` は呼び出し失敗。
-/// `unsafe` 2 箇所は `fandhe_platform_android::with_activity` と同一の根拠。
+/// `MusicLibraryHelper.read(Activity, long)`（`cancel=false`）または `cancel(Activity, long)`（`cancel=true`）を
+/// JNI の static 呼び出しで呼ぶ。`false` は呼び出し失敗。JavaVM と Activity の取得は
+/// `fandhe_platform_android::with_activity_class` に任せ、ここは `unsafe` を持たない。
 #[cfg(target_os = "android")]
-#[allow(unsafe_code)]
 fn call_activity(cancel: bool, id: u64) -> bool {
-    use super::android::JniCallFailed;
-    let Some(app) = crate::android::android_app() else {
+    use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
+    use jni::objects::JValue;
+    let Some(app) = android_app() else {
         return false;
     };
-    // SAFETY: `app.vm_as_ptr()` は android-activity が管理する有効な `JavaVM*` で、
-    // `app` は本呼び出しの間生存する。
-    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    vm.attach_current_thread(|env: &mut jni::Env| -> Result<(), JniCallFailed> {
-        let raw_activity = app.activity_as_ptr() as jni::sys::jobject;
-        // SAFETY: 未所有のグローバル参照を所有権なしでラップするだけで delete しない。
-        let activity = unsafe { env.as_cast_raw::<jni::objects::JObject>(&raw_activity)? };
-        let args = [jni::objects::JValue::Long(id as jni::sys::jlong)];
-        if cancel {
-            env.call_method(
-                &activity,
-                jni::jni_str!("cancelMusicLibraryList"),
-                jni::jni_sig!((long) -> ()),
+    with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.MusicLibraryHelper"),
+        |env, activity, class| -> Result<(), JniCallFailed> {
+            let args = [
+                JValue::Object(activity),
+                JValue::Long(id as jni::sys::jlong),
+            ];
+            env.call_static_method(
+                class,
+                if cancel {
+                    jni::jni_str!("cancel")
+                } else {
+                    jni::jni_str!("read")
+                },
+                jni::jni_sig!((android.app.Activity, long) -> ()),
                 &args,
             )?;
-        } else {
-            env.call_method(
-                &activity,
-                jni::jni_str!("requestMusicLibraryList"),
-                jni::jni_sig!((long) -> ()),
-                &args,
-            )?;
-        }
-        Ok(())
-    })
+            Ok(())
+        },
+    )
     .is_ok()
 }
 
@@ -153,7 +149,7 @@ fn call_activity(cancel: bool, id: u64) -> bool {
 /// JNI 命名規約上の固定シンボル名で、既存の JNI エクスポートと同じ根拠。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "system" fn Java_com_fandhe_platform_MusicLibraryHelper_nativeOnMusicLibraryResult<
     'caller,
 >(
@@ -195,7 +191,7 @@ extern "system" fn Java_com_fandhe_platform_MusicLibraryHelper_nativeOnMusicLibr
     }
 }
 
-/// Android の `MusicLibrary` 実装を返す（`device/music_library.rs` の dispatch から呼ばれる）。
+/// Android の `MusicLibrary` 実装を返す（`driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn MusicLibrary> {
     Arc::new(AndroidMusicLibrary)
@@ -206,7 +202,7 @@ pub(crate) fn implementation() -> Arc<dyn MusicLibrary> {
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 pub(crate) fn implementation() -> Arc<dyn MusicLibrary> {
-    Arc::new(fandhe_device::music_library::UnsupportedMusicLibrary)
+    Arc::new(crate::contract::UnsupportedMusicLibrary)
 }
 
 #[cfg(test)]

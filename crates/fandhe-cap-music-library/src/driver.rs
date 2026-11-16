@@ -1,9 +1,9 @@
 //! Phase 11（親 #108）型サンプル「音楽ライブラリ」（Issue #482）の effect ドライバ。
 //! `fandhe_core::screens::music_library_list`（端末依存ゼロ）の要求を観測し、
-//! `fandhe_device::music_library::MusicLibrary` で曲のタイトルとアーティストを読んで
+//! `crate::contract::MusicLibrary` で曲のタイトルとアーティストを読んで
 //! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約の SSOT は `fandhe_device::music_library`。
+//! 契約の SSOT は `crate::contract`。
 //!
 //! # スレッド
 //!
@@ -12,8 +12,8 @@
 //!
 //! # OS 別実装の差し込み口
 //!
-//! [`implementation`] の cfg 分岐が最終形で、各 OS は `implementation()` を持つモジュールだけを
-//! 埋める（macOS: `macos_music_library`（#482）、Windows: `windows_music_library`（#483）、
+//! [`platform_music_library`] の cfg 分岐が最終形で、各 OS は `implementation()` を持つモジュールだけを
+//! 埋める（macOS: `macos.rs`（#482）、Windows: `windows_music_library`（#483）、
 //! iOS: `ios_music_library`（#484）、Android: `android_music_library`（#485））。
 //! それ以外（Linux 等）は `UnsupportedMusicLibrary` 固定で、ダミーの成功実装へは倒さない。
 //!
@@ -21,43 +21,43 @@
 
 use std::sync::Arc;
 
-use fandhe_core::screens::music_library_list::{
-    finish_list, mark_loading, take_request, ListFailure, MusicLibraryListState, TrackListing,
-};
-#[cfg(any(target_os = "macos", target_os = "ios", test))]
-use fandhe_device::music_library::tracks_from;
 #[cfg(not(any(
     target_os = "macos",
     target_os = "ios",
     target_os = "android",
     target_os = "windows"
 )))]
-use fandhe_device::music_library::UnsupportedMusicLibrary;
-use fandhe_device::music_library::{MusicLibrary, MusicLibraryFailure, TrackList, LIST_TIMEOUT};
+use crate::contract::UnsupportedMusicLibrary;
+#[cfg(any(target_os = "macos", target_os = "ios", test))]
+use crate::contract::tracks_from;
+use crate::contract::{LIST_TIMEOUT, MusicLibrary, MusicLibraryFailure, TrackList};
+use fandhe_core::screens::music_library_list::{
+    ListFailure, MusicLibraryListState, TrackListing, finish_list, mark_loading, take_request,
+};
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `MusicLibrary` 実装を返す（プロセスで 1 個）。
-fn implementation() -> Arc<dyn MusicLibrary> {
+pub fn platform_music_library() -> Arc<dyn MusicLibrary> {
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn MusicLibrary>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
             #[cfg(target_os = "macos")]
             {
-                super::macos_music_library::implementation()
+                crate::macos::implementation()
             }
             #[cfg(target_os = "ios")]
             {
-                super::ios_music_library::implementation()
+                crate::ios::implementation()
             }
             #[cfg(target_os = "android")]
             {
-                super::android_music_library::implementation()
+                crate::android::implementation()
             }
             #[cfg(target_os = "windows")]
             {
-                super::windows_music_library::implementation()
+                crate::windows::implementation()
             }
             #[cfg(not(any(
                 target_os = "macos",
@@ -138,7 +138,7 @@ pub fn music_library_list_effect(
     state: &MusicLibraryListState,
     sender: &CompletionSender<MusicLibraryListState>,
 ) {
-    drive(state, sender, implementation());
+    drive(state, sender, platform_music_library());
 }
 
 /// `.m` が詰めた「title\0artist\0」の組の列を曲の一覧へ解釈する（macOS・iOS 共用）。
@@ -177,22 +177,28 @@ pub(crate) fn tracks_from_nul_buffer(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fandhe_core::screens::music_library_list::{
-        fetch, PERMISSION_DENIED_STATUS, TIMEOUT_STATUS, UNSUPPORTED_STATUS,
+    use crate::contract::{
+        UnsupportedMusicLibrary as Unsupported, tracks_from as device_tracks_from,
     };
-    use fandhe_device::music_library::{
-        tracks_from as device_tracks_from, UnsupportedMusicLibrary as Unsupported,
+    use fandhe_core::screens::music_library_list::{
+        PERMISSION_DENIED_STATUS, TIMEOUT_STATUS, UNSUPPORTED_STATUS, fetch,
     };
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
     fn sender_with_channel() -> (
         CompletionSender<MusicLibraryListState>,
-        std::sync::mpsc::Receiver<crate::app::Completion<MusicLibraryListState>>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<MusicLibraryListState>>,
     ) {
-        let ctx = egui::Context::default();
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, ctx), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     struct Fake {
@@ -334,7 +340,7 @@ mod tests {
     #[test]
     fn unsupported_os_implementation_is_unsupported() {
         assert_eq!(
-            implementation()
+            platform_music_library()
                 .list_tracks(Duration::from_millis(1))
                 .map(|_| ()),
             Err(MusicLibraryFailure::Unsupported)

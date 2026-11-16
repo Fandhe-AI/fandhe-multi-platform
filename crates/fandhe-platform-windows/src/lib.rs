@@ -10,9 +10,10 @@
 //! - メインウィンドウの最小化・復元の切り替わりを配る [`minimize`]: 最小化で保持を手放し復元で取り直す機能（environment-sensors・
 //!   motion-raw-sensors）が、互いの OS 実装を呼び合わずに同じ判定を共用する
 //! - WinRT 非同期操作の完了をキューへ積む [`winrt_async`]: 作業スレッドで完了を待たない機能が共用する
+//! - Known Folder のパス解決 [`known_folder`]: Pictures（photo-library）・Music（music-library）が共用する
 //!
 //! egui・eframe・winit・`fandhe-device` には依存しない（機能 crate の依存グラフに入れないため）。
-//! Windows 以外ではクレート全体が空。`unsafe` は [`ComInit`] の COM 呼び出し 2 か所と [`open_url`] の `ShellExecuteW` 1 か所と [`lpwstr_variant`] の `PropVariantChangeType` 1 か所と [`minimize`] の `IsIconic`・`InvalidateRect` 2 か所の計 6 か所だけで、
+//! Windows 以外ではクレート全体が空。`unsafe` は [`ComInit`] の COM 呼び出し 2 か所と [`open_url`] の `ShellExecuteW` 1 か所と [`lpwstr_variant`] の `PropVariantChangeType` 1 か所と [`minimize`] の `IsIconic`・`InvalidateRect` 2 か所の`SHGetKnownFolderPath`・`PWSTR` 変換・`CoTaskMemFree` の [`known_folder`] 3 か所を加えた計 9 か所だけで、
 //! クレートルートは `deny(unsafe_code)`。
 
 #![cfg(target_os = "windows")]
@@ -30,7 +31,7 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninit
 use windows::Win32::System::Variant::VT_LPWSTR;
 use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-use windows::core::{HSTRING, PCWSTR, w};
+use windows::core::{GUID, HSTRING, PCWSTR, w};
 
 pub mod minimize;
 pub mod winrt_async;
@@ -139,4 +140,22 @@ pub fn open_url(url: &str) -> isize {
         )
     };
     result.0 as isize
+}
+
+/// Known Folder（`FOLDERID_Pictures`・`FOLDERID_Music` など）のパスを OS から得る。失敗は `None`（HRESULT の詳細は
+/// 載せない）。OneDrive 等へリダイレクトされたパスもそのまま返す。`CoInitializeEx` は不要（Known Folder API と
+/// `CoTaskMemFree` は COM の初期化を要さない）。呼び出し元は photo-library と music-library の Windows 実装。
+#[allow(unsafe_code)]
+pub fn known_folder(id: &GUID) -> Option<std::path::PathBuf> {
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::{KF_FLAG_DEFAULT, SHGetKnownFolderPath};
+    // SAFETY: `id` は有効な KNOWNFOLDERID への参照で、token は既定（現在のユーザー）。成功時の戻り値は
+    // 呼び出し側が `CoTaskMemFree` で 1 回だけ解放する所有権付きの NUL 終端 UTF-16。
+    let pwstr = unsafe { SHGetKnownFolderPath(id, KF_FLAG_DEFAULT, None) }.ok()?;
+    // SAFETY: `pwstr` は上で得た有効な NUL 終端文字列。変換の成否にかかわらず直後に解放するため、
+    // 変換失敗の経路でもリークしない。
+    let converted = unsafe { pwstr.to_string() };
+    // SAFETY: `pwstr.0` は `SHGetKnownFolderPath` が確保したブロックで、ここで 1 回だけ解放する。
+    unsafe { CoTaskMemFree(Some(pwstr.0 as *const _)) };
+    converted.ok().map(std::path::PathBuf::from)
 }

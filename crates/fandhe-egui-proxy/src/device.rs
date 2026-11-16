@@ -66,11 +66,6 @@ pub mod android_image_recognition;
 /// `device/local_peer.rs` の Android 経路から呼ばれる。
 #[cfg(target_os = "android")]
 pub mod android_local_peer;
-/// Issue #485: Android 向け音楽ライブラリ実装（`MediaStore.Audio.Media` を JNI 経由で読む）。
-/// `device/music_library.rs` の Android 経路から呼ばれる。純関数をホストでテストするため test でも載せる。
-#[cfg(any(target_os = "android", test))]
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_music_library;
 /// Issue #1131（親 #114）: Android 向け決済シート（Google Pay API、TEST 環境）の実装。
 /// `device/payment_request.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -81,10 +76,6 @@ pub mod android_payment_request;
 #[cfg(any(target_os = "android", test))]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub mod android_pen_stylus;
-/// Issue #1254（骨格）/ #1256（実装）: Android 向け写真ライブラリ保存実装。
-/// `device/photo_save.rs` の Android 経路から呼ばれる。
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-pub mod android_photo_library;
 /// Issue #364: Android 向けピクチャ・イン・ピクチャ実装。
 /// `device/picture_in_picture.rs` の Android 経路から呼ばれる。
 #[cfg(any(target_os = "android", test))]
@@ -163,11 +154,6 @@ pub mod apple_local_peer;
 /// iOS/macOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod apple_mic_record;
-/// Issue #1254（macOS）/ #1255（iOS）: iOS / macOS 向け写真ライブラリ保存実装
-/// （`apple/fandhe_apple_photo_library.m` を呼ぶ C ABI ラッパー。iOS は実装済み）。
-/// `device/photo_save.rs` の iOS / macOS 経路から呼ばれる。
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-pub mod apple_photo_library;
 /// Issue #364（macOS）/ #365（iOS）: ピクチャ・イン・ピクチャ実装（`apple/fandhe_apple_picture_in_picture.m` の AVKit を
 /// 呼ぶ C ABI ラッパー）。`device/picture_in_picture.rs` の macOS・iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -263,10 +249,6 @@ pub mod ios_image_recognition;
 /// `device/local_peer.rs` の iOS 経路から呼ばれる。
 #[cfg(target_os = "ios")]
 pub mod ios_local_peer;
-/// Issue #484: iOS 向け音楽ライブラリ実装（`ios/fandhe_ios_music_library.m` の MediaPlayer を呼ぶ
-/// C ABI ラッパー）。`device/music_library.rs` の iOS 経路から呼ばれる。
-#[cfg(target_os = "ios")]
-pub mod ios_music_library;
 /// Issue #356: iOS 向けペン・筆圧入力実装（`ios/fandhe_ios_pen_stylus.m` の観測専用
 /// `UIGestureRecognizer` が値を置く C ABI ラッパー）。`device/pen_stylus.rs` の iOS 経路から呼ばれる。
 #[cfg(any(target_os = "ios", test))]
@@ -309,10 +291,6 @@ pub mod local_peer;
 #[cfg(any(target_os = "macos", test))]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub mod macos_app_shortcuts;
-/// Issue #482: macOS 向け音楽ライブラリ実装（`macos/fandhe_macos_music_library.m` の `ITLibrary` を
-/// 呼ぶ C ABI ラッパー）。`device/music_library.rs` の macOS 経路から呼ばれる。
-#[cfg(target_os = "macos")]
-pub mod macos_music_library;
 /// Issue #355: macOS 向けペン・筆圧入力実装（`macos/fandhe_macos_pen_stylus.m` の `NSEvent` local
 /// monitor を呼ぶ C ABI ラッパー）。`device/pen_stylus.rs` の macOS 経路から呼ばれる。写像の純関数を
 /// ホストでテストできるよう cfg は `any(macos, test)`。
@@ -343,10 +321,6 @@ pub mod macos_window_management;
 /// effect ドライバ（macOS/iOS/Windows/Android 実装、他 OS は `UnsupportedMicRecorder`
 /// 固定）。
 pub mod mic_record;
-/// Phase 11 の拡充ループ（親 #108、Issue #482）: 音楽ライブラリの effect ドライバ（macOS・iOS 実装、
-/// Windows・Android は #483・#485 の担当、他 OS は `UnsupportedMusicLibrary` 固定。
-/// Web は対象外）。
-pub mod music_library;
 /// Phase 11 の拡充ループ（親 #114、Issue #541・#1130）: 決済シートの effect ドライバ（Android は
 /// pull 型 bridge、他のネイティブは `UnsupportedPaymentSheet` 固定の同期経路。dispatch は最終形。
 /// Web は `fandhe-web-dom`）。
@@ -360,10 +334,6 @@ pub mod pen_stylus;
 /// `UnsupportedPhotoPicker` 固定。Web は `fandhe-web-dom`）。選んだ画像は復号を確かめてから
 /// `image_store` 経由で描く。
 pub mod photo_pick;
-/// Phase 11 の拡充ループ（親 #1121、Issue #1254）: 写真の保存の effect ドライバ（macOS /
-/// iOS / Android は pull 型 `bridge`、Windows は Pictures フォルダへ同期書き込み、
-/// Linux は `UnsupportedPhotoLibrary` 固定。iOS / Android は兄弟 issue #1255 / #1256 まで非対応）。
-pub mod photo_save;
 /// Phase 11 の拡充ループ（親 #97、Issue #364）: ピクチャ・イン・ピクチャの effect ドライバ（macOS・iOS・Android 実装、
 /// 他 OS は `UnsupportedPictureInPicture` 固定）。
 pub mod picture_in_picture;
@@ -436,21 +406,11 @@ pub mod windows_image_recognition;
 /// `device/mic_record.rs` の Windows 経路から呼ばれる。
 #[cfg(target_os = "windows")]
 pub mod windows_mic_record;
-/// Issue #483: Windows 向け音楽ライブラリ実装（Music フォルダの走査 + プロパティストア）。
-/// `device/music_library.rs` の Windows 経路から呼ばれる。走査の純関数をホストの `cargo test` で
-/// 検査するため cfg は `any(windows, test)`。
-#[cfg(any(target_os = "windows", test))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub mod windows_music_library;
 /// Issue #359: Windows 向けペン・筆圧入力実装（`SetWindowSubclass` の観測専用サブクラスが
 /// `WM_POINTER*` から値を置く）。`device/pen_stylus.rs` の Windows 経路から呼ばれる。
 #[cfg(any(target_os = "windows", test))]
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub mod windows_pen_stylus;
-/// Issue #1254: Windows 向け写真保存実装（`SHGetKnownFolderPath(FOLDERID_Pictures)` で解決した
-/// フォルダへ `FolderPhotoLibrary` で書く）。`device/photo_save.rs` の Windows 経路から呼ばれる。
-#[cfg(target_os = "windows")]
-pub mod windows_photo_library;
 /// Issue #326: Windows 向け印刷実装（`PrintDlgExW` + GDI）。`device/print.rs` の Windows 経路から
 /// 呼ばれる。結果の写像は純関数でホストでもテストできる（ffi 部分は `cfg(target_os = "windows")`）。
 #[cfg(any(target_os = "windows", test))]

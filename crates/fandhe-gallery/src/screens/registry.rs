@@ -180,7 +180,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "photo_save" => fandhe_core::screens::photo_save::current_screen,
-    fandhe_egui_proxy::device::photo_save::photo_save_effect,
+    fandhe_cap_photo_library::photo_save_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "wallpaper_set" => fandhe_core::screens::wallpaper_set::current_screen,
@@ -496,7 +496,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "music_library_list" => fandhe_core::screens::music_library_list::current_screen,
-    fandhe_egui_proxy::device::music_library::music_library_list_effect,
+    fandhe_cap_music_library::music_library_list_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "smart_home_list" => fandhe_core::screens::smart_home_list::current_screen,

@@ -1959,6 +1959,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-music-library"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "fandhe-cap-network-status"
 version = "0.2.0"
 dependencies = [
@@ -2122,6 +2137,22 @@ dependencies = [
  "fandhe-runtime",
  "jni 0.22.4",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-photo-library"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
+ "fandhe-runtime",
+ "image",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -2666,6 +2697,7 @@ dependencies = [
  "fandhe-cap-ml-inference",
  "fandhe-cap-motion-raw-sensors",
  "fandhe-cap-multi-display",
+ "fandhe-cap-music-library",
  "fandhe-cap-network-status",
  "fandhe-cap-nfc",
  "fandhe-cap-nfc-card-emulation",
@@ -2679,6 +2711,7 @@ dependencies = [
  "fandhe-cap-pdf-viewer",
  "fandhe-cap-pedometer",
  "fandhe-cap-per-app-language",
+ "fandhe-cap-photo-library",
  "fandhe-cap-power-state",
  "fandhe-cap-quick-settings-tile",
  "fandhe-cap-radio-control",

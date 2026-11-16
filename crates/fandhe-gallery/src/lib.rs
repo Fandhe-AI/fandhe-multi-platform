@@ -212,6 +212,9 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // 以前は egui-proxy の `android::run` が呼んでいた。機能 crate を egui-proxy が知らないようにするため移した）。
     #[cfg(feature = "device")]
     fandhe_cap_document_scan::reset_pending_tracking();
+    // 写真ライブラリ保存の保留中の要求も破棄する（保留中の保存要求は復元せず破棄し、旧要求の遅延完了を id 不一致で無視させる。`fandhe_cap_photo_library::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_photo_library::reset_pending_tracking();
     // 位置情報の再試行の処理済み世代を基準値へ戻す（画面状態は再生成で retry_seq 0 へ戻る。`fandhe_cap_location::reset_retry_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_location::reset_retry_tracking();

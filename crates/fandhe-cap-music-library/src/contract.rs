@@ -4,13 +4,13 @@
 //! 扱う範囲は「ボタンを押すと端末内の曲のタイトルとアーティストを OS の返す順で先頭
 //! [`MAX_TRACKS`] 件だけ読む」ことだけ。再生・アートワーク・アルバム・総件数は扱わない。
 //! 対象は macOS（#482）・Windows（#483）・iOS（#484）・Android（#485）。Web は対応表で `no`。
-//! `fandhe-egui-proxy` の `device/music_library.rs` がワーカースレッドで
+//! 本 crate の `driver.rs` がワーカースレッドで
 //! [`MusicLibrary::list_tracks`] を呼ぶ（ブロッキングの契約）。全 OS が [`tracks_from`] を通して
 //! 整形する。
 //!
 //! # 契約
 //!
-//! - 結果は成功（0 曲を含む）か [`MusicLibraryFailure`]。`DeviceError` に variant を足すと既存の
+//! - 結果は成功（0 曲を含む）か [`MusicLibraryFailure`]。`MusicLibraryError` に variant を足すと既存の
 //!   網羅 match が壊れるため機能固有の enum にする（`pedometer::PedometerFailure` と同じ判断）
 //! - **0 曲を出すのは、許可済みで OS が空を返したときだけ**。非対応・拒否・期限切れ・失敗を
 //!   0 曲へ畳まない（`device-bridge-contracts.md`「6. 嘘の成功」）
@@ -37,7 +37,7 @@
 
 use std::time::Duration;
 
-use crate::device_info::clean_text;
+use fandhe_device::device_info::clean_text;
 
 /// 読む曲数の上限。
 pub const MAX_TRACKS: usize = 20;
