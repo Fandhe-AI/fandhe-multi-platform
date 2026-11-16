@@ -166,8 +166,9 @@ pub(crate) mod bridge {
             if let Some(os) = os {
                 os.cancel(a.request_id);
             }
+            // 呼び出しスレッド（UI スレッドを含む）を待ち受けスレッドの終了待ちで止めない。
             if let Some(s) = a.server.as_mut() {
-                s.stop();
+                s.stop_async();
             }
         }
     }
@@ -612,6 +613,15 @@ mod tests {
         }
     }
 
+    /// 待ち受けの停止は非同期（join は別スレッド）なので、閉じるまで短く待つ。
+    fn assert_port_closes(port: u16) {
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
+            assert!(std::time::Instant::now() < end, "待ち受けが閉じない");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+
     fn valid_url() -> String {
         let hex = bridge::lock().as_ref().unwrap().req.state.to_hex();
         format!("fandhe://web-auth/callback?state={hex}&code=abc123")
@@ -650,7 +660,7 @@ mod tests {
             .port();
         bridge::complete_from_os(id(), Ok(bridge::RawResult::Url(valid_url())));
         assert!(bridge::lock().is_none());
-        assert!(std::net::TcpStream::connect(("127.0.0.1", port)).is_err());
+        assert_port_closes(port);
         h.frame(&fake);
         assert_eq!(h.state.status, screen::RETURNED_CODE_STATUS);
         assert!(h.state.detail.contains("（6 文字）") && !h.state.detail.contains("abc123"));
@@ -966,7 +976,7 @@ mod tests {
         fresh.frame(&fake);
         assert!(fake.cancelled.load(Ordering::SeqCst));
         assert!(bridge::lock().is_none() && bridge::SLOT.snapshot().is_none());
-        assert!(std::net::TcpStream::connect(("127.0.0.1", port)).is_err());
+        assert_port_closes(port);
         assert!(begin_external(&fake, ext_request()).is_ok());
     }
 
@@ -1006,7 +1016,7 @@ mod tests {
         // 画面の描画に関係なく、破棄の通知だけで回収できる。
         assert_eq!(reclaim_screen_request(), Some(rid));
         assert!(bridge::lock().is_none() && bridge::SLOT.snapshot().is_none());
-        assert!(std::net::TcpStream::connect(("127.0.0.1", port)).is_err());
+        assert_port_closes(port);
         assert_eq!(reclaim_screen_request(), None, "二重には閉じない");
         assert!(begin_external(&fake, ext_request()).is_ok());
         // 公開入口の要求は回収しない。

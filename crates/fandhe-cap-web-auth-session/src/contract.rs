@@ -470,6 +470,23 @@ mod server {
             )
         }
 
+        /// 停止の合図だけ立て、スレッドの回収（join）は使い捨てのスレッドに任せて即座に戻る。UI スレッドなど呼び出しスレッドを
+        /// 待たせない経路（Activity の破棄・毎フレーム・取り消し）で使う。listener は待ち受けスレッドが合図を見て抜けた時点で閉じる
+        /// （`accept` のポーリング間隔と、処理中の接続の読み取り期限 `READ_DEADLINE` ぶんだけ遅れうる）。
+        pub fn stop_async(&mut self) {
+            self.stop.store(true, Ordering::SeqCst);
+            if let Some(h) = self.thread.take()
+                && h.thread().id() != std::thread::current().id()
+            {
+                // 回収に失敗（スレッドを作れない）しても、合図は立っているのでスレッドは自分で終わる。
+                let _ = std::thread::Builder::new()
+                    .name("web-auth-demo-join".into())
+                    .spawn(move || {
+                        let _ = h.join();
+                    });
+            }
+        }
+
         /// 停止して listener を閉じる。自スレッド（ループバックの完了通知経由）からは join しない。
         pub fn stop(&mut self) {
             self.stop.store(true, Ordering::SeqCst);

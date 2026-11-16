@@ -202,8 +202,8 @@ mod imp {
 /// `WebAuthSessionHelper.nativeReclaimScreenRequest`（Activity の破棄時）。画面の要求だけを回収し、その id を返す（無ければ -1）。
 /// 画面状態は破棄で失われるため、表示中の画面に依存せずここで待ち受け・slot を片付ける。公開入口の要求は触らない。
 ///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない（引数のポインタは読まない）。
+/// 引数のポインタは読まず、この関数自体は `unsafe` 操作を含まない。`extern "system"` の境界で panic するとプロセスが abort するため、
+/// `catch_unwind` で遮断して `-1`（回収なし）を返す。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
@@ -211,7 +211,10 @@ extern "system" fn Java_com_fandhe_platform_WebAuthSessionHelper_nativeReclaimSc
     _env: *mut core::ffi::c_void,
     _class: *mut core::ffi::c_void,
 ) -> jni::sys::jlong {
-    crate::driver::reclaim_screen_request().map_or(-1, |id| id as jni::sys::jlong)
+    std::panic::catch_unwind(|| {
+        crate::driver::reclaim_screen_request().map_or(-1, |id| id as jni::sys::jlong)
+    })
+    .unwrap_or(-1)
 }
 
 /// `WebAuthSessionHelper.nativeOnWebAuthSessionResult` から呼ばれる JNI エクスポート。

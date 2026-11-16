@@ -92,6 +92,11 @@ final class WebAuthSessionHelper {
     // Activity の破棄時。以後の要求は拒否される（要求が無ければ何もしない）。
     static void detach(Activity activity) {
         HELPERS.remove(activity);
+        // 新しい Activity の onCreate が古い Activity の onDestroy より先に来る流れでは、別の helper が残っている。
+        // 画面の要求はグローバルで、残った Activity（新しい画面）のものを閉じかねないので、最後の helper のときだけ回収する。
+        if (!HELPERS.isEmpty()) {
+            return;
+        }
         long id;
         try {
             id = nativeReclaimScreenRequest();
@@ -104,6 +109,7 @@ final class WebAuthSessionHelper {
                 if (request.complete(id)) {
                     launchedId = RequestTracker.NONE;
                     leftId = RequestTracker.NONE;
+                    currentState = null;
                 }
             }
         }
