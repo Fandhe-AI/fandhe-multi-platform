@@ -1,5 +1,5 @@
 //! macOS 向け音楽ライブラリ実装（Issue #482、親 #108）。`macos/fandhe_macos_music_library.m`
-//! （iTunesLibrary `ITLibrary`。`build.rs` が macOS 分岐で feature `device` 有効時にコンパイルし
+//! （iTunesLibrary `ITLibrary`。`build.rs` が macOS 分岐でコンパイルし
 //! iTunesLibrary をリンクする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ
 //! `// SAFETY:` で契約を明記する。`driver.rs` の macOS 経路からワーカースレッドで
 //! 呼ばれ、契約は `crate::contract`。
@@ -34,7 +34,7 @@ use crate::driver::tracks_from_nul_buffer;
 const BUF_CAP: usize = 64 * 1024;
 
 mod ffi {
-    // SAFETY: `macos/fandhe_macos_music_library.m`（`build.rs` が macOS 分岐で feature `device` 有効時に
+    // SAFETY: `macos/fandhe_macos_music_library.m`（`build.rs` が macOS 分岐で
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {

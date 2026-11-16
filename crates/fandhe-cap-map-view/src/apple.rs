@@ -35,7 +35,7 @@ pub struct AppleMapSnapshotter;
 
 static INSTANCE: AppleMapSnapshotter = AppleMapSnapshotter;
 
-/// プロセスで共有する実装を返す（`device/map_view.rs` の最終形の入口）。
+/// プロセスで共有する実装を返す（`driver.rs` の dispatch が呼ぶ入口）。
 pub(crate) fn snapshotter() -> &'static AppleMapSnapshotter {
     &INSTANCE
 }
@@ -83,7 +83,7 @@ extern "C" fn fandhe_rust_map_view_outcome(
     width: u32,
     height: u32,
 ) {
-    let side = fandhe_core::RGBA_MAX_SIDE as usize;
+    let side = crate::contract::MAX_SIDE as usize;
     let valid = code == 0
         && !ptr.is_null()
         && (width as usize)

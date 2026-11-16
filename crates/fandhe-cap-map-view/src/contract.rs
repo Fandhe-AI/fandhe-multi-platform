@@ -21,6 +21,9 @@
 use crate::error::MapViewError;
 use fandhe_device::Image;
 
+/// OS が返す画像の一辺の上限（ピクセル）。OS 実装（`apple.rs`）が受け取る画素の長さ検査に使う
+/// 契約側の唯一の値。`fandhe_core::RGBA_MAX_SIDE` 以下に保つ（`driver.rs` に const assert を置く）。
+pub const MAX_SIDE: u32 = 2048;
 /// 取得範囲の下限（メートル）。
 pub const MIN_SPAN_M: f64 = 100.0;
 /// 取得範囲の上限（メートル）。

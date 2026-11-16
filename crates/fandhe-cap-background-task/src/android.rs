@@ -30,7 +30,7 @@
 //! 報告しない（`contract.rs` の `RunResult` doc 参照）。
 //!
 //! # 状態は参考値・`WorkManager` へは問い合わせない（オーナー承認済み方針、10/2、
-//! Windows 実装 `windows_background_task.rs` と同じ形）
+//! Windows 実装 `windows.rs` と同じ形）
 //!
 //! 当初は `backgroundTaskStateBits()` で `WorkInfo` を毎回問い合わせていたが、
 //! 次の 3 件の指摘（PR #1052）で破棄した。
@@ -90,7 +90,7 @@ fn decide_state(scheduled_at_ms: Option<u64>, ran_at_unix_ms: Option<u64>) -> Sc
 const RECORD_FILE_NAME: &str = "6261636b67726f756e642d7461736b2e6c6173742d72756e";
 
 /// 現在時刻（UNIX エポックからのミリ秒）。取得に失敗した場合は `0`
-/// （`windows_background_task.rs::now_unix_ms` と同じ方針。`schedule` の正しさが
+/// （`windows.rs::now_unix_ms` と同じ方針。`schedule` の正しさが
 /// 依存する唯一の性質は「現在時刻の近似」であり、`0` へのフォールバックは安全側
 /// に倒れる: 以後の `state()` 判定で「記録が常に予約時刻以降」に見えるだけで、
 /// 失敗や嘘の成功にはならない）。
@@ -204,7 +204,7 @@ impl BackgroundTask for AndroidBackgroundTask {
             .scheduled_at_ms
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        // 読み出し失敗は「記録なし」側に倒す（`windows_background_task.rs::state`
+        // 読み出し失敗は「記録なし」側に倒す（`windows.rs::state`
         // と同じ方針。状態は参考値であり、`last_run()` が別途 `Err` を返す契約を
         // 保つ)。
         let ran_at_unix_ms = read_record(self.storage.as_ref())

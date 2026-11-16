@@ -4,7 +4,7 @@
 //! パッケージ化前提の `BackgroundTaskBuilder` は使わない（10-01 のユーザー判断）。
 //!
 //! `driver.rs` の Windows 経路から [`WindowsBackgroundTask`] を使う
-//! （`crate::contract::BackgroundTask` 実装、`macos_background_task.rs`
+//! （`crate::contract::BackgroundTask` 実装、`macos.rs`
 //! と同型）。実行そのものは別プロセス（タスク起動時に専用引数付きで `main.rs` が
 //! 再度立つ）が行うため発火コールバックは無く、[`WindowsBackgroundTask::state`] は
 //! 保存済みの実行記録と自分が出した予約時刻を比較するだけで判定する
@@ -116,12 +116,12 @@ pub fn parse_scheduled_args(args: &[OsString]) -> bool {
 
 /// 1970-01-01 からの経過秒 → `ITrigger` の境界文字列（`YYYY-MM-DDTHH:MM:SS+00:00`、
 /// `ITrigger::StartBoundary`/`EndBoundary` の文書化された書式）。現地時刻への変換を
-/// 避けるため UTC 固定・明示オフセット付きで組み立てる（`fandhe_core::screens::
-/// background_task::civil_from_days` を再利用する、日付計算を複製しない）。
+/// 避けるため UTC 固定・明示オフセット付きで組み立てる（日付計算は画面と共有する
+/// `fandhe_core::utc_date::civil_from_days`。複製しない）。
 fn format_boundary(total_secs: u64) -> String {
     let days = (total_secs / 86_400) as i64;
     let secs_of_day = total_secs % 86_400;
-    let (y, m, d) = fandhe_core::screens::background_task::civil_from_days(days);
+    let (y, m, d) = fandhe_core::utc_date::civil_from_days(days);
     let h = secs_of_day / 3600;
     let min = (secs_of_day % 3600) / 60;
     let s = secs_of_day % 60;
@@ -168,7 +168,7 @@ fn map_hresult(code: i32) -> BackgroundTaskError {
 }
 
 /// 現在時刻（UNIX エポックからのミリ秒）。取得に失敗した場合は `0`
-/// （`macos_background_task.rs::fandhe_rust_background_task_fired` と同じ方針。
+/// （`macos.rs::fandhe_rust_background_task_fired` と同じ方針。
 /// 失敗は環境が壊れている場合のみで、`schedule`/`run_scheduled` の正しさが
 /// 依存する唯一の性質は「単調に増える」ことではなく「現在時刻の近似」なので、
 /// `0` へのフォールバックは安全側に倒れる――開始境界が過去になり得るが、

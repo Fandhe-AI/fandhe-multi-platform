@@ -18,7 +18,7 @@ use crate::contract::LocationFailure;
 use crate::driver::SHARED;
 
 // SAFETY: `apple/fandhe_apple_location.m` が定義する C ABI（`build.rs` が iOS・macOS
-// 両ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は
+// 両ターゲットだけコンパイル・リンクする）。契約は
 // `.m` ファイル冒頭コメントおよび下記 `start` 実装のコメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {
@@ -40,7 +40,7 @@ pub fn start() {
 }
 
 /// `.m` 側の `code`（1=denied / 2=disabled / 3=failed）を [`LocationFailure`] へ写す
-/// 純関数（cfg 無しで全ターゲットからテストできる、`device/location.rs::to_failure_kind`
+/// 純関数（cfg 無しで全ターゲットからテストできる、`driver.rs::to_failure_kind`
 /// と同じ切り出し方針）。未知のコードは `None` を返し、呼び出し元が無視する
 /// （偽の成功・偽の失敗を作らない、実装計画 §8 参照）。
 fn failure_from_code(code: i32) -> Option<LocationFailure> {
@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn fix_and_failure_are_no_op_before_shared_is_initialized() {
-        // `SHARED`（`device/location.rs`）はプロセス内グローバルのため、他テストが
+        // `SHARED`（`driver.rs`）はプロセス内グローバルのため、他テストが
         // 先に `shared_location()` を呼んでいる可能性がある。ここでは「未初期化なら
         // panic しない」という契約のみを検証する（既に初期化済みでも呼び出し自体が
         // panic しないことは変わらない）。

@@ -4,9 +4,6 @@
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)`
 //! として呼ばれる契約、`app::EffectFn` 参照）。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。
-//!
 //! # 実装スコープ（#888/#889/#890）
 //!
 //! Windows は [`shared_location`] が初回アクセス時に [`crate::contract::CommandLocation`]
@@ -19,7 +16,7 @@
 //! 形にはならない）。
 //!
 //! iOS / macOS（Apple、Issue #889）は [`location_effect`] が初回呼び出し時に
-//! `device::apple_location::start()` を呼ぶ（CoreLocation の `CLLocationManager` は
+//! `apple::start()` を呼ぶ（CoreLocation の `CLLocationManager` は
 //! 生成したスレッドの run loop を要求するため、egui の update ループ＝main スレッドで
 //! 呼ぶ必要があり、Windows のようにドライバ自体を子プロセスで起動する構成が
 //! 取れない。`shared_location()` からは起動しない: `cargo test`/clippy がテストの
@@ -30,7 +27,7 @@
 //!
 //! Windows/Android/iOS/macOS 以外（実質 Linux・Web）は [`shared_location`] が
 //! 初回アクセス時に `push_failure(LocationFailure::Unsupported)` を 1 回入れて
-//! 「使えない」表示にする（`device/clipboard.rs::shared_clipboard` の cfg
+//! 「使えない」表示にする（`fandhe-cap-clipboard` の `shared_clipboard` の cfg
 //! カスケードと同型。ここではダミー座標へフォールバックしない）。
 
 #[cfg(any(
@@ -55,7 +52,7 @@ use fandhe_runtime::CompletionSender;
 /// ポーリングは不要）。
 pub const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
-/// プロセス内で共有する測位状態（読み手・書き手の橋渡し）。`device/apple_location.rs`
+/// プロセス内で共有する測位状態（読み手・書き手の橋渡し）。`apple.rs`
 /// からも push 元として参照するため `pub(super)`（Issue #889）。
 pub(crate) static SHARED: OnceLock<SharedLocation> = OnceLock::new();
 
@@ -114,7 +111,7 @@ pub fn reset_retry_tracking() {
     *last_seq = 0;
 }
 
-/// Apple（iOS/macOS）で `device::apple_location::start()` を初回呼び出し済みかどうか
+/// Apple（iOS/macOS）で `apple::start()` を初回呼び出し済みかどうか
 /// （Issue #889。`location_effect` から呼ばれる）。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 static APPLE_STARTED: OnceLock<()> = OnceLock::new();
@@ -140,7 +137,7 @@ pub fn platform_location() -> &'static SharedLocation {
 
 /// 共有 `SharedLocation` への参照を返す（Windows のみ未初期化時に書き手を起動・
 /// 登録する。Apple は `location_effect` 側が起動する、モジュール doc 参照）。
-/// `registry.rs` の `effect` 区画・`device.rs::shutdown` から参照される公開入口。
+/// `registry.rs` の `effect` 区画・`fandhe-egui-proxy` の `device.rs::shutdown` から参照される公開入口。
 pub fn shared_location() -> &'static SharedLocation {
     shared_location_for(false)
 }
@@ -255,7 +252,7 @@ pub fn restart_location(shared: &SharedLocation, _precise: bool) {
 }
 
 /// アプリ終了時に Windows の測位子プロセスを止める（`fandhe-gallery` の終了フック（`shutdown()`）から呼ばれる契約。`static` は `Drop` が走らないため、
-/// 明示停止が要る、`device/tts.rs::stop_shared_tts` と同じ理由）。
+/// 明示停止が要る、`fandhe-egui-proxy` の `device/tts.rs::stop_shared_tts` と同じ理由）。
 pub fn stop_shared_location() {
     #[cfg(target_os = "windows")]
     if let Some(driver) = WINDOWS_DRIVER
@@ -267,7 +264,7 @@ pub fn stop_shared_location() {
     }
 }
 
-/// Apple 専用: `apple_location::start()` を初回だけ呼ぶ。初回なら真。location と geofence の
+/// Apple 専用: `apple::start()` を初回だけ呼ぶ。初回なら真。location と geofence の
 /// 両画面から呼ばれる（`CLLocationManager` は main スレッド = egui の update ループで起動する）。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub fn start_apple_location_once() -> bool {
@@ -280,14 +277,14 @@ pub fn start_apple_location_once() -> bool {
 
 /// `crate::error::LocationError` を画面の [`FailureKind`] へ写す（`fandhe-core` は
 /// `fandhe-device` に依存しないため、両者の型を橋渡しするのは本クレート側の責務、
-/// `device.rs::to_note_storage_error` と同じ判断）。
+/// `fandhe-cap-local-storage-kv` の driver と同じ判断）。
 pub fn to_failure_kind(e: &LocationError) -> FailureKind {
     match e {
         LocationError::PermissionDenied => FailureKind::PermissionDenied,
         LocationError::Disabled(_) => FailureKind::ServiceDisabled,
         LocationError::Unsupported => FailureKind::Unsupported,
         // タイムアウト・その他の内部要因は再試行の余地がある扱いにする
-        // （`fandhe_device::location` モジュール doc の対応表: Timeout/Failed → Internal）。
+        // （`crate::contract` の `LocationFailure`: Timeout/Failed → 再試行可）。
         _ => FailureKind::Retryable,
     }
 }
@@ -343,7 +340,7 @@ fn drive(
     let next = location.last_fix();
 
     // 現在の表示と実質的に変わらないなら送信をスキップし、egui を無駄に再描画させない
-    // （`device/tilt.rs::can_skip_send` と同じ考え方）。`Waiting`・`Fixed`（同一座標）・
+    // （同じ値の再送を省く考え方）。`Waiting`・`Fixed`（同一座標）・
     // 失敗状態（同一種別）のいずれも、変化が無い間は `request_repaint_after` で
     // `POLL_INTERVAL` 後に再確認するだけにとどめる。失敗状態をここに含めないと
     // `send`（即時 `request_repaint`）が毎フレーム呼ばれ続け、測位に失敗している間

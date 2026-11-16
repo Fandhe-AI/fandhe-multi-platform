@@ -1,7 +1,7 @@
 //! macOS / iOS 向けネットワーク接続状態実装（Issue #1282、iOS は #1283）。
 //! `driver.rs::platform_network_status` の macOS 経路と、iOS 経路
-//! （`ios_network_status.rs` が返す）から呼ばれ、`apple/fandhe_apple_network_status.m`
-//! （`NWPathMonitor`、`build.rs` が feature `device` 有効時にコンパイル）を C ABI で呼ぶ。
+//! （`ios.rs` が返す）から呼ばれ、`apple/fandhe_apple_network_status.m`
+//! （`NWPathMonitor`、`build.rs` がコンパイル）を C ABI で呼ぶ。
 //! `unsafe` は引数なし・戻り値 int のみの FFI 1 箇所と、`.m` から呼ばれる受け口 1 つに閉じる。
 //!
 //! # 再描画（契約表 4）

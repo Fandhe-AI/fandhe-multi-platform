@@ -1,8 +1,8 @@
 //! macOS 向けバックグラウンド処理実装（Issue #1043）。`NSBackgroundActivityScheduler`
-//! （`macos/fandhe_macos_background_task.m`、`build.rs` が macOS ターゲットの feature
-//! `device` 有効時にコンパイル・リンクする）を `unsafe extern "C"` 2 関数（[`ffi::schedule`]/
+//! （`macos/fandhe_macos_background_task.m`、`build.rs` が macOS ターゲットで
+//! コンパイル・リンクする）を `unsafe extern "C"` 2 関数（[`ffi::schedule`]/
 //! [`ffi::cancel`]）で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する
-//! （`apple_mic_record.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
+//! （`fandhe-egui-proxy` の `device/apple_mic_record.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `driver.rs` の macOS 経路から [`MacBackgroundTask`] を使う
 //! （`crate::contract::BackgroundTask` 実装）。
@@ -54,8 +54,8 @@ use fandhe_device::storage::Storage;
 const INTERVAL_SECS: f64 = 10.0;
 const TOLERANCE_SECS: f64 = 5.0;
 
-// SAFETY: `macos/fandhe_macos_background_task.m`（`build.rs` が macOS ターゲットの
-// feature `device` 有効時にコンパイル・リンクする）が定義する C ABI。契約は `.m`
+// SAFETY: `macos/fandhe_macos_background_task.m`（`build.rs` が macOS ターゲットで
+// コンパイル・リンクする）が定義する C ABI。契約は `.m`
 // ファイル冒頭コメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {
@@ -129,7 +129,7 @@ impl MacBackgroundTask {
         Self::with_ffi(storage, ffi::schedule, ffi::cancel)
     }
 
-    /// テストから任意の FFI 実装を注入する入口（`apple_mic_record.rs` 等と同じ設計）。
+    /// テストから任意の FFI 実装を注入する入口（`fandhe-egui-proxy` の `device/apple_mic_record.rs` 等と同じ設計）。
     fn with_ffi(
         storage: Arc<dyn Storage>,
         schedule_fn: fn(u64, f64, f64) -> bool,
@@ -305,7 +305,7 @@ fn on_fired(task: &MacBackgroundTask, generation: u64, now_unix_ms: u64) {
 
 /// プロセス static（`driver.rs::platform_background_task` が構築した
 /// 唯一のインスタンスを保持する。発火コールバックは FFI 境界を越えて届くため
-/// `Arc` 経由でしか参照できない、`apple_biometric.rs` の `g_*` static と同じ必要性）。
+/// `Arc` 経由でしか参照できない、`g_*` static と同じ必要性）。
 static INSTANCE: OnceLock<Arc<MacBackgroundTask>> = OnceLock::new();
 
 /// `driver.rs::platform_background_task` から 1 度だけ呼ばれ、以後の発火

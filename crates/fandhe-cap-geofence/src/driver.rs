@@ -173,7 +173,7 @@ pub fn geofence_effect(state: &GeofenceShowState, sender: &CompletionSender<Geof
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     start_apple_location_once();
 
-    // 時計が取れないときは 0（ios_background_task.rs と同じ扱い）。
+    // 時計が取れないときは 0（`fandhe-cap-background-task` の `ios.rs` と同じ扱い）。
     let now_unix_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)

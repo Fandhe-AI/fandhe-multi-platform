@@ -1,6 +1,6 @@
 //! iOS 向け音楽ライブラリ実装（Issue #484、親 #108）。`ios/fandhe_ios_music_library.m`
 //! （MediaPlayer `MPMediaQuery songsQuery` + `MPMediaLibrary requestAuthorization:`。`build.rs` が iOS 分岐で
-//! feature `device` 有効時にコンパイルする。MediaPlayer はリンク済み）を `unsafe extern "C"` 1 関数で呼ぶ。
+//! コンパイルする。MediaPlayer はリンク済み）を `unsafe extern "C"` 1 関数で呼ぶ。
 //! `unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。`driver.rs` の iOS 経路から
 //! ワーカースレッドで呼ばれ、契約は `crate::contract`。macOS 版 `macos.rs` と同形で、
 //! 違いは OS API だけ。
@@ -39,7 +39,7 @@ use crate::driver::tracks_from_nul_buffer;
 const BUF_CAP: usize = 64 * 1024;
 
 mod ffi {
-    // SAFETY: `ios/fandhe_ios_music_library.m`（`build.rs` が iOS 分岐で feature `device` 有効時に
+    // SAFETY: `ios/fandhe_ios_music_library.m`（`build.rs` が iOS 分岐で
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {

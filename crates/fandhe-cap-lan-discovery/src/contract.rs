@@ -181,7 +181,7 @@ pub fn error_from_dns_status(status: u32) -> LanDiscoveryError {
 }
 
 /// Windows の DNS レコード 1 件（PTR / SRV / A / AAAA）を OS 型から切り離してコピーしたもの。
-/// 生ポインタの走査（`windows_lan_discovery`）と結合規則（[`link_dns_records`]）を分け、
+/// 生ポインタの走査（`windows.rs`）と結合規則（[`link_dns_records`]）を分け、
 /// 結合をホストの `cargo test` で検査できるようにする。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DnsRecord {

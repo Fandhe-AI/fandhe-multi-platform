@@ -30,6 +30,12 @@ const SNAPSHOT_DEADLINE: std::time::Duration = std::time::Duration::from_secs(15
 /// 取得サイズ（共通コアの定数）。
 const SIZE_PX: (u32, u32) = (MAP_WIDTH_PX, MAP_HEIGHT_PX);
 
+// 契約の上限は描画側の上限を超えず、取得サイズも契約の上限に収まる（超えると `RgbaPixels::new` が `None` になる）。
+const _: () = assert!(crate::contract::MAX_SIDE <= fandhe_core::RGBA_MAX_SIDE);
+const _: () = assert!(
+    MAP_WIDTH_PX <= crate::contract::MAX_SIDE && MAP_HEIGHT_PX <= crate::contract::MAX_SIDE
+);
+
 /// 期限を過ぎたか。起点・現在とも単調時計 `Instant`（システム時刻の変更に影響されない）。
 #[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
 fn is_expired(

@@ -13,8 +13,8 @@
 //! # OS 別実装の差し込み口
 //!
 //! [`platform_music_library`] の cfg 分岐が最終形で、各 OS は `implementation()` を持つモジュールだけを
-//! 埋める（macOS: `macos.rs`（#482）、Windows: `windows_music_library`（#483）、
-//! iOS: `ios_music_library`（#484）、Android: `android_music_library`（#485））。
+//! 埋める（macOS: `macos.rs`（#482）、Windows: `windows.rs`（#483）、
+//! iOS: `ios.rs`（#484）、Android: `android.rs`（#485））。
 //! それ以外（Linux 等）は `UnsupportedMusicLibrary` 固定で、ダミーの成功実装へは倒さない。
 //!
 //! 文字列バッファの解釈 [`tracks_from_nul_buffer`] は macOS・iOS の `.m` が共用する。

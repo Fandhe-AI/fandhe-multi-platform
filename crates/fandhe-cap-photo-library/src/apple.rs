@@ -1,12 +1,12 @@
 //! macOS / iOS 向け写真ライブラリ保存実装（Issue #1254 macOS・#1255 iOS）。
 //! `driver.rs` の iOS / macOS 経路から呼ばれ、Photos 実装
-//! （`apple/fandhe_apple_photo_library.m`、`build.rs` が feature `device` 有効時のみ
+//! （`apple/fandhe_apple_photo_library.m`、`build.rs` がのみ
 //! コンパイル・リンクする）を `unsafe extern "C"` 1 関数（[`begin_save`]）で呼ぶ。
 //! `unsafe` はこの呼び出し 1 箇所に閉じ `// SAFETY:` で契約を明記する
-//! （`apple_calendar.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
+//! （`fandhe-cap-calendar` の `apple.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `.m` 側の完了から [`fandhe_rust_photo_library_outcome`] が呼ばれ、`driver::bridge`
-//! へ結果を置く（pull 型）。結果コード → 結果の写像は `device/photo_save.rs::
+//! へ結果を置く（pull 型）。結果コード → 結果の写像は `driver.rs::
 //! outcome_from_apple_code` に一本化する。画像のバイト列はログへ出力しない（security.md A09）。
 //!
 //! iOS（#1255）は Photos の API が同じため、同じ `.m` を分岐なしで共用する。iOS ではコールバックが

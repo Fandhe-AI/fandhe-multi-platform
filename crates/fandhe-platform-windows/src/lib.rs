@@ -13,7 +13,13 @@
 //! - Known Folder のパス解決 [`known_folder`]: Pictures（photo-library）・Music（music-library）が共用する
 //!
 //! egui・eframe・winit・`fandhe-device` には依存しない（機能 crate の依存グラフに入れないため）。
-//! Windows 以外ではクレート全体が空。`unsafe` は [`ComInit`] の COM 呼び出し 2 か所と [`open_url`] の `ShellExecuteW` 1 か所と [`lpwstr_variant`] の `PropVariantChangeType` 1 か所と [`minimize`] の `IsIconic`・`InvalidateRect` 2 か所の`SHGetKnownFolderPath`・`PWSTR` 変換・`CoTaskMemFree` の [`known_folder`] 3 か所を加えた計 9 か所だけで、
+//! Windows 以外ではクレート全体が空。`unsafe` は次の計 9 か所だけで、
+//! - [`ComInit`] の COM 呼び出し 2 か所
+//! - [`open_url`] の `ShellExecuteW` 1 か所
+//! - [`lpwstr_variant`] の `PropVariantChangeType` 1 か所
+//! - [`minimize`] の `IsIconic`・`InvalidateRect` 2 か所
+//! - [`known_folder`] の `SHGetKnownFolderPath`・`PWSTR` 変換・`CoTaskMemFree` 3 か所
+//!
 //! クレートルートは `deny(unsafe_code)`。
 
 #![cfg(target_os = "windows")]

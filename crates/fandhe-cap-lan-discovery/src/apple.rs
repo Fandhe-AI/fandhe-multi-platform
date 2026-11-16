@@ -20,8 +20,8 @@ use crate::error::LanDiscoveryError;
 
 use crate::driver::{OBSERVED, finish};
 
-// SAFETY: `apple/fandhe_apple_lan_discovery.m` が定義する C ABI（`build.rs` が iOS / macOS の
-// feature `device` 有効時にコンパイル・リンクする）。契約は `.m` ファイル冒頭コメントに集約する。
+// SAFETY: `apple/fandhe_apple_lan_discovery.m` が定義する C ABI（`build.rs` が iOS / macOS で
+// コンパイル・リンクする）。契約は `.m` ファイル冒頭コメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {
     fn fandhe_apple_lan_start(request_id: u64, duration_ms: u64) -> i32;

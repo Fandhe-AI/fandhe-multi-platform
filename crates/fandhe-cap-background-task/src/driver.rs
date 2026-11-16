@@ -5,9 +5,6 @@
 //! 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`device/
 //! notification.rs::drive` と同型）。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。
-//!
 //! # ボタン要求（同期呼び出し + 別スレッド）
 //!
 //! `schedule()`/`cancel()` は FFI 1 回と状態更新だけで UI を要さないため、

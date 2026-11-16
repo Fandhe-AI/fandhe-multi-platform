@@ -1,8 +1,8 @@
 //! iOS 向けバックグラウンド処理実装（Issue #1045）。`BGTaskScheduler` +
 //! `BGAppRefreshTaskRequest`（`ios/fandhe_ios_background_task.m`、`build.rs` が
-//! feature `device` 有効時にコンパイル・リンクする）を `unsafe extern "C"` 3 関数
+//! コンパイル・リンクする）を `unsafe extern "C"` 3 関数
 //! （[`ffi::register`]/[`ffi::submit`]/[`ffi::cancel`]）で呼ぶ。`unsafe` はこの
-//! 呼び出しに閉じ `// SAFETY:` で契約を明記する（`macos_background_task.rs` と同型、
+//! 呼び出しに閉じ `// SAFETY:` で契約を明記する（`macos.rs` と同型、
 //! coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `driver.rs` の iOS 経路から [`IosBackgroundTask`] を使う
@@ -55,8 +55,8 @@ const EARLIEST_BEGIN_SECS: f64 = 60.0;
 // モック関数ポインタを注入して検証する。
 #[cfg(target_os = "ios")]
 mod ffi_decl {
-    // SAFETY: `ios/fandhe_ios_background_task.m`（`build.rs` が iOS ターゲットの
-    // feature `device` 有効時にコンパイル・リンクする）が定義する C ABI。契約は
+    // SAFETY: `ios/fandhe_ios_background_task.m`（`build.rs` が iOS ターゲットで
+    // コンパイル・リンクする）が定義する C ABI。契約は
     // `.m` ファイル冒頭コメントに集約する。
     #[allow(unsafe_code)]
     unsafe extern "C" {
@@ -238,7 +238,7 @@ fn on_fired(task: &IosBackgroundTask, result: RunResult, now_unix_ms: u64) -> bo
 
 /// プロセス static（`driver.rs::platform_background_task` が構築した
 /// 唯一のインスタンスを保持する。発火コールバックは FFI 境界を越えて届くため
-/// `Arc` 経由でしか参照できない、`macos_background_task.rs::INSTANCE` と同じ必要性）。
+/// `Arc` 経由でしか参照できない、`macos.rs::INSTANCE` と同じ必要性）。
 #[cfg(target_os = "ios")]
 static INSTANCE: OnceLock<Arc<IosBackgroundTask>> = OnceLock::new();
 
@@ -341,7 +341,7 @@ mod tests {
 
     // `submit_fn`/`cancel_fn` は固定コードを返すだけの fn ポインタにする（クロージャは
     // 関数ポインタ型に変換できず、共有 static な可変状態は `cargo test` の並列実行で
-    // 他テストと競合するため使わない。`macos_background_task.rs` の `always_ok`/
+    // 他テストと競合するため使わない。`macos.rs` の `always_ok`/
     // `always_fail` と同じ発想だが、本ファイルは状態を持つ静的変数自体を避ける）。
     fn always_ok(_earliest_begin_secs: f64) -> i32 {
         0

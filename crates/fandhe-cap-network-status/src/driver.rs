@@ -8,7 +8,7 @@
 //! 描画せずポーリングが止まる、契約表 4）、状態が変わらなければ送信を省略する。
 //!
 //! dispatch（[`platform_network_status`]）は全対象 OS の最終形。iOS は
-//! `ios_network_status.rs`（Apple 共用実装）を返し、Android は `android_network_status.rs`
+//! `ios.rs`（Apple 共用実装）を返し、Android は `android.rs`
 //! （`ConnectivityManager`、#1284）を返す。Web は `fandhe-web-dom` 側（#1285）。
 
 use std::sync::{Arc, Mutex};

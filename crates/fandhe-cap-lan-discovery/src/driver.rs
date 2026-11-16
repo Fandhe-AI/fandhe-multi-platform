@@ -5,9 +5,6 @@
 //! 契約の SSOT は `crate::contract`（`_http._tcp`・10 秒・上限 50 件・
 //! `normalize_services`・`decode_code`）。`fandhe-cap-bluetooth-le` の driver と同型の pull 型。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。
-//!
 //! # iOS / macOS / Windows / Android: pull 型 `bridge`
 //!
 //! 発見と解決は OS のスレッドから非同期に届くため、`LanDiscovery` トレイトを通さずコアの状態機械へ
@@ -20,9 +17,9 @@
 //!
 //! 4 OS とも `present(request_id, duration) -> Result<(), LanDiscoveryError>` の同じ形で、後続の OS 実装は
 //! 自分のモジュールの中身だけを埋め、本ファイルの dispatch には触らない。
-//! - macOS・iOS: `apple_lan_discovery`（`nw_browser` と dns_sd。iOS は `ios_lan_discovery` が委譲）
-//! - Android: `android_lan_discovery`（`NsdManager` と Java 側 `LanDiscoveryHelper`。窓は main Handler が閉じる）
-//! - Windows: `windows_lan_discovery`（Win32 `DnsServiceBrowse`。ワーカーが窓の間待つ）
+//! - macOS・iOS: `apple.rs`（`nw_browser` と dns_sd。iOS は `ios.rs` が委譲）
+//! - Android: `android.rs`（`NsdManager` と Java 側 `LanDiscoveryHelper`。窓は main Handler が閉じる）
+//! - Windows: `windows.rs`（Win32 `DnsServiceBrowse`。ワーカーが窓の間待つ）
 //!
 //! # 期限・終了
 //!
@@ -38,7 +35,7 @@
 //! # 守る範囲 / 守らない範囲
 //!
 //! 守る: 1 プロセス内の要求と完了の順序、失敗を成功と見せないこと、探索の停止と資源の解放。
-//! 守らない範囲は `fandhe_device::lan_discovery` のモジュール doc を参照。
+//! 守らない範囲は `crate::contract` のモジュール doc を参照。
 //! サービス名・アドレスはログへ出さない（security.md A09）。
 
 use std::collections::HashMap;
@@ -125,8 +122,8 @@ impl Observer {
     /// サービス 1 件を足す。現在の要求のときだけ。同名の合流規則は `normalize_services` を
     /// 再利用する（規則を二重に書かない）。
     ///
-    /// 呼び出し元は Apple の `apple_lan_discovery`・Windows の `windows_lan_discovery`・
-    /// Android の `android_lan_discovery`。
+    /// 呼び出し元は Apple の `apple.rs`・Windows の `windows.rs`・
+    /// Android の `android.rs`。
     #[cfg_attr(
         not(any(
             target_os = "ios",
