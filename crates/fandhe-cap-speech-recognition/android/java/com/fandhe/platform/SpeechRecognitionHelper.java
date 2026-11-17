@@ -34,7 +34,10 @@ import java.util.HashMap;
 // 再生成（回転等の構成変更）: 認識器（`speechRecognizer`）・リスナー・タイマー・要求 id・ロックは static で、新しい helper へそのまま
 // 引き継がれる。認識器は旧 Activity でなくアプリケーション Context で作り（Activity で作ると破棄時にサービス接続が漏れとして
 // 外される）、リスナーは static メソッドで作るため旧 helper / Activity を参照しない。結果は static な要求 id の照合で配送される。
-// 構成変更では聞き取りを中断しない。背景遷移（構成変更でない停止）では `onHostStopped` が中断（5）する（背景で聞き取らない、契約表 1）。
+// 構成変更では聞き取りを中断しない。背景遷移（構成変更でない停止）では `onHostStopped` が、発行元の Activity に限り中断（5）する
+// （背景で聞き取らない、契約表 1）。`onHostPaused` は前面の写し（`resumed`）を下ろすだけで中断しない。終了（`isFinishing`）は
+// `onHostDestroyed` の `detach` が発行元について 1 度だけ中断（5）する。Rust 側 `reset_pending_tracking` は `abortPending` で
+// 結果を届けずに破棄する。許可ダイアログが出ている間は `abortPending` 後も発行元を残し、その Activity の終了で許可待ちを下ろす。
 // 中断を `onPause` でなく `onStop` で行うのは、`isChangingConfigurations()` が `onStop` / `onDestroy` で確実に読めるため
 // （`Activity.isChangingConfigurations` の文書は `onStop` での利用を想定している。`onPause` 時点の値は文書で保証されていない）。
 // 権限ダイアログは透過 Activity で `onPause` だけを起こし `onStop` は起こさないため、許可待ちを誤って中断しない。
@@ -93,8 +96,8 @@ final class SpeechRecognitionHelper {
             }
             speechOwner = null;
             if (activity.isChangingConfigurations()) {
-                // 追跡中の要求があるときだけ新しい helper へ引き継ぐ（無ければ何も待たない）。
-                speechOwnerOrphaned = speechRequest.current() != RequestTracker.NONE;
+                // 追跡中の要求か許可ダイアログの結果待ちがあるときだけ新しい helper へ引き継ぐ（無ければ何も待たない）。
+                speechOwnerOrphaned = speechRequest.current() != RequestTracker.NONE || speechPermissionPending;
                 return;
             }
             interruptListeningLocked();
@@ -108,8 +111,8 @@ final class SpeechRecognitionHelper {
                     nativeOnSpeechResult(id, SPEECH_RESULT_INTERRUPTED, null);
                 }
             } else {
-                // システム破棄: 追跡中の要求（権限ダイアログ待ち）が残るときだけ、復元後の helper へ引き継ぐ。
-                speechOwnerOrphaned = speechRequest.current() != RequestTracker.NONE;
+                // システム破棄: 追跡中の要求か許可ダイアログの結果待ちが残るときだけ、復元後の helper へ引き継ぐ。
+                speechOwnerOrphaned = speechRequest.current() != RequestTracker.NONE || speechPermissionPending;
             }
         }
     }
@@ -123,8 +126,12 @@ final class SpeechRecognitionHelper {
     static void abortPending() {
         synchronized (speechLock) {
             speechStartPendingResume = false;
-            speechOwner = null;
-            speechOwnerOrphaned = false;
+            // 権限ダイアログが出ている間は発行元を残す。ダイアログを出した Activity の終了（`detach`）で許可待ちの照合状態を
+            // 下ろす入口が要るため（発行元を外すと `detach` が早期 return し、`speechPermissionPending` が true のまま残る）。
+            if (!speechPermissionPending) {
+                speechOwner = null;
+                speechOwnerOrphaned = false;
+            }
             speechRequest.take();
             discardRecognizer();
         }
@@ -217,6 +224,11 @@ final class SpeechRecognitionHelper {
                     // 新しいダイアログを起動できるようになる（上記 `speechPermissionPending`
                     // doc 参照）。
                     speechPermissionPending = false;
+                    if (speechRequest.current() == RequestTracker.NONE) {
+                        // 要求が無いまま発行元だけ残っていた（`abortPending` 後の許可待ち）なら、ここで外す。
+                        speechOwner = null;
+                        speechOwnerOrphaned = false;
+                    }
                     if (id == RequestTracker.NONE || speechRequest.current() != id) {
                         // 自分が起動したダイアログの結果ではない（旧要求が「停止」で
                         // 破棄された後に新要求が追跡された、または既に破棄済み）。

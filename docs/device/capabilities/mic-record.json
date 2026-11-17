@@ -25,7 +25,7 @@
       "api": "`MediaRecorder`",
       "perm": "`<uses-permission android:name=\"android.permission.RECORD_AUDIO\" />`",
       "url": "https://developer.android.com/media/platform/mediarecorder",
-      "note": "実装済み（旧#957）。`RECORD_AUDIO` の実行時許可（`ActivityResultContracts.RequestPermission`）後、`MediaRecorder`（`AudioSource.MIC`/`OutputFormat.MPEG_4`/`AudioEncoder.AAC`、モノラル・64kbps・44.1kHz）でアプリ専有キャッシュの一時ファイルへ録音し、`setMaxDuration`（30 秒、Rust 側 `MAX_RECORD_MS` と同じ値）で OS 側自動停止する。停止後にバイト列を読み切ってから一時ファイルを削除する（0 バイトは失敗）。権限確認・録音完了が非同期のため `MicRecorder` トレイトは通さず、macOS と同型の pull 型 `RequestSlot` 経由で `fandhe_core::screens::mic_record` へ直接書き戻す。バックグラウンド遷移（`MicRecordLifecycle` の `onHostPaused`/`onHostDestroyed`）・Activity 再生成では録音中の要求を破棄して失敗を返し、保留要求を残さない。既知の天井: v1 は 30 秒固定・AAC モノラル固定・録音中の他アプリのオーディオフォーカス奪取や着信からの復帰再開は無し・プロセス死は結果を捨てる。実機確認は未実施（`device-check-pending`）",
+      "note": "実装済み（旧#957）。`RECORD_AUDIO` の実行時許可（`ActivityResultContracts.RequestPermission`）後、`MediaRecorder`（`AudioSource.MIC`/`OutputFormat.MPEG_4`/`AudioEncoder.AAC`、モノラル・64kbps・44.1kHz）でアプリ専有キャッシュの一時ファイルへ録音し、`setMaxDuration`（30 秒、Rust 側 `MAX_RECORD_MS` と同じ値）で OS 側自動停止する。停止後にバイト列を読み切ってから一時ファイルを削除する（0 バイトは失敗）。権限確認・録音完了が非同期のため `MicRecorder` トレイトは通さず、macOS と同型の pull 型 `RequestSlot` 経由で `fandhe_core::screens::mic_record` へ直接書き戻す。`onHostPaused` は前面の写しを下ろすだけで中断しない。構成変更（回転等）では録音も保留中の要求も新しい Activity へ引き継ぐ。構成変更でない停止（`onHostStopped`）では要求の発行元の Activity に限り録音を中断（5）し、終了（`isFinishing`）の `onHostDestroyed` は発行元について保留中の要求を含め 1 度だけ中断（5）する。Rust 側 `reset_pending_tracking` による明示破棄（`abortPending`）は結果を届けず捨てる。既知の天井: v1 は 30 秒固定・AAC モノラル固定・録音中の他アプリのオーディオフォーカス奪取や着信からの復帰再開は無し・プロセス死は結果を捨てる。実機確認は未実施（`device-check-pending`）",
       "sourceName": [
         "マイク録音"
       ],
