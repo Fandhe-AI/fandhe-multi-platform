@@ -82,7 +82,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "photo_pick" => fandhe_core::screens::photo_pick::current_screen,
-    fandhe_egui_proxy::device::photo_pick::photo_pick_effect,
+    fandhe_cap_photo_picker::photo_pick_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "contact_pick" => fandhe_core::screens::contact_pick::current_screen,
@@ -478,7 +478,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "barcode_scan" => fandhe_core::screens::barcode_scan::current_screen,
-    fandhe_egui_proxy::device::barcode_scan::barcode_scan_effect,
+    fandhe_cap_barcode_scan::barcode_scan_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "otp_input" => fandhe_core::screens::otp_input::current_screen,
@@ -490,7 +490,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "image_recognize" => fandhe_core::screens::image_recognize::current_screen,
-    fandhe_egui_proxy::device::image_recognition::image_recognize_effect,
+    fandhe_cap_image_recognition::image_recognize_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "media_transcode" => fandhe_core::screens::media_transcode::current_screen,

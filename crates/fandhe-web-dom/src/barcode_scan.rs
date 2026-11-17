@@ -5,7 +5,7 @@
 //! （[`crate::file_picker::drive`] と共用）で得た画像 1 枚を検査 → `createImageBitmap` →
 //! `BarcodeDetector.detect()` で読み、中身の文字列一覧を `finish_scan` へ書き戻す。
 //! Web は `fandhe-device` の `BarcodeReader` トレイトを通らない（`file_picker.rs` と同じ分担）。
-//! 検査の SSOT は `fandhe_device::{photo_picker, barcode_scan}` を使い、複製しない。
+//! 検査の SSOT は `fandhe_device::photo_picker` と `fandhe_cap_barcode_scan`（契約の純関数）を使い、複製しない。
 //!
 //! # 結果の写像
 //!
@@ -28,8 +28,8 @@
 //! 複数タブ、`fandhe-egui-proxy` の wasm canvas 経路。
 //! Safari・Firefox・Windows/Linux の Chrome は `BarcodeDetector` が無いか形式が空のため非対応表示。
 
+use fandhe_cap_barcode_scan::normalize_payloads;
 use fandhe_core::screens::barcode_scan::ScanFailure;
-use fandhe_device::barcode_scan::normalize_payloads;
 use fandhe_device::photo_picker::{dimensions_within_limits, image_dimensions, PickedPhoto};
 use fandhe_device::DeviceError;
 

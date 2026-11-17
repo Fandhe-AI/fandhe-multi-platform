@@ -1,10 +1,10 @@
-//! fandhe-egui-proxy: 端末機能の配線と各 OS の入口を持つ、v1 既定バックエンドの現行実装。
+//! fandhe-egui-proxy: 各 OS の入口を持つ、v1 既定バックエンドの現行実装。
 //!
 //! 描画（`Node` → egui の変換）とアプリ起動（eframe・バックエンドの選択）は
 //! `fandhe-render-egui` へ移した（Issue #1164）。画面の登録と各 OS の最終成果物
 //! （デスクトップ・iOS の実行体、Android・Web の cdylib）は非公開アプリ `fandhe-gallery` へ
-//! 出した（Issue #1165）。ここに残るのは端末機能の配線（`device/`）、TV フォーカス・
-//! ソフトキーボードの橋渡し、各 OS の入口関数（`ios::run`・`web::start`・`android::run`）、
+//! 出した（Issue #1165）。端末機能の配線は機能 crate（`fandhe-cap-*`）へすべて移し、`device/` は撤去した（Issue #1355）。
+//! ここに残るのは TV フォーカス・ソフトキーボードの橋渡し、各 OS の入口関数（`ios::run`・`web::start`・`android::run`）、
 //! 計測専用アプリで、REQ-21 で `fandhe-platform-*` などへ順に分ける予定（設計は
 //! `docs/architecture/consumer-app-structure.md`）。移した項目は従来のパス
 //! （`fandhe_egui_proxy::render_screen`・`app::ProxyApp` 等）で再公開しており、#1194 で本クレートごと撤去する。
@@ -81,24 +81,11 @@ pub use fandhe_render_egui::{accessibility, font, paint_command, recyclers, text
 #[cfg(target_os = "android")]
 pub mod android;
 pub mod app;
-// Phase 8（端末機能、Issue #746/#747/#748/#749）の画面 effect ドライバの置き場。`device`
-// feature（既定 on）は wasm32 でも有効になるが `fandhe-device` 自体は非 wasm32 分岐にのみ
-// optional dependency として置かれているため、`not(target_arch = "wasm32")` を
-// 併せて要る（`device.rs`・`screens.rs` のマクロ doc 参照）。
-#[cfg(all(feature = "device", not(target_arch = "wasm32")))]
-pub mod device;
 // TASK-5.1（REQ-5、Issue #236 / #593）: コールドスタート計測の共通ラッパー。
 // iOS（`ios.rs`）・デスクトップ native（`main.rs`）の両エントリから使う
 // （`cold_start.rs` モジュール doc 参照）。
 #[cfg(feature = "cold-start-probe")]
 pub mod cold_start;
-// Issue #1103: `ImageWidget` の実画素を egui へ届ける 1 枠の保管所は fandhe-render-egui にある。
-// `device/` が従来のパスで使えるよう非公開で再公開する。
-#[cfg_attr(
-    not(all(feature = "device", not(target_arch = "wasm32"))),
-    allow(unused_imports)
-)]
-pub(crate) use fandhe_render_egui::image_store;
 pub(crate) use fandhe_render_egui::rgba_image;
 // Issue #796 / #795: ソフトキーボードの状態バッファ（Android `TextInputState` /
 // iOS `UITextField.text` + `markedTextRange`）を egui イベント列へ変換する純関数群。

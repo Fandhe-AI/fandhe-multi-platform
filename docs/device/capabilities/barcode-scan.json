@@ -11,10 +11,10 @@
       "api": "Vision `VNDetectBarcodesRequest`（写真選択で選んだ画像から検出）",
       "perm": "不要（Info.plist・entitlement の追加なし。画像入力。写真選択は PHPicker で権限不要）",
       "url": "https://developer.apple.com/documentation/vision/vndetectbarcodesrequest",
-      "note": "写真選択（PHPicker）で選んだ画像 1 枚を `VNDetectBarcodesRequest`（全形式）で読み、中身の文字列を一覧表示する。PHPicker の受け口は id の `1 << 62` の目印で文字認識・通常の写真選択と共有し、`validate_photo` → ヘッダー検査 → Vision の順に OS コールバックスレッドで同期に読み、結果を `RequestSlot` に置いて `request_repaint` で次フレームを起こす。0 件は成功（「コードは見つかりませんでした」）、キャンセルは失敗にしない、復号不能は失敗。権限拒否の失敗系は無い。守る範囲は 1 画面・1 プロセス内の順序（世代照合）と嘘の成功の禁止、守らない範囲は OS ごとの検出結果の違い・処理時間・実行中の取り消し・保留中の要求の復元。中身はログに出さず、URL でも開かない。カメラ映像からのライブ読み取りは範囲外。確認は #554",
+      "note": "写真選択（PHPicker）で選んだ画像 1 枚を `VNDetectBarcodesRequest`（全形式）で読み、中身の文字列を一覧表示する。PHPicker の受け口は機能 crate `fandhe-cap-photo-picker` が持ち、要求ごとに受け取りを登録して文字認識・通常の写真選択と共有し、`validate_photo` → ヘッダー検査 → Vision の順に OS コールバックスレッドで同期に読み、結果を `RequestSlot` に置いて `request_repaint` で次フレームを起こす。0 件は成功（「コードは見つかりませんでした」）、キャンセルは失敗にしない、復号不能は失敗。権限拒否の失敗系は無い。守る範囲は 1 画面・1 プロセス内の順序（世代照合）と嘘の成功の禁止、守らない範囲は OS ごとの検出結果の違い・処理時間・実行中の取り消し・保留中の要求の復元。中身はログに出さず、URL でも開かない。カメラ映像からのライブ読み取りは範囲外。公開入口（画面の状態型に依存しない非同期の入口、iOS）: `begin_barcode_scan` / `poll_barcode_scan` / `discard_barcode_scan`。写真選択を開いて選ばれた画像を読み取る。画面 effect と同じ slot を持ち主で分けて共有し、進行中・結果未取得の間の新しい要求（画面側の分を含む）は断る（`Internal(\"barcode_scan busy\")`）。結果は写真選択と同じ検査（`validate_photo` → ヘッダー検査）を通った値で、キャンセルは `Ok(None)`、0 件は成功、要求ごとに 1 回だけ届き、失われた要求（reset 等）は 1 回だけ `Internal(\"barcode_scan lost\")`。discard は Rust 側の記録だけを空にして写真選択の画面は閉じず、閉じるまで次の begin は写真選択側が OS の観測（提示中のピッカー）で busy（code 3）を返し失敗で終わる。discard 後に遅れて届いた結果は id 照合で捨て、新しい要求へは結びつかない。確認は #554",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#554）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_barcode_scan.m + crates/fandhe-egui-proxy/src/device/ios_barcode_scan.rs + crates/fandhe-egui-proxy/src/device/apple_barcode_scan.rs + crates/fandhe-egui-proxy/src/device/barcode_scan.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_photo_picker.m + crates/fandhe-device/src/barcode_scan.rs + crates/fandhe-core/src/screens/barcode_scan.rs、Issue #558"
+      "impl": "crates/fandhe-cap-barcode-scan/apple/fandhe_apple_barcode_scan.m + crates/fandhe-cap-barcode-scan/src/apple.rs + crates/fandhe-cap-barcode-scan/src/driver.rs + crates/fandhe-cap-barcode-scan/src/contract.rs + crates/fandhe-cap-photo-picker/ios/fandhe_ios_photo_picker.m + crates/fandhe-core/src/screens/barcode_scan.rs、Issue #558・#1355"
     },
     "android": {
       "status": "no",
@@ -35,7 +35,7 @@
       "note": "写真選択で選んだ画像 1 枚を `VNDetectBarcodesRequest`（全形式）で読み、中身の文字列を一覧表示する。0 件は成功（「コードは見つかりませんでした」）、写真選択のキャンセルは失敗にしない、復号不能は失敗。権限拒否の失敗系は無い。辺・画素数は OS を呼ぶ前に検査する。守る範囲は 1 画面・1 プロセス内の順序（世代照合）と嘘の成功の禁止、守らない範囲は OS ごとの検出結果の違い・処理時間・実行中の取り消し。中身はログに出さず、URL でも開かない。カメラ映像からの読み取りは対象外。目視は #554",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#554）",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_barcode_scan.m + crates/fandhe-egui-proxy/src/device/apple_barcode_scan.rs + crates/fandhe-egui-proxy/src/device/barcode_scan.rs + crates/fandhe-device/src/barcode_scan.rs + crates/fandhe-core/src/screens/barcode_scan.rs、Issue #557"
+      "impl": "crates/fandhe-cap-barcode-scan/apple/fandhe_apple_barcode_scan.m + crates/fandhe-cap-barcode-scan/src/apple.rs + crates/fandhe-cap-barcode-scan/src/driver.rs + crates/fandhe-cap-barcode-scan/src/contract.rs + crates/fandhe-core/src/screens/barcode_scan.rs、Issue #557・#1355"
     },
     "windows": {
       "status": "no",
@@ -52,7 +52,7 @@
       "note": "写真選択で選んだ画像 1 枚を `createImageBitmap` → `BarcodeDetector.detect()` で読み、中身の文字列を一覧表示する。0 件は成功（「コードは見つかりませんでした」）、写真選択のキャンセルは失敗にしない、復号不能は失敗。`BarcodeDetector` が無いブラウザは写真選択を開かず、`getSupportedFormats()` が空なら選択後に、非対応と表示する。バイト数・辺・画素数は復号前に検査する。守る範囲は 1 画面内の順序（世代照合）と嘘の成功の禁止・`ImageBitmap` の解放、守らない範囲はブラウザごとの検出結果の違い・処理時間・実行中の取り消し・複数タブ。中身はログに出さず、URL でも開かない。実ブラウザ確認は #554。対応は Chrome の macOS・ChromeOS・Android（Android はブラウザ側が Google Play services を要する）。Windows・Linux のデスクトップ Chrome と Firefox は非対応",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実ブラウザでの確認は確認用 issue #554 で追う",
-      "impl": "crates/fandhe-web-dom/src/barcode_scan.rs + crates/fandhe-web-dom/src/file_picker.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/barcode_scan.rs + crates/fandhe-device/src/barcode_scan.rs、Issue #559",
+      "impl": "crates/fandhe-web-dom/src/barcode_scan.rs + crates/fandhe-web-dom/src/file_picker.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/barcode_scan.rs + crates/fandhe-cap-barcode-scan/src/contract.rs（normalize_payloads）、Issue #559",
       "safari": "非対応（実行時判定で非対応と表示）"
     }
   },

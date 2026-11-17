@@ -1,23 +1,23 @@
-//! macOS / iOS 向け文字認識実装（Issue #1250 macOS、iOS は #1252。iOS は `ios_image_recognition::deliver` が使う）。
-//! `device/image_recognition.rs` の macOS 経路から呼ばれ、`apple/fandhe_apple_image_recognition.m`
-//! （Vision `VNRecognizeTextRequest`。`build.rs` が feature `device` 有効時にコンパイル）を
+//! macOS / iOS 向け文字認識実装（Issue #1250 macOS、iOS は #1252。iOS は `ios_effect::drive` の受け取りが使う）。
+//! `crate::driver` の macOS 経路から呼ばれ、`apple/fandhe_apple_image_recognition.m`
+//! （Vision `VNRecognizeTextRequest`。`build.rs` が macOS・iOS でコンパイル）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。行は `.m` からコールバックで 1 件ずつ Rust の
 //! `Vec<String>` へ積み、所有権とアロケータは境界を越えない。`unsafe` はこの呼び出しと
 //! コールバックの 2 箇所に閉じる（coding-rust.md の FFI 例外規定準拠）。`build.rs` の
-//! コンパイル条件・`device.rs` の mod cfg と同じ OS 集合に保つ。
+//! コンパイル条件・`lib.rs` の mod cfg と同じ OS 集合に保つ。
 //!
-//! 契約の SSOT は `fandhe_device::image_recognition`: 得た行は必ず `normalize_lines` を通し、
+//! 契約の SSOT は [`crate::contract`]: 得た行は必ず `normalize_lines` を通し、
 //! 日本語が使えない OS は `Unsupported(LANGUAGE_UNAVAILABLE)`、復号・OS 呼び出しの失敗は
 //! `Internal`（0 行の成功へ畳まない）。呼び出しはブロックするため、呼び出し元はワーカーで呼ぶ。
 
-use std::ffi::{c_char, c_void, CStr};
+use std::ffi::{CStr, c_char, c_void};
 
-use fandhe_device::image_recognition::{normalize_lines, TextRecognizer, LANGUAGE_UNAVAILABLE};
+use crate::contract::{LANGUAGE_UNAVAILABLE, TextRecognizer, normalize_lines};
+use crate::error::ImageRecognitionError;
 use fandhe_device::photo_picker::PickedPhoto;
-use fandhe_device::DeviceError;
 
 // SAFETY: `apple/fandhe_apple_image_recognition.m` が定義する C ABI（`build.rs` が macOS / iOS
-// ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は `.m` 冒頭コメントに集約する。
+// ターゲットでコンパイル・リンクする）。契約は `.m` 冒頭コメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {
     fn fandhe_apple_image_recognition_recognize(
@@ -43,7 +43,7 @@ pub(crate) struct AppleTextRecognizer;
 
 impl TextRecognizer for AppleTextRecognizer {
     #[allow(unsafe_code)]
-    fn recognize(&self, photo: &PickedPhoto) -> Result<Vec<String>, DeviceError> {
+    fn recognize(&self, photo: &PickedPhoto) -> Result<Vec<String>, ImageRecognitionError> {
         let mut raw: Vec<String> = Vec::new();
         // SAFETY: `photo.bytes` は呼び出しの間生存する読み取り専用の領域で、`.m` はコピーせず
         // 呼び出しの間だけ参照する。`raw` への可変参照はこの呼び出しの間だけ `ctx` として渡し、
@@ -58,8 +58,8 @@ impl TextRecognizer for AppleTextRecognizer {
         };
         match code {
             0 => Ok(normalize_lines(raw)),
-            2 => Err(DeviceError::Unsupported(LANGUAGE_UNAVAILABLE)),
-            _ => Err(DeviceError::Internal("image_recognition")),
+            2 => Err(ImageRecognitionError::Unsupported(LANGUAGE_UNAVAILABLE)),
+            _ => Err(ImageRecognitionError::Internal("image_recognition")),
         }
     }
 }
@@ -93,6 +93,6 @@ mod tests {
         bytes.extend_from_slice(&[0xFF; 32]);
         let photo = validate_photo(bytes).unwrap();
         let err = AppleTextRecognizer.recognize(&photo).unwrap_err();
-        assert!(matches!(err, DeviceError::Internal(_)), "{err:?}");
+        assert!(matches!(err, ImageRecognitionError::Internal(_)), "{err:?}");
     }
 }

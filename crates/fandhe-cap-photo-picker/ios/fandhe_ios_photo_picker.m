@@ -1,6 +1,6 @@
 // Phase 11（端末機能の拡張ループ、親 #1101）: iOS 側の実写真選択実装（Issue #1104）。
 //
-// `crates/fandhe-egui-proxy/src/device/ios.rs`（`present_photo_picker`/
+// `crates/fandhe-cap-photo-picker/src/ios.rs`（`present_ios_photo_picker`/
 // `fandhe_rust_photo_picker_outcome`）から C ABI 経由で呼ばれる。`PHPickerViewController`
 // は Rust バインディングを持たないため、この 1 ファイルの ObjC コードに実装を閉じ、
 // `unsafe extern "C"` 宣言 1 点のみを Rust 側へ公開する（`fandhe_ios_file_picker.m` と同型。
@@ -21,6 +21,7 @@
 //     0 = 選択（path_ptr/path_len が一時ファイルの絶対パス、UTF-8）
 //     1 = ユーザーがキャンセル（失敗ではない）
 //     2 = 内部エラー（提示失敗・読み出し失敗・JPEG への変換失敗・パスの UTF-8 変換失敗等）
+//     3 = busy（進行中のピッカーがある間の新しい要求。Rust 側は `Internal("photo_picker busy")` へ写す）
 //   0 以外では path_ptr を参照しない（NULL を渡す）。
 //
 // 一時ファイルの寿命: Rust 側は呼び出しの中で読み・8 MiB 判定・復号確認まで同期に終える。
@@ -34,8 +35,9 @@
 // すべての Cocoa 呼び出しは `@autoreleasepool` の内側（Rust ワーカーではなく本ファイルの
 // キュー上で動くが、ハンドラごとに明示する）。
 //
-// 進行中フラグは持たない: 単一飛行はコア（`fandhe_core::screens::photo_pick`）がボタンを隠す
-// ことで保証済み。
+// 進行中かどうかは OS の観測（提示中のピッカーが実際に提示されているか）で決める。推測タイマーのフラグは持たない:
+// 画面 effect も公開入口（`begin_photo_pick`）も同じこの入口を通るため、Rust 側が slot を捨てた（`discard_photo_pick`）後でも、
+// ピッカーが残っている間の新しい要求はここで busy（code 3）にする。
 
 #import <ImageIO/ImageIO.h>
 #import <PhotosUI/PhotosUI.h>
@@ -46,8 +48,11 @@
 // 提示中の picker.delegate（weak）を生かしておくための強参照（ARC 管理）。main queue からのみ
 // 読み書きする（`fandhe_ios_file_picker.m` の `g_retainedDelegate` と同じ理由）。
 static id _Nullable g_retainedDelegate = nil;
+// 提示中のピッカー（weak）。delegate が残っていてもピッカーが提示されていなければ、完了通知が来ないまま消えた（シーン破棄等）ので
+// 進行中とみなさない（永久に busy にならないため）。main queue からのみ読み書きする。
+static __weak PHPickerViewController *g_activePicker = nil;
 
-// `ios.rs::fandhe_rust_photo_picker_outcome` の宣言（本ファイルの唯一の呼び出し先）。
+// `ios.rs::fandhe_rust_photo_picker_outcome`（`fandhe-cap-photo-picker`）の宣言（本ファイルの唯一の呼び出し先）。
 extern void fandhe_rust_photo_picker_outcome(uint64_t requestId, int32_t code,
                                               const uint8_t *_Nullable path_ptr, size_t path_len);
 
@@ -169,7 +174,7 @@ static void FandheDeliverPickedProvider(uint64_t requestId, NSItemProvider *prov
 
 // `PHPickerViewControllerDelegate` を実装し、結果を Rust へ橋渡しする。
 // `UIAdaptivePresentationControllerDelegate` も併せて実装し、スワイプ dismiss もキャンセルとして
-// 扱う。重複して届いた通知は Rust 側 `bridge::deliver`（request_id 不一致・消費済みは無視）に
+// 扱う。重複して届いた通知は Rust 側の受け取りの登録表（`pending.rs`。未登録・消費済みの id は無視）に
 // 一任する（`fandhe_ios_file_picker.m` と同じ）。
 @interface FandhePhotoPickerDelegate : NSObject <PHPickerViewControllerDelegate, UIAdaptivePresentationControllerDelegate>
 @property(nonatomic, assign) uint64_t requestId;
@@ -182,8 +187,11 @@ static void FandheDeliverPickedProvider(uint64_t requestId, NSItemProvider *prov
     // キャンセルへ化けさせる競合を遮断するため、先に delegate を外す。
     picker.presentationController.delegate = nil;
     uint64_t requestId = self.requestId;
-    // 以降 `self` に触れないこと（最後の強参照が落ちる）。
-    g_retainedDelegate = nil;
+    // 以降 `self` に触れないこと（最後の強参照が落ちる）。重複して届いた旧 delegate の通知が、次の要求の delegate を
+    // 外さないよう、自分が現在の delegate のときだけ外す。
+    if (g_retainedDelegate == self) {
+        g_retainedDelegate = nil;
+    }
     // PHPicker は選択後に自動では閉じない。
     [picker dismissViewControllerAnimated:YES completion:nil];
 
@@ -197,7 +205,9 @@ static void FandheDeliverPickedProvider(uint64_t requestId, NSItemProvider *prov
 
 - (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController {
     uint64_t requestId = self.requestId;
-    g_retainedDelegate = nil;
+    if (g_retainedDelegate == self) {
+        g_retainedDelegate = nil;
+    }
     fandhe_rust_photo_picker_outcome(requestId, 1, NULL, 0);
 }
 
@@ -206,11 +216,38 @@ static void FandheDeliverPickedProvider(uint64_t requestId, NSItemProvider *prov
 int32_t fandhe_ios_photo_picker_pick(uint64_t requestId) {
     dispatch_async(dispatch_get_main_queue(), ^{
       @autoreleasepool {
+        // 進行中のピッカー（提示中、提示・dismiss のアニメーション中）があれば、重ねて提示せず busy を返す。
+        // 判定は delegate の有無ではなく OS の観測（提示状態）で行う: 完了通知で delegate を解放した直後も、
+        // ピッカーは dismiss が終わるまで提示中のままで、その上へ present すると失敗してコールバックが来ない。
+        PHPickerViewController *active = g_activePicker;
+        if (active != nil && (active.presentingViewController != nil || active.isBeingPresented || active.isBeingDismissed)) {
+            fandhe_rust_photo_picker_outcome(requestId, 3, NULL, 0);
+            return;
+        }
+        // delegate だけ残っていれば、完了通知を失った残り（シーン破棄等）なので解放して続ける。
+        // 解放する旧 delegate の要求には失敗（code 2）を 1 度だけ届ける（画面が `Picking` のまま、公開入口が未確定のまま止まらない）。
+        // 旧 delegate は通知経路から外れているため、ここでの通知は重複しない。
+        FandhePhotoPickerDelegate *stale = g_retainedDelegate;
+        g_retainedDelegate = nil;
+        g_activePicker = nil;
+        if (stale != nil) {
+            fandhe_rust_photo_picker_outcome(stale.requestId, 2, NULL, 0);
+        }
         UIViewController *top = FandheTopmostViewController();
         // `top.view.window == nil` は `presentViewController` が delegate を一切呼ばずに失敗する
         // 既知の失敗系（`fandhe_ios_file_picker.m` と同じ）。提示成否はここで一度だけ決める。
         if (top == nil || top.view.window == nil) {
             fandhe_rust_photo_picker_outcome(requestId, 2, NULL, 0);
+            return;
+        }
+
+        // `top`（最前面）が遷移中（提示の途中・dismiss の途中）なら、`presentViewController` は黙って捨てられ delegate が呼ばれない。
+        // 遷移中だけ重ねて提示せず busy で返す（この要求にはまだ delegate を持たせていない）。安定して出ている別の画面
+        // （別機能の system picker を含む。ファイル選択・色選択など）の上には重ねる: UIKit として正当で、そちらの進行中の判定は
+        // 各機能が自分のピッカーについてだけ持つ（本機能は他機能のピッカーを観測しない）。
+        // `FandheTopmostViewController` は一番奥の提示まで辿るため、`top.presentedViewController` は常に nil で判定に使えない。
+        if (top.isBeingPresented || top.isBeingDismissed) {
+            fandhe_rust_photo_picker_outcome(requestId, 3, NULL, 0);
             return;
         }
 
@@ -225,8 +262,28 @@ int32_t fandhe_ios_photo_picker_pick(uint64_t requestId) {
         picker.delegate = delegate;
         picker.presentationController.delegate = delegate;
         g_retainedDelegate = delegate;
+        g_activePicker = picker;
 
-        [top presentViewController:picker animated:YES completion:nil];
+        // 提示の成否は completion（提示の完了後、presented 側の `viewDidAppear:` の後に呼ばれる。公式文書）で確かめる。
+        // 直後には確かめない: `presentingViewController` / `isBeingPresented` が提示の直後に立つ保証が文書に無く、立つ前に確かめると
+        // 正しい提示を失敗と誤判定して delegate を外し、選択を捨ててしまう。ここは「completion が来たのに提示が成立していない」
+        // 場合の安全網で、通常は何もしない。delegate の完了経路が先に走っていれば（`g_retainedDelegate != delegate`）何もしない。
+        // 既知の天井: UIKit が提示を捨てたとき completion が呼ばれるかは文書に無く、呼ばれなければこの要求は確定しない。
+        // completion ブロックが picker を強参照するため、weak の `g_activePicker` は nil にならない。残った delegate は、次の要求が
+        // 「提示されていない（`presentingViewController == nil && !isBeingPresented && !isBeingDismissed`）」と判定してここで
+        // 旧 delegate を失敗（code 2）で確定して回収する（推測のタイマーは持たない）。ただし Rust 側の slot は要求中のまま残るため、
+        // 次の要求がここへ届くのは、公開入口で discard したあと、または slot が reset されたあとだけ（画面 effect は busy で断られ、
+        // iOS に画面の `Picking` を抜ける経路は無い）。遷移中は上で busy にして提示自体を避けるので、捨てられること自体はほぼ起きない前提の天井。
+        [top presentViewController:picker
+                          animated:YES
+                        completion:^{
+                          if (g_retainedDelegate == delegate && picker.presentingViewController == nil) {
+                              g_retainedDelegate = nil;
+                              g_activePicker = nil;
+                              picker.presentationController.delegate = nil;
+                              fandhe_rust_photo_picker_outcome(requestId, 2, NULL, 0);
+                          }
+                        }];
       }
     });
 

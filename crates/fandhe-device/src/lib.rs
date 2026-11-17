@@ -17,8 +17,6 @@
 //! #745 の API が確定してから #747〜#749 側で行う。
 #![forbid(unsafe_code)]
 
-/// Phase 11（端末機能の拡充ループ、親 #116、Issue #557）: 画像内のバーコード・QR 読み取り。
-pub mod barcode_scan;
 /// カメラのライブ映像の縮小の部品（`downscale_packed`・`downscale_yuv420`・`preview_size`）だけ。`fandhe-cap-ar` と
 /// `fandhe-web-dom` が共有する純関数で、機能の契約は `fandhe-cap-camera-preview-stream` が持つ（Issue #812 / #1329、
 /// consumer-app-structure.md §8）。
@@ -34,8 +32,6 @@ pub mod eye_dropper;
 /// Phase 11（端末機能の拡充ループ、Issue #872）: ファイル選択ダイアログ。
 pub mod file_picker;
 pub mod http;
-/// Phase 11（端末機能の拡充ループ、親 #1120、Issue #1250）: 画像内の文字認識（OCR）。
-pub mod image_recognition;
 /// Phase 11（端末機能の拡充ループ、親 #86、Issue #267）: 音声 1 本の再生・一時停止・停止。
 pub mod media_playback;
 /// Issue #1188: MP4 box 読みの共有部品（音声変換は機能 crate `fandhe-cap-media-transcode`、動画変換 `video_transcode` が使う）。
@@ -44,7 +40,7 @@ pub mod media_transcode;
 pub mod passkey;
 /// Phase 11（端末機能の拡充ループ、親 #1121、Issue #1254）: 画像 1 枚の写真ライブラリ保存。
 pub mod photo_library;
-/// Phase 11（端末機能の拡充ループ）: 写真 1 枚の選択。
+/// 写真 1 枚の選択の共有部品（型・検証・寸法の検査・表示用の復号）。契約と OS 実装は機能 crate `fandhe-cap-photo-picker`（Issue #1355）。
 pub mod photo_picker;
 pub mod storage;
 /// Phase 11（端末機能の拡充ループ、親 #115、Issue #535）: 端末内翻訳（固定の原文を 1 回訳す）。

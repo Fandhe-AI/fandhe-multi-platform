@@ -1,23 +1,23 @@
 //! macOS / iOS 向けバーコード・QR 読み取り実装（Issue #557 macOS、iOS は #558。iOS は
-//! `ios_barcode_scan` が使う）。`device/barcode_scan.rs` の macOS 経路から呼ばれ、
-//! `apple/fandhe_apple_barcode_scan.m`（Vision `VNDetectBarcodesRequest`。`build.rs` が feature
-//! `device` 有効時にコンパイル）を `unsafe extern "C"` 1 関数で呼ぶ。中身は `.m` からコールバックで
+//! `ios_effect::drive` の受け取りが使う）。`crate::driver` の macOS 経路から呼ばれ、
+//! `apple/fandhe_apple_barcode_scan.m`（Vision `VNDetectBarcodesRequest`。`build.rs` が macOS・iOS で
+//! コンパイル）を `unsafe extern "C"` 1 関数で呼ぶ。中身は `.m` からコールバックで
 //! 1 件ずつ Rust の `Vec<String>` へ積み、所有権とアロケータは境界を越えない。`unsafe` はこの呼び出しと
 //! コールバックの 2 箇所に閉じる（coding-rust.md の FFI 例外規定準拠）。`build.rs` の
-//! コンパイル条件・`device.rs` の mod cfg と同じ OS 集合に保つ。
+//! コンパイル条件・`lib.rs` の mod cfg と同じ OS 集合に保つ。
 //!
-//! 契約の SSOT は `fandhe_device::barcode_scan`: 得た中身は必ず `normalize_payloads` を通し、
+//! 契約の SSOT は [`crate::contract`]: 得た中身は必ず `normalize_payloads` を通し、
 //! 復号・OS 呼び出しの失敗は `Internal`（0 件の成功へ畳まない）。呼び出しはブロックするため、
 //! 呼び出し元はワーカーで呼ぶ。
 
 use std::ffi::c_void;
 
-use fandhe_device::barcode_scan::{normalize_payloads, BarcodeReader};
+use crate::contract::{BarcodeReader, normalize_payloads};
+use crate::error::BarcodeScanError;
 use fandhe_device::photo_picker::PickedPhoto;
-use fandhe_device::DeviceError;
 
 // SAFETY: `apple/fandhe_apple_barcode_scan.m` が定義する C ABI（`build.rs` が macOS / iOS
-// ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は `.m` 冒頭コメントに集約する。
+// ターゲットでコンパイル・リンクする）。契約は `.m` 冒頭コメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {
     fn fandhe_apple_barcode_scan_read(
@@ -51,7 +51,7 @@ pub(crate) struct AppleBarcodeReader;
 
 impl BarcodeReader for AppleBarcodeReader {
     #[allow(unsafe_code)]
-    fn read(&self, photo: &PickedPhoto) -> Result<Vec<String>, DeviceError> {
+    fn read(&self, photo: &PickedPhoto) -> Result<Vec<String>, BarcodeScanError> {
         let mut raw: Vec<String> = Vec::new();
         // SAFETY: `photo.bytes` は呼び出しの間生存する読み取り専用の領域で、`.m` はコピーせず
         // 呼び出しの間だけ参照する。`raw` への可変参照はこの呼び出しの間だけ `ctx` として渡し、
@@ -66,7 +66,7 @@ impl BarcodeReader for AppleBarcodeReader {
         };
         match code {
             0 => Ok(normalize_payloads(raw)),
-            _ => Err(DeviceError::Internal("barcode_scan")),
+            _ => Err(BarcodeScanError::Internal("barcode_scan")),
         }
     }
 }
@@ -110,6 +110,6 @@ mod tests {
         bytes.extend_from_slice(&[0xFF; 32]);
         let photo = validate_photo(bytes).unwrap();
         let err = AppleBarcodeReader.read(&photo).unwrap_err();
-        assert!(matches!(err, DeviceError::Internal(_)), "{err:?}");
+        assert!(matches!(err, BarcodeScanError::Internal(_)), "{err:?}");
     }
 }

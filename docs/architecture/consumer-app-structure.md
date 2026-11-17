@@ -174,7 +174,7 @@ graph TD
 | 1 機能だけが使う契約・型 | その機能 crate |
 | エラー型 | 共有しない。crate ごとに `<Pascal>Error` を持ち、使うバリアントだけを写す。表示文言は `DeviceError` と同じ書き出しにしてテストで固定する |
 | 他機能の OS 機能を実際に使う（例: `geofence` → `location`、`background_task` → `storage`） | 機能 crate から機能 crate へ依存する。依存先の宣言も一緒に入るため、権限の実態と合う |
-| OS に触れない型・検証・定数・符号化を 2 機能以上が使う（例: `url_scheme`・`photo_picker::PickedPhoto`・`http::check_url`） | `fandhe-device` に残す。機能 crate 同士で依存させない（使わない機能の権限・コンポーネントが宣言に混ざるため） |
+| OS に触れない型・検証・定数・符号化を 2 機能以上が使う（例: `url_scheme`・`photo_picker::PickedPhoto`・`http::check_url`・表示用の復号 `photo_picker::decode_for_display`（任意の feature `display-decode`）） | `fandhe-device` に残す。機能 crate 同士で依存させない（使わない機能の権限・コンポーネントが宣言に混ざるため） |
 | OS 層の定型（JNI・main thread・再描画・保存先の解決） | `fandhe-platform-<os>`・`fandhe-runtime` |
 
 - 利用者は `fandhe-device` に直接依存しません。使うのは機能 crate で、共有型は機能 crate が再公開します

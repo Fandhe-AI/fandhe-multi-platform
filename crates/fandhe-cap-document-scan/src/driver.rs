@@ -36,7 +36,6 @@
 //!
 //! 画像の中身と OS のエラー文はログに出さない。失敗は理由の種別だけを持つ。
 
-use std::io::Cursor;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -45,6 +44,7 @@ use fandhe_core::screens::document_scan_show::DocumentScanShowState;
 use fandhe_core::screens::document_scan_show::{
     CoreFailure, CoreOutcome, Phase, ShownPage, finish_scan, mark_running, take_request,
 };
+use fandhe_device::photo_picker::{ImageFormat, decode_for_display as decode_pixels};
 use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, SlotOwner, poll_and_finish_owned};
 use fandhe_runtime::{CompletionSender, image_store};
 
@@ -52,14 +52,6 @@ use crate::{
     DocumentScanFailure, DocumentScanOutcome, DocumentScanner, PRESENT_DEADLINE, PageFormat,
     ScannedPage,
 };
-
-/// 復号を許す辺の最大（画素）。
-const MAX_SIDE: u32 = 16384;
-/// 復号中の確保上限（バイト）。
-const MAX_ALLOC: u64 = 256 * 1024 * 1024;
-/// 表示用の複製の辺の上限（画素）。`RgbaPixels` の上限（2048）に収まる。
-// ponytail: 写真選択（egui-proxy の photo_pick）と同じ値・同じ縮小処理を複製している。共有の置き場は #1183 で決める。
-const DISPLAY_SIDE: u32 = 1024;
 
 /// 復号確認を通った 1 ページ目。
 struct Decoded {
@@ -71,35 +63,20 @@ struct Decoded {
 }
 
 /// 2 段目の検査: 実際に復号できるかを確かめ、表示用の画素を作る。失敗は `None`
-/// （画像の中身・エラー文は持ち出さない）。
+/// （画像の中身・エラー文は持ち出さない）。復号・上限・縮小の本体は写真選択・スキャナー機器と共有する
+/// `fandhe_device::photo_picker::decode_for_display`（1 か所）で、ここは形式名・サイズへの写像だけを持つ。
 fn decode_for_display(page: &ScannedPage) -> Option<Decoded> {
     let (format, name) = match page.format() {
-        PageFormat::Png => (image::ImageFormat::Png, "PNG"),
-        PageFormat::Jpeg => (image::ImageFormat::Jpeg, "JPEG"),
+        PageFormat::Png => (ImageFormat::Png, "PNG"),
+        PageFormat::Jpeg => (ImageFormat::Jpeg, "JPEG"),
     };
-    let mut reader = image::ImageReader::with_format(Cursor::new(page.bytes()), format);
-    // `Limits` は non_exhaustive のため、既定値から書き換える。
-    let mut limits = image::Limits::default();
-    limits.max_image_width = Some(MAX_SIDE);
-    limits.max_image_height = Some(MAX_SIDE);
-    limits.max_alloc = Some(MAX_ALLOC);
-    reader.limits(limits);
-    let decoded = reader.decode().ok()?;
-    let (width, height) = (decoded.width(), decoded.height());
-    // thumbnail は小さい画像を拡大しうるため、大きいときだけ縮める。
-    let shown = if width > DISPLAY_SIDE || height > DISPLAY_SIDE {
-        decoded.thumbnail(DISPLAY_SIDE, DISPLAY_SIDE)
-    } else {
-        decoded
-    };
-    let rgba = shown.to_rgba8();
-    let image = RgbaPixels::new(rgba.width(), rgba.height(), rgba.into_raw())?;
+    let d = decode_pixels(page.bytes(), format)?;
     Some(Decoded {
-        image,
+        image: d.image,
         format: name,
         size: page.bytes().len(),
-        width,
-        height,
+        width: d.width,
+        height: d.height,
     })
 }
 
@@ -491,6 +468,7 @@ mod tests {
         error_text, image_source, request_scan, status_text,
     };
     use fandhe_runtime::{Completion, RepaintWaker};
+    use std::io::Cursor;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
 

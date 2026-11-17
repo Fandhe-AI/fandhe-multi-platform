@@ -1,0 +1,56 @@
+[package]
+name = "fandhe-cap-photo-picker"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の写真選択（photo-picker）の機能 crate（契約・OS 別実装・宣言。レンダラ非依存）"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 公開対象だが、fandhe-core も現在 publish = false のため揃えている。公開設定は #1216 の範囲。
+publish = false
+
+[dependencies]
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ）。
+fandhe-core = { path = "../fandhe-core" }
+# 選んだ 1 枚の型・検証・読み取り（`PickedPhoto`・`validate_photo`・`picked_from_path_bytes` 等）と、表示用の復号
+# （feature `display-decode`。書類スキャン・スキャナー機器と共有する 1 か所）。`fandhe-device` から機能 crate へは依存させない（§7）。
+fandhe-device = { path = "../fandhe-device", features = ["display-decode"] }
+# 完了通知の送り口（CompletionSender）・要求の追跡（RequestSlot）・画素の保管所・再描画。egui には依存しない。
+fandhe-runtime = { path = "../fandhe-runtime" }
+thiserror = { workspace = true }
+
+# macOS の `NSOpenPanel`。Windows は rfd を使わない（`desktop.rs` の doc 参照）。Linux は依存自体を持ち込まず `Unsupported` を返す。
+[target.'cfg(target_os = "macos")'.dependencies]
+rfd = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android" }
+jni = { workspace = true }
+
+[dev-dependencies]
+# 復号確認のテストで PNG を作る。
+image = { workspace = true }
+
+[build-dependencies]
+# iOS の ObjC を build.rs でコンパイルする helper。通常のビルドには cc を持ち込まない。
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
+# 機能宣言（capability-declaration.md）。写真選択は OS のシステムピッカー（`PHPickerViewController`・`PickVisualMedia`）で、権限は要さない。
+[package.metadata.fandhe]
+id = "photo-picker"
+
+[package.metadata.fandhe.ios]
+frameworks = ["ImageIO", "PhotosUI", "UniformTypeIdentifiers"]
+
+[package.metadata.fandhe.android]
+java = ["android/java"]
+
+# Activity のライフサイクルへ参加する非公開 provider（FeatureLifecycleProvider、fandhe-platform-android）。
+# Manifest の同じ要素と完全に一致させる（cargo-fandhe の突き合わせテストが確かめる）。
+[[package.metadata.fandhe.android.components]]
+kind = "provider"
+name = "com.fandhe.platform.PhotoPickerLifecycle"
+exported = false
+attributes = { authorities = "${applicationId}.fandhe.photo-picker" }
+
+[lints]
+workspace = true

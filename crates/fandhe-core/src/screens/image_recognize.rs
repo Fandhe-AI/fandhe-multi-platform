@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod image_recognize;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは本モジュール外
-//! （`fandhe-egui-proxy` の `device/image_recognition.rs`）が [`take_request`] で要求を観測し、
+//! （機能 crate `fandhe-cap-image-recognition` の `driver.rs`）が [`take_request`] で要求を観測し、
 //! [`mark_recognizing`]・[`finish_recognize`] で状態を進める。全対象 OS（macOS / Windows /
 //! iOS / Android）で同じ UI・文言を使うため、OS 別の子 issue はこのファイルを触らない。
 //!

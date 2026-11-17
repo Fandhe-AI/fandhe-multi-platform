@@ -2,7 +2,7 @@
 // iOS 実装（#558）と共用できるよう `TARGET_OS` では分けない（Vision と Foundation だけを使い、
 // UIKit / AppKit に触れない）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_barcode_scan.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-barcode-scan/src/apple.rs` から C ABI 経由で呼ばれる。
 // `build.rs` が macOS・iOS ターゲットの feature `device` 有効時に `cc` コンパイルする
 // （Rust 側 cfg と同じ OS 集合に保つ）。
 //
@@ -23,7 +23,7 @@
 // できないバイナリ等）は飛ばす。中身に NUL を含む値も長さ付きで
 // そのまま渡す。
 // 空の値の除去は Rust 側の `normalize_payloads` が行う（契約の SSOT は
-// `fandhe_device::barcode_scan`）。
+// `fandhe-cap-barcode-scan` の `contract.rs`）。
 //
 // スレッド: 呼び出しごとにリクエストとハンドラを作るため共有状態もロックも持たない。
 // 呼ばれたスレッド（Rust のワーカー）で同期に実行する（`dispatch_sync` は使わない。main 側が

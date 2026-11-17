@@ -32,6 +32,7 @@ device = [
   "dep:fandhe-cap-background-download",
   "dep:fandhe-cap-background-task",
   "dep:fandhe-cap-background-upload",
+  "dep:fandhe-cap-barcode-scan",
   "dep:fandhe-cap-biometric-auth",
   "dep:fandhe-cap-ble-peripheral",
   "dep:fandhe-cap-bluetooth-classic",
@@ -78,6 +79,7 @@ device = [
   "dep:fandhe-cap-http-get",
   "dep:fandhe-cap-human-presence",
   "dep:fandhe-cap-image-generation",
+  "dep:fandhe-cap-image-recognition",
   "dep:fandhe-cap-in-app-browser",
   "dep:fandhe-cap-in-app-review",
   "dep:fandhe-cap-lan-discovery",
@@ -115,6 +117,7 @@ device = [
   "dep:fandhe-cap-pen-stylus",
   "dep:fandhe-cap-per-app-language",
   "dep:fandhe-cap-photo-library",
+  "dep:fandhe-cap-photo-picker",
   "dep:fandhe-cap-picture-in-picture",
   "dep:fandhe-cap-power-state",
   "dep:fandhe-cap-print",
@@ -242,6 +245,7 @@ fandhe-cap-autofill-otp = { path = "../fandhe-cap-autofill-otp", optional = true
 fandhe-cap-background-download = { path = "../fandhe-cap-background-download", optional = true }
 fandhe-cap-background-task = { path = "../fandhe-cap-background-task", optional = true }
 fandhe-cap-background-upload = { path = "../fandhe-cap-background-upload", optional = true }
+fandhe-cap-barcode-scan = { path = "../fandhe-cap-barcode-scan", optional = true }
 fandhe-cap-biometric-auth = { path = "../fandhe-cap-biometric-auth", optional = true }
 fandhe-cap-ble-peripheral = { path = "../fandhe-cap-ble-peripheral", optional = true }
 fandhe-cap-bluetooth-classic = { path = "../fandhe-cap-bluetooth-classic", optional = true }
@@ -288,6 +292,7 @@ fandhe-cap-home-widget = { path = "../fandhe-cap-home-widget", optional = true }
 fandhe-cap-http-get = { path = "../fandhe-cap-http-get", optional = true }
 fandhe-cap-human-presence = { path = "../fandhe-cap-human-presence", optional = true }
 fandhe-cap-image-generation = { path = "../fandhe-cap-image-generation", optional = true }
+fandhe-cap-image-recognition = { path = "../fandhe-cap-image-recognition", optional = true }
 fandhe-cap-in-app-browser = { path = "../fandhe-cap-in-app-browser", optional = true }
 fandhe-cap-in-app-review = { path = "../fandhe-cap-in-app-review", optional = true }
 fandhe-cap-lan-discovery = { path = "../fandhe-cap-lan-discovery", optional = true }
@@ -325,6 +330,7 @@ fandhe-cap-pedometer = { path = "../fandhe-cap-pedometer", optional = true }
 fandhe-cap-pen-stylus = { path = "../fandhe-cap-pen-stylus", optional = true }
 fandhe-cap-per-app-language = { path = "../fandhe-cap-per-app-language", optional = true }
 fandhe-cap-photo-library = { path = "../fandhe-cap-photo-library", optional = true }
+fandhe-cap-photo-picker = { path = "../fandhe-cap-photo-picker", optional = true }
 fandhe-cap-picture-in-picture = { path = "../fandhe-cap-picture-in-picture", optional = true }
 fandhe-cap-power-state = { path = "../fandhe-cap-power-state", optional = true }
 fandhe-cap-print = { path = "../fandhe-cap-print", optional = true }

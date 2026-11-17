@@ -15,23 +15,6 @@
 //! 本モジュール自体は `lib.rs` 側の `#[cfg(target_os = "ios")] pub mod ios;` で
 //! ゲートされるため、モジュール内でのターゲット条件の再指定はしない。
 
-/// `run` が組み立てる `eframe::App` の `egui::Context` を `EguiWaker` として
-/// 起床口に登録する（改訂 4、`android.rs` と同型）。`device/ios.rs` の
-/// `fandhe_rust_file_picker_outcome`（`UIDocumentPickerViewController` の delegate
-/// コールバック、UI スレッド外）は `bridge::deliver` で結果を置くだけでは egui の
-/// 描画ループを起こせない（`file_pick.rs::drive_mobile` は pull 型で `sender` も
-/// 画面の `generation` も持たず、毎フレームの effect 呼び出しでしか結果を拾えない）
-/// ため、結果を置いたら [`request_repaint`] で確実に再描画を起こす。
-///
-/// `frame-metrics` 版の `run`（`frame_metrics::run_ios` へ委譲）では設定しない。
-/// 計測専用で file_pick 画面を使わないため。
-///
-/// `fandhe_runtime::request_repaint` で登録済みの起床口を起こす（`EguiWaker`）。`run` 実行前
-/// （通常到達しない）は何もしない。
-pub(crate) fn request_repaint() {
-    fandhe_runtime::request_repaint();
-}
-
 /// iOS 向けエントリポイント。`ProxyApp::new` を wgpu（Metal）バックエンドで起動する。
 ///
 /// 呼び出し元は `main.rs` の iOS 向け `fn main` のみを想定する

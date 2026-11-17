@@ -1263,6 +1263,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-barcode-scan"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-photo-picker",
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "image",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-biometric-auth"
 version = "0.2.0"
 dependencies = [
@@ -1539,6 +1552,7 @@ name = "fandhe-cap-document-scan"
 version = "0.2.0"
 dependencies = [
  "fandhe-core",
+ "fandhe-device",
  "fandhe-platform-android",
  "fandhe-platform-apple",
  "fandhe-runtime",
@@ -1853,6 +1867,21 @@ dependencies = [
  "fandhe-platform-apple",
  "fandhe-runtime",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-image-recognition"
+version = "0.2.0"
+dependencies = [
+ "fandhe-cap-photo-picker",
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "image",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
 ]
 
 [[package]]
@@ -2337,6 +2366,21 @@ dependencies = [
  "jni 0.22.4",
  "thiserror 2.0.20",
  "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-photo-picker"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "image",
+ "jni 0.22.4",
+ "rfd",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -2889,6 +2933,8 @@ dependencies = [
 name = "fandhe-device"
 version = "0.1.0"
 dependencies = [
+ "fandhe-core",
+ "image",
  "libc",
  "rfd",
  "serde_json",
@@ -2957,6 +3003,7 @@ dependencies = [
  "fandhe-cap-background-download",
  "fandhe-cap-background-task",
  "fandhe-cap-background-upload",
+ "fandhe-cap-barcode-scan",
  "fandhe-cap-biometric-auth",
  "fandhe-cap-ble-peripheral",
  "fandhe-cap-bluetooth-classic",
@@ -3003,6 +3050,7 @@ dependencies = [
  "fandhe-cap-http-get",
  "fandhe-cap-human-presence",
  "fandhe-cap-image-generation",
+ "fandhe-cap-image-recognition",
  "fandhe-cap-in-app-browser",
  "fandhe-cap-in-app-review",
  "fandhe-cap-lan-discovery",
@@ -3040,6 +3088,7 @@ dependencies = [
  "fandhe-cap-pen-stylus",
  "fandhe-cap-per-app-language",
  "fandhe-cap-photo-library",
+ "fandhe-cap-photo-picker",
  "fandhe-cap-picture-in-picture",
  "fandhe-cap-power-state",
  "fandhe-cap-print",
@@ -3186,6 +3235,7 @@ dependencies = [
  "fandhe-cap-autofill-otp",
  "fandhe-cap-background-download",
  "fandhe-cap-background-task",
+ "fandhe-cap-barcode-scan",
  "fandhe-cap-bluetooth-le",
  "fandhe-cap-camera-preview-stream",
  "fandhe-cap-color-picker",

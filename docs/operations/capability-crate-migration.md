@@ -204,7 +204,7 @@ iOS・Android の実機での確認は人間担当です。移行 PR では行�
 | app-shortcuts | macOS の `.m` が egui-proxy の `fandhe_rust_url_scheme_received` を呼ぶ。Windows は `windows_url_scheme` と `windows_notification::lpwstr_variant` を使う。iOS は `fandhe_ios_scene.m` に埋まっている | url-scheme と同時に移す。口は #1325 で入った（§16）（第 13 束 #1333 で移した、§23） |
 | file-association | `windows_url_scheme` の内部（`win::`・`map_registry_error`）を使う。iOS・macOS は url_scheme の `.m` が受け口 | url-scheme と同時に移す。口は #1325 で入った（§16）（第 13 束 #1333 で移した、§23） |
 | spotlight-index | driver が `url_scheme::platform_url_scheme()` を使い、apple の `.m` が `fandhe_rust_url_scheme_received` を呼ぶ | url-scheme と同時に移す。口は #1325 で入った（§16）（第 13 束 #1333 で移した、§23） |
-| barcode-scan | `photo_pick::implementation`・`ios::present_photo_picker`・`image_recognition::precheck` を使う。photo-picker 側も barcode_scan の参照で止まっていて循環している | photo-picker・image-recognition と同じ PR で移す |
+| barcode-scan | `photo_pick::implementation`・`ios::present_photo_picker`・`image_recognition::precheck` を使う。photo-picker 側も barcode_scan の参照で止まっていて循環している | photo-picker・image-recognition と同じ PR で移す（第 17 束 #1355 で移した、§27） |
 | lan-discovery | apple の `.m` が `fandhe_apple_network_status_read` を、Windows が `windows_network_status` を使う。network-status も `map_view.rs` が OS 実装を使うため移せない | network-status・map-view と同時に移す （第 12 束 #1332 で移した、§22） |
 | wifi-info | 未移行の wifi-connect の Windows 実装（`windows_wifi_connect.rs`）が `windows_wifi_info::radio_off` を使う | wifi-connect と同時に移す（第 9 束 #1329 で移した） |
 | local-peer-connect | `NEARBY_WIFI_DEVICES` の `usesPermissionFlags="neverForLocation"` を宣言の `Permission`（name・max-sdk のみ）で表せず、`cargo-fandhe` の `tests/gen.rs` が通らない | 宣言に権限フラグを足してから （第 15 束 #1335 で移した、§25） |
@@ -582,7 +582,7 @@ notification・alarm・device-info・quick-settings-tile・media-playback・now-
 
 第 12 束（local-storage-kv・location・network-status・geofence・background-task・map-view・lan-discovery・photo-picker・
 image-recognition・barcode-scan・photo-library・music-library）のうち、互いの OS 実装を参照していた組を解いて 9 機能を移した。
-photo-picker・image-recognition・barcode-scan の 3 機能は未了（下の表）。はじめて出た型と、その扱いは次のとおり。
+photo-picker・image-recognition・barcode-scan の 3 機能は第 17 束（#1355）で移した（§27）。はじめて出た型と、その扱いは次のとおり。
 
 | 型 | 扱い |
 |----|------|
@@ -602,7 +602,7 @@ photo-picker・image-recognition・barcode-scan の 3 機能は未了（下の�
 
 | 機能 | 残っている作業 |
 |------|----------------|
-| photo-picker・image-recognition・barcode-scan | 3 機能が循環している（iOS の PHPicker の受け口 `fandhe_rust_photo_picker_outcome` が 3 機能へ振り分け、barcode-scan が `image_recognition::precheck` と `photo_pick::implementation` を使う）。iOS の受け口は photo-picker の crate が持ち、要求ごとに `deliver` を登録する形へ直す。寸法検査（`precheck`）は `fandhe-device::photo_picker` へ上げ、表示用の復号（photo-picker・document-scan・scanner-devices の 3 か所の複製）は `fandhe-device` の任意 feature へ 1 つにまとめる。Android の `pickPhoto`・`photoPickRequest`・`convertPhotoToJpeg` は `MainActivity` から `PhotoPickerHelper` + `PhotoPickerLifecycle` へ切り出す。`fandhe-device::file_picker` の `PickCommand`・`windows_pick_command`・`run_windows_pick`・`BusyGuard` を `pub` にする（第 16 束 #1354 で済み。iOS・Android の受け取りも `picked_from_path_bytes`・`picked_from_document` として公開した、§26） |
+| photo-picker・image-recognition・barcode-scan | 済み（第 17 束 #1355 で移した、§27）。残っていた作業は、iOS の受け口を photo-picker の crate が持ち要求ごとに受け取りを登録する形へ直す、寸法検査を `fandhe-device::photo_picker` へ上げる、表示用の復号の 3 か所の複製を `fandhe-device` の任意 feature へ 1 つにまとめる、Android の写真選択を `MainActivity` から切り出す、の 4 つ |
 | bluetooth-le・bluetooth-classic の `ACCESS_FINE_LOCATION` | location の crate が `main` に入ったので、`max-sdk = 30` へ狭められる（§21 の申し送り。geofence が FINE を宣言するため、現行 Manifest の属性なしの 1 行は geofence の宣言と一致させる必要があり、狭める PR で Manifest と宣言を合わせて直す） |
 
 ## 23. 第 13 束（#1333）で出た型
@@ -723,3 +723,28 @@ PiP の切り替わりの口は #1327（§18）で決着していた。はじめ
 - `fandhe-egui-proxy/macos/Info.plist`・`platforms/apple/FandheIosApp/Resources/Info.plist` の撤去と、旧構造の撤去（#1194）
 - iOS・Android・Windows の実機確認（人間担当。権限ダイアログ・Activity 再生成・背景遷移での中断・TTS エンジンの検出・`RecognitionService` の検出）
 
+## 27. 第 17 束（#1355）で出た型
+
+第 17 束（photo-picker・image-recognition・barcode-scan）で、第 12 束（§22）に積んだ最後の 3 機能を移した。これで `fandhe-egui-proxy/src/device/` の
+機能はなくなり、`device.rs` ごと撤去した。3 機能は互いの OS 実装を参照して循環していたため、1 つの束で解いた。はじめて出た型と、その扱いは次のとおり。
+
+| 型 | 扱い |
+|----|------|
+| 1 つの OS の受け口を複数の機能が共有する（iOS の PHPicker） | 受け口 `fandhe_rust_photo_picker_outcome` と `.m` は photo-picker の crate が持つ。以前は要求 id の最上位ビット（`1 << 63`・`1 << 62`）のタグで 3 機能へ振り分けていたが、要求ごとに受け取り（`IosPickDeliver`）を `PendingDelivers`（`pending.rs`）へ登録し、受け口は id で 1 件を取り出して呼ぶ形に直した。公開の入口は `present_ios_photo_picker(deliver) -> bool` の 1 つで、受け口は機能を知らない。取り出しと消去は同じロックで行い、呼ぶのはロックを外してから（`deliver` の中で別の要求を登録してもデッドロックしない）。知らない id・二重の到着は捨てる。受け取りの後に `request_repaint` を呼ぶ（入力のない egui が次フレームを描かず処理中のまま止まるのを防ぐ） |
+| 機能 crate 同士の依存（OS 機能そのものを使う） | image-recognition・barcode-scan とも `cfg(not(any(android, wasm32)))` で `fandhe-cap-photo-picker` に依存する。Android の文字認識は骨格（`Unsupported`）、wasm32 の文字認識は対象外（Web に標準 API が無い）、Android・wasm32 のバーコード読み取りは実装が無いため、写真選択の Java helper・provider や画像復号の依存を混ぜない（cargo-fandhe の到達判定は target ごとに辺をたどる）。wasm32 の `image_recognize_effect` は Android と同じ固定の `Unsupported` で完了させる。Windows・Linux は写真選択の宣言を持たないため依存を張っても宣言は混ざらない |
+| OS に触れない検証を共有する（寸法の検査） | 文字認識の `precheck` を `fandhe_device::photo_picker::precheck_dimensions` へ上げ、文字認識とバーコード読み取りが使う（識別子は `photo_picker size` / `photo_picker header`。画面の文言には出さない） |
+| 同じ復号処理の複製を 1 か所へ（表示用の復号） | `fandhe-device` に任意の feature `display-decode`（`image` と `fandhe-core` の optional 依存）を足し、`photo_picker::decode_for_display(bytes, format) -> Option<DisplayImage>` に辺・確保の上限（`MAX_PHOTO_SIDE`・`MAX_DECODE_ALLOC`）・表示辺（`DISPLAY_MAX_SIDE`）・縮小・RGBA 化をまとめた。写真選択・書類スキャン・スキャナー機器が使い、それぞれは形式名・サイズ・失敗への写像だけを持つ（複製していた定数と `image::Limits` の処理は消えた）。書類スキャンは `PageFormat` の判定で `image` を直接使うため、その依存は残る。`fandhe-cap-document-scan` はこの共有部品のために `fandhe-device`（feature `display-decode`）へ新たに依存する（`fandhe-device` から機能 crate への依存は張らない） |
+| 同期 trait を通らない OS の公開入口 | `platform_photo_picker()` は macOS・Windows でダイアログを開き、iOS・Android・Linux は `Unsupported`（成功を偽装しない）。`platform_image_recognition()` は macOS で Vision、Windows で `OcrEngine`、それ以外は `Unsupported`。`platform_barcode_scan()` は macOS で Vision、それ以外は `Unsupported`。iOS・Android の OS はコールバック型で同期にできないため、begin / poll / discard 型の非同期の入口を足した（下の行） |
+| begin / poll / discard 型の公開入口（§8.2） | photo-picker は iOS・Android の `begin_photo_pick` / `poll_photo_pick` / `discard_photo_pick`、image-recognition・barcode-scan は iOS の `begin_image_recognition` 等・`begin_barcode_scan` 等。前例は file-picker・mic-record。画面 effect と同じ `RequestSlot` を `SlotOwner`（`PUBLIC_OWNER` / `SCREEN_OWNER`）で分けて共有し、公開側は `begin_excluding`、画面は `begin_keeping_foreign` と `poll_and_finish_owned`。poll と discard は `PUBLIC_POLL_LOCK` で直列にし、結果は要求ごとに 1 回だけ届く。失われた要求は `Err(Internal("… lost"))` を 1 回だけ返す。discard は Rust 側の記録だけを空にし、OS 側で進行中なら次の begin を OS の観測で busy にする（Android の `PhotoPickerHelper` は `RequestTracker.tryTrack` で code 3、iOS の `.m` は `g_activePicker` の `presentingViewController` / `isBeingDismissed` で code 3、Rust は `Internal("… busy")` へ写す）。discard 直後に古い画面の結果が新しい要求へ結びつくことはない（id 照合）。photo-picker の公開結果は同期の `PhotoPicker` と同じ検証済みの `PickedPhoto`（キャンセルは `Err(Cancelled)`）で、画面の結果だけ復号確認済みの画素を持つ（`deliver` が持ち主で決める）。image-recognition・barcode-scan の公開結果は写真選択の検査（`validate_photo` → ヘッダー検査）を通った OS の結果で、キャンセルは `Ok(None)` |
+| 失敗型 | `PhotoPickerError`・`ImageRecognitionError`・`BarcodeScanError` が `From<DeviceError>` を持ち、識別子を 1:1 で写す。文字認識・バーコード読み取りは `From<PhotoPickerError>` も持つ。表示文言は移行前の識別子（`photo_picker`・`image_recognition`・`barcode_scan`）のまま |
+| `MainActivity` に最後まで埋まっていた Android 実装 | `photoPickRequest`・`pickPhoto`・`requestPhotoPick`・`deliverPickedPhoto`・`photoExceedsLimit`・`convertPhotoToJpeg`・`decodeAndEncodeJpeg`・`PHOTO_*` を `PhotoPickerHelper`（private コンストラクタ + `HELPERS` + static 入口 `request(Activity, long)`）と `PhotoPickerLifecycle` へ移した。ランチャーのキーは `fandhe:MainActivity:5` のまま。JNI の受け口は `Java_com_fandhe_platform_PhotoPickerHelper_nativeOnPhotoPickerResult`。Helper が無い要求は失敗（code 2）で確定する。積んだ処理が選択画面を起動する直前に、要求の世代と Activity の状態（終了中・破棄済み・表から外れた）を見直す。`MainActivity` は写真選択の処理を持たない。`detach` は終了中（`isFinishing`）の破棄なら追跡を外して失敗（code 2）で確定し、公開入口の追加で `track` を `tryTrack`（追跡中は code 3 の busy）へ変えた |
+| Activity 再生成時の破棄 | 契約は「保留中の要求は復元せず破棄」のまま。`reset_pending_tracking` を機能 crate が `pub` で公開し、`fandhe-gallery` の `android_main` が呼ぶ。`fandhe-egui-proxy` の `android.rs` からは消した |
+| 旧構造の撤去 | `fandhe-egui-proxy/src/device.rs` と `src/device/`（`android.rs`・`ios.rs` を含む）を撤去した。`build.rs` から写真選択・文字認識・バーコード読み取りの `compile_*` を消し、使われなくなった `request_repaint`（iOS・Android）と `image_store` の再公開も消した。feature `device`・optional の依存・`windows` の features・`image` の依存は #1194 で撤去する |
+| Web | 写真選択の Web（`fandhe-web-dom/src/file_picker.rs`）は動かしていない。バーコード読み取りの Web 本体は `fandhe-web-dom` に残し、`normalize_payloads` の参照先だけ `fandhe-cap-barcode-scan` へ付け替えた（web-dom が機能 crate に依存する）。wasm32 では写真選択の crate に依存しない |
+
+### 対象外
+
+- `fandhe-egui-proxy` の feature `device`・optional の依存・`windows` の features・`image` の依存、`macos/Info.plist` の撤去（#1194）
+- iOS の `.m`・Java と Rust に複製されている `MAX_PHOTO_*`・`PHOTO_CONVERT_SIDE` を片側（Rust）から JNI・C ABI の引数で渡す形にすること（挙動を変えない移動を優先した。device-bridge-contracts 5 の既存の指摘対象）
+- 写真選択の Web と、バーコード読み取りの Web 本体を `fandhe-web-dom` から機能 crate へ移すこと
+- iOS・Android・Windows の実機確認（人間担当。PHPicker の振り分け・Activity 再生成での破棄・HEIC の変換・OCR の言語）

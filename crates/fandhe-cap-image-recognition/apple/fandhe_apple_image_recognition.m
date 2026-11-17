@@ -2,7 +2,7 @@
 // iOS 実装（#1252）と共用できるよう `TARGET_OS` では分けない（Vision と Foundation だけを使い、
 // UIKit / AppKit に触れない）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_image_recognition.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-image-recognition/src/apple.rs` から C ABI 経由で呼ばれる。
 // `build.rs` が macOS・iOS ターゲットの feature `device` 有効時に `cc` コンパイルする
 // （Rust 側 cfg と同じ OS 集合に保つ）。
 //
@@ -20,7 +20,7 @@
 //         `Unsupported(LANGUAGE_UNAVAILABLE)` へ写す）
 //
 // 空行の除去と前後空白の trim は Rust 側の `normalize_lines` が行う（契約の SSOT は
-// `fandhe_device::image_recognition`）。
+// `fandhe-cap-image-recognition` の `contract.rs`）。
 //
 // スレッド: 呼び出しごとにリクエストとハンドラを作るため共有状態もロックも持たない。
 // 呼ばれたスレッド（Rust のワーカー）で同期に実行する（`dispatch_sync` は使わない。main 側が
