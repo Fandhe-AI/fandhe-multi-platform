@@ -11,7 +11,7 @@
       "api": "UIKit（`UIDocumentPickerViewController`）",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/uikit/uidocumentpickerviewcontroller",
-      "note": "実装済み（旧#873、案 B）。`asCopy:YES` + `UTTypeData`（フォルダを除外するため `UTTypeItem` ではない）で任意ファイルを選択。読み取り・8 MiB 判定は `fandhe_device::file_picker::picked_from_path_bytes`（`read_picked`）に一本化し、OS 側（ObjC）は提示とパス通知のみ。iOS 実機で確認済み（2026-09-15: 選ぶ / キャンセル / 8 MiB 超のエラー / ダークモード切替中・回転中に picker を開いても結果が届く）",
+      "note": "実装済み（旧#873、案 B）。`asCopy:YES` + `UTTypeData`（フォルダを除外するため `UTTypeItem` ではない）で任意ファイルを選択。読み取り・8 MiB 判定は `fandhe_device::file_picker::picked_from_path_bytes`（`read_picked`）に一本化し、OS 側（ObjC）は提示とパス通知のみ。シーンが切断されたときは `UISceneDidDisconnectNotification` の観測で失敗として 1 度だけ確定し、次の開始ができる（残る天井: UIKit が提示を捨ててコールバックが来ず、シーンも接続されたままの稀な場合は観測する通知が無く `Picking` のまま残る。シーン切断の実機確認は人間担当）。iOS 実機で確認済み（2026-09-15: 選ぶ / キャンセル / 8 MiB 超のエラー / ダークモード切替中・回転中に picker を開いても結果が届く）",
       "sourceName": [
         "ファイル共有（他アプリからの選択）"
       ],

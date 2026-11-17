@@ -34,8 +34,9 @@
 //! 自分で `finish_pick`/`finish_import` を反映できたことを確認してから
 //! [`bridge::clear`] するため、「キュー投入成功 ≠ 反映」の隙間も無い。
 //!
-//! 固定タイムアウトを掛けないため、OS がコールバックしないケース（シーン破棄等）は
-//! `Picking` のまま残る（既知の天井、out-of-scope-tracking.md 対象外の設計上の割り切り）。
+//! 固定タイムアウトを掛けないため、OS がコールバックしないケースは `Picking` のまま残る。
+//! iOS のシーンの切断は `.m` が `UISceneDidDisconnectNotification` の観測で失敗として確定するので残らず、
+//! 残るのは UIKit が提示を捨ててコールバックが来ず、シーンも接続されたままの稀な場合だけ（既知の天井、out-of-scope-tracking.md 対象外の設計上の割り切り）。
 //!
 //! # `bridge` は `file_pick`/`tsv_import` の 2 画面で共有する
 //!
