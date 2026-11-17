@@ -315,7 +315,6 @@ fn release_features(mount_id: u64) {
     super::device_info::release_mount(mount_id);
     super::audio_devices::release_mount(mount_id);
     super::local_fonts::release_mount(mount_id);
-    super::eye_dropper::release_mount(mount_id);
     super::color_picker::release_mount(mount_id);
     super::camera_preview_stream::release_mount(mount_id);
     super::multi_display::release_mount(mount_id);

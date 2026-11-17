@@ -1607,7 +1607,13 @@ dependencies = [
  "fandhe-core",
  "fandhe-device",
  "fandhe-platform-apple",
+ "fandhe-platform-web",
  "fandhe-runtime",
+ "js-sys",
+ "thiserror 2.0.20",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -3190,6 +3196,7 @@ dependencies = [
  "fandhe-cap-display-refresh-hdr",
  "fandhe-cap-dynamic-type",
  "fandhe-cap-external-app-launch",
+ "fandhe-cap-eye-dropper",
  "fandhe-cap-file-association",
  "fandhe-cap-file-watch",
  "fandhe-cap-flashlight",

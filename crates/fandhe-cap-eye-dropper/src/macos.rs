@@ -5,7 +5,7 @@
 //! （`apple_contact_picker.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `.m` 側のハンドラから [`fandhe_rust_eye_dropper_outcome`] が呼ばれ、
-//! `driver` の `bridge` へ結果を push する（pull 型）。コード → 結果の写像は
+//! `driver` の `bridge` へ結果を push する（pull 型。画面 effect と公開入口が同じ slot を共有する）。コード → 結果の写像は
 //! `fandhe_device::eye_dropper::result_from_macos_code` に一本化する。
 //!
 //! 拾った色をログへ出力しない（security.md A09）。
@@ -16,7 +16,7 @@ unsafe extern "C" {
     fn fandhe_macos_eye_dropper_present(request_id: u64) -> i32;
 }
 
-/// スポイトの起動を依頼する。`request_id` は `bridge::begin` が払い出した ID。
+/// スポイトの起動を依頼する。`request_id` は `bridge` の `SlotOwner` が払い出した ID。
 /// 戻り値は「依頼を受理できたか」（`false` は呼び出し元が `Internal` として畳む）。
 #[allow(unsafe_code)]
 pub(crate) fn present(request_id: u64) -> bool {
@@ -33,6 +33,7 @@ pub(crate) fn present(request_id: u64) -> bool {
 extern "C" fn fandhe_rust_eye_dropper_outcome(request_id: u64, code: i32, rgb: i32) {
     crate::driver::bridge::deliver(
         request_id,
-        fandhe_device::eye_dropper::result_from_macos_code(code, rgb),
+        fandhe_device::eye_dropper::result_from_macos_code(code, rgb)
+            .map_err(crate::error::EyeDropperError::from_device),
     );
 }

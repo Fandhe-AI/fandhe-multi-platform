@@ -126,6 +126,8 @@ fandhe-cap-midi = { path = "../fandhe-cap-midi" }
 fandhe-cap-passkey-signin = { path = "../fandhe-cap-passkey-signin" }
 # screen-capture の契約（build_capture_result）。Web 実装本体は本クレートに残る。
 fandhe-cap-screen-capture = { path = "../fandhe-cap-screen-capture" }
+# eye-dropper の Web 実装（`eye_dropper_pick_effect`）は機能 crate へ移した（Issue #1359）。demo.rs が effect として渡す。
+fandhe-cap-eye-dropper = { path = "../fandhe-cap-eye-dropper" }
 # Issue #1190: シリアルポートの純関数・定数（`LineAssembler`・`SerialPortFailure`・`BAUD_RATE` など）の正本。Web 実装の本体は本クレートに残す。wasm32 では OS 別の実装が cfg で外れる。
 fandhe-cap-serial-port = { path = "../fandhe-cap-serial-port" }
 # 契約の型・純関数（EventLog・LockState・SleepLockEvent 等）。Web 実装の本体はこの crate に残る（OS 別の依存は target で外れ、wasm32 でも通る）。
