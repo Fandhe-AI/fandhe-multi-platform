@@ -170,7 +170,9 @@ final class FilePickerHelper {
             // CREATED へ落とす（再び STARTED に戻るのは `onStart`）ため、状態の保存後（回転・バックグラウンド化）に launch して
             // Bundle へ id が入らず、追跡が残って以後ずっと busy になる穴を API 27 以前も含めて塞げる。RESUMED にしないのは、
             // マルチウィンドウの非フォーカスやダイアログによる `onPause` 中でも `startActivityForResult` は有効で、要求を失敗にする理由がないため。
-            // 回転の途中（`isChangingConfigurations`）は保存後なら必ずこの条件に含まれ、保存前に launch した分は Bundle で引き継がれる。
+            // 状態の保存後は Lifecycle が必ず CREATED へ落ちるので、回転の途中でも上の条件で弾かれる（保存前に launch した分は Bundle で引き継がれる）。
+            // STARTED 未満の要求は理由を問わず一律に失敗（code 2）にする。保存後に限らず、初回の `onCreate` から `onStart` までの間や、
+            // `onStop` の後（バックグラウンド中に Rust 側から来た要求）も含む。
             if (activity.isFinishing() || activity.isDestroyed()
                     || !activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED)
                     || of(activity) != this) {
