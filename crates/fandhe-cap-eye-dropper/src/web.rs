@@ -265,7 +265,7 @@ pub(crate) fn start_screen(
 /// 失敗は slot・印を空けて `Err` で返す（結果は届かない）。
 pub(crate) fn begin_public() -> Result<u64, EyeDropperError> {
     let request_id = PUBLIC_OWNER
-        .begin_excluding(&SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
+        .begin_excluding(&SLOT, &[&PUBLIC_OWNER])
         .ok_or(EyeDropperError::Internal("eye_dropper busy"))?;
     let abandon = |e: EyeDropperError| {
         SLOT.clear(request_id);

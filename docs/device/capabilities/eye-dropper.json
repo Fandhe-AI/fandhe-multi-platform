@@ -29,7 +29,7 @@
         "https://developer.apple.com/documentation/appkit/nscolorsampler/show(selectionhandler:)",
         "https://developer.apple.com/videos/play/wwdc2019/210/"
       ],
-      "note": "実装済み（#762）。`show` はすぐ戻り、利用者がクリックするとサンプラーを閉じて、選択ハンドラを main thread で呼ぶ（公式）。取り消すとハンドラに nil が渡る。自前で画面を読むと macOS 10.15 から画面収録の許可を求められるが、`NSColorSampler` を使えば求められない（WWDC19「What's New in AppKit for macOS Catalina」）。サンプラーを閉じる公開 API は無い。ハンドラが必ず一度呼ばれるかは公式に記述がない。画面の状態が作り直されて古い要求を見失ったときは、effect が Idle で走った時点で見捨てた要求として記録し、結果の到着で解放する（再描画は待たない）。画面が描画されなくなる・破棄されて effect が二度と走らない場合は記録を付けられず、サンプラーの確定後も公開入口が busy のままになりうる（守らない範囲。macOS に画面の破棄を知らせる口が無い）",
+      "note": "実装済み（#762）。`show` はすぐ戻り、利用者がクリックするとサンプラーを閉じて、選択ハンドラを main thread で呼ぶ（公式）。取り消すとハンドラに nil が渡る。自前で画面を読むと macOS 10.15 から画面収録の許可を求められるが、`NSColorSampler` を使えば求められない（WWDC19「What's New in AppKit for macOS Catalina」）。サンプラーを閉じる公開 API は無い。ハンドラが必ず一度呼ばれるかは公式に記述がない。画面側の持ち主の結果が届いたのに画面が受け取らない（状態の作り直し・画面の破棄）ときは、結果が届いて進行中でない slot を公開入口の開始が置き換える（進行中はサンプラーの二重起動を防ぐため busy）。画面が後で見ると失われた要求として失敗になり、成功にはならない",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#759）",
       "impl": "crates/fandhe-cap-eye-dropper/macos/fandhe_macos_eye_dropper.m + crates/fandhe-cap-eye-dropper/src/macos.rs + crates/fandhe-cap-eye-dropper/src/driver.rs + crates/fandhe-cap-eye-dropper/src/error.rs + crates/fandhe-core/src/screens/eye_dropper_pick.rs + crates/fandhe-device/src/eye_dropper.rs、Issue #762・#1359"
