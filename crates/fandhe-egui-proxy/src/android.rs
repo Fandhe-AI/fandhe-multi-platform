@@ -28,28 +28,6 @@ pub use winit::platform::android::activity::AndroidApp;
 /// （Issue #1166）。呼び出し側のパス `crate::android::android_app` を保つ再公開。
 pub(crate) use fandhe_platform_android::{android_app, set_android_app};
 
-/// `android_main` が組み立てる `eframe::App` の `egui::Context` を `EguiWaker` として
-/// 起床口に登録する（Issue #831 codex-review 指摘 PRRT_kwDOTl73E86hCOSM）。`device/android.rs` の
-/// `nativeOnMotionChanged` は UI スレッド外（Java 側センサコールバック）から
-/// [`crate::device::tilt::shared_motion`] へ傾きを push するだけでは egui の描画ループを
-/// 起こせない（`tilt_ball_effect` の自走は非ゼロ傾きの `drive` 呼び出しが前提で、
-/// 描画が一度止まると次に呼ばれる保証がない）ため、値更新のたびに
-/// [`request_repaint`] を呼んで確実に再開させる。
-///
-/// `OnceLock` ではなく `Mutex` にするのは、[`ANDROID_APP`] と同じ理由（codex-review 指摘、
-/// Issue #831）。`configChanges` で止められない再生成で `Activity` が再生成されると `android_main` が
-/// 新しい `egui::Context` を伴って再度呼ばれる。`OnceLock` のまま 2 回目以降の `set` を
-/// 無視すると、破棄済み `Activity` に紐づく古い `Context` へ `request_repaint` し続け、
-/// 再生成後の新しい画面が起きない（Cursor Bugbot 同一指摘 discussion_r3978309491）。
-/// `android_main` の呼び出しのたびに保持内容を差し替える。
-/// `set_repaint_waker` も同じく毎回差し替える。
-///
-/// `fandhe_runtime::request_repaint` で登録済みの起床口を起こす（`EguiWaker`）。`android_main` 実行前
-/// （通常到達しない）は何もしない。
-pub(crate) fn request_repaint() {
-    fandhe_runtime::request_repaint();
-}
-
 /// 起動する画面名（実行時 env → ビルド時 `option_env!` → debug システムプロパティの順）。
 /// 最終成果物（`fandhe-gallery`）が画面ゲートを設定するために使う。固定文字列との比較にだけ使い、
 /// パス・コマンドへは展開しない（A03）。
@@ -74,12 +52,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // `device` feature 無効時（`android_app()` の cfg 撤廃済み）に本 static を必要とするため、
     // `set_android_app` 呼び出し自体は feature に関わらず常に行う。
     set_android_app(app.clone());
-    // Issue #1104: `photo_pick::bridge::SLOT` もプロセス static のため再生成をまたいで残る。
-    // 写真選択の契約は「保留中の要求は復元せず破棄」（`fandhe_device::photo_picker` モジュール
-    // doc）なので、新しい `Idle` の画面状態を作る前に捨て、旧要求の遅延完了を id 不一致で
-    // 無視させる（`device::photo_pick::bridge::reset` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::photo_pick::reset_pending_tracking();
 
     // TASK-17.2（REQ-17）/ Issue #715: `FANDHE_PROXY_APP=<名前>` で描画対象を切り替える
     // （`main.rs`/`web.rs`/`ios.rs` と同じ契約、A03 対策・security.md 準拠の固定文字列

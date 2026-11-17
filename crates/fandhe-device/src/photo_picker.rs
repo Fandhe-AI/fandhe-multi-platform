@@ -6,13 +6,16 @@
 //! `ACTION_OPEN_DOCUMENT`）/ macOS（`PHPicker` または `NSOpenPanel`）/ Windows
 //! （`IFileOpenDialog`）/ Web（`<input type=file accept="image/*">`）。
 //!
+//! 機能の契約（`PhotoPicker` trait）と OS 実装・effect ドライバは機能 crate `fandhe-cap-photo-picker` へ移した
+//! （Issue #1355）。ここに残るのは、写真選択・文字認識（`fandhe-cap-image-recognition`）・バーコード読み取り
+//! （`fandhe-cap-barcode-scan`）・書類スキャン・スキャナー機器・Web（`fandhe-web-dom`）が共有する、OS に触れない部品
+//! （型・定数・[`validate_photo`]・寸法の検査・表示用の復号）だけで、`fandhe-device` から機能 crate へは依存しない
+//! （`docs/operations/capability-crate-migration.md` §7）。
+//!
 //! request/response 型（要求 1 件を出して 1 件の結果を待つ）。OS がコールバック型のため
-//! [`file_picker`](crate::file_picker) と同じく、橋渡し層（`fandhe-egui-proxy` の `device/`・
-//! `fandhe-web-dom`）が `crates/fandhe-runtime/src/request_slot.rs` の
-//! `RequestSlot` で要求を追跡し、OS コールバックから結果を書き戻す前提。[`PhotoPicker`] の
-//! 同期 API はデスクトップ向けで、モバイル / Web は本モジュールの型・定数・
-//! [`validate_photo`] だけを共有する。バイト列の読み取りは
-//! [`read_picked_from`](crate::file_picker::read_picked_from) に [`MAX_PHOTO_BYTES`] を
+//! [`file_picker`](crate::file_picker) と同じく、橋渡し層（機能 crate・`fandhe-web-dom`）が
+//! `crates/fandhe-runtime/src/request_slot.rs` の `RequestSlot` で要求を追跡し、OS コールバックから結果を書き戻す前提。
+//! バイト列の読み取りは [`read_picked_from`](crate::file_picker::read_picked_from) に [`MAX_PHOTO_BYTES`] を
 //! 渡して行い、読み取りの実装を増やさない。
 //!
 //! # 契約
@@ -26,10 +29,11 @@
 //!      `Err(Internal)`、[`MAX_PHOTO_BYTES`] 超過 → `Err(InvalidInput)`（縮小・切り詰めで
 //!      成功にしない）。先頭のマジックナンバーしか見ないため、これを通っても復号できるとは
 //!      限らない（ヘッダーだけ・途中で切れたデータは通りうる）
-//!   2. 表示前の復号確認（橋渡し層。`fandhe-egui-proxy` / `fandhe-web-dom`）: 実際に
+//!   2. 表示前の復号確認（橋渡し層。機能 crate / `fandhe-web-dom`）: 実際に
 //!      画像として復号し、失敗したら `Err(Internal)` として画面へ返す。**利用者に成功として
 //!      見せてよいのは 2 段目まで通ったものだけ**（`device-bridge-contracts.md`「6. 嘘の成功」）。
-//!      本クレートは画像復号の依存を持たない（共通コアの依存を増やさないため）
+//!      復号は任意の feature `display-decode` の `decode_for_display` に 1 つにまとめた
+//!      （既定では画像復号の依存を持たない。共通コアの依存を増やさないため）
 //! - **キャンセルは `Err(Cancelled)`**（失敗として見せない。「10. 三値」）。ピッカーの
 //!   起動失敗等は `Err(Internal)`、非対応 OS は `Err(Unsupported)`。権限は不要のため
 //!   `PermissionDenied` は返さない
@@ -58,7 +62,6 @@
 //!   同時操作と、OS 側で非同期に確定する選択との時間差は扱わない
 
 use crate::DeviceError;
-use crate::file_picker::PickedFile;
 
 /// 1 枚あたりのバイト数上限。読み取り側（`file_picker::read_picked_from`）と値をずらさないため
 /// `file_picker::MAX_FILE_BYTES` を参照する（SSOT）。超過は `InvalidInput`。
@@ -100,97 +103,6 @@ pub struct PickedPhoto {
     pub format: ImageFormat,
 }
 
-/// 写真選択の契約（モジュール doc の「契約」節）。デスクトップ向けの同期 API。
-pub trait PhotoPicker: Send + Sync {
-    /// 画像選択 UI を 1 回開き、選ばれた 1 枚を [`validate_photo`] 済みで返す。
-    /// キャンセルは `Err(Cancelled)`。
-    fn pick(&self) -> Result<PickedPhoto, DeviceError>;
-}
-
-/// 対象外 OS（Linux 等）・初期化失敗時のフォールバック。ダミーの成功実装へは倒さない。
-pub struct UnsupportedPhotoPicker;
-
-impl PhotoPicker for UnsupportedPhotoPicker {
-    fn pick(&self) -> Result<PickedPhoto, DeviceError> {
-        Err(DeviceError::Unsupported("photo_picker"))
-    }
-}
-
-/// デスクトップのダイアログが返す 3 値（選択 / キャンセル / 失敗）を [`PickedPhoto`] の契約へ写す
-/// 純関数。キャンセルは `Cancelled`、選択は 1 段目 [`validate_photo`] を通す。OS を問わず
-/// ホストでテストできるよう `cfg` を付けない。
-#[cfg_attr(not(any(target_os = "macos", target_os = "windows")), allow(dead_code))]
-pub(crate) fn photo_from_pick(
-    picked: Result<Option<PickedFile>, DeviceError>,
-) -> Result<PickedPhoto, DeviceError> {
-    match picked? {
-        None => Err(DeviceError::Cancelled("photo_picker")),
-        Some(f) => validate_photo(f.bytes),
-    }
-}
-
-/// Windows の `OpenFileDialog.Filter` に渡す固定フィルタ。デスクトップの復号が PNG / JPEG
-/// のみ（依存を増やさないため。GIF / WebP は対象外）なので、ダイアログ側でも絞る。
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-const WINDOWS_PHOTO_FILTER: &str = "Images (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg";
-
-/// macOS / Windows 向け実装。ファイル選択（`RfdFilePicker`）と同じ OS 分けを踏襲する:
-/// macOS は `rfd`（`NSOpenPanel`）、Windows は PowerShell 子プロセス（終了コードで
-/// 3 値を区別。rfd は失敗をキャンセルへ化けさせるため使わない）。UI スレッドから同期で呼ぶ
-/// 契約（`NSOpenPanel` は main スレッド必須）。
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-pub struct RfdPhotoPicker {
-    busy: std::sync::atomic::AtomicBool,
-}
-
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-impl RfdPhotoPicker {
-    /// 構築は失敗しない。
-    pub fn new() -> Self {
-        Self {
-            busy: std::sync::atomic::AtomicBool::new(false),
-        }
-    }
-}
-
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-impl Default for RfdPhotoPicker {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-impl PhotoPicker for RfdPhotoPicker {
-    fn pick(&self) -> Result<PickedPhoto, DeviceError> {
-        use std::sync::atomic::Ordering;
-        if self
-            .busy
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .is_err()
-        {
-            return Err(DeviceError::Internal("photo_picker busy"));
-        }
-        let _guard = crate::file_picker::BusyGuard(&self.busy);
-
-        #[cfg(target_os = "macos")]
-        let picked = match rfd::FileDialog::new()
-            .add_filter("Images", &["png", "jpg", "jpeg"])
-            .pick_file()
-        {
-            None => Ok(None),
-            Some(path) => crate::file_picker::read_picked(&path, MAX_PHOTO_BYTES).map(Some),
-        };
-        #[cfg(target_os = "windows")]
-        let picked = crate::file_picker::run_windows_pick(
-            crate::file_picker::windows_pick_command(Some(WINDOWS_PHOTO_FILTER)),
-            MAX_PHOTO_BYTES,
-        );
-        photo_from_pick(picked)
-    }
-}
-
 /// バイト列の先頭から画像形式を判定する。対応外は `None`。
 fn sniff_format(b: &[u8]) -> Option<ImageFormat> {
     if b.starts_with(&[0xFF, 0xD8, 0xFF]) {
@@ -221,11 +133,14 @@ pub fn validate_photo(bytes: Vec<u8>) -> Result<PickedPhoto, DeviceError> {
     Ok(PickedPhoto { bytes, format })
 }
 
-/// 復号前に許す辺の長さ（画素）。デスクトップの `image::Limits`（`fandhe-egui-proxy`
-/// `device/photo_pick.rs::MAX_SIDE`）と揃える。
+/// 復号前に許す辺の長さ（画素）。表示用の復号（`decode_for_display`）の `image::Limits` もこの値を使う。
 pub const MAX_PHOTO_SIDE: u32 = 16384;
-/// 復号前に許す総画素数。RGBA 4 バイトで 256 MiB（デスクトップの `max_alloc` と同じ）。
+/// 復号前に許す総画素数。RGBA 4 バイトで 256 MiB（[`MAX_DECODE_ALLOC`] と同じ）。
 pub const MAX_PHOTO_PIXELS: u64 = 64 * 1024 * 1024;
+/// 表示用の復号中の確保上限（バイト）。`MAX_PHOTO_PIXELS` 画素を RGBA 4 バイトで持った大きさ。
+pub const MAX_DECODE_ALLOC: u64 = MAX_PHOTO_PIXELS * 4;
+/// 表示用の複製の辺の上限（画素）。`RgbaPixels` の上限（2048）に収まり、egui の最大テクスチャ辺も避けられる。
+pub const DISPLAY_MAX_SIDE: u32 = 1024;
 
 fn be16(b: &[u8], i: usize) -> Option<u32> {
     Some(u32::from(u16::from_be_bytes([*b.get(i)?, *b.get(i + 1)?])))
@@ -288,6 +203,67 @@ pub fn dimensions_within_limits(width: u32, height: u32) -> bool {
         && width <= MAX_PHOTO_SIDE
         && height <= MAX_PHOTO_SIDE
         && u64::from(width) * u64::from(height) <= MAX_PHOTO_PIXELS
+}
+
+/// OS（OCR・バーコード読み取り）へ画像を渡す前に、ヘッダーだけで辺・画素数を検査する（圧縮爆弾対策）。
+/// 上限超過は `InvalidInput("photo_picker size")`、ヘッダーを読めない画像は `Internal("photo_picker header")`
+/// （切り詰めて成功にしない）。文字認識とバーコード読み取りの両方が使う、OS に触れない検証。
+pub fn precheck_dimensions(photo: &PickedPhoto) -> Result<(), DeviceError> {
+    match image_dimensions(photo) {
+        Some((w, h)) if dimensions_within_limits(w, h) => Ok(()),
+        Some(_) => Err(DeviceError::InvalidInput("photo_picker size")),
+        None => Err(DeviceError::Internal("photo_picker header")),
+    }
+}
+
+/// 表示用に復号した画像。`image` は辺 [`DISPLAY_MAX_SIDE`] 以下へ縮めた画素、`width` / `height` は元の寸法。
+#[cfg(feature = "display-decode")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DisplayImage {
+    /// 表示用の画素（縮小済み）。
+    pub image: fandhe_core::RgbaPixels,
+    /// 元画像の幅（画素）。
+    pub width: u32,
+    /// 元画像の高さ（画素）。
+    pub height: u32,
+}
+
+/// 2 段検査の 2 段目: 実際に復号できるかを確かめ、表示用の画素を作る。失敗は `None`
+/// （画像の中身・エラー文は持ち出さない。呼び出し側が自機能の失敗へ写す）。
+///
+/// 写真選択・書類スキャン・スキャナー機器が同じ復号を使う。辺 [`MAX_PHOTO_SIDE`]・確保 [`MAX_DECODE_ALLOC`] の上限を
+/// `image::Limits` で掛け、超えたら `None`（成功にしない）。表示は [`DISPLAY_MAX_SIDE`] 以下へ縮めた複製で行い、報告する
+/// 寸法は元のもの。PNG / JPEG のみ復号する（`image` の gif / webp feature は新しい依存を足すため採らない。GIF / WebP は `None`）。
+#[cfg(feature = "display-decode")]
+pub fn decode_for_display(bytes: &[u8], format: ImageFormat) -> Option<DisplayImage> {
+    let format = match format {
+        ImageFormat::Png => image::ImageFormat::Png,
+        ImageFormat::Jpeg => image::ImageFormat::Jpeg,
+        ImageFormat::Gif | ImageFormat::Webp => return None,
+    };
+    let mut reader = image::ImageReader::with_format(std::io::Cursor::new(bytes), format);
+    // `Limits` は non_exhaustive のため、既定値から書き換える。
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(MAX_PHOTO_SIDE);
+    limits.max_image_height = Some(MAX_PHOTO_SIDE);
+    limits.max_alloc = Some(MAX_DECODE_ALLOC);
+    reader.limits(limits);
+    let decoded = reader.decode().ok()?;
+    let (width, height) = (decoded.width(), decoded.height());
+    // thumbnail は小さい画像を拡大しうるため、大きいときだけ縮める。
+    let shown = if width > DISPLAY_MAX_SIDE || height > DISPLAY_MAX_SIDE {
+        decoded.thumbnail(DISPLAY_MAX_SIDE, DISPLAY_MAX_SIDE)
+    } else {
+        decoded
+    };
+    let rgba = shown.to_rgba8();
+    // 表示辺 DISPLAY_MAX_SIDE 以下なので `RGBA_MAX_SIDE` に収まる。外れたら成功にせず失敗にする。
+    let image = fandhe_core::RgbaPixels::new(rgba.width(), rgba.height(), rgba.into_raw())?;
+    Some(DisplayImage {
+        image,
+        width,
+        height,
+    })
 }
 
 #[cfg(test)]
@@ -391,96 +367,94 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_picker_is_not_a_fake_success() {
-        let err = UnsupportedPhotoPicker.pick().unwrap_err();
-        assert!(matches!(err, DeviceError::Unsupported(_)));
-    }
-
-    #[test]
     fn header_only_passes_stage_one_but_is_not_a_decode_guarantee() {
         // 1 段目はマジックナンバーしか見ない。復号の確認は橋渡し層（2 段目）の責務。
         let photo = validate_photo(vec![0xFF, 0xD8, 0xFF]).unwrap();
         assert_eq!(photo.format, ImageFormat::Jpeg);
     }
 
-    fn file(bytes: &[u8]) -> PickedFile {
-        PickedFile {
-            name: "a".to_string(),
-            bytes: bytes.to_vec(),
-        }
+    fn png_with_size(w: u32, h: u32) -> PickedPhoto {
+        let mut b = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13];
+        b.extend_from_slice(b"IHDR");
+        b.extend_from_slice(&w.to_be_bytes());
+        b.extend_from_slice(&h.to_be_bytes());
+        validate_photo(b).expect("PNG と判定できる")
     }
 
     #[test]
-    fn cancel_is_cancelled_not_success() {
+    fn precheck_accepts_within_limits() {
+        assert!(precheck_dimensions(&png_with_size(10, 10)).is_ok());
+    }
+
+    #[test]
+    fn precheck_rejects_oversize_as_invalid_input() {
+        let r = precheck_dimensions(&png_with_size(1, MAX_PHOTO_SIDE + 1));
         assert!(matches!(
-            photo_from_pick(Ok(None)),
-            Err(DeviceError::Cancelled(_))
+            r,
+            Err(DeviceError::InvalidInput("photo_picker size"))
         ));
     }
 
     #[test]
-    fn pick_failure_passes_through() {
+    fn precheck_rejects_unreadable_header_as_internal() {
+        // IHDR を欠く PNG（先頭マジックだけ）はヘッダーを読めない。
+        let p = validate_photo(vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]).unwrap();
+        let r = precheck_dimensions(&p);
         assert!(matches!(
-            photo_from_pick(Err(DeviceError::Internal("x"))),
-            Err(DeviceError::Internal(_))
+            r,
+            Err(DeviceError::Internal("photo_picker header"))
         ));
+    }
+}
+
+#[cfg(all(test, feature = "display-decode"))]
+mod decode_tests {
+    use super::*;
+
+    fn png(w: u32, h: u32) -> Vec<u8> {
+        let img = image::RgbaImage::from_pixel(w, h, image::Rgba([10, 20, 30, 255]));
+        let mut out = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut out, image::ImageFormat::Png).unwrap();
+        out.into_inner()
     }
 
     #[test]
-    fn picked_file_goes_through_stage_one() {
-        assert!(matches!(
-            photo_from_pick(Ok(Some(file(b"")))),
-            Err(DeviceError::Internal(_))
-        ));
-        assert!(matches!(
-            photo_from_pick(Ok(Some(file(b"not an image")))),
-            Err(DeviceError::Internal(_))
-        ));
-        let mut big = vec![0xFF, 0xD8, 0xFF];
-        big.resize(MAX_PHOTO_BYTES + 1, 0);
-        assert!(matches!(
-            photo_from_pick(Ok(Some(file(&big)))),
-            Err(DeviceError::InvalidInput(_))
-        ));
-        let png = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0];
-        assert_eq!(
-            photo_from_pick(Ok(Some(file(&png)))).unwrap().format,
-            ImageFormat::Png
-        );
-    }
-
-    #[cfg(unix)]
-    fn sh(script: &str) -> crate::file_picker::PickCommand {
-        crate::file_picker::PickCommand {
-            program: std::path::PathBuf::from("/bin/sh"),
-            args: vec!["-c".to_string(), script.to_string()],
-        }
+    fn valid_png_decodes_within_display_side() {
+        let d = decode_for_display(&png(8, 4), ImageFormat::Png).unwrap();
+        assert_eq!((d.width, d.height), (8, 4));
+        assert_eq!((d.image.width(), d.image.height()), (8, 4));
     }
 
     #[test]
-    #[cfg(unix)]
-    fn windows_style_cancel_failure_and_non_image_are_not_success() {
-        use crate::file_picker::run_windows_pick;
-        let run = |script: &str| photo_from_pick(run_windows_pick(sh(script), MAX_PHOTO_BYTES));
-        // キャンセル専用コード 2。
-        assert!(matches!(run("exit 2"), Err(DeviceError::Cancelled(_))));
-        // それ以外の非ゼロは失敗。
-        assert!(matches!(run("exit 1"), Err(DeviceError::Internal(_))));
-        // 画像でないファイルは 1 段目で落ちる。
-        let path = std::env::temp_dir().join(format!("fandhe-photo-test-{}", std::process::id()));
-        std::fs::write(&path, b"plain text").unwrap();
-        let r = run(&format!("printf '%s' '{}'", path.display()));
-        let _ = std::fs::remove_file(&path);
-        assert!(matches!(r, Err(DeviceError::Internal(_))), "{r:?}");
+    fn large_image_is_shrunk_for_display_but_reports_original_size() {
+        let d = decode_for_display(&png(2048, 16), ImageFormat::Png).unwrap();
+        assert_eq!((d.width, d.height), (2048, 16));
+        assert!(d.image.width() <= DISPLAY_MAX_SIDE);
     }
 
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
     #[test]
-    fn rfd_photo_picker_busy_is_internal() {
-        let picker = RfdPhotoPicker::new();
-        picker
-            .busy
-            .store(true, std::sync::atomic::Ordering::Release);
-        assert!(matches!(picker.pick(), Err(DeviceError::Internal(_))));
+    fn truncated_png_fails() {
+        let mut b = png(64, 64);
+        b.truncate(b.len() / 2);
+        assert!(decode_for_display(&b, ImageFormat::Png).is_none());
+    }
+
+    #[test]
+    fn header_only_jpeg_passes_stage_one_but_fails_decode() {
+        let p = validate_photo(vec![0xFF, 0xD8, 0xFF]).unwrap();
+        assert!(decode_for_display(&p.bytes, p.format).is_none());
+    }
+
+    #[test]
+    fn gif_and_webp_are_not_success() {
+        assert!(decode_for_display(b"GIF89a....", ImageFormat::Gif).is_none());
+        assert!(decode_for_display(b"RIFF\0\0\0\0WEBPVP8 ", ImageFormat::Webp).is_none());
+    }
+
+    #[test]
+    fn side_over_limit_is_rejected() {
+        // 1 辺 16385 の PNG（ほぼ空なので小さい）。上限超えは復号前に弾かれる。
+        let b = png(MAX_PHOTO_SIDE + 1, 1);
+        assert!(decode_for_display(&b, ImageFormat::Png).is_none());
     }
 }

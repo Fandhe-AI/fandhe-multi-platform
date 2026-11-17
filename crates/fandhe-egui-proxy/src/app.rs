@@ -6,9 +6,6 @@
 
 use fandhe_core::{Screen, StateStore};
 use fandhe_render_egui::app::central_panel_with_insets;
-#[cfg(test)]
-#[cfg_attr(not(feature = "device"), allow(unused_imports))]
-pub(crate) use fandhe_render_egui::app::egui_sender;
 pub use fandhe_render_egui::app::{
     insets_px_to_margin, Completion, CompletionSender, EffectFn, EguiWaker, InsetMarginSupplier,
     ProxyApp, ProxyAppDyn,

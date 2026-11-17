@@ -7,15 +7,22 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
 publish = false
 
+[features]
+display-decode = ["dep:image", "dep:fandhe-core"]
+
 [dependencies]
 thiserror = { workspace = true }
 # `passkey`・`background_task` 等が JSON を扱うため全ターゲットの依存にする。既に workspace で解決済みで
 # 新規パッケージは増えない（ルート Cargo.toml の `serde_json` コメント参照）。
 serde_json = { workspace = true }
+# 表示用の画像復号（feature `display-decode`、`photo_picker::decode_for_display`）。写真選択・書類スキャン・スキャナー機器が
+# 同じ復号と縮小を 1 か所で使う。既定では持ち込まない（画素の型 `RgbaPixels` のための `fandhe-core` も同じ）。
+# jpeg は Cargo.lock 済みの zune-jpeg で、新しいパッケージは増えない。
+fandhe-core = { path = "../fandhe-core", optional = true }
+image = { workspace = true, features = ["jpeg"], optional = true }
 
-
-# Phase 11（Issue #872、#876 codex-review P1 是正）: `file_picker::pick_folder`（フォルダ選択）と `photo_picker::RfdPhotoPicker` の
-# macOS 経路のみ。ファイル選択の `RfdFilePicker` は機能 crate `fandhe-cap-file-picker` へ移した（同じ理由で自前の macOS 依存を持つ）。
+# Phase 11（Issue #872、#876 codex-review P1 是正）: `file_picker::pick_folder`（フォルダ選択）の macOS 経路のみ。
+# ファイル選択の `RfdFilePicker` は `fandhe-cap-file-picker`、写真選択の `RfdPhotoPicker` は `fandhe-cap-photo-picker` へ移した（どちらも自前の macOS 依存を持つ）。
 # Windows は rfd を使わない（rfd 0.17 の同期 API が COM 初期化失敗等を `.ok()` で握り潰しキャンセルへ化けさせ、
 # 「キャンセルと失敗は別の結果」契約に違反するため）。Windows は PowerShell の `System.Windows.Forms.OpenFileDialog` を
 # 子プロセスとして起動し、終了コードで選択/キャンセル/失敗を区別する（`file_picker.rs` 参照）。

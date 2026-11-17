@@ -109,7 +109,7 @@ accesskit = { workspace = true }
 # union するため、既存の native 分岐（glow/x11/wayland）と合成される）。
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-# Issue #1103（写真選択）: デスクトップ / モバイルの 2 段目（復号確認、`device/photo_pick.rs`）で
+# Issue #1103（写真選択）: デスクトップ / モバイルの 2 段目（復号確認、`fandhe-cap-photo-picker` の `driver.rs`）で
 # JPEG を復号する。Cargo.lock に既にある `zune-core` / `zune-jpeg` を有効にするだけで新しい
 # パッケージは増えない（gif / webp は `gif`・`image-webp` 等が増えるため採らない）。
 # wasm32 には持ち込まない（Web は `createImageBitmap` で復号する）。

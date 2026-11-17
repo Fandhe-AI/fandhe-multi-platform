@@ -292,6 +292,10 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // 以前は egui-proxy の `android::run` が呼んでいた。機能 crate を egui-proxy が知らないようにするため移した）。
     #[cfg(feature = "device")]
     fandhe_cap_document_scan::reset_pending_tracking();
+    // 写真選択の保留中の要求も破棄する（契約は「復元せず破棄」。以前は egui-proxy の `android::run` が呼んでいた。旧要求の遅延完了を
+    // id 不一致で無視させる。`fandhe_cap_photo_picker::reset_pending_tracking` doc 参照）。
+    #[cfg(feature = "device")]
+    fandhe_cap_photo_picker::reset_pending_tracking();
     // 写真ライブラリ保存の保留中の要求も破棄する（保留中の保存要求は復元せず破棄し、旧要求の遅延完了を id 不一致で無視させる。`fandhe_cap_photo_library::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_photo_library::reset_pending_tracking();

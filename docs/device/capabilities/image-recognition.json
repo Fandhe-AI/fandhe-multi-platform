@@ -11,13 +11,13 @@
       "api": "Vision（`VNRecognizeTextRequest` + `VNImageRequestHandler`。ObjC クラス）",
       "perm": "不要（画像ファイル・バイト列を渡す場合。カメラ撮影は別機能 camera）",
       "url": "https://developer.apple.com/documentation/vision/vnrecognizetextrequest",
-      "note": "実装済み（旧#1252）。写真選択の PHPicker 受け口（`fandhe_ios_photo_picker.m`）を id の最上位ビットのタグで共有し、元のバイト列を `validate_photo` → ヘッダー検査（辺・画素数。超えたら OCR を呼ばず `InvalidInput`）→ Vision（`.m` は macOS と共用、Accurate・`ja-JP` + `en-US`）で OCR する。OCR は main ではなく OS のコールバックスレッドで `@autoreleasepool` 内に同期実行し、`dispatch_sync` は使わない。結果は `RequestSlot` に置き、直後に `request_repaint` で次フレームを起こして `poll_and_finish` が拾う。キャンセルは失敗にせず、0 行は「文字なし」の成功、復号不能は `Internal`、日本語が使えなければ `LanguageUnavailable`。権限・usage description・entitlement は不要。守る範囲: 1 プロセス内の要求と完了の順序（世代照合）、嘘の成功の禁止、バイト列の解放。守らない範囲: 実行中の OCR の取り消し（結果は世代照合で捨てる）、処理時間、OS ごとの認識結果の違い、複数プロセス。既知の天井: HEIC などは `.m` が長辺 4096 の JPEG へ変換してから OCR する。実機での認識結果・キャンセル・壊れた画像の目視は #13 で済み。",
+      "note": "実装済み（旧#1252）。写真選択の PHPicker 受け口（機能 crate `fandhe-cap-photo-picker` の `fandhe_ios_photo_picker.m`）へ要求ごとに受け取りを登録して共有し、元のバイト列を `validate_photo` → ヘッダー検査（辺・画素数。超えたら OCR を呼ばず `InvalidInput`）→ Vision（`.m` は macOS と共用、Accurate・`ja-JP` + `en-US`）で OCR する。OCR は main ではなく OS のコールバックスレッドで `@autoreleasepool` 内に同期実行し、`dispatch_sync` は使わない。結果は `RequestSlot` に置き、直後に `request_repaint` で次フレームを起こして `poll_and_finish` が拾う。キャンセルは失敗にせず、0 行は「文字なし」の成功、復号不能は `Internal`、日本語が使えなければ `LanguageUnavailable`。権限・usage description・entitlement は不要。守る範囲: 1 プロセス内の要求と完了の順序（世代照合）、嘘の成功の禁止、バイト列の解放。守らない範囲: 実行中の OCR の取り消し（結果は世代照合で捨てる）、処理時間、OS ごとの認識結果の違い、複数プロセス。既知の天井: HEIC などは `.m` が長辺 4096 の JPEG へ変換してから OCR する。実機での認識結果・キャンセル・壊れた画像の目視は #13 で済み。",
       "sourceName": [
         "画像認識（顔・文字・矩形検出等）"
       ],
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_image_recognition.m + crates/fandhe-egui-proxy/src/device/ios_image_recognition.rs + crates/fandhe-egui-proxy/src/device/apple_image_recognition.rs + crates/fandhe-egui-proxy/src/device/image_recognition.rs + crates/fandhe-egui-proxy/ios/fandhe_ios_photo_picker.m + crates/fandhe-device/src/image_recognition.rs + crates/fandhe-core/src/screens/image_recognize.rs、Issue 旧#1252",
+      "impl": "crates/fandhe-cap-image-recognition/apple/fandhe_apple_image_recognition.m + crates/fandhe-cap-image-recognition/src/ios.rs + crates/fandhe-cap-image-recognition/src/apple.rs + crates/fandhe-cap-image-recognition/src/driver.rs + crates/fandhe-cap-image-recognition/src/contract.rs + crates/fandhe-cap-photo-picker/ios/fandhe_ios_photo_picker.m + crates/fandhe-core/src/screens/image_recognize.rs、Issue 旧#1252・#1355",
       "verified": true
     },
     "android": {
@@ -39,7 +39,7 @@
       "note": "実装済み（旧#1250）。Vision の `VNRecognizeTextRequest`（Accurate・言語補正あり・認識言語 `ja-JP` + `en-US`、revision 3）を C ABI 1 関数で呼び、行をコールバックで Rust の `Vec<String>` へ積んで `normalize_lines` を通す。入力は写真選択（photo-picker）で選んだ 1 枚（`validate_photo` 済み・8 MiB 上限）で、OS を呼ぶ前にヘッダーだけで辺・画素数を検査し、超えたら OCR を呼ばず `InvalidInput`、ヘッダーを読めない画像も失敗にする。OCR はワーカースレッドで実行し UI を止めない。`@autoreleasepool` の内側で同期実行し、`dispatch_sync` は使わない。0 行は「文字なし」の成功、復号不能・`performRequests` の失敗は `Internal`、日本語が使えない（macOS 13 未満等）は `Unsupported(LANGUAGE_UNAVAILABLE)`（失敗として表示し 0 行の成功へ畳まない）。写真選択のキャンセルは失敗にしない。権限・entitlement は不要。`.m` は iOS（旧#1252）と共用でき、`build.rs`・`device.rs` の cfg・dispatch は全対象 OS 分を 旧#1250 で最終形にした（Windows / iOS / Android は `Unsupported` を返すスタブ）。守る範囲: 1 画面・1 プロセス内での要求と完了の順序（世代照合）、嘘の成功の禁止、ワーカーが持つバイト列の解放。守らない範囲: OS ごとの認識結果・行の分け方の違い、処理時間（タイムアウトなし）、実行中の OCR の取り消し（結果は世代照合で捨てる）、複数プロセス。実際の文字入り画像での認識結果・キャンセル・壊れた画像の目視は #13 で済み。",
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-egui-proxy/apple/fandhe_apple_image_recognition.m + crates/fandhe-egui-proxy/src/device/apple_image_recognition.rs + crates/fandhe-egui-proxy/src/device/image_recognition.rs + crates/fandhe-device/src/image_recognition.rs + crates/fandhe-core/src/screens/image_recognize.rs、Issue 旧#1250",
+      "impl": "crates/fandhe-cap-image-recognition/apple/fandhe_apple_image_recognition.m + crates/fandhe-cap-image-recognition/src/apple.rs + crates/fandhe-cap-image-recognition/src/driver.rs + crates/fandhe-cap-image-recognition/src/contract.rs + crates/fandhe-core/src/screens/image_recognize.rs、Issue 旧#1250・#1355",
       "verified": true
     },
     "windows": {
@@ -50,7 +50,7 @@
       "note": "実装済み（旧#1251）。WinRT `OcrEngine.TryCreateFromUserProfileLanguages` で言語を確認し（null = OCR 言語パック未導入は `Unsupported(LANGUAGE_UNAVAILABLE)`）、選んだ 1 枚（`validate_photo` 済み）を `InMemoryRandomAccessStream` → `BitmapDecoder` で復号して `RecognizeAsync` に渡し、行を `normalize_lines` に通す。`MaxImageDimension` を超える画像は切り詰めず縦横比を保って縮小する。0 行は「文字なし」の成功、ストリーム・復号・認識の失敗は固定ラベルの `Internal`（HRESULT・認識文字は出さない）で、0 行の成功へ畳まない。OCR はワーカースレッドで同期実行し UI を止めない。`unsafe`・`RoInitialize` は使わず、権限・manifest 宣言は追加しない。認識言語はユーザープロファイル言語に従う（日本語 OCR 言語が無い端末では日本語を読めない）。守る範囲: 1 画面・1 プロセス内での要求と完了の順序（世代照合）、嘘の成功の禁止、バイト列とネイティブハンドルの解放。守らない範囲: OS ごとの認識結果・行の分け方の違い、処理時間（タイムアウトなし）、実行中の OCR の取り消し（結果は世代照合で捨てる）、複数プロセス。既知の天井: unpackaged の exe から `OcrEngine` が動くかは未確認で、型検査は `x86_64-pc-windows-gnu` のみ。実機で到達できなければ done を取り下げる（Windows 実機確認 #13）。",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#13）",
-      "impl": "crates/fandhe-egui-proxy/src/device/windows_image_recognition.rs + crates/fandhe-egui-proxy/src/device/image_recognition.rs + crates/fandhe-device/src/image_recognition.rs + crates/fandhe-core/src/screens/image_recognize.rs、Issue 旧#1251"
+      "impl": "crates/fandhe-cap-image-recognition/src/windows.rs + crates/fandhe-cap-image-recognition/src/driver.rs + crates/fandhe-cap-image-recognition/src/contract.rs + crates/fandhe-core/src/screens/image_recognize.rs、Issue 旧#1251・#1355"
     },
     "web": {
       "status": "no",

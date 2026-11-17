@@ -11,10 +11,8 @@
 //!   `ios/fandhe_ios_text_input.m`（Issue #795）は `src/ios_text_input.rs` が外れる計測ビルド
 //!   （`cold-start-probe`・`frame-metrics`）ではコンパイルしない（Issue #19）。winit の補完で起動経路の
 //!   責務のため、本 crate に残す。
-//! - それ以外の端末機能は feature `device`（既定 on）でのみコンパイルする。無効時は呼び出し元の
-//!   `src/device/*` がビルドされないため、リンクエラーを避けて素通りする。
+//! - 端末機能の ObjC は機能 crate（`fandhe-cap-*`）の `build.rs` が持つ。`src/device/` は撤去した（Issue #1355）。
 //! - framework は `.m` / Swift ごとに自己完結して宣言する（他の単位のリンクに頼らない）。
-//!   各 `compile_*` の doc に、対象 OS・呼び出し元・Issue 番号を書く。
 //! - macOS の `Info.plist` 埋め込み（`-sectcreate`）は最終実行体の設定。`fandhe-gallery` へ転送する。
 //! - Swift 薄層の弱リンク・`-rpath`・clang_rt・`-sectcreate` は `rustc-link-arg` では依存元へ伝わらない。
 //!   最終成果物は `fandhe-gallery` へ移ったため、`links` メタデータで転送し、gallery の `build.rs` が
@@ -47,62 +45,15 @@ fn build() {
         compile_objc("ios/fandhe_ios_text_input.m", &["Foundation", "UIKit"]);
     }
 
-    // feature `device`（既定 on）でのみ `fandhe-device` への依存自体が有効になる
-    // （`Cargo.toml` の native 分岐参照）。無効時に ObjC をコンパイルしても
-    // 呼び出し元（`src/device/ios.rs`）がビルドされないため、リンクエラーを
-    // 避けるべく feature 無効時は素通りする。
-    if std::env::var("CARGO_FEATURE_DEVICE").is_err() {
-        return;
-    }
-
-    // `ios/fandhe_ios_photo_picker.m`（写真選択）。
-    compile_objc(
-        "ios/fandhe_ios_photo_picker.m",
-        &["ImageIO", "PhotosUI", "UIKit", "UniformTypeIdentifiers"],
-    );
-
-    // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も iOS 分岐と共用する。
-    compile_apple_image_recognition();
-    // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
-    compile_apple_barcode_scan();
+    // 端末機能の ObjC（写真選択・文字認識・バーコード読み取りを含む）は機能 crate（`fandhe-cap-*`）の `build.rs` が持つ（Issue #1355）。
 }
 
-/// `apple/fandhe_apple_barcode_scan.m` を `cc` でコンパイルし Vision をリンクする
-/// （Issue #557 macOS、iOS は #558 が利用、バーコード・QR 読み取り）。
-/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_barcode_scan`）と
-/// 同じ OS 集合に保つ。
-fn compile_apple_barcode_scan() {
-    compile_objc(
-        "apple/fandhe_apple_barcode_scan.m",
-        &["Foundation", "Vision"],
-    );
-}
-
-/// `apple/fandhe_apple_image_recognition.m` を `cc` でコンパイルし Vision をリンクする
-/// （Issue #1250 macOS、iOS は #1252 が利用、画像の文字認識）。
-/// macOS・iOS 双方の分岐から呼ぶ。Rust 側 cfg（`device.rs` の `apple_image_recognition`）と
-/// 同じ OS 集合に保つ。
-fn compile_apple_image_recognition() {
-    compile_objc(
-        "apple/fandhe_apple_image_recognition.m",
-        &["Foundation", "Vision"],
-    );
-}
-
-/// macOS ターゲット向けビルド（Issue #889・#897）。iOS と異なり macOS は位置情報
-/// （機能 crate `fandhe-cap-location` が持つ）などの `apple/*.m` だけを対象とする。既存の `ios/*.m` 群（文字入力・写真選択）は iOS 専用のため対象外。
-///
-/// feature `device`（既定 on）でのみ `fandhe-device` への依存自体が有効になり、
-/// 呼び出し元の Rust がビルド対象になる（iOS 分岐と同じ判断）。無効時はコンパイルもリンクも行わない。
+/// macOS ターゲット向けビルド（Issue #889・#897）。macOS の ObjC は機能 crate（`fandhe-cap-*`）の `build.rs` が持つため、
+/// ここに残るのは実行体への `Info.plist` の埋め込みだけ。
 fn build_macos() {
     if std::env::var("CARGO_FEATURE_DEVICE").is_err() {
         return;
     }
-
-    // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も共用する。
-    compile_apple_image_recognition();
-    // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
-    compile_apple_barcode_scan();
 
     // 素の実行体（`fandhe-gallery` の bin）へ `macos/Info.plist`
     // （`CFBundleIdentifier` + `NSLocationUsageDescription`）を埋め込む。macOS 10.15+

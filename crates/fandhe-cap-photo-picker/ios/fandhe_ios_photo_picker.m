@@ -1,6 +1,6 @@
 // Phase 11（端末機能の拡張ループ、親 #1101）: iOS 側の実写真選択実装（Issue #1104）。
 //
-// `crates/fandhe-egui-proxy/src/device/ios.rs`（`present_photo_picker`/
+// `crates/fandhe-cap-photo-picker/src/ios.rs`（`present_ios_photo_picker`/
 // `fandhe_rust_photo_picker_outcome`）から C ABI 経由で呼ばれる。`PHPickerViewController`
 // は Rust バインディングを持たないため、この 1 ファイルの ObjC コードに実装を閉じ、
 // `unsafe extern "C"` 宣言 1 点のみを Rust 側へ公開する（`fandhe_ios_file_picker.m` と同型。
@@ -47,7 +47,7 @@
 // 読み書きする（`fandhe_ios_file_picker.m` の `g_retainedDelegate` と同じ理由）。
 static id _Nullable g_retainedDelegate = nil;
 
-// `ios.rs::fandhe_rust_photo_picker_outcome` の宣言（本ファイルの唯一の呼び出し先）。
+// `ios.rs::fandhe_rust_photo_picker_outcome`（`fandhe-cap-photo-picker`）の宣言（本ファイルの唯一の呼び出し先）。
 extern void fandhe_rust_photo_picker_outcome(uint64_t requestId, int32_t code,
                                               const uint8_t *_Nullable path_ptr, size_t path_len);
 
@@ -169,7 +169,7 @@ static void FandheDeliverPickedProvider(uint64_t requestId, NSItemProvider *prov
 
 // `PHPickerViewControllerDelegate` を実装し、結果を Rust へ橋渡しする。
 // `UIAdaptivePresentationControllerDelegate` も併せて実装し、スワイプ dismiss もキャンセルとして
-// 扱う。重複して届いた通知は Rust 側 `bridge::deliver`（request_id 不一致・消費済みは無視）に
+// 扱う。重複して届いた通知は Rust 側の受け取りの登録表（`pending.rs`。未登録・消費済みの id は無視）に
 // 一任する（`fandhe_ios_file_picker.m` と同じ）。
 @interface FandhePhotoPickerDelegate : NSObject <PHPickerViewControllerDelegate, UIAdaptivePresentationControllerDelegate>
 @property(nonatomic, assign) uint64_t requestId;

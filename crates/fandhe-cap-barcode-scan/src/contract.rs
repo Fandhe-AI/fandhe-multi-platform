@@ -1,11 +1,11 @@
 //! 画像内のバーコード・QR 読み取りの抽象（Phase 11 の拡充ループ、対応表
 //! `docs/device/capabilities/barcode-scan.json`、親 #116、Issue #557）。
 //!
-//! 扱う範囲は「写真選択（[`crate::photo_picker`]）で選んだ画像 1 枚のバーコード・QR を読み、
+//! 扱う範囲は「写真選択（`fandhe-cap-photo-picker`）で選んだ画像 1 枚のバーコード・QR を読み、
 //! 中身の文字列の一覧を返す」ことだけ。カメラのライブ読み取り・位置枠・形式の絞り込み・形式名の
 //! 返却は扱わない。対象は iOS / macOS（Vision `VNDetectBarcodesRequest`）と Web
 //! （`BarcodeDetector`）。Android・Windows は OS 標準の API が無く対象外。
-//! 一発呼び出し型の同期 API。呼び出し側（`fandhe-egui-proxy` の effect ドライバ）は
+//! 一発呼び出し型の同期 API。呼び出し側（この crate の effect ドライバ）は
 //! UI を止めないようワーカースレッドから呼ぶ。
 //!
 //! # 契約
@@ -31,21 +31,22 @@
 //! ワーカーが持つバイト列の解放。守らない範囲: OS ごとの検出結果・順序の違い、処理時間
 //! （タイムアウトは掛けない）、実行中の検出の取り消し（結果は世代照合で捨てる）、複数プロセス。
 
-use crate::DeviceError;
-use crate::photo_picker::PickedPhoto;
+use fandhe_device::photo_picker::PickedPhoto;
+
+use crate::error::BarcodeScanError;
 
 /// バーコード・QR 読み取りの契約（モジュール doc の「契約」節）。
 pub trait BarcodeReader: Send + Sync {
     /// `photo` のコードを読み、[`normalize_payloads`] 済みの中身一覧を返す。0 件は成功。
-    fn read(&self, photo: &PickedPhoto) -> Result<Vec<String>, DeviceError>;
+    fn read(&self, photo: &PickedPhoto) -> Result<Vec<String>, BarcodeScanError>;
 }
 
 /// 対象外 OS（Linux 等）・未実装 OS のフォールバック。ダミーの成功実装へは倒さない。
 pub struct UnsupportedBarcodeReader;
 
 impl BarcodeReader for UnsupportedBarcodeReader {
-    fn read(&self, _photo: &PickedPhoto) -> Result<Vec<String>, DeviceError> {
-        Err(DeviceError::Unsupported("barcode_scan"))
+    fn read(&self, _photo: &PickedPhoto) -> Result<Vec<String>, BarcodeScanError> {
+        Err(BarcodeScanError::Unsupported("barcode_scan"))
     }
 }
 
@@ -65,7 +66,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::photo_picker::ImageFormat;
+    use fandhe_device::photo_picker::ImageFormat;
 
     #[test]
     fn normalize_drops_only_empty_keeps_order_and_duplicates() {
@@ -85,6 +86,6 @@ mod tests {
             format: ImageFormat::Png,
         };
         let err = UnsupportedBarcodeReader.read(&photo).unwrap_err();
-        assert!(matches!(err, DeviceError::Unsupported("barcode_scan")));
+        assert!(matches!(err, BarcodeScanError::Unsupported("barcode_scan")));
     }
 }

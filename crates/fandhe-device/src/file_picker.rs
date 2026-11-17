@@ -340,7 +340,7 @@ pub fn pick_folder() -> Result<Option<PathBuf>, DeviceError> {
 }
 
 /// busy を必ず戻す小さなガード（early return・panic のどちらの経路でも Drop で戻る）。
-/// 写真選択（`photo_picker::RfdPhotoPicker`）も同じ挙動にするため共有する。
+/// 写真選択（機能 crate `fandhe-cap-photo-picker` の `RfdPhotoPicker`）も同じ挙動にするため共有する。
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub struct BusyGuard<'a>(pub &'a AtomicBool);
 

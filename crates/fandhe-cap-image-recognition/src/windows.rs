@@ -1,9 +1,9 @@
 //! Windows 向け文字認識（Issue #1251）。WinRT `Windows.Media.Ocr.OcrEngine` を呼ぶ。
 //!
-//! 呼び出し元: `device/image_recognition.rs` の Windows 経路。写真選択とヘッダー検査
+//! 呼び出し元: `crate::driver` の Windows 経路。写真選択とヘッダー検査
 //! （辺・画素数）のあと、ワーカースレッド上で `recognize` を同期に呼ぶ。世代照合・
 //! キャンセル・失敗の画面向け写像は呼び出し側が担い、本ファイルは「ブロックしてよい
-//! 同期関数」だけを持つ。契約の SSOT は `fandhe_device::image_recognition`。
+//! 同期関数」だけを持つ。契約の SSOT は [`crate::contract`]。
 //!
 //! 失敗の写像（全呼び出し箇所で一貫）:
 //! - `TryCreateFromUserProfileLanguages` が null（OCR 言語パック未導入）→
@@ -19,9 +19,9 @@
 //! 既知の天井: unpackaged exe から `OcrEngine` が動くかは未確認で実機確認待ち（#1245）。
 //! 型検査は `x86_64-pc-windows-gnu` のみ。
 
-use fandhe_device::image_recognition::{normalize_lines, TextRecognizer, LANGUAGE_UNAVAILABLE};
+use crate::contract::{LANGUAGE_UNAVAILABLE, TextRecognizer, normalize_lines};
+use crate::error::ImageRecognitionError;
 use fandhe_device::photo_picker::PickedPhoto;
-use fandhe_device::DeviceError;
 use windows::Graphics::Imaging::{
     BitmapAlphaMode, BitmapDecoder, BitmapPixelFormat, BitmapTransform, ColorManagementMode,
     ExifOrientationMode, SoftwareBitmap,
@@ -32,12 +32,12 @@ use windows::Storage::Streams::{DataWriter, InMemoryRandomAccessStream};
 /// Windows の文字認識（`OcrEngine`）。
 pub(crate) struct WindowsTextRecognizer;
 
-fn internal(label: &'static str) -> DeviceError {
-    DeviceError::Internal(label)
+fn internal(label: &'static str) -> ImageRecognitionError {
+    ImageRecognitionError::Internal(label)
 }
 
 /// バイト列を復号し、OCR の辺上限を超えるときは縦横比を保って縮小した bitmap を返す。
-fn decode(bytes: &[u8], max_dim: u32) -> Result<SoftwareBitmap, DeviceError> {
+fn decode(bytes: &[u8], max_dim: u32) -> Result<SoftwareBitmap, ImageRecognitionError> {
     let stream_err = |_| internal("image_recognition stream");
     let stream = InMemoryRandomAccessStream::new().map_err(stream_err)?;
     let writer = DataWriter::CreateDataWriter(&stream).map_err(stream_err)?;
@@ -84,12 +84,12 @@ fn decode(bytes: &[u8], max_dim: u32) -> Result<SoftwareBitmap, DeviceError> {
 }
 
 impl TextRecognizer for WindowsTextRecognizer {
-    fn recognize(&self, photo: &PickedPhoto) -> Result<Vec<String>, DeviceError> {
+    fn recognize(&self, photo: &PickedPhoto) -> Result<Vec<String>, ImageRecognitionError> {
         // 言語が無いときに無駄な復号をしないよう、エンジン生成を先に行う。
         let engine = match OcrEngine::TryCreateFromUserProfileLanguages() {
             Ok(e) => e,
             Err(e) if e.code().is_ok() => {
-                return Err(DeviceError::Unsupported(LANGUAGE_UNAVAILABLE))
+                return Err(ImageRecognitionError::Unsupported(LANGUAGE_UNAVAILABLE));
             }
             Err(_) => return Err(internal("image_recognition init")),
         };
@@ -128,7 +128,7 @@ mod tests {
         match WindowsTextRecognizer.recognize(&photo) {
             Ok(lines) => assert!(lines.is_empty()),
             // OCR 言語が無い環境
-            Err(DeviceError::Unsupported(_)) => {}
+            Err(ImageRecognitionError::Unsupported(_)) => {}
             Err(e) => panic!("{e:?}"),
         }
     }
@@ -140,7 +140,10 @@ mod tests {
         let photo = validate_photo(bytes).unwrap();
         let err = WindowsTextRecognizer.recognize(&photo).unwrap_err();
         assert!(
-            matches!(err, DeviceError::Internal(_) | DeviceError::Unsupported(_)),
+            matches!(
+                err,
+                ImageRecognitionError::Internal(_) | ImageRecognitionError::Unsupported(_)
+            ),
             "{err:?}"
         );
     }

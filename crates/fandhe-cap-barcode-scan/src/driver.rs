@@ -1,112 +1,115 @@
-//! Phase 11（親 #116）型サンプル「バーコード・QR 読み取り」（Issue #557）の effect ドライバ。
-//! `fandhe_core::screens::barcode_scan`（端末依存ゼロ）の要求を観測し、写真選択
-//! （`device/photo_pick.rs` と同じ `PhotoPicker`）で選ばせた画像 1 枚を
-//! `fandhe_device::barcode_scan::BarcodeReader` で読んで `CompletionSender` 経由で
-//! 結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
-//! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
+//! Phase 11（親 #116）型サンプル「バーコード・QR 読み取り」（Issue #557）の effect ドライバ（機能 crate `fandhe-cap-barcode-scan` の中核、
+//! Issue #1355）。`fandhe_core::screens::barcode_scan`（端末依存ゼロ）の要求を観測し、写真選択（機能 crate `fandhe-cap-photo-picker`）で
+//! 選ばせた画像 1 枚を [`BarcodeReader`] で読んで `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の
+//! `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`fandhe_runtime::EffectFn` 参照）。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。Web は
-//! `fandhe-web-dom` 側（#559）で扱う。契約（結果の形・失敗の区別・守る範囲）の SSOT は
-//! `fandhe_device::barcode_scan`。
+//! Web は `fandhe-web-dom` 側（#559）で扱い、契約の純関数 [`normalize_payloads`] だけをこの crate から使う（wasm32 では写真選択の crate
+//! に依存しないため、この driver の OS 経路は wasm32 でコンパイルされない）。契約（結果の形・失敗の区別・守る範囲）の SSOT は
+//! [`crate::contract`]。
 //!
-//! # OS 別の分担（dispatch は #557 で最終形。後続の子は自分の OS のモジュールだけを埋める）
+//! # OS 別の分担
 //!
-//! - macOS: [`super::apple_barcode_scan::AppleBarcodeReader`]（#557）
-//! - iOS: `ios_barcode_scan::drive`（#558。PHPicker + Vision。macOS と同じ `.m` で読む）
-//! - それ以外（Windows・Android・Linux）: 対応表で `no` / 対象外。写真選択を開かず `Unsupported`
-//!   で完了させる（ダミーの成功実装へは倒さない）
+//! - macOS: `apple::AppleBarcodeReader`（#557）
+//! - iOS: `ios::drive`（#558。PHPicker + Vision。macOS と同じ `.m` で読む）。`fandhe_cap_photo_picker::present_ios_photo_picker` へ
+//!   要求ごとの受け取りを登録する
+//! - それ以外（Windows・Android・Linux）: 対応表で `no` / 対象外。写真選択を開かず `Unsupported` で完了させる
+//!   （ダミーの成功実装へは倒さない）。Android は写真選択の crate に依存しない
 //!
 //! # スレッド（デスクトップ）
 //!
-//! `NSOpenPanel` は main スレッド必須のため、`photo_pick` と同じく呼ばれたスレッド
-//! （egui の update ループ = main）で `pick()` を同期に呼ぶ。読み取りは UI を止めうるため、
-//! 選択後はワーカースレッドで実行して完了を送る。二重起動は、`mark_scanning` の適用前に effect が
-//! 再度走っても `pick()` が main を塞いで完了が先に積まれるため起きず、画面側の `Idle` 以外
-//! no-op でも防がれる。ワーカーが持つバイト列は完了送信後に drop される。
+//! `NSOpenPanel` は main スレッド必須のため、`photo_pick` と同じく呼ばれたスレッド（egui の update ループ = main）で `pick()` を同期に
+//! 呼ぶ。読み取りは UI を止めうるため、選択後はワーカースレッドで実行して完了を送る。二重起動は、`mark_scanning` の適用前に effect が
+//! 再度走っても `pick()` が main を塞いで完了が先に積まれるため起きず、画面側の `Idle` 以外 no-op でも防がれる。ワーカーが持つ
+//! バイト列は完了送信後に drop される。
 //!
 //! # 入力の検査
 //!
-//! 写真は `validate_photo`（8 MiB 上限・形式）済み。加えて OS に渡す前にヘッダーだけで
-//! 辺・画素数を検査し（`image_recognition::precheck` を共用）、超えたら OS を呼ばず `InvalidInput`
+//! 写真は `validate_photo`（8 MiB 上限・形式）済み。加えて OS に渡す前にヘッダーだけで辺・画素数を検査し
+//! （`fandhe_device::photo_picker::precheck_dimensions`。文字認識と共有）、超えたら OS を呼ばず `InvalidInput`
 //! （圧縮爆弾対策。切り詰めて成功にしない）。ヘッダーを読めない画像も失敗にする。
 
-#[cfg(any(test, target_os = "macos"))]
+#[cfg(test)]
 use std::sync::Arc;
 
+#[cfg(any(test, target_os = "macos"))]
+use fandhe_cap_photo_picker::PhotoPicker;
+#[cfg(any(test, target_os = "ios"))]
+use fandhe_cap_photo_picker::PhotoPickerError;
+use fandhe_core::screens::barcode_scan::{BarcodeScanState, ScanFailure};
 #[cfg(any(test, not(target_os = "ios")))]
 use fandhe_core::screens::barcode_scan::{finish_scan, mark_scanning, take_request};
-use fandhe_core::screens::barcode_scan::{BarcodeScanState, ScanFailure};
-#[cfg(any(test, target_os = "macos", target_os = "ios"))]
-use fandhe_device::barcode_scan::BarcodeReader;
 #[cfg(any(test, target_os = "ios"))]
 use fandhe_device::file_picker::PickedFile;
+#[cfg(any(test, target_os = "macos", target_os = "ios"))]
+use fandhe_device::photo_picker::precheck_dimensions;
 #[cfg(any(test, target_os = "ios"))]
 use fandhe_device::photo_picker::validate_photo;
-#[cfg(any(test, target_os = "macos"))]
-use fandhe_device::photo_picker::PhotoPicker;
+use fandhe_runtime::CompletionSender;
+
 #[cfg(any(test, target_os = "macos", target_os = "ios"))]
-use fandhe_device::DeviceError;
+use crate::contract::BarcodeReader;
+#[cfg(any(test, target_os = "macos", target_os = "ios"))]
+use crate::error::BarcodeScanError;
 
-use crate::app::CompletionSender;
+/// 現在のプラットフォームに応じた [`BarcodeReader`] 実装を返す（プロセスで 1 個）。状態型に依存しない入口で、
+/// フレームワークの外のアプリも自分の状態型の effect から使える。macOS は Vision、iOS・Windows・Android・Linux は `Unsupported`
+/// （iOS は PHPicker が非同期に結果を返すため同期の入口では使えない。画面は [`barcode_scan_effect`] の経路を使う）。
+// ponytail: iOS の同期入口は要求が出たら足す（`ios::drive` の登録・受け取りを同期に直すにはスレッド待ちが要る）。
+pub fn platform_barcode_scan() -> std::sync::Arc<dyn crate::contract::BarcodeReader> {
+    #[cfg(target_os = "macos")]
+    {
+        std::sync::Arc::new(crate::apple::AppleBarcodeReader)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        std::sync::Arc::new(crate::contract::UnsupportedBarcodeReader)
+    }
+}
 
-/// `DeviceError` を画面の失敗種別へ写す。内部識別子・パス・読み取った中身は利用者向け文言へ
+/// `BarcodeScanError` を画面の失敗種別へ写す。内部識別子・パス・読み取った中身は利用者向け文言へ
 /// 出さず、上記以外は固定文言にする（security.md A09）。
 #[cfg(any(test, target_os = "macos", target_os = "ios"))]
-pub(crate) fn to_failure(e: DeviceError) -> ScanFailure {
+pub(crate) fn to_failure(e: BarcodeScanError) -> ScanFailure {
     match e {
-        DeviceError::Unsupported(_) => ScanFailure::Unsupported,
-        DeviceError::InvalidInput(_) => ScanFailure::InvalidInput,
+        BarcodeScanError::Unsupported(_) => ScanFailure::Unsupported,
+        BarcodeScanError::InvalidInput(_) => ScanFailure::InvalidInput,
         _ => ScanFailure::Failed("コードを読み取れませんでした".to_string()),
     }
 }
 
-/// iOS で barcode 要求の PHPicker 呼び出しに立てる目印（`1 << 62`）。写真選択の id・
-/// 文字認識の目印（`1 << 63`）と区別し、`ios.rs` の同じ受け口を共有する。
-#[cfg(any(test, target_os = "ios"))]
-pub(crate) const IOS_PICKER_TAG: u64 = 1 << 62;
-
-/// 文字認識の目印。`ios_image_recognition::PICKER_TAG` と同じ値（そちらは iOS 専用で
-/// ホストのテストから参照できないため写す）。
-#[cfg(any(test, target_os = "ios"))]
-const OCR_PICKER_TAG: u64 = 1 << 63;
-
-/// `id` が barcode 要求の PHPicker 呼び出しか。振り分け順に頼らず、OCR の目印が立った id は除く。
-/// `RequestSlot` の採番は 1 から始まり 2^62 には届かない。
-#[cfg(any(test, target_os = "ios"))]
-pub(crate) fn owns_picker_id(id: u64) -> bool {
-    id & OCR_PICKER_TAG == 0 && id & IOS_PICKER_TAG != 0
-}
-
 /// PHPicker の結果を検査して読む純粋関数（iOS 経路）。キャンセルは `Ok(None)`（失敗にしない）、
 /// 0 件は成功、それ以外の失敗は `to_failure` で固定文言へ写す。バイト列は戻り時に解放される。
-/// ホストのテストで検証できるよう `ios_barcode_scan` から分離。
+/// ホストのテストで検証できるよう `ios` から分離。
 #[cfg(any(test, target_os = "ios"))]
 pub(crate) fn scan_picked(
-    result: Result<Option<PickedFile>, DeviceError>,
+    result: Result<Option<PickedFile>, PhotoPickerError>,
     reader: &dyn BarcodeReader,
 ) -> Result<Option<Vec<String>>, ScanFailure> {
     let file = match result {
         Ok(Some(file)) => file,
-        Ok(None) | Err(DeviceError::Cancelled(_)) => return Ok(None),
-        Err(e) => return Err(to_failure(e)),
+        Ok(None) | Err(PhotoPickerError::Cancelled(_)) => return Ok(None),
+        Err(e) => return Err(to_failure(e.into())),
     };
-    let photo = validate_photo(file.bytes).map_err(to_failure)?;
-    super::image_recognition::precheck(&photo).map_err(to_failure)?;
+    let photo = validate_photo(file.bytes)
+        .map_err(BarcodeScanError::from)
+        .map_err(to_failure)?;
+    precheck_dimensions(&photo)
+        .map_err(BarcodeScanError::from)
+        .map_err(to_failure)?;
     reader.read(&photo).map(Some).map_err(to_failure)
 }
 
 /// `registry.rs` の `effect` 区画から `barcode_scan` 画面用に配線される effect ドライバ。
-/// OS ごとの分岐はここで最終形にしてあり、後続の子 issue は触らない。
 pub fn barcode_scan_effect(state: &BarcodeScanState, sender: &CompletionSender<BarcodeScanState>) {
     #[cfg(target_os = "macos")]
     drive_desktop(
         state,
         sender,
-        &*super::photo_pick::implementation(),
-        Arc::new(super::apple_barcode_scan::AppleBarcodeReader),
+        &*fandhe_cap_photo_picker::platform_photo_picker(),
+        platform_barcode_scan(),
     );
     #[cfg(target_os = "ios")]
-    super::ios_barcode_scan::drive(state, sender);
+    crate::ios::drive(state, sender);
     #[cfg(not(any(target_os = "macos", target_os = "ios")))]
     finish_unsupported(state, sender);
 }
@@ -129,7 +132,7 @@ fn drive_desktop(
     state: &BarcodeScanState,
     sender: &CompletionSender<BarcodeScanState>,
     picker: &dyn PhotoPicker,
-    reader: Arc<dyn BarcodeReader>,
+    reader: std::sync::Arc<dyn BarcodeReader>,
 ) {
     let Some(generation) = take_request(state) else {
         return;
@@ -147,11 +150,13 @@ fn drive_desktop(
     let photo = match picker.pick() {
         Ok(photo) => photo,
         // キャンセルは失敗ではない（契約表 10）。
-        Err(DeviceError::Cancelled(_)) => return finish(sender, Ok(None)),
-        Err(e) => return finish(sender, Err(to_failure(e))),
+        Err(fandhe_cap_photo_picker::PhotoPickerError::Cancelled(_)) => {
+            return finish(sender, Ok(None));
+        }
+        Err(e) => return finish(sender, Err(to_failure(e.into()))),
     };
-    if let Err(e) = super::image_recognition::precheck(&photo) {
-        return finish(sender, Err(to_failure(e)));
+    if let Err(e) = precheck_dimensions(&photo) {
+        return finish(sender, Err(to_failure(e.into())));
     }
 
     let worker_sender = sender.clone();
@@ -167,7 +172,7 @@ fn drive_desktop(
     if spawned.is_err() {
         finish(
             sender,
-            Err(to_failure(DeviceError::Internal("barcode_scan spawn"))),
+            Err(to_failure(BarcodeScanError::Internal("barcode_scan spawn"))),
         );
     }
 }
@@ -175,20 +180,27 @@ fn drive_desktop(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::UnsupportedBarcodeReader;
     use fandhe_core::screens::barcode_scan::{
-        request_scan, CANCELLED_STATUS, FAILED_PREFIX, INVALID_INPUT_STATUS, NO_CODE_STATUS,
-        UNSUPPORTED_STATUS,
+        CANCELLED_STATUS, FAILED_PREFIX, INVALID_INPUT_STATUS, NO_CODE_STATUS, UNSUPPORTED_STATUS,
+        request_scan,
     };
-    use fandhe_device::barcode_scan::UnsupportedBarcodeReader;
-    use fandhe_device::photo_picker::{validate_photo, PickedPhoto};
+    use fandhe_device::photo_picker::{PickedPhoto, validate_photo};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
-    type Rx = std::sync::mpsc::Receiver<crate::app::Completion<BarcodeScanState>>;
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: Duration) {}
+    }
+
+    type Rx = std::sync::mpsc::Receiver<fandhe_runtime::Completion<BarcodeScanState>>;
 
     fn sender_with_channel() -> (CompletionSender<BarcodeScanState>, Rx) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (crate::app::egui_sender(tx, egui::Context::default()), rx)
+        (CompletionSender::new(tx, Arc::new(NoopWaker)), rx)
     }
 
     /// 幅 × 高さをヘッダーに持つ PNG（IHDR の先頭だけ。形式判定とヘッダー検査にだけ使う）。
@@ -200,19 +212,19 @@ mod tests {
         validate_photo(b).expect("PNG と判定できる")
     }
 
-    struct FakePicker(fn() -> Result<PickedPhoto, DeviceError>);
+    struct FakePicker(fn() -> Result<PickedPhoto, PhotoPickerError>);
     impl PhotoPicker for FakePicker {
-        fn pick(&self) -> Result<PickedPhoto, DeviceError> {
+        fn pick(&self) -> Result<PickedPhoto, PhotoPickerError> {
             (self.0)()
         }
     }
 
     struct FakeReader {
-        result: fn() -> Result<Vec<String>, DeviceError>,
+        result: fn() -> Result<Vec<String>, BarcodeScanError>,
         called: Arc<AtomicBool>,
     }
     impl BarcodeReader for FakeReader {
-        fn read(&self, _photo: &PickedPhoto) -> Result<Vec<String>, DeviceError> {
+        fn read(&self, _photo: &PickedPhoto) -> Result<Vec<String>, BarcodeScanError> {
             self.called.store(true, Ordering::SeqCst);
             (self.result)()
         }
@@ -221,8 +233,8 @@ mod tests {
     /// 要求を立てて `drive_desktop` し、届いた完了（mark と finish の 2 件）を順に適用した
     /// 状態と、reader が呼ばれたかを返す。
     fn run(
-        picker: fn() -> Result<PickedPhoto, DeviceError>,
-        result: fn() -> Result<Vec<String>, DeviceError>,
+        picker: fn() -> Result<PickedPhoto, PhotoPickerError>,
+        result: fn() -> Result<Vec<String>, BarcodeScanError>,
     ) -> (BarcodeScanState, bool) {
         let (sender, rx) = sender_with_channel();
         let mut state = BarcodeScanState::default();
@@ -240,7 +252,7 @@ mod tests {
         (state, called.load(Ordering::SeqCst))
     }
 
-    fn ok_photo() -> Result<PickedPhoto, DeviceError> {
+    fn ok_photo() -> Result<PickedPhoto, PhotoPickerError> {
         Ok(png_with_size(10, 10))
     }
 
@@ -275,7 +287,7 @@ mod tests {
     #[test]
     fn picker_cancel_is_cancel_and_skips_reader() {
         let (s, called) = run(
-            || Err(DeviceError::Cancelled("photo_picker")),
+            || Err(PhotoPickerError::Cancelled("photo_picker")),
             || Ok(vec![]),
         );
         assert!(!called);
@@ -286,28 +298,33 @@ mod tests {
     #[test]
     fn picker_failures_are_mapped_and_skip_reader() {
         let (s, called) = run(
-            || Err(DeviceError::Unsupported("photo_picker")),
+            || Err(PhotoPickerError::Unsupported("photo_picker")),
             || Ok(vec![]),
         );
         assert!(!called);
         assert_eq!(s.error, UNSUPPORTED_STATUS);
         let (s, _) = run(
-            || Err(DeviceError::InvalidInput("photo_picker size")),
+            || Err(PhotoPickerError::InvalidInput("photo_picker size")),
             || Ok(vec![]),
         );
         assert_eq!(s.error, INVALID_INPUT_STATUS);
-        let (s, _) = run(|| Err(DeviceError::Internal("photo_picker")), || Ok(vec![]));
+        let (s, _) = run(
+            || Err(PhotoPickerError::Internal("photo_picker")),
+            || Ok(vec![]),
+        );
         assert!(s.error.starts_with(FAILED_PREFIX));
         assert!(s.status.is_empty());
     }
 
     #[test]
     fn reader_failures_are_mapped() {
-        let (s, _) = run(ok_photo, || Err(DeviceError::Unsupported("barcode_scan")));
+        let (s, _) = run(ok_photo, || {
+            Err(BarcodeScanError::Unsupported("barcode_scan"))
+        });
         assert_eq!(s.error, UNSUPPORTED_STATUS);
-        let (s, _) = run(ok_photo, || Err(DeviceError::InvalidInput("x")));
+        let (s, _) = run(ok_photo, || Err(BarcodeScanError::InvalidInput("x")));
         assert_eq!(s.error, INVALID_INPUT_STATUS);
-        let (s, _) = run(ok_photo, || Err(DeviceError::Internal("secret-id")));
+        let (s, _) = run(ok_photo, || Err(BarcodeScanError::Internal("secret-id")));
         assert!(s.error.starts_with(FAILED_PREFIX));
         assert!(!s.error.contains("secret-id"), "内部識別子を出さない");
         assert!(s.payloads.is_empty() && s.status.is_empty());
@@ -334,7 +351,7 @@ mod tests {
         let (s, called) = run(
             || {
                 validate_photo(vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A])
-                    .map_err(|_| DeviceError::Internal("test"))
+                    .map_err(|_| PhotoPickerError::Internal("test"))
             },
             || Ok(vec!["x".into()]),
         );
@@ -368,18 +385,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn owns_picker_id_is_exclusive_with_ocr_and_plain_ids() {
-        assert!(owns_picker_id(IOS_PICKER_TAG | 1));
-        assert!(owns_picker_id(IOS_PICKER_TAG | 12345));
-        for id in [1u64, 2, u32::MAX as u64] {
-            assert!(!owns_picker_id(id));
-        }
-        assert!(!owns_picker_id((1 << 63) | 1));
-        assert!(!owns_picker_id((1 << 63) | IOS_PICKER_TAG | 1));
-    }
-
-    fn picked(photo: PickedPhoto) -> Result<Option<PickedFile>, DeviceError> {
+    fn picked(photo: PickedPhoto) -> Result<Option<PickedFile>, PhotoPickerError> {
         Ok(Some(PickedFile {
             name: "a".into(),
             bytes: photo.bytes,
@@ -387,8 +393,8 @@ mod tests {
     }
 
     fn scan_run(
-        input: Result<Option<PickedFile>, DeviceError>,
-        result: fn() -> Result<Vec<String>, DeviceError>,
+        input: Result<Option<PickedFile>, PhotoPickerError>,
+        result: fn() -> Result<Vec<String>, BarcodeScanError>,
     ) -> (Result<Option<Vec<String>>, ScanFailure>, bool) {
         let called = Arc::new(AtomicBool::new(false));
         let out = scan_picked(
@@ -412,7 +418,7 @@ mod tests {
 
     #[test]
     fn scan_picked_cancel_skips_reader() {
-        for input in [Ok(None), Err(DeviceError::Cancelled("x"))] {
+        for input in [Ok(None), Err(PhotoPickerError::Cancelled("x"))] {
             let (o, c) = scan_run(input, || Ok(vec![]));
             assert_eq!(o, Ok(None));
             assert!(!c);
@@ -421,7 +427,7 @@ mod tests {
 
     #[test]
     fn scan_picked_invalid_inputs_skip_reader() {
-        let (o, c) = scan_run(Err(DeviceError::Internal("x")), || Ok(vec![]));
+        let (o, c) = scan_run(Err(PhotoPickerError::Internal("x")), || Ok(vec![]));
         assert!(matches!(o, Err(ScanFailure::Failed(_))));
         assert!(!c);
         let big = png_with_size(1, fandhe_device::photo_picker::MAX_PHOTO_SIDE + 1);
@@ -446,7 +452,7 @@ mod tests {
     #[test]
     fn scan_picked_reader_failure_hides_internal_id() {
         let (o, _) = scan_run(picked(png_with_size(10, 10)), || {
-            Err(DeviceError::Internal("secret-id"))
+            Err(BarcodeScanError::Internal("secret-id"))
         });
         match o {
             Err(ScanFailure::Failed(m)) => assert!(!m.contains("secret-id")),

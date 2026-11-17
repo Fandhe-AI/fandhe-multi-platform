@@ -1,11 +1,11 @@
 //! 画像内の文字認識（OCR）の抽象（Phase 11 の拡充ループ、対応表
 //! `docs/device/capabilities/image-recognition.json`、親 #1120）。
 //!
-//! 扱う範囲は「写真選択（[`crate::photo_picker`]）で選んだ画像 1 枚の文字を認識し、行の
+//! 扱う範囲は「写真選択（`fandhe-cap-photo-picker`）で選んだ画像 1 枚の文字を認識し、行の
 //! 一覧を返す」ことだけ。位置枠・顔・矩形検出・カメラ入力は扱わない。対象は iOS / macOS
 //! （Vision `VNRecognizeTextRequest`）、Android（ML Kit Text Recognition）、
 //! Windows（`Windows.Media.Ocr.OcrEngine`）。Web は標準 API が無く対象外。
-//! 一発呼び出し型の同期 API。呼び出し側（`fandhe-egui-proxy` の effect ドライバ）は
+//! 一発呼び出し型の同期 API。呼び出し側（この crate の effect ドライバ）は
 //! UI を止めないようワーカースレッドから呼ぶ。
 //!
 //! # 契約
@@ -32,8 +32,9 @@
 //! 順序の違い、処理時間（タイムアウトは掛けない）、実行中の OCR の取り消し（結果は
 //! 世代照合で捨てる）、複数プロセス。認識した文字・画像はログへ出さない。
 
-use crate::DeviceError;
-use crate::photo_picker::PickedPhoto;
+use fandhe_device::photo_picker::PickedPhoto;
+
+use crate::error::ImageRecognitionError;
 
 /// 認識言語が端末で使えないときの `Unsupported` の識別子（SSOT）。呼び出し側はこれと
 /// 一致するかで「言語データ不足」と「非対応 OS」を見分ける。
@@ -42,15 +43,15 @@ pub const LANGUAGE_UNAVAILABLE: &str = "image_recognition language";
 /// 文字認識の契約（モジュール doc の「契約」節）。
 pub trait TextRecognizer: Send + Sync {
     /// `photo` の文字を認識し、[`normalize_lines`] 済みの行一覧を返す。0 行は成功。
-    fn recognize(&self, photo: &PickedPhoto) -> Result<Vec<String>, DeviceError>;
+    fn recognize(&self, photo: &PickedPhoto) -> Result<Vec<String>, ImageRecognitionError>;
 }
 
 /// 対象外 OS（Linux 等）・未実装 OS のフォールバック。ダミーの成功実装へは倒さない。
 pub struct UnsupportedTextRecognizer;
 
 impl TextRecognizer for UnsupportedTextRecognizer {
-    fn recognize(&self, _photo: &PickedPhoto) -> Result<Vec<String>, DeviceError> {
-        Err(DeviceError::Unsupported("image_recognition"))
+    fn recognize(&self, _photo: &PickedPhoto) -> Result<Vec<String>, ImageRecognitionError> {
+        Err(ImageRecognitionError::Unsupported("image_recognition"))
     }
 }
 
@@ -69,7 +70,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::photo_picker::ImageFormat;
+    use fandhe_device::photo_picker::ImageFormat;
 
     #[test]
     fn normalize_drops_blank_lines_keeps_order_and_duplicates() {
@@ -89,6 +90,9 @@ mod tests {
             format: ImageFormat::Png,
         };
         let err = UnsupportedTextRecognizer.recognize(&photo).unwrap_err();
-        assert!(matches!(err, DeviceError::Unsupported("image_recognition")));
+        assert!(matches!(
+            err,
+            ImageRecognitionError::Unsupported("image_recognition")
+        ));
     }
 }

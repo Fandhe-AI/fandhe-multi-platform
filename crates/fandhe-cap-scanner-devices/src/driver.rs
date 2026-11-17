@@ -38,57 +38,14 @@ use fandhe_core::screens::scanner_devices_import::{
 use fandhe_runtime::request_slot::{POLL_INTERVAL, RequestSlot, poll_and_finish};
 use fandhe_runtime::{CompletionSender, image_store};
 
-/// 復号を許す辺の最大（画素）。
-const MAX_SIDE: u32 = 16384;
-/// 復号中の確保上限（バイト）。
-const MAX_ALLOC: u64 = 256 * 1024 * 1024;
-/// 表示用の複製の辺の上限（画素）。`RgbaPixels` の上限（2048）に収まる。
-// ponytail: 写真選択（egui-proxy の `photo_pick`）・書類スキャン（`fandhe-cap-document-scan`）と同じ値・同じ縮小処理を
-// 複製している。photo-picker を移すときに 3 か所の共有の置き場を決める。
-const DISPLAY_SIDE: u32 = 1024;
-
-/// 復号確認を通った画像。
-struct Decoded {
-    image: fandhe_core::RgbaPixels,
-    width: u32,
-    height: u32,
-}
+/// 復号確認を通った画像（表示用の画素と元の寸法）。
+type Decoded = fandhe_device::photo_picker::DisplayImage;
 
 /// 2 段目の検査: 実際に復号できるかを確かめ、表示用の画素を作る。失敗は `Err(())`
-/// （画像の中身・OS のエラー文は持ち出さない）。
+/// （画像の中身・OS のエラー文は持ち出さない）。復号・上限・縮小の本体は写真選択・書類スキャンと共有する
+/// `fandhe_device::photo_picker::decode_for_display`（1 か所）。
 fn decode_for_display(photo: &fandhe_device::photo_picker::PickedPhoto) -> Result<Decoded, ()> {
-    use fandhe_device::photo_picker::ImageFormat;
-    let format = match photo.format {
-        ImageFormat::Png => image::ImageFormat::Png,
-        ImageFormat::Jpeg => image::ImageFormat::Jpeg,
-        // feature を持たない。成功にせず失敗として返す。
-        ImageFormat::Gif | ImageFormat::Webp => return Err(()),
-    };
-    let mut reader =
-        image::ImageReader::with_format(std::io::Cursor::new(&photo.bytes[..]), format);
-    // `Limits` は non_exhaustive のため、既定値から書き換える。
-    let mut limits = image::Limits::default();
-    limits.max_image_width = Some(MAX_SIDE);
-    limits.max_image_height = Some(MAX_SIDE);
-    limits.max_alloc = Some(MAX_ALLOC);
-    reader.limits(limits);
-    let decoded = reader.decode().map_err(|_| ())?;
-    let (width, height) = (decoded.width(), decoded.height());
-    // thumbnail は小さい画像を拡大しうるため、大きいときだけ縮める。
-    let shown = if width > DISPLAY_SIDE || height > DISPLAY_SIDE {
-        decoded.thumbnail(DISPLAY_SIDE, DISPLAY_SIDE)
-    } else {
-        decoded
-    };
-    let rgba = shown.to_rgba8();
-    // 表示辺 DISPLAY_SIDE 以下なので `RGBA_MAX_SIDE` に収まる。外れたら成功にせず失敗にする。
-    let image =
-        fandhe_core::RgbaPixels::new(rgba.width(), rgba.height(), rgba.into_raw()).ok_or(())?;
-    Ok(Decoded {
-        image,
-        width,
-        height,
-    })
+    fandhe_device::photo_picker::decode_for_display(&photo.bytes, photo.format).ok_or(())
 }
 
 /// 復号済みの画像。`RequestSlot` が `Clone` を要るため画素は `Arc` で持つ。

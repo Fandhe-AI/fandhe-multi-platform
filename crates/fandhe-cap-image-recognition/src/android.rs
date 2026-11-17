@@ -1,5 +1,5 @@
 //! Android 向け文字認識の骨格（Issue #1250 で置いたスタブ。実装は #1253）。
-//! `device/image_recognition.rs` の Android 経路から毎フレーム呼ばれる。#1253 が ML Kit の
+//! `crate::driver` の Android 経路から毎フレーム呼ばれる。#1253 が ML Kit の
 //! Java ヘルパークラス・JNI・`RequestSlot` を使った実装に本ファイルの `drive` を置き換える
 //! （dispatch・画面・文言は #1250 で最終形）。
 //!
@@ -7,10 +7,10 @@
 //! 嘘の成功にもならない）。
 
 use fandhe_core::screens::image_recognize::{
-    finish_recognize, mark_recognizing, take_request, ImageRecognizeState, RecognizeFailure,
+    ImageRecognizeState, RecognizeFailure, finish_recognize, mark_recognizing, take_request,
 };
 
-use crate::app::CompletionSender;
+use fandhe_runtime::CompletionSender;
 
 /// Android 版 effect 本体。#1253 まで要求を `Unsupported` で完了させるだけ。
 pub(crate) fn drive(state: &ImageRecognizeState, sender: &CompletionSender<ImageRecognizeState>) {
