@@ -5,7 +5,7 @@
   "order": 28,
   "priority": 19,
   "bundle": "request-response",
-  "note": "`Speech`（`SFSpeechRecognizer`）/ Android `SpeechRecognizer` / macOS `Speech` / Windows `SpeechRecognizer` / Web Speech Recognition API（対応ブラウザ限定）。画面の外のアプリ向けの入口として `begin_speech_recognition`・`request_stop_speech_recognition`・`poll_speech_recognition`（画面の状態型に依存しない非同期）を公開する（macOS・iOS・Android・Windows。それ以外の OS は Unsupported）。画面 effect と同じ要求の slot を共有し、片方が進行中・結果未取得のとき他方は処理中（busy）で断る。同期の `platform_speech_recognition()` は Unsupported を返す。",
+  "note": "`Speech`（`SFSpeechRecognizer`）/ Android `SpeechRecognizer` / macOS `Speech` / Windows `SpeechRecognizer` / Web Speech Recognition API（対応ブラウザ限定）。画面の外のアプリ向けの入口として `begin_speech_recognition`・`request_stop_speech_recognition`・`poll_speech_recognition`（画面の状態型に依存しない非同期）を公開する（macOS・iOS・Android・Windows。それ以外の OS は Unsupported）。画面 effect と同じ要求の slot を共有し、片方が進行中・結果未取得のとき他方は処理中（busy）で断る。画面側の未取得の結果・進行中の要求が残る間は公開入口も busy で断られる（画面状態が破棄されて effect が回らないと解消しない。lan-discovery と同じ構造）。Android の reset で要求を失ったときは poll が 1 度だけ失敗を返す。reset は `android_main` で effect の駆動前に呼ぶ前提（開始と並走させない）。同期の `platform_speech_recognition()` は Unsupported を返す。",
   "capture": "captures/speech-recognition.png",
   "platforms": {
     "ios": {

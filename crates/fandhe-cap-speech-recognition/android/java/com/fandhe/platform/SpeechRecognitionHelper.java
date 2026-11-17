@@ -123,6 +123,8 @@ final class SpeechRecognitionHelper {
     // こちらが先ならコールバックは追跡 id が一致しないことを見て何も始めない（その際ダイアログの照合状態はコールバックが下ろす
     // ため、ここでは触らない）。判定と更新は `speechLock` の内側で行う。`SpeechRecognizer` は main スレッドでしか触れないため、
     // 認識器の破棄だけ main へ積む（追跡 id は先に捨てているので、積んだ処理が走るまでの間に届く認識器の通知は照合で捨てられる）。
+    // 前提: `android_main` で effect の駆動前に呼び、開始と並走させない。Rust 側 reset の後・ここの前に別スレッドの開始が要求を登録して
+    // 世代を読むと、Runnable は不一致で無言 return し、その要求は Rust 側で pending のまま残る。
     static void abortPending() {
         synchronized (speechLock) {
             // main へ積んだだけで未登録の開始要求を無効にする（`requestSpeechRecognitionStart` が積む前に読んだ世代と照合する）。

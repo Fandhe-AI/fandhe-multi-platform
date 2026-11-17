@@ -543,6 +543,9 @@ pub fn platform_speech_recognition() -> Box<dyn SpeechRecognizer> {
 /// 未取得の要求（画面側の分を含む）があるうちは `Internal`（busy）で断る。画面 effect 側も、この入口の進行中・未取得の
 /// 要求があれば置き換えず処理中の失敗で終える。依頼自体の失敗は `Err`（結果は届かない）。権限の確認は OS が行い、拒否は結果に
 /// `PermissionDenied` で届く。それ以外の OS は `Unsupported`。
+///
+/// 画面側の未取得の結果・進行中の要求が残る間も busy で断られる（画面状態が破棄されて effect が回らないと解消しない。
+/// lan-discovery と同じ構造）。
 #[cfg(any(
     target_os = "macos",
     target_os = "ios",
@@ -622,7 +625,7 @@ pub fn request_stop_speech_recognition(request_id: u64) -> bool {
     }
 }
 
-/// [`begin_speech_recognition`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・取り出し済みは `None`。
+/// [`begin_speech_recognition`] の結果を取り出す。Android の reset で要求を失ったときは 1 度だけ `Err(Internal("speech_recognition lost"))`、以後は `None`。届いていれば 1 度だけ `Some`、未着・旧 id・取り出し済みは `None`。
 /// 結果は 3 値: 認識できた・無音（`Ok(Recognized / NoMatch)`）、利用者の停止や OS 側のキャンセル（`Ok(Cancelled)`。
 /// `Err(Cancelled)` はこちらへ寄せる）、失敗（`Err`: 権限拒否・ライフサイクル中断を表す `Internal`・認識器なし・その他）。
 pub fn poll_speech_recognition(
@@ -639,14 +642,26 @@ pub fn poll_speech_recognition(
             return None;
         }
         // 照合・取得・消去を同じロックで行う（並行 poll でも Some は 1 件だけ）。
-        let result = bridge::SLOT.take_ready(request_id)?;
+        if let Some(result) = bridge::SLOT.take_ready(request_id) {
+            bridge::PUBLIC_OWNER.release(request_id);
+            return Some(match result {
+                Err(SpeechRecognitionError::Cancelled(_)) => {
+                    Ok(crate::contract::SpeechOutcome::Cancelled)
+                }
+                other => other,
+            });
+        }
+        // slot が空・別の要求に替わっていれば喪失（reset 等）。未着と区別して 1 度だけ失敗で返し、以後は `None`。
+        if bridge::SLOT
+            .snapshot()
+            .is_some_and(|(id, _)| id == request_id)
+        {
+            return None;
+        }
         bridge::PUBLIC_OWNER.release(request_id);
-        Some(match result {
-            Err(SpeechRecognitionError::Cancelled(_)) => {
-                Ok(crate::contract::SpeechOutcome::Cancelled)
-            }
-            other => other,
-        })
+        Some(Err(SpeechRecognitionError::Internal(
+            "speech_recognition lost",
+        )))
     }
     #[cfg(not(any(
         target_os = "macos",
@@ -663,6 +678,8 @@ pub fn poll_speech_recognition(
 /// Rust 側の保留記録を捨て、Java 側の保留・実行中の要求も止める（`abortPending`、結果は届けない）。
 /// 権限ダイアログの許可コールバックが先に来て開始済みでも、後から来ても、画面に反映されない録音・聞き取りは残らない。
 /// 外部アプリ（呼ばない構成）では Java 側が再生成を引き継ぐ。
+/// `android_main` で effect の駆動前に呼ぶ前提で、開始（`begin_speech_recognition`・画面 effect）と並走させない
+/// （reset と Java 側 `abortPending` の間に別スレッドの開始が登録されると、その要求は pending のまま残りうる）。
 /// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照。
 /// `fandhe-cap-biometric-auth` の `reset_pending_tracking` と同じ命名・位置づけ）。
 #[cfg(target_os = "android")]
@@ -1022,6 +1039,30 @@ mod tests {
                 .begin_keeping_foreign(&bridge::SLOT)
                 .is_some()
         );
+        bridge::reset();
+    }
+
+    /// reset で要求を失ったら、公開側は 1 度だけ失敗を返し、以後 `None`、再び開始できる。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
+    #[test]
+    fn public_request_lost_by_reset_fails_once() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let begin = || {
+            bridge::PUBLIC_OWNER.begin_excluding(
+                &bridge::SLOT,
+                &[&bridge::SCREEN_OWNER, &bridge::PUBLIC_OWNER],
+            )
+        };
+        let id = begin().unwrap();
+        assert!(poll_speech_recognition(id).is_none());
+        bridge::reset();
+        assert!(matches!(
+            poll_speech_recognition(id),
+            Some(Err(SpeechRecognitionError::Internal(_)))
+        ));
+        assert!(poll_speech_recognition(id).is_none());
+        assert!(begin().is_some());
         bridge::reset();
     }
 

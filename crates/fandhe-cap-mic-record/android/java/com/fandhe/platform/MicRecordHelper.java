@@ -113,6 +113,8 @@ final class MicRecordHelper {
     // Java 側も同じ要求を結果を届けずに捨てる: 追跡 id・保留フラグを下ろし、録音が走っていれば止めて資源を解放する。
     // 権限ダイアログの許可コールバック（main スレッド）とは前後どちらでもよい。コールバックが先なら開始済みの録音をここで止め、
     // こちらが先ならコールバックは追跡 id が無いことを見て何も始めない。判定と更新は `micLock` の内側で行う。
+    // 前提: `android_main` で effect の駆動前に呼び、開始と並走させない。Rust 側 reset の後・ここの前に別スレッドの開始が要求を登録して
+    // 世代を読むと、Runnable は不一致で無言 return し、その要求は Rust 側で pending のまま残る。
     static void abortPending() {
         MediaRecorder recorder;
         File tempFile;
