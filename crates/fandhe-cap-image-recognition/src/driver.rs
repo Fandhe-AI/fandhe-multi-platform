@@ -128,8 +128,9 @@ pub(crate) fn recognize_picked(
 /// iOS の PHPicker 結果を受ける slot と持ち主（pull 型、`fandhe_runtime::request_slot::RequestSlot` の facade）。
 ///
 /// 画面 effect（`ios_effect::drive`）と公開入口（[`begin_image_recognition`] / [`poll_image_recognition`] / [`discard_image_recognition`]）が同じ slot を共有する。
-/// 持ち主（[`bridge::SCREEN_OWNER`]・[`bridge::PUBLIC_OWNER`]）で自分の分の要求を区別し、片方が進行中・結果未取得のとき他方は置き換えず
-/// busy で断る。slot には変換前の生の結果（ImageRecognitionError）を置き、画面へ渡すときに [`to_failure`] で写す。
+/// 持ち主（[`bridge::SCREEN_OWNER`]・[`bridge::PUBLIC_OWNER`]）で自分の分の要求を区別し、
+/// 進行中の要求は busy で断り、公開側の未取得の結果は守る。画面側の届いた未取得の結果は公開入口が置き換え、置き換えられた画面は lost の失敗になる（成功にはならない）。
+/// slot には変換前の生の結果（ImageRecognitionError）を置き、画面へ渡すときに [`to_failure`] で写す。
 ///
 /// テストでホストからも検証できるよう `cfg(test)` でもコンパイルする（OS 呼び出しは含まない）。
 #[cfg(any(test, target_os = "ios"))]

@@ -155,7 +155,8 @@ fn mobile_outcome(
 /// iOS / Android の OS コールバックとの橋渡し（pull 型、`fandhe_runtime::request_slot::RequestSlot` の facade。モジュール doc 参照）。
 ///
 /// 画面 effect と公開入口（[`begin_photo_pick`] / [`poll_photo_pick`]）が同じ slot を共有する。持ち主（[`bridge::SCREEN_OWNER`]・
-/// [`bridge::PUBLIC_OWNER`]）で自分の分の要求を区別し、片方が進行中・結果未取得のとき他方は置き換えず busy で断る。
+/// [`bridge::PUBLIC_OWNER`]）で自分の分の要求を区別し、
+/// 進行中の要求は busy で断り、公開側の未取得の結果は守る。画面側の届いた未取得の結果は公開入口が置き換え、置き換えられた画面は lost の失敗になる（成功にはならない）。
 /// 画面の結果は復号確認済みの画素、公開入口の結果は [`validate_photo`] 済みの [`PickedPhoto`]（同期の [`PhotoPicker`] と同じ。
 /// 復号は保証しない）で、どちらを置くかは `deliver` が持ち主で決める。
 ///

@@ -195,8 +195,9 @@ pub(crate) fn drive_with<S: 'static>(
 /// 連番 `request_id`（再生成で画面の `generation` が 1 から再開しても衝突しない）。
 ///
 /// 画面 effect と公開入口（[`begin_file_pick`] / [`poll_file_pick`]）が同じ slot を共有する。
-/// 持ち主（[`bridge::SCREEN_OWNER`]・[`bridge::PUBLIC_OWNER`]）で自分の分の要求を区別し、片方が進行中・結果未取得のとき
-/// 他方は置き換えず busy で断る。slot には変換前の生の結果（`FilePickerError`）を置き、画面へ渡すときに文言へ変換する。
+/// 持ち主（[`bridge::SCREEN_OWNER`]・[`bridge::PUBLIC_OWNER`]）で自分の分の要求を区別し、
+/// 進行中の要求は busy で断り、公開側の未取得の結果は守る。画面側の届いた未取得の結果は公開入口が置き換え、置き換えられた画面は lost の失敗になる（成功にはならない）。
+/// slot には変換前の生の結果（`FilePickerError`）を置き、画面へ渡すときに文言へ変換する。
 ///
 /// テストでホストからも検証できるよう `cfg(test)` でもコンパイルする（OS 呼び出しは含まない）。
 #[cfg(any(test, target_os = "ios", target_os = "android"))]
