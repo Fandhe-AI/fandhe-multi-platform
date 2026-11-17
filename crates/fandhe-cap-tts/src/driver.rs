@@ -231,12 +231,17 @@ fn worker_loop(
 /// ワーカーが実際に処理し終える（＝先行する発話要求の `Tts::speak` 呼び出しが
 /// 既に終わっている）まで待ってから戻る。
 ///
-/// まだキューが 1 度も使われていない（[`COMMAND_QUEUE`] が `None`、＝発話も停止も
-/// 一度も発送されていない）場合は接続すら試みていないため何もしない。
+/// まだキューが 1 度も使われていない（[`COMMAND_QUEUE`] が `None`）場合、画面の effect は
+/// 発話も停止も発送していない。ただし公開入口 [`platform_tts`] から直接 `speak` された発話は
+/// キューを通らないため、初期化済みの TTS があればその場で `stop` する（未初期化なら何もしない）。
 /// 応答待ちには上限（2 秒）を設け、ワーカーが `wait_outcome` の長時間ポーリングで
 /// 詰まっている場合でもプロセス終了処理自体をブロックし続けない。
 pub fn shutdown() {
     let Some(queue) = COMMAND_QUEUE.get() else {
+        if let Some(Ok(tts)) = TTS.get() {
+            // 終了処理のため、停止の失敗はこれ以上扱えない（子プロセスの回収は `stop` 自身が行う）。
+            let _ = tts.stop();
+        }
         return;
     };
     let (ack_tx, ack_rx) = mpsc::channel();
