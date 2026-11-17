@@ -478,4 +478,18 @@ fn unselected_backup_exclusion_fails_and_selected_passes() {
     );
     let m = make_ws("bk-ok", &deps(&["cam", "bk"]), &[]);
     check("android", &m, &format!("{ANDROID_CLEAN}{rule}")).unwrap();
+    // domain 違いの同名除外は別物。選んだ機能が file の同名を除外していても、未選択の bk の sharedpref の除外は検出する。
+    let bkf = cap(
+        "bkf",
+        "[package.metadata.fandhe.android]\nbackup-exclusions = [{ domain = \"file\", path = \"fandhe_bk.xml\" }]\n",
+    );
+    let other = rule.replace("\"sharedpref\"", "\"file\"");
+    let m = make_ws(
+        "bk-domain",
+        &deps(&["cam", "bkf"]),
+        &[(bkf.0.as_str(), bkf.1.clone())],
+    );
+    check("android", &m, &format!("{ANDROID_CLEAN}{other}")).unwrap();
+    let e = check("android", &m, &format!("{ANDROID_CLEAN}{other}{rule}")).unwrap_err();
+    assert!(e.contains("sharedpref:fandhe_bk.xml"), "{e}");
 }

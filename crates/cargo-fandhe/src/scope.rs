@@ -87,11 +87,12 @@ fn tokens(d: &Declaration, os: &str) -> Vec<(&'static str, String)> {
                         .iter()
                         .map(|c| ("コンポーネント", c.name.clone())),
                 );
-                // 観測は <application> が指すバックアップ規則 XML（script が aapt2 で足す）。
+                // 観測は <application> が指すバックアップ規則 XML（script が aapt2 で足す）。path だけだと
+                // domain 違いの同名除外が許可値に紛れるので、`backup_pairs` と同じ (domain, path) の組で照合する。
                 out.extend(
                     a.backup_exclusions
                         .iter()
-                        .map(|e| ("バックアップ除外", e.path.clone())),
+                        .map(|e| ("バックアップ除外", backup_token(e.domain.as_str(), &e.path))),
                 );
                 // `group:artifact:version` のうち版は照合に含めない。
                 out.extend(a.gradle.iter().map(|g| {
@@ -152,11 +153,51 @@ fn contains_token(text: &str, needle: &str) -> bool {
     })
 }
 
+/// バックアップ除外 1 件の照合用トークン。観測側は `backup_pairs` が同じ形を作る。
+fn backup_token(domain: &str, path: &str) -> String {
+    format!("backup-exclude:{domain}:{path}")
+}
+
+/// バックアップ規則 XML の dump（`E: exclude` 直下の名前空間なし `domain`・`path`）を `backup_token` の行にする。
+fn backup_pairs(observed: &str) -> String {
+    let mut out = String::new();
+    let mut cur: Option<(Option<String>, Option<String>)> = None;
+    let flush = |c: &mut Option<(Option<String>, Option<String>)>, out: &mut String| {
+        if let Some((Some(d), Some(p))) = c.take() {
+            out.push_str(&backup_token(&d, &p));
+            out.push('\n');
+        }
+    };
+    for line in observed.lines().map(str::trim) {
+        if let Some(rest) = line.strip_prefix("E: ") {
+            flush(&mut cur, &mut out);
+            cur = (rest.split_whitespace().next() == Some("exclude")).then_some((None, None));
+        } else if let (Some(rest), Some((d, p))) = (line.strip_prefix("A: "), cur.as_mut()) {
+            let Some((name, rhs)) = rest.split_once('=') else {
+                continue;
+            };
+            let val = || {
+                rhs.strip_prefix('"')
+                    .and_then(|r| r.split('"').next())
+                    .map(str::to_string)
+            };
+            match name {
+                "domain" => *d = val(),
+                "path" => *p = val(),
+                _ => {}
+            }
+        }
+    }
+    flush(&mut cur, &mut out);
+    out
+}
+
 /// 観測テキストを禁止集合で照合し、違反を 1 件ずつ返す。
 pub(crate) fn scan(forbidden: &BTreeMap<String, Owner>, observed: &str) -> Vec<String> {
+    let observed = format!("{observed}\n{}", backup_pairs(observed));
     forbidden
         .iter()
-        .filter(|(v, _)| contains_token(observed, v))
+        .filter(|(v, _)| contains_token(&observed, v))
         .map(|(v, (id, kind))| {
             format!("選ばなかった機能 {id} の{kind} `{v}` が成果物に含まれています")
         })
