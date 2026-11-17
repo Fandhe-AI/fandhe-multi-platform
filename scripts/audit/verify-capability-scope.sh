@@ -79,7 +79,7 @@ observe_android() {
   [[ -f "${apk}" ]] || die "--apk に APK ファイルを指定してください"
   local aapt2
   aapt2="$(find_aapt2)" || die "aapt2 が見つかりません。ANDROID_HOME を設定するか PATH に通してください（scripts/android/android-env.sh 参照）"
-  local mf_dump="${work}/apk-manifest.txt" attr id res path
+  local mf_dump="${work}/apk-manifest.txt" attr id res path xml
   "${aapt2}" dump xmltree --file AndroidManifest.xml "${apk}" >"${mf_dump}" ||
     die "aapt2 が失敗しました"
   cat -- "${mf_dump}" >>"${obs}"
@@ -90,10 +90,13 @@ observe_android() {
   for attr in dataExtractionRules fullBackupContent; do
     id="$(sed -n "s/.*:${attr}(0x[0-9a-f]*)=@\(0x[0-9a-f]*\).*/\1/p" "${mf_dump}" | head -n 1)"
     [[ -n "${id}" ]] || continue
-    path="$(awk -v id="${id}" '$1 == "resource" && $2 == id { f = 1; next } f && $1 == "resource" { exit } f { for (i = 1; i < NF; i++) if ($i == "(file)") { print $(i + 1); exit } }' "${res}")"
+    path="$(awk -v id="${id}" '$1 == "resource" && $2 == id { f = 1; next } f && $1 == "resource" { exit } f { for (i = 1; i < NF; i++) if ($i == "(file)") print $(i + 1) }' "${res}")"
     [[ -n "${path}" ]] || die "${attr} の参照先 ${id} のファイルを解決できません"
-    "${aapt2}" dump xmltree --file "${path}" "${apk}" >>"${obs}" ||
-      die "${path} の dump に失敗しました"
+    # 同じ ID に複数構成（xml / xml-v31 等）があり得るので、全構成を検査する
+    while IFS= read -r xml; do
+      "${aapt2}" dump xmltree --file "${xml}" "${apk}" >>"${obs}" ||
+        die "${xml} の dump に失敗しました"
+    done <<<"${path}"
   done
   if [[ -n "${gradle_deps}" ]]; then
     [[ -f "${gradle_deps}" ]] || die "--gradle-deps のファイルがありません"
