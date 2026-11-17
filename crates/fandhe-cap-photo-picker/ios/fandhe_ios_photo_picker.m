@@ -36,7 +36,8 @@
 // キュー上で動くが、ハンドラごとに明示する）。
 //
 // 完了通知を失う経路のうちシーンの切断は、`UISceneDidDisconnectNotification` の観測で失敗（code 2）として 1 度だけ確定する
-// （画面の effect が `Picking` のまま止まらない）。UIKit が提示を捨てて completion も来ない場合だけは観測できず、確定しない。
+// （画面の effect が `Picking` のまま止まらない）。UIKit が提示を捨てて completion も来ない場合と、提示先のシーンが特定できない場合は観測できず、確定しない。
+// 切断でピッカーが delegate を呼ばずに消える挙動自体が、公式文書で確認されておらず実機で未確認。
 //
 // 進行中かどうかは OS の観測（提示中のピッカーが実際に提示されているか）で決める。推測タイマーのフラグは持たない:
 // 画面 effect も公開入口（`begin_photo_pick`）も同じこの入口を通るため、Rust 側が slot を捨てた（`discard_photo_pick`）後でも、
@@ -223,9 +224,10 @@ static __weak UIScene *g_activeScene = nil;
 static id _Nullable g_sceneDisconnectToken = nil;
 
 // シーンの切断で、完了通知を失った要求を失敗（code 2）で 1 度だけ確定する（main queue）。
-// 切断されるとピッカーは delegate を呼ばずに消え、画面の effect が `Picking` のまま止まる。OS の観測で確定するので推測のタイマーは持たない。
-// 提示したシーンが分かっていれば一致したときだけ、分からない（scene 外の window へ提示した）ときは通常のアプリのシーンの切断だけを対象にし、
-// 外部ディスプレイ等の別シーンの切断で進行中の正しい選択を落とさない。
+// 切断されるとピッカーは delegate を呼ばずに消え、画面の effect が `Picking` のまま止まる、という挙動は公式文書で確認されておらず実機で未確認。
+// OS の観測で確定するので推測のタイマーは持たない。
+// 提示したシーンが記録でき、それが切断されたときだけ確定する。提示先が特定できない（記録が nil）ときは、iPad のマルチウィンドウで
+// 無関係な別シーンが閉じただけで正しい選択を落とさないよう、切断では確定しない（観測できない天井）。
 // 正しい選択は先に `g_retainedDelegate` が nil になっているので何もしない。確定後に遅れて届いた通知は Rust 側が消費済みの id として捨てる。
 static void FandhePhotoPickerFailOnSceneDisconnect(UIScene *disconnected) {
     id stale = g_retainedDelegate;
@@ -233,10 +235,7 @@ static void FandhePhotoPickerFailOnSceneDisconnect(UIScene *disconnected) {
         return;
     }
     UIScene *active = g_activeScene;
-    BOOL mine = active != nil
-                    ? active == disconnected
-                    : [disconnected.session.role isEqualToString:UIWindowSceneSessionRoleApplication];
-    if (!mine) {
+    if (active == nil || active != disconnected) {
         return;
     }
     PHPickerViewController *picker = g_activePicker;
