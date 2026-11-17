@@ -290,6 +290,10 @@ fn public_outcome(
 /// 結果の解放: 届く結果は [`validate_photo`] 済みのバイト列（上限 `MAX_PHOTO_BYTES`）だけで、fd・一時パスは届く前に解放済み。
 /// 取り出さない要求が slot に残ると次の要求も画面 effect の開始も busy で断られるため、不要な要求は [`discard_photo_pick`] で捨てる。
 ///
+/// 既知の天井（iOS）: UIKit が提示を捨てて completion も来ない場合、要求は確定せず slot に残る。画面 effect は busy で断られ続け、公開入口は
+/// [`discard_photo_pick`] で捨てるまで確定しない（捨てたあとの次の begin が `.m` の残りを失敗で回収する）。最前面が遷移中なら提示せず
+/// busy にするため、捨てられること自体はほぼ起きない前提。推測のタイマーは持たない。
+///
 /// デスクトップ（macOS・Windows）は同期の [`platform_photo_picker`] を使うため、この入口は持たず `Unsupported`。Linux 等も `Unsupported`。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn begin_photo_pick() -> Result<u64, PhotoPickerError> {

@@ -216,11 +216,11 @@ static void FandheDeliverPickedProvider(uint64_t requestId, NSItemProvider *prov
 int32_t fandhe_ios_photo_picker_pick(uint64_t requestId) {
     dispatch_async(dispatch_get_main_queue(), ^{
       @autoreleasepool {
-        // 進行中のピッカー（提示中、または dismiss のアニメーション中）があれば、重ねて提示せず busy を返す。
+        // 進行中のピッカー（提示中、提示・dismiss のアニメーション中）があれば、重ねて提示せず busy を返す。
         // 判定は delegate の有無ではなく OS の観測（提示状態）で行う: 完了通知で delegate を解放した直後も、
         // ピッカーは dismiss が終わるまで提示中のままで、その上へ present すると失敗してコールバックが来ない。
         PHPickerViewController *active = g_activePicker;
-        if (active != nil && (active.presentingViewController != nil || active.isBeingDismissed)) {
+        if (active != nil && (active.presentingViewController != nil || active.isBeingPresented || active.isBeingDismissed)) {
             fandhe_rust_photo_picker_outcome(requestId, 3, NULL, 0);
             return;
         }
@@ -269,8 +269,11 @@ int32_t fandhe_ios_photo_picker_pick(uint64_t requestId) {
         // 正しい提示を失敗と誤判定して delegate を外し、選択を捨ててしまう。ここは「completion が来たのに提示が成立していない」
         // 場合の安全網で、通常は何もしない。delegate の完了経路が先に走っていれば（`g_retainedDelegate != delegate`）何もしない。
         // 既知の天井: UIKit が提示を捨てたとき completion が呼ばれるかは文書に無く、呼ばれなければこの要求は確定しない。
-        // その場合は picker が解放されて weak の `g_activePicker` が nil になるので、次の要求がここで旧 delegate を失敗（code 2）で
-        // 確定して回収する（推測のタイマーは持たない）。
+        // completion ブロックが picker を強参照するため、weak の `g_activePicker` は nil にならない。残った delegate は、次の要求が
+        // 「提示されていない（`presentingViewController == nil && !isBeingPresented && !isBeingDismissed`）」と判定してここで
+        // 旧 delegate を失敗（code 2）で確定して回収する（推測のタイマーは持たない）。ただし Rust 側の slot は要求中のまま残るため、
+        // 次の要求がここへ届くのは、公開入口で discard したあと、または slot が reset されたあとだけ（画面 effect は busy で断られ、
+        // iOS に画面の `Picking` を抜ける経路は無い）。遷移中は上で busy にして提示自体を避けるので、捨てられること自体はほぼ起きない前提の天井。
         [top presentViewController:picker
                           animated:YES
                         completion:^{
