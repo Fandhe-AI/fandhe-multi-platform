@@ -158,10 +158,11 @@ pub(crate) fn backup_exclusion_problems(field: &str, list: &[BackupExclusion]) -
     for (i, e) in list.iter().enumerate() {
         let f = format!("{field}[{i}].path");
         c.check(
-            is_rel_path(&e.path) && e.path.split('/').all(|s| s != "."),
+            // 空の区切り（`a//b`・末尾 `/`）も拒む。同じ対象が別の綴りで重複検査と verify-scope の照合をすり抜けないよう、綴りを 1 つに揃える。
+            is_rel_path(&e.path) && e.path.split('/').all(|s| s != "." && !s.is_empty()),
             &f,
             format!(
-                "`{}` は domain 直下からの相対パスにしてください（空・絶対・`.`・`..`・`\\`・`:` は不可。`.` はドメイン全体の除外になるため書けません）",
+                "`{}` は domain 直下からの相対パスにしてください（空・絶対・`.`・`..`・空の区切り・`\\`・`:` は不可。`.` はドメイン全体の除外になるため書けません）",
                 e.path
             ),
         );

@@ -928,7 +928,9 @@ fn backup_exclusions_validate_and_merge() {
     let ok = |e: Value| android(json!({"backup-exclusions": e}));
     assert!(problems(ok(json!([{"domain":"sharedpref","path":"a.xml"}]))).is_empty());
     assert!(problems(ok(json!([{"domain":"file","path":"d/e.db"}]))).is_empty());
-    for bad in [".", "", "/abs", "../x", "a/../b", "a/./b", "a\\b", "a:b"] {
+    for bad in [
+        ".", "", "/abs", "../x", "a/../b", "a/./b", "a//b", "a/", "a\\b", "a:b",
+    ] {
         assert_rejected(
             ok(json!([{"domain":"file","path":bad}])),
             "backup-exclusions[0].path",
