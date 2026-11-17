@@ -538,9 +538,31 @@ pub fn platform_speech_recognition() -> Box<dyn SpeechRecognizer> {
     Box::new(UnsupportedSpeechRecognizer)
 }
 
+/// 公開入口が受けた上限時間を検証し、全 OS へ渡す形（整数ミリ秒・上限 `MAX_LISTEN_MS` で丸め）へ揃える（変換と検証の唯一の場所）。
+/// ミリ秒に直して 0 になる指定（0・1 ms 未満）は `InvalidInput`。0 は Android の `setMaxDuration` で「期限なし」、Windows の認識で
+/// 無期限になりうるため、端数も OS へ渡さない。
+#[cfg_attr(
+    not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "android"
+    )),
+    allow(dead_code)
+)]
+fn clamp_max_listen(d: std::time::Duration) -> Result<std::time::Duration, SpeechRecognitionError> {
+    let ms = d.as_millis().min(u128::from(MAX_LISTEN_MS)) as u64;
+    if ms == 0 {
+        return Err(SpeechRecognitionError::InvalidInput(
+            "speech_recognition duration",
+        ));
+    }
+    Ok(std::time::Duration::from_millis(ms))
+}
+
 /// 聞き取りを OS へ依頼し、結果を [`poll_speech_recognition`] で受け取るための要求 id を返す（macOS・iOS・Android・Windows）。
 ///
-/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。`max` は 0 なら `InvalidInput`、
+/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。`max` は 1 ms 未満（0 を含む）なら `InvalidInput`、端数は ms へ切り捨て、
 /// 上限（30 秒）を超える分は上限へ丸める。1 プロセスに 1 要求で、画面 effect と slot を共有するため、進行中・結果が
 /// 未取得の要求（画面側の分を含む）があるうちは `Internal`（busy）で断る。画面 effect 側も、この入口の進行中・未取得の
 /// 要求があれば置き換えず処理中の失敗で終える。依頼自体の失敗は `Err`（結果は届かない）。権限の確認は OS が行い、拒否は結果に
@@ -556,12 +578,7 @@ pub fn platform_speech_recognition() -> Box<dyn SpeechRecognizer> {
     target_os = "android"
 ))]
 pub fn begin_speech_recognition(max: std::time::Duration) -> Result<u64, SpeechRecognitionError> {
-    if max.is_zero() {
-        return Err(SpeechRecognitionError::InvalidInput(
-            "speech_recognition duration",
-        ));
-    }
-    let max = max.min(std::time::Duration::from_millis(MAX_LISTEN_MS));
+    let max = clamp_max_listen(max)?;
     let request_id = bridge::PUBLIC_OWNER
         .begin_excluding(
             &bridge::SLOT,
@@ -1051,6 +1068,34 @@ mod tests {
                 .is_some()
         );
         bridge::reset();
+    }
+
+    /// 1 ms 未満（ミリ秒に直すと 0）の上限は `InvalidInput`、端数は切り捨て、上限は丸める。
+    #[test]
+    fn clamp_max_listen_rejects_sub_millisecond_and_truncates() {
+        use std::time::Duration;
+        assert!(matches!(
+            clamp_max_listen(Duration::ZERO),
+            Err(SpeechRecognitionError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            clamp_max_listen(Duration::from_nanos(1)),
+            Err(SpeechRecognitionError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            clamp_max_listen(Duration::from_micros(999)),
+            Err(SpeechRecognitionError::InvalidInput(_))
+        ));
+        assert_eq!(
+            clamp_max_listen(Duration::from_micros(1_999)),
+            Ok(Duration::from_millis(1))
+        );
+        assert_eq!(
+            clamp_max_listen(Duration::from_secs(3600)),
+            Ok(Duration::from_millis(
+                fandhe_core::screens::speech_recognize::MAX_LISTEN_MS
+            ))
+        );
     }
 
     /// reset で要求を失ったら、公開側は 1 度だけ失敗を返し、以後 `None`、再び開始できる。

@@ -496,9 +496,29 @@ pub fn platform_mic_record() -> Box<dyn MicRecorder> {
     Box::new(UnsupportedMicRecorder)
 }
 
+/// 公開入口が受けた上限時間を検証し、全 OS へ渡す形（整数ミリ秒・上限 `MAX_RECORD_MS` で丸め）へ揃える（変換と検証の唯一の場所）。
+/// ミリ秒に直して 0 になる指定（0・1 ms 未満）は `InvalidInput`。0 は Android の `setMaxDuration` で「期限なし」、Windows の認識で
+/// 無期限になりうるため、端数も OS へ渡さない。
+#[cfg_attr(
+    not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "android"
+    )),
+    allow(dead_code)
+)]
+fn clamp_max_duration(d: std::time::Duration) -> Result<std::time::Duration, MicRecordError> {
+    let ms = d.as_millis().min(u128::from(MAX_RECORD_MS)) as u64;
+    if ms == 0 {
+        return Err(MicRecordError::InvalidInput("mic_record duration"));
+    }
+    Ok(std::time::Duration::from_millis(ms))
+}
+
 /// 録音を OS へ依頼し、結果を [`poll_mic_record`] で受け取るための要求 id を返す（macOS・iOS・Android・Windows）。
 ///
-/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。`max_duration` は 0 なら `InvalidInput`、
+/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。`max_duration` は 1 ms 未満（0 を含む）なら `InvalidInput`、端数は ms へ切り捨て、
 /// 上限（30 秒）を超える分は上限へ丸める。1 プロセスに 1 要求で、画面 effect と slot を共有するため、進行中・結果が
 /// 未取得の要求（画面側の分を含む）があるうちは `Internal`（busy）で断る。画面 effect 側も、この入口の進行中・未取得の
 /// 要求があれば置き換えず処理中の失敗で終える。依頼自体の失敗は `Err`（結果は届かない）。権限の確認は OS が行い、拒否は結果に
@@ -514,10 +534,7 @@ pub fn platform_mic_record() -> Box<dyn MicRecorder> {
     target_os = "android"
 ))]
 pub fn begin_mic_record(max_duration: std::time::Duration) -> Result<u64, MicRecordError> {
-    if max_duration.is_zero() {
-        return Err(MicRecordError::InvalidInput("mic_record duration"));
-    }
-    let max_duration = max_duration.min(std::time::Duration::from_millis(MAX_RECORD_MS));
+    let max_duration = clamp_max_duration(max_duration)?;
     let request_id = bridge::PUBLIC_OWNER
         .begin_excluding(
             &bridge::SLOT,
@@ -889,6 +906,34 @@ mod tests {
             .unwrap();
         assert!(poll_mic_record(screen).is_none());
         bridge::reset();
+    }
+
+    /// 1 ms 未満（ミリ秒に直すと 0）の上限は `InvalidInput`、端数は切り捨て、上限は丸める。
+    #[test]
+    fn clamp_max_duration_rejects_sub_millisecond_and_truncates() {
+        use std::time::Duration;
+        assert!(matches!(
+            clamp_max_duration(Duration::ZERO),
+            Err(MicRecordError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            clamp_max_duration(Duration::from_nanos(1)),
+            Err(MicRecordError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            clamp_max_duration(Duration::from_micros(999)),
+            Err(MicRecordError::InvalidInput(_))
+        ));
+        assert_eq!(
+            clamp_max_duration(Duration::from_micros(1_999)),
+            Ok(Duration::from_millis(1))
+        );
+        assert_eq!(
+            clamp_max_duration(Duration::from_secs(3600)),
+            Ok(Duration::from_millis(
+                fandhe_core::screens::mic_record::MAX_RECORD_MS
+            ))
+        );
     }
 
     /// reset で要求を失ったら、公開側は 1 度だけ失敗を返し、以後 `None`、再び開始できる。
