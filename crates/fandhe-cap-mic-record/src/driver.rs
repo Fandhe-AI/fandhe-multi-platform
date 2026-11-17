@@ -509,7 +509,9 @@ pub fn platform_mic_record() -> Box<dyn MicRecorder> {
     allow(dead_code)
 )]
 fn clamp_max_duration(d: std::time::Duration) -> Result<std::time::Duration, MicRecordError> {
-    let ms = d.as_millis().min(u128::from(MAX_RECORD_MS)) as u64;
+    let ms = d
+        .as_millis()
+        .min(u128::from(fandhe_core::screens::mic_record::MAX_RECORD_MS)) as u64;
     if ms == 0 {
         return Err(MicRecordError::InvalidInput("mic_record duration"));
     }

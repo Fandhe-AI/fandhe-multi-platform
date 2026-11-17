@@ -551,7 +551,9 @@ pub fn platform_speech_recognition() -> Box<dyn SpeechRecognizer> {
     allow(dead_code)
 )]
 fn clamp_max_listen(d: std::time::Duration) -> Result<std::time::Duration, SpeechRecognitionError> {
-    let ms = d.as_millis().min(u128::from(MAX_LISTEN_MS)) as u64;
+    let ms = d.as_millis().min(u128::from(
+        fandhe_core::screens::speech_recognize::MAX_LISTEN_MS,
+    )) as u64;
     if ms == 0 {
         return Err(SpeechRecognitionError::InvalidInput(
             "speech_recognition duration",
