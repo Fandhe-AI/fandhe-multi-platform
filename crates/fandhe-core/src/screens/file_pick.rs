@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。実際のダイアログ表示・読み取りは
-//! 本モジュール外（`fandhe-egui-proxy` の effect ドライバ、`device/file_pick.rs`）が
+//! 本モジュール外（`fandhe-cap-file-picker` の effect ドライバ、`driver.rs`）が
 //! [`take_request`] で要求を観測し [`finish_pick`] で結果を注入する。
 //!
 //! # 成功・キャンセル・失敗を混同しない理由

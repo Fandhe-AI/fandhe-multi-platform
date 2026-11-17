@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。実際の発話は本モジュール外
-//! （`fandhe-egui-proxy` の effect ドライバ、`device/tts.rs`）が
+//! （`fandhe-egui-proxy` の effect ドライバ、`fandhe-cap-tts` の `driver.rs`）が
 //! [`take_speak_request`] / [`take_stop_request`] で要求を観測し
 //! [`finish_speak`] / [`finish_stop`] で結果を注入する。
 //!
@@ -28,7 +28,7 @@
 //!
 //! [`stop`] は発話が発送済み（OS 呼び出しが別スレッドで進行中）であっても常に
 //! 受理し、`speak_text` を即座に畳んで「打ち切り」を表す。OS 呼び出しスレッド
-//! （`device/tts.rs::run_speak`、`Tts::wait_outcome` でブロッキング待機中）は
+//! （`fandhe-cap-tts` の `driver.rs::run_speak`、`Tts::wait_outcome` でブロッキング待機中）は
 //! 動き続けるが、後から届くその完了は [`finish_speak`] が `speak_text` が既に
 //! `None`（＝停止で打ち切り済み）であることを見て無視する（stale 判定、
 //! `stale_completion_is_ignored` テスト参照）。表示に使う結果は停止側の

@@ -3,7 +3,7 @@
 //! myIme 設定画面のユーザー辞書（読み・単語・品詞・コメント）のような TSV を読み込む
 //! 前提機能。端末依存（`fandhe-device`・OS API）を一切持たない純粋関数として実装し、
 //! ファイルの取得は既存の `FilePicker`（`fandhe-device`）や
-//! `screens::file_pick`/`crates/fandhe-egui-proxy/src/device/file_pick.rs` の
+//! `screens::file_pick`/`crates/fandhe-cap-file-picker/src/driver.rs` の
 //! 橋渡しをそのまま使う（新しい trait は作らない）。`screens::tsv_import` 画面から
 //! 呼ばれるほか、myIme 設定画面からの再利用も想定する。
 //!

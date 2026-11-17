@@ -430,6 +430,13 @@ fn android_main(app: fandhe_egui_proxy::android::AndroidApp) {
     // アプリ内ブラウザの保留中の要求も破棄する（Activity 再生成で保留中の要求を復元しない。`fandhe_cap_in_app_browser::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_in_app_browser::reset_pending_tracking();
+    // マイク録音・音声認識の保留中の要求も破棄する。`bridge::SLOT`/`STARTED_REQUEST_ID` はプロセス static のため再生成をまたいで残り、
+    // 画面状態は `Idle` で作り直されるため、残すと結果が画面へ反映されず次の操作が詰まる（各 crate の `reset_pending_tracking` doc 参照）。
+    // 各 crate の reset は Java 側の保留・実行中の要求も止める（結果は届けない）。再生成の引き継ぎ・終了時の中断は helper が自分で行い、ここには依存しない。
+    #[cfg(feature = "device")]
+    fandhe_cap_mic_record::reset_pending_tracking();
+    #[cfg(feature = "device")]
+    fandhe_cap_speech_recognition::reset_pending_tracking();
     // 決済シートの保留中の要求を破棄し、旧 request_id の完了を不一致で捨てさせる（`fandhe_cap_payment_request::reset_pending_tracking` doc 参照）。
     #[cfg(feature = "device")]
     fandhe_cap_payment_request::reset_pending_tracking();
@@ -465,11 +472,14 @@ pub fn register_teardown_hooks() {
     fandhe_render_egui::app::set_teardown_hooks(shutdown, fandhe_cap_memory_pressure::shutdown);
 }
 
-/// 終了時の停止。未移行の機能（egui-proxy の `device`）を先に止め、機能 crate を続けて止める。
-/// 機能 crate の停止は相互に独立で、依存のある media_playback → audio_session の前後は保っている。
+/// 終了時の停止。機能 crate を順に止める。機能 crate の停止は相互に独立で、依存のある media_playback → audio_session の前後は
+/// 保っている。
 #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
 fn shutdown() {
-    fandhe_egui_proxy::device::shutdown();
+    // 読み上げの子プロセス（`say`・PowerShell）を止める。プロセスが終了すると `static` の `Drop` は走らず、ウィンドウを閉じても
+    // 発話中の子プロセスが残るため、終了フックから明示的に止める（キューがあれば発話要求と同じキューへ積み、発送済みの発話より後に止まる。
+    // 公開入口から直接発話してキューが無いときは、その場で止める）。
+    fandhe_cap_tts::shutdown();
     // 進行中の Web 認証（デモサーバーと OS のセッション）を閉じる。
     fandhe_cap_web_auth_session::shutdown();
     // 再生（media-playback）→ OS のメディア操作（now-playing-controls）の順に止め、どちらも audio_session より前に置く。

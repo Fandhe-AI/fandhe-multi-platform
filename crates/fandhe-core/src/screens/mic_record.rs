@@ -7,12 +7,12 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。実際の録音開始・停止・権限確認は
-//! 本モジュール外（`fandhe-egui-proxy` の effect ドライバ、`device/mic_record.rs`）が
+//! 本モジュール外（`fandhe-cap-mic-record` の effect ドライバ、`driver.rs`）が
 //! [`take_start_request`]/[`take_stop_request`] で要求を観測し [`finish_record`] で
 //! 結果を注入する（`biometric_check.rs`「認証した・キャンセル・使えない・失敗を
 //! 混同しない理由」と同じ構造。マイク録音は権限確認・録音完了が非同期に届くため、
 //! `fandhe-egui-proxy` 側は `MicRecorder` トレイトを通さず本状態機械へ直接書き戻す
-//! 契約になる、`fandhe_device::mic_record` モジュール doc 参照）。
+//! 契約になる、`fandhe-cap-mic-record` の `contract` の doc 参照）。
 //!
 //! # 経過秒数は画面側の時刻で表示する（OS からの継続 push は受けない）
 //!
@@ -77,7 +77,7 @@ pub enum RecordPhase {
 }
 
 /// 録音結果の要約（画面表示用。生バイト列は保持しない。
-/// `fandhe_device::mic_record::Recording` からの変換は `fandhe-egui-proxy` 側の
+/// `fandhe_cap_mic_record::Recording` からの変換は `fandhe-cap-mic-record` の driver の
 /// 責務にする、`fandhe-core` は `fandhe-device` に依存しないため）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordSummary {

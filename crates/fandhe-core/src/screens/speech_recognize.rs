@@ -13,7 +13,7 @@
 //! 観測し [`finish_listen`] で結果を注入する（`mic_record.rs`「端末依存はゼロ」節と
 //! 同じ構造。macOS/Windows は認識開始・完了が非同期に届くため、`fandhe-egui-proxy`
 //! 側は `SpeechRecognizer` トレイトを通さず本状態機械へ直接書き戻す契約になる、
-//! `fandhe_device::speech_recognition` モジュール doc 参照）。
+//! `fandhe-cap-speech-recognition` の `contract` の doc 参照）。
 //!
 //! # 経過秒数は画面側の時刻で表示する（OS からの継続 push は受けない）
 //!
@@ -33,7 +33,7 @@
 //! [`ListenOutcome::Cancelled`]（正常な利用者操作であり失敗ではないため、
 //! [`FAILED_PREFIX`] を付けた `error` ではなく通常色の `status` へ載せる、
 //! `mic_record.rs::RecordOutcome::Cancelled` と同型）。停止を失敗として見せる経路は
-//! 作らない（`fandhe_device::speech_recognition` モジュール doc 参照）。
+//! 作らない（`fandhe-cap-speech-recognition` の `contract` の doc 参照）。
 //!
 //! ```text
 //! Idle --「話す」--> Requested, generation += 1
@@ -56,7 +56,7 @@ const START_BUTTON_ID: WidgetId = WidgetId::from_raw(1);
 /// 「停止」ボタンの `WidgetId`。
 const STOP_BUTTON_ID: WidgetId = WidgetId::from_raw(2);
 
-/// 聞き取りの上限（ミリ秒）。`fandhe_device::mic_record::MAX_RECORDING_BYTES` とは
+/// 聞き取りの上限（ミリ秒）。`fandhe_cap_mic_record::MAX_RECORDING_BYTES` とは
 /// 別軸の時間上限で、`mic_record::MAX_RECORD_MS`（ネイティブ側 `recordForDuration:`
 /// 相当の上限）と単一の定数で揃える SSOT（モジュール doc 参照）。macOS 側
 /// （`dispatch_after`）・Windows 側（ワーカーの `recv_timeout`）の期限もこの値を使う。

@@ -19,7 +19,7 @@
         "読み上げ（TTS、任意テキストの音声合成）"
       ],
       "implStatus": "実装済み・実機確認済み",
-      "impl": "`crates/fandhe-egui-proxy/ios/fandhe_ios_tts.m` + `crates/fandhe-egui-proxy/src/device/ios.rs`（`IosTts`）、Issue 旧#866"
+      "impl": "`crates/fandhe-cap-tts/ios/fandhe_ios_tts.m` + `crates/fandhe-cap-tts/src/ios.rs`（`IosTts`）、Issue 旧#866"
     },
     "android": {
       "status": "done",
@@ -28,12 +28,12 @@
       "api": "`TextToSpeech`（`android.speech.tts`）",
       "perm": "なし",
       "url": "https://developer.android.com/reference/android/speech/tts/TextToSpeech",
-      "note": "実装済み（旧#866）。`MainActivity.ttsRequest` が `runOnUiThread` で `TextToSpeech` を操作し、非同期初期化（`OnInitListener`）完了を待ってから発話・停止を `nativeOnTtsResult` で Rust 側 mailbox へ返す（初期化未完了時に偽の成功を返さない設計）。TalkBack（スクリーンリーダー、上表の該当行）とは別 API で、画面の読み上げではなくアプリが指定した文字列の発話。再生成中の発話は `onDestroy` が確定させ、新画面には『読み上げました』が出ない既知の天井（旧#881）。Android 実機で確認済み（2026-09-15: 読み上げ / 発話中の停止 / 空文字のエラー）",
+      "note": "実装済み（旧#866）。`TtsHelper.request`（`TtsLifecycle` が Activity ごとに生成。`MainActivity` には配線を書かない）が `runOnUiThread` で `TextToSpeech` を操作し、非同期初期化（`OnInitListener`）完了を待ってから発話・停止を `nativeOnTtsResult` で Rust 側 mailbox へ返す（初期化未完了時に偽の成功を返さない設計）。TalkBack（スクリーンリーダー、上表の該当行）とは別 API で、画面の読み上げではなくアプリが指定した文字列の発話。再生成中の発話は `TtsLifecycle.onHostDestroyed`（`TtsHelper.detach`）が確定させ、新画面には『読み上げました』が出ない既知の天井（旧#881）。Android 実機で確認済み（2026-09-15: 読み上げ / 発話中の停止 / 空文字のエラー）",
       "sourceName": [
         "読み上げ（TTS、任意テキストの音声合成）"
       ],
       "implStatus": "実装済み・実機確認済み",
-      "impl": "`crates/fandhe-egui-proxy/src/device/android.rs`（`AndroidTts`）+ `platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java`、Issue 旧#866"
+      "impl": "`crates/fandhe-cap-tts/src/android.rs`（`AndroidTts`）+ `crates/fandhe-cap-tts/android/java/com/fandhe/platform/TtsHelper.java` + `crates/fandhe-cap-tts/android/java/com/fandhe/platform/TtsLifecycle.java`、Issue 旧#866"
     },
     "macos": {
       "status": "done",
@@ -41,12 +41,12 @@
       "api": "AVFoundation（`AVSpeechSynthesizer`）/ AppKit（`NSSpeechSynthesizer`、非推奨）",
       "perm": "なし",
       "url": "https://developer.apple.com/documentation/avfoundation/avspeechsynthesizer",
-      "note": "実装済み（旧#865）。`AVSpeechSynthesizer` を自前で叩くと `fandhe-device` の `#![forbid(unsafe_code)]` を破るため、OS 同梱コマンド `say`（内部で AVFoundation を使う）を `std::process::Command` で起動する方式にした（`tts` クレート（crates.io）は `Send`/`Sync` 非対応・保守終了気味の依存を引くため不採用、判断根拠は PR 本文参照）。Mac で実アプリを動かし、読み上げ・停止・OS 未対応時のエラー表示（偽の成功を出さないこと）を目視・聴取で確認済み",
+      "note": "実装済み（旧#865）。`AVSpeechSynthesizer` を自前で叩くと 機能 crate の `#![forbid(unsafe_code)]` を破るため、OS 同梱コマンド `say`（内部で AVFoundation を使う）を `std::process::Command` で起動する方式にした（`tts` クレート（crates.io）は `Send`/`Sync` 非対応・保守終了気味の依存を引くため不採用、判断根拠は PR 本文参照）。Mac で実アプリを動かし、読み上げ・停止・OS 未対応時のエラー表示（偽の成功を出さないこと）を目視・聴取で確認済み",
       "sourceName": [
         "読み上げ（TTS、任意テキストの音声合成）"
       ],
       "implStatus": "実装済み",
-      "impl": "`crates/fandhe-device/src/tts.rs`（`CommandTts`）、Issue 旧#865"
+      "impl": "`crates/fandhe-cap-tts/src/contract.rs`（`CommandTts`）、Issue 旧#865"
     },
     "windows": {
       "status": "done",
@@ -59,7 +59,7 @@
         "読み上げ（TTS、任意テキストの音声合成）"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "`crates/fandhe-device/src/tts.rs`（`CommandTts`）、Issue 旧#865"
+      "impl": "`crates/fandhe-cap-tts/src/contract.rs`（`CommandTts`）、Issue 旧#865"
     },
     "web": {
       "status": "done",
@@ -68,7 +68,7 @@
       "perm": "なし（Safari はユーザー操作起点でのみ発話）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesis",
       "safari": "対応（ユーザー操作起点が必要）",
-      "note": "実装済み（旧#867）。`fandhe-web-dom` の `mount_with_effect` + `tts` モジュールが `window.speechSynthesis` / `SpeechSynthesisUtterance` へ配線する（wasm32 では `fandhe-device` の `Tts` トレイトを通らない）。非対応ブラウザでは Err を返し偽の成功を出さない。スクリーンリーダーへの AX ツリー公開とは別 API。実ブラウザでの確認は未了",
+      "note": "実装済み（旧#867）。`fandhe-web-dom` の `mount_with_effect` + `tts` モジュールが `window.speechSynthesis` / `SpeechSynthesisUtterance` へ配線する（wasm32 では `fandhe-cap-tts` の `Tts` トレイトを通らない）。非対応ブラウザでは Err を返し偽の成功を出さない。スクリーンリーダーへの AX ツリー公開とは別 API。実ブラウザでの確認は未了",
       "sourceName": [
         "読み上げ（TTS、任意テキストの音声合成）"
       ],

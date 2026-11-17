@@ -74,11 +74,11 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "tts_speak" => fandhe_core::screens::tts_speak::current_screen,
-    fandhe_egui_proxy::device::tts::tts_speak_effect,
+    fandhe_cap_tts::tts_speak_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "file_pick" => fandhe_core::screens::file_pick::current_screen,
-    fandhe_egui_proxy::device::file_pick::file_pick_effect,
+    fandhe_cap_file_picker::file_pick_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "photo_pick" => fandhe_core::screens::photo_pick::current_screen,
@@ -218,7 +218,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "mic_record" => fandhe_core::screens::mic_record::current_screen,
-    fandhe_egui_proxy::device::mic_record::mic_record_effect,
+    fandhe_cap_mic_record::mic_record_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "screen_capture" => fandhe_core::screens::screen_capture::current_screen,
@@ -226,7 +226,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "tsv_import" => fandhe_core::screens::tsv_import::current_screen,
-    fandhe_egui_proxy::device::tsv_import::tsv_import_effect,
+    fandhe_cap_file_picker::tsv_import_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "notification_send" => fandhe_core::screens::notification_send::current_screen,
@@ -238,7 +238,7 @@ generated_screens! {
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "speech_recognize" => fandhe_core::screens::speech_recognize::current_screen,
-    fandhe_egui_proxy::device::speech_recognition::speech_recognize_effect,
+    fandhe_cap_speech_recognition::speech_recognize_effect,
     effect
     #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
     "sound_classification_show" => fandhe_core::screens::sound_classification_show::current_screen,

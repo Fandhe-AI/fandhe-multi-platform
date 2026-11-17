@@ -552,11 +552,7 @@ tts・file-picker・tsv-parse・mic-record・speech-recognition は、`MainActiv
 
 ### 未了の機能
 
-| 機能 | 残っている作業 |
-|------|----------------|
-| tts | `device/android.rs` の `Slot`・`Mailbox`・`AndroidTts`・JNI 受け口、`device/ios.rs` の `IosTts`、`MainActivity` の TTS 一式、`fandhe_ios_tts.m`。`stop_shared_tts` を `shutdown()` として gallery の終了フックから呼ぶ。`queries`（`android.intent.action.TTS_SERVICE`）を宣言する |
-| file-picker・tsv-parse | `FilePicker`・`RfdFilePicker` と `device/file_pick.rs`・`device/tsv_import.rs`・`device/android.rs`・`device/ios.rs` の切り出し。共有部分（`PickedFile`・`read_picked*`・`BusyGuard` など）は `fandhe-device::file_picker` に残す（photo-picker #1332 が使う）。tsv-parse は file-picker の crate に同居させる |
-| mic-record・speech-recognition | `MainActivity` の `micLock`・権限ランチャー・`SpeechRecognizer` の一式と `device/android.rs` の受け口。speech-recognition は `queries`（`android.speech.RecognitionService`）を宣言する。`measure_dt_ms` は `fandhe_runtime::tick` を直接使う |
+tts・file-picker・tsv-parse・mic-record・speech-recognition は、第 16 束（#1354、§26）で移した。
 
 ## 21. 第 11 束（#1331）で出た型
 
@@ -606,7 +602,7 @@ photo-picker・image-recognition・barcode-scan の 3 機能は未了（下の�
 
 | 機能 | 残っている作業 |
 |------|----------------|
-| photo-picker・image-recognition・barcode-scan | 3 機能が循環している（iOS の PHPicker の受け口 `fandhe_rust_photo_picker_outcome` が 3 機能へ振り分け、barcode-scan が `image_recognition::precheck` と `photo_pick::implementation` を使う）。iOS の受け口は photo-picker の crate が持ち、要求ごとに `deliver` を登録する形へ直す。寸法検査（`precheck`）は `fandhe-device::photo_picker` へ上げ、表示用の復号（photo-picker・document-scan・scanner-devices の 3 か所の複製）は `fandhe-device` の任意 feature へ 1 つにまとめる。Android の `pickPhoto`・`photoPickRequest`・`convertPhotoToJpeg` は `MainActivity` から `PhotoPickerHelper` + `PhotoPickerLifecycle` へ切り出す。`fandhe-device::file_picker` の `PickCommand`・`windows_pick_command`・`run_windows_pick`・`BusyGuard` を `pub` にする |
+| photo-picker・image-recognition・barcode-scan | 3 機能が循環している（iOS の PHPicker の受け口 `fandhe_rust_photo_picker_outcome` が 3 機能へ振り分け、barcode-scan が `image_recognition::precheck` と `photo_pick::implementation` を使う）。iOS の受け口は photo-picker の crate が持ち、要求ごとに `deliver` を登録する形へ直す。寸法検査（`precheck`）は `fandhe-device::photo_picker` へ上げ、表示用の復号（photo-picker・document-scan・scanner-devices の 3 か所の複製）は `fandhe-device` の任意 feature へ 1 つにまとめる。Android の `pickPhoto`・`photoPickRequest`・`convertPhotoToJpeg` は `MainActivity` から `PhotoPickerHelper` + `PhotoPickerLifecycle` へ切り出す。`fandhe-device::file_picker` の `PickCommand`・`windows_pick_command`・`run_windows_pick`・`BusyGuard` を `pub` にする（第 16 束 #1354 で済み。iOS・Android の受け取りも `picked_from_path_bytes`・`picked_from_document` として公開した、§26） |
 | bluetooth-le・bluetooth-classic の `ACCESS_FINE_LOCATION` | location の crate が `main` に入ったので、`max-sdk = 30` へ狭められる（§21 の申し送り。geofence が FINE を宣言するため、現行 Manifest の属性なしの 1 行は geofence の宣言と一致させる必要があり、狭める PR で Manifest と宣言を合わせて直す） |
 
 ## 23. 第 13 束（#1333）で出た型
@@ -696,4 +692,34 @@ PiP の切り替わりの口は #1327（§18）で決着していた。はじめ
 | 失敗型を持たない機能（health-data） | 契約の `HealthDataFailure` が失敗の種類のため、`error.rs` を作らない（in-app-browser 等と同じ） |
 | Rust 側の `unsafe` の削減（car-display・picture-in-picture） | 独自の `with_activity` をやめて `fandhe_platform_android::with_activity_class` + `call_static_method` に寄せた。Android で JNI のエクスポートが残らない car-display は全 OS で `forbid(unsafe_code)`、picture-in-picture は Apple だけ `deny` |
 | `build.gradle.kts` の `implementation(...)` | car-app・wallet の依存の行と guava の constraints は、旧構造の撤去（#1194）までアプリ側に残す。宣言の `gradle` と版を一致させる（`tests/gen.rs` が確かめる） |
+
+## 26. 第 16 束（#1354）で出た型
+
+第 16 束（tts・file-picker・tsv-parse・mic-record・speech-recognition）で、第 10 束（§20）に積んだ未了の 5 機能（4 crate）を移した。
+実装が共有ファイル（`device/android.rs`・`device/ios.rs`・`MainActivity.java`）に埋まった古い型で、`scaffold` だけでは動かせなかった。
+はじめて出た型と、その扱いは次のとおり。
+
+| 型 | 扱い |
+|----|------|
+| 2 つの id を 1 つの crate にまとめる（file-picker・tsv-parse） | tsv-parse の effect は file-picker の選択経路（`PickHooks`・`bridge`）をそのまま使う。crate は `fandhe-cap-file-picker` の 1 つで、宣言の `id` は file-picker。2 つの対応表の `impl` は同じ crate のパスを指す（§15 の compose-mail-sms と同じ扱い）。`scaffold` は契約を丸ごと `git mv` するため使わず、`driver.rs`・`tsv_import.rs`・`.m` を手で移した |
+| 契約の一部を他機能が共有する（file-picker） | `PickedFile`・`MAX_FILE_BYTES`・`read_picked*`・`sanitize_picked_name`・`pick_folder`・Windows の `PickCommand`・`windows_pick_command`・`run_windows_pick`・`BusyGuard` は写真選択・ドラッグ & ドロップ・ファイル関連付け・フォルダ監視も使うため `fandhe-device::file_picker` に残し、機能 crate の `contract` が一部を `pub use` で再公開する（§7）。`FilePicker` trait・`UnsupportedFilePicker`・`RfdFilePicker`（macOS・Windows）は機能 crate へ移した。`PickCommand` 以下は `pub(crate)` から `pub` へ上げた |
+| OS の受け取りのうち `unsafe` を含まない部分を共有する（file-picker・写真選択） | iOS の「結果コード + 一時コピーのパス」を `fandhe_device::file_picker::picked_from_path_bytes`、Android の「結果コード + fd の `File` + 表示名」を `picked_from_document` として `fandhe-device` に置き、検証と読み取りを 1 か所にした。ポインタを読む `unsafe`（`slice::from_raw_parts`）と fd を包む `unsafe`（`OwnedFd::from_raw_fd`）は呼び出し側の crate に 1 行ずつ残す（`// SAFETY:` つき）。fd は名前の検証より先に所有権を取り、どの失敗経路でも 1 回だけ close される順序を変えない。写真選択（`fandhe-egui-proxy` の iOS・Android の受け口）も同じ関数に付け替えた。photo-picker の機能 crate 化（#1355）は機能 crate 同士の依存を作らず、この関数を使う（宣言・Java helper・`.m` が photo-picker だけを選ぶアプリへ混ざらない） |
+| `DeviceError` を返す共有部品を機能 crate の失敗型へ写す | `FilePickerError` が `From<DeviceError>` を持ち、識別子ごと 1:1 に写す（`Unsupported`・`InvalidInput`・`Internal`。それ以外は `Internal("file_picker")`）。表示文言は移行前と同じ |
+| 2 本の mailbox（受理と最終結果）を持つ Android 実装（tts） | `Slot`・`Mailbox`・`AndroidTts` を機能 crate の `android.rs` へ移した（`device/android.rs` で `Mailbox` を使うのは tts だけだった）。JNI の受け口 `nativeOnTtsAccepted`・`nativeOnTtsResult` は JNI 型を持たない `on_tts_accepted`・`on_tts_result` へ本体を分け、ホストのテストから通せるようにした。JNI のエクスポート名は `TtsHelper` のクラス名へ変わる |
+| `Activity.onDestroy` の破棄処理を provider の `onHostDestroyed` へ移す（tts） | 破棄フラグ・保留要求の確定（status 2）・発話中の確定（status 7）・`TextToSpeech.shutdown()` を `TtsHelper.detach` が冪等にこの順で行う。従来は `super.onDestroy()` の前にフラグを立て、後で確定と解放をしていた。provider の通知は `super.onDestroy()` の中で届くため前後だけが違い、UI キュー上の要求の Runnable と `onTtsInit` がフラグを見て拒否する経路は変わらない |
+| 前面の写しを Lifecycle へ移す（mic-record・speech-recognition） | `MainActivity.activityResumed` を、Helper のインスタンスの `resumed` へ移し、`onHostResumed` で true、`onHostPaused` で false にする。どちらも `super.onResume()` / `super.onPause()` の中で届き、従来は `super` の後で更新していたため前後だけが違う。許可ダイアログの応答との到着順は、応答側が `resumed` を見て保留（`*StartPendingResume`）にし、次の `onHostResumed` で再開する形で変わらず保つ |
+| 許可ランチャーのキー | mic は `fandhe:MainActivity:2`、speech は `fandhe:MainActivity:3`、file picker は `fandhe:MainActivity:4`。再生成をまたいで保留中の結果を同じ登録へ配送するため、従来の文字列のまま明示する（写真選択の `:5` は `MainActivity` に残る） |
+| `MainActivity.onCreate` が捨てていた static の要求 id | `micRecordRequest.take()`・`speechRequest.take()` は attach へ移していない。attach は要求を保持して構成変更をまたいで引き継ぎ（発行元の引き継ぎ待ちで新しい helper が受ける）、破棄は `fandhe-gallery` の `android_main` が呼ぶ `reset_pending_tracking` → 各 Helper の static `abortPending()` が行う。speech は許可ダイアログの結果待ち（`speechPermissionPending`）が残る間、`abortPending` 後も発行元を残す。file picker は今の契約どおり、再生成の後も static の id で新しい Activity が結果を拾う |
+| Helper が無い要求 | 成功にも待ちにもしない。tts は status 2、mic・speech は内部エラー（code 2）、file picker は失敗（code 2）で確定する。停止の入口（`requestStop`）は止めるものが無いので何もしない |
+| 宣言に載せたもの | tts の `android.queries`（`TTS_SERVICE`）、speech の `android.queries`（`RecognitionService`）、iOS・macOS の usage description（mic は `NSMicrophoneUsageDescription`、speech は `NSSpeechRecognitionUsageDescription` と `NSMicrophoneUsageDescription`。文言は `fandhe-gallery` の `fandhe-app.<os>.usage-descriptions`）、`RECORD_AUDIO`、provider 4 件、framework、Windows の `windows` feature（`Media_Capture`・`Media_MediaProperties`・`Storage_Streams`・`Media_SpeechRecognition`） |
+| 終了時の片付け | `fandhe-egui-proxy::device::shutdown` は tts の停止だけを持っていたため関数ごと撤去し、`fandhe-gallery` の終了フックが `fandhe_cap_tts::shutdown()` を呼ぶ。`reset_pending_tracking`（mic・speech）は `fandhe-gallery` の `android_main` が呼ぶ |
+| Web の参照の付け替え（mic-record・speech-recognition） | `fandhe-web-dom` が機能 crate に依存し、契約の純関数・定数・失敗型を使う。Web の本体は `fandhe-web-dom` に残る。tts・file-picker の Web は契約を使っていないため触っていない |
+| 失敗型の表示文言 | 移行前の `DeviceError` の識別子（`mic_record`・`speech_recognition`・`file_picker`）のまま固定する。他の移行（`tts`・`biometric-auth` など）は id の表記になるが、画面に出る文言を変えないことを優先した。speech-recognition は `Disabled` を手で足した |
+| `cargo-fandhe` の `tests/gen.rs` | macOS の Info.plist は生成物がキー名の昇順で並ぶため、`NSServices` より後ろに `NSSpeechRecognitionUsageDescription` が続く。`NSServices` の値だけを JSON と照合する検査で、そのキーの手前で切るようにした |
+
+### 対象外
+
+- photo-picker・image-recognition・barcode-scan の移行と、画像の復号・寸法検査の共通化（#1355）。この束は受け取りの関数を公開するところまで
+- `fandhe-egui-proxy/macos/Info.plist`・`platforms/apple/FandheIosApp/Resources/Info.plist` の撤去と、旧構造の撤去（#1194）
+- iOS・Android・Windows の実機確認（人間担当。権限ダイアログ・Activity 再生成・背景遷移での中断・TTS エンジンの検出・`RecognitionService` の検出）
 

@@ -6,10 +6,10 @@
 //!
 //! Web は `fandhe-device` の `MicRecorder` トレイトを通らない（`location.rs`/`share.rs` と
 //! 同じ理由。`fandhe-egui-proxy` の feature `device` は wasm32 に依存を持ち込まない設計、
-//! `fandhe_device::mic_record` モジュール doc の「対応不可プラットフォーム」節参照）。
+//! `fandhe_cap_mic_record` の `contract` の doc の「対応不可プラットフォーム」節参照）。
 //! そのため本モジュールが DOM レンダラ側の対応実装にあたる。ただし録音結果の不変条件
-//! （0 バイト禁止・`duration_ms == 0` 禁止・[`fandhe_device::mic_record::MAX_RECORDING_BYTES`]
-//! 超過禁止）だけは [`fandhe_device::mic_record::build_recording`] を共有する
+//! （0 バイト禁止・`duration_ms == 0` 禁止・[`fandhe_cap_mic_record::MAX_RECORDING_BYTES`]
+//! 超過禁止）だけは [`fandhe_cap_mic_record::build_recording`] を共有する
 //! （検証ロジックの SSOT を 1 箇所に保つ、`location.rs` の `is_valid_fix` と同じ方針）。
 //!
 //! # 期限は `MAX_RECORD_MS` の 1 定数で揃える
@@ -53,8 +53,8 @@
 //! 観測する。`take_stop_request` 経路（`tick` 上限からの `StopRequested`）自体は
 //! [`mod@web`] が処理するため、状態機械としては停止操作に対応している。
 
+use fandhe_cap_mic_record::build_recording;
 use fandhe_core::screens::mic_record::RecordSummary;
-use fandhe_device::mic_record::build_recording;
 
 /// 非対応ブラウザ・secure context 外・`MediaRecorder` 未定義時の案内。
 /// native ビルドでは `mod web`（唯一の呼び出し元）が存在しないため未使用警告が出る
@@ -83,7 +83,7 @@ use fandhe_core::screens::mic_record::RecordOutcome;
 /// （ブラウザ API を呼ばないため native からもテストできる、モジュール doc 参照）。
 ///
 /// `cancel_requested`（権限確認中に利用者が「停止」を押した）は例外の種類に関わらず
-/// [`RecordOutcome::Cancelled`] を優先する（`fandhe_device::mic_record` の macOS/Android
+/// [`RecordOutcome::Cancelled`] を優先する（`fandhe_cap_mic_record` の macOS/Android
 /// 実装と同じ「利用者操作によるキャンセルは失敗ではない」方針、`biometric_check::
 /// AuthOutcome` と同型）。`message` は受け取らない・転送しない（security.md A09）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -103,9 +103,9 @@ pub(crate) fn outcome_from_error_name(
 }
 
 /// 読み取ったバイト列・mime・録音時間から [`RecordSummary`] を組み立てる純関数。
-/// 不変条件の検証は [`build_recording`] の SSOT に一本化し、`DeviceError` の内部識別子
+/// 不変条件の検証は [`build_recording`] の SSOT に一本化し、`MicRecordError` の内部識別子
 /// （`"mic_record bytes"` 等）は画面へ出さず [`RECORD_FAILED`] の固定文言へ畳む
-/// （`fandhe-egui-proxy::device::mic_record::to_message` と同じ方針）。
+/// （`fandhe-cap-mic-record` の driver の `to_message` と同じ方針）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn summary_from_bytes(
     bytes: Vec<u8>,
@@ -343,7 +343,7 @@ mod web {
 
             // 巨大な `ArrayBuffer` を確保する前に上限を確認する
             // （`file_picker.rs::read` の事前判定と同じ最適化）。
-            if blob.size() as usize > fandhe_device::mic_record::MAX_RECORDING_BYTES {
+            if blob.size() as usize > fandhe_cap_mic_record::MAX_RECORDING_BYTES {
                 fail(&applier, mount_id, generation, super::RECORD_FAILED);
                 return;
             }
@@ -827,7 +827,7 @@ mod tests {
 
     #[test]
     fn summary_from_bytes_rejects_oversized() {
-        let bytes = vec![0u8; fandhe_device::mic_record::MAX_RECORDING_BYTES + 1];
+        let bytes = vec![0u8; fandhe_cap_mic_record::MAX_RECORDING_BYTES + 1];
         assert!(summary_from_bytes(bytes, "audio/webm".to_string(), 1_000).is_err());
     }
 

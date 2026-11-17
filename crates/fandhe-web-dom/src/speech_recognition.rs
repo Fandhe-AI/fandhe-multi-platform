@@ -5,10 +5,10 @@
 //! （`SpeechRecognition`/`webkitSpeechRecognition`）で 1 回だけ聞き取って結果を書き戻す。
 //!
 //! Web は `fandhe-device` の `SpeechRecognizer` トレイトを通らない（`mic_record.rs`/
-//! `biometric_auth.rs` と同じ理由。`fandhe_device::speech_recognition` モジュール doc の
+//! `biometric_auth.rs` と同じ理由。`fandhe_cap_speech_recognition` の `contract` の doc の
 //! 「対応不可プラットフォーム」節参照）。そのため本モジュールが DOM レンダラ側の
 //! 対応実装にあたる。ただし結果文字列の不変条件（空白のみ → `NoMatch`、16 KiB 超過を
-//! 許さない）だけは [`fandhe_device::speech_recognition::outcome_from_transcript`] を
+//! 許さない）だけは [`fandhe_cap_speech_recognition::outcome_from_transcript`] を
 //! 共有する（検証ロジックの SSOT を 1 箇所に保つ、`mic_record.rs::summary_from_bytes` と
 //! 同じ方針）。
 //!
@@ -41,14 +41,14 @@
 //!
 //! | コード | 結果 |
 //! |---|---|
-//! | `not-allowed` / `service-not-allowed` | 権限拒否（`DeviceError::PermissionDenied`） |
+//! | `not-allowed` / `service-not-allowed` | 権限拒否（`SpeechRecognitionError::PermissionDenied`） |
 //! | `no-speech` | [`ListenOutcome::NoMatch`] |
 //! | `aborted` | [`ListenOutcome::Cancelled`] |
 //! | `language-not-supported` | [`UNAVAILABLE`]（`fandhe_device` 側「言語未対応 →
 //!   Unsupported」の表と揃える） |
-//! | `network` | `DeviceError::Disabled`（`fandhe_device` 側「オフライン → Disabled」の
+//! | `network` | `SpeechRecognitionError::Disabled`（`fandhe_cap_speech_recognition` 側「オフライン → Disabled」の
 //!   表と揃える） |
-//! | `audio-capture` / `bad-grammar` / 未知・`None` | `DeviceError::Internal` |
+//! | `audio-capture` / `bad-grammar` / 未知・`None` | `SpeechRecognitionError::Internal` |
 //!
 //! `onresult` が結果を 0 件返した場合・`onnomatch`・先に確定せず `onend` に到達した場合は
 //! すべて [`ListenOutcome::NoMatch`] に畳む。
@@ -74,23 +74,23 @@
 //! 結果を返す（ブラウザ実装の仕様。対応表の note にも明記する）。独自の送信経路は
 //! 追加しない。
 
+use fandhe_cap_speech_recognition::SpeechRecognitionError;
 use fandhe_core::screens::speech_recognize::ListenOutcome;
-use fandhe_device::DeviceError;
 
 /// 非対応ブラウザ・secure context 外・コンストラクタ未定義時の案内
-/// （`fandhe-egui-proxy::device::speech_recognition::UNAVAILABLE` と同じ文言で揃える）。
+/// （`fandhe-cap-speech-recognition` の driver の `UNAVAILABLE` と同じ文言で揃える）。
 /// native ビルドでは `mod web`（唯一の呼び出し元）が存在しないため未使用警告が出る
 /// （`mic_record.rs::UNAVAILABLE` と同じ理由）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const UNAVAILABLE: &str = "この環境では音声認識を使えません";
 
-/// `onerror`/内部失敗時の汎用案内。`DeviceError::Internal` の `Display` を共有し、
+/// `onerror`/内部失敗時の汎用案内。`SpeechRecognitionError::Internal` の `Display` を共有し、
 /// 内部識別子（`"speech_recognition"`）は画面へ出さず固定文言に畳む
-/// （`fandhe-egui-proxy::device::speech_recognition::to_message` と同じ方針を
-/// Web 側の `DeviceError` 由来の値にも適用する）。
+/// （`fandhe-cap-speech-recognition` の driver の `to_message` と同じ方針を
+/// Web 側の `SpeechRecognitionError` 由来の値にも適用する）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 fn internal_message() -> String {
-    DeviceError::Internal("speech_recognition").to_string()
+    SpeechRecognitionError::Internal("speech_recognition").to_string()
 }
 
 /// `event.error`（`onerror` のエラーコード文字列）→ [`ListenOutcome`] への変換純関数
@@ -100,24 +100,24 @@ fn internal_message() -> String {
 pub(crate) fn outcome_from_error_code(code: Option<&str>) -> Result<ListenOutcome, String> {
     match code {
         Some("not-allowed") | Some("service-not-allowed") => {
-            Err(DeviceError::PermissionDenied("speech_recognition").to_string())
+            Err(SpeechRecognitionError::PermissionDenied.to_string())
         }
         Some("no-speech") => Ok(ListenOutcome::NoMatch),
         Some("aborted") => Ok(ListenOutcome::Cancelled),
         Some("language-not-supported") => Err(UNAVAILABLE.to_string()),
-        Some("network") => Err(DeviceError::Disabled("speech_recognition").to_string()),
+        Some("network") => Err(SpeechRecognitionError::Disabled("speech_recognition").to_string()),
         _ => Err(internal_message()),
     }
 }
 
 /// `SpeechRecognitionAlternative::transcript()` の文字列 → [`ListenOutcome`] への変換。
-/// 不変条件の検証は [`fandhe_device::speech_recognition::outcome_from_transcript`] の
-/// SSOT に一本化し、`DeviceError` の内部識別子は画面へ出さず [`internal_message`] の
+/// 不変条件の検証は [`fandhe_cap_speech_recognition::outcome_from_transcript`] の
+/// SSOT に一本化し、`SpeechRecognitionError` の内部識別子は画面へ出さず [`internal_message`] の
 /// 固定文言へ畳む（`mic_record.rs::summary_from_bytes` と同じ方針）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn outcome_from_transcript_text(text: String) -> Result<ListenOutcome, String> {
-    use fandhe_device::speech_recognition::SpeechOutcome;
-    match fandhe_device::speech_recognition::outcome_from_transcript(text) {
+    use fandhe_cap_speech_recognition::SpeechOutcome;
+    match fandhe_cap_speech_recognition::outcome_from_transcript(text) {
         Ok(SpeechOutcome::Recognized(t)) => Ok(ListenOutcome::Recognized(t)),
         Ok(SpeechOutcome::NoMatch) => Ok(ListenOutcome::NoMatch),
         Ok(SpeechOutcome::Cancelled) => Ok(ListenOutcome::Cancelled),
@@ -519,7 +519,7 @@ mod web {
 
             // `MAX_LISTEN_MS` の自動停止（OS 側）。Rust 側の `tick` 自動停止と同じ定数
             // （モジュール doc「期限は 1 定数で揃える」節）。`abort()` ではなく `stop()`
-            // で結果の確定を求める（`fandhe_device::speech_recognition` モジュール doc
+            // で結果の確定を求める（`fandhe_cap_speech_recognition` の `contract` の doc
             // 「上限」節と同じ判断）。
             let timeout_closure = Closure::<dyn FnMut()>::new(move || {
                 if matches_current(mount_id, generation) {
@@ -611,11 +611,11 @@ mod tests {
     fn not_allowed_errors_map_to_permission_denied() {
         assert_eq!(
             outcome_from_error_code(Some("not-allowed")),
-            Err(DeviceError::PermissionDenied("speech_recognition").to_string())
+            Err(SpeechRecognitionError::PermissionDenied.to_string())
         );
         assert_eq!(
             outcome_from_error_code(Some("service-not-allowed")),
-            Err(DeviceError::PermissionDenied("speech_recognition").to_string())
+            Err(SpeechRecognitionError::PermissionDenied.to_string())
         );
     }
 
@@ -647,7 +647,7 @@ mod tests {
     fn network_maps_to_disabled() {
         assert_eq!(
             outcome_from_error_code(Some("network")),
-            Err(DeviceError::Disabled("speech_recognition").to_string())
+            Err(SpeechRecognitionError::Disabled("speech_recognition").to_string())
         );
     }
 
@@ -700,7 +700,7 @@ mod tests {
 
     #[test]
     fn transcript_text_rejects_oversized_text() {
-        let text = "あ".repeat(fandhe_device::speech_recognition::MAX_TRANSCRIPT_BYTES + 1);
+        let text = "あ".repeat(fandhe_cap_speech_recognition::MAX_TRANSCRIPT_BYTES + 1);
         assert_eq!(outcome_from_transcript_text(text), Err(internal_message()));
     }
 }

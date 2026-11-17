@@ -14,14 +14,13 @@ thiserror = { workspace = true }
 serde_json = { workspace = true }
 
 
-# Phase 11（Issue #872、#876 codex-review P1 是正）: `file_picker::RfdFilePicker`
-# の macOS 経路のみ。Windows は rfd を使わない（rfd 0.17 の同期 API が COM 初期化
-# 失敗等を `.ok()` で握り潰しキャンセルへ化けさせ、本クレートの
-# 「キャンセルと失敗は別の結果」契約に違反するため）。Windows は PowerShell の
-# `System.Windows.Forms.OpenFileDialog` を子プロセスとして起動し、終了コードで
-# 選択/キャンセル/失敗を区別する（`tts::CommandTts` と同型、`file_picker.rs` 参照）。
-# 対応表（`docs/device/capabilities/file-picker.json`）が Linux を対象外として
-# いるため、Linux はこの依存自体を持ち込まず `Unsupported` を返す。
+# Phase 11（Issue #872、#876 codex-review P1 是正）: `file_picker::pick_folder`（フォルダ選択）と `photo_picker::RfdPhotoPicker` の
+# macOS 経路のみ。ファイル選択の `RfdFilePicker` は機能 crate `fandhe-cap-file-picker` へ移した（同じ理由で自前の macOS 依存を持つ）。
+# Windows は rfd を使わない（rfd 0.17 の同期 API が COM 初期化失敗等を `.ok()` で握り潰しキャンセルへ化けさせ、
+# 「キャンセルと失敗は別の結果」契約に違反するため）。Windows は PowerShell の `System.Windows.Forms.OpenFileDialog` を
+# 子プロセスとして起動し、終了コードで選択/キャンセル/失敗を区別する（`file_picker.rs` 参照）。
+# 対応表（`docs/device/capabilities/file-picker.json`）が Linux を対象外としているため、Linux はこの依存自体を持ち込まず
+# `Unsupported` を返す。
 [target.'cfg(target_os = "macos")'.dependencies]
 rfd = { workspace = true }
 
