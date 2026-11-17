@@ -51,7 +51,7 @@
         "https://wicg.github.io/eyedropper-api/"
       ],
       "safari": "Safari 非対応（iOS を含む）。Firefox・Android 版 Chrome も非対応。デスクトップの Chrome・Edge 95 以降のみ",
-      "note": "実装済み（#763）。コンストラクタが無ければ非対応、`AbortError` だけを取り消し、ほかの拒否と不正な `sRGBHex` は失敗として扱う。画面の破棄と `pagehide` で `signal` により中断する。MDN は Limited availability・Experimental。`EyeDropper` は `[SecureContext]` で、secure context 外ではコンストラクタ自体が無い。`open()` の拒否は `NotAllowedError`（ユーザー操作外）・`InvalidStateError`（別のスポイトが開いている）・`AbortError`（Esc での取り消し・`AbortSignal` での中断）・`OperationError`（その他の失敗）（MDN）。`sRGBHex` は `#aabbcc` 形式の sRGB。公開入口の discard・画面の破棄・画面の要求の差し替えのいずれでも、`AbortError` の確定まで次の開始は busy になる。失われた要求には `Internal(\"eye_dropper lost\")` を 1 度だけ返す。連打した直後の 2 回目の押下は busy の失敗になる",
+      "note": "実装済み（#763）。コンストラクタが無ければ非対応、`AbortError` だけを取り消し、ほかの拒否と不正な `sRGBHex` は失敗として扱う。画面の破棄と `pagehide` で `signal` により中断する。MDN は Limited availability・Experimental。`EyeDropper` は `[SecureContext]` で、secure context 外ではコンストラクタ自体が無い。`open()` の拒否は `NotAllowedError`（ユーザー操作外）・`InvalidStateError`（別のスポイトが開いている）・`AbortError`（Esc での取り消し・`AbortSignal` での中断）・`OperationError`（その他の失敗）（MDN）。`sRGBHex` は `#aabbcc` 形式の sRGB。`open()` を始めた後は、公開入口の discard・画面の破棄・画面の要求の差し替えのいずれでも、`AbortError` の確定まで次の開始は busy になる（`open()` の前ならその場で空く）。失われた要求には `Internal(\"eye_dropper lost\")` を 1 度だけ返す（通常は到達しない保険）。別の要求として開始した場合（公開入口の 2 回目の begin・画面の世代替え）は、確定までの間 busy の失敗になる。同じ世代での再押下は何もせず無視される",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実ブラウザ確認待ち（#759）",
       "impl": "crates/fandhe-cap-eye-dropper/src/web.rs + crates/fandhe-cap-eye-dropper/src/web_result.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/eye_dropper_pick.rs + crates/fandhe-device/src/eye_dropper.rs、Issue #763・#1359"

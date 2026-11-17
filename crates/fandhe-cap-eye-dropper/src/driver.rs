@@ -204,7 +204,8 @@ pub fn eye_dropper_pick_effect(
 ///   ハンドラの中から同期で呼ぶこと。そうでなければ `NotAllowedError` で拒否され、失敗として poll に届く。
 ///   secure context に限られ、Chromium 系だけが対応する。
 /// - 拾った色はログ・`Debug` に出さない。
-/// - 前の要求が失われたあと、その id を poll せずに開始すると、旧 id の喪失は通知されない（旧 id の poll は `None`）。
+/// - 前の要求が失われたあと、その id を poll せずに開始すると、旧 id の喪失は通知されない
+///   （旧 id の poll は `None`）。
 #[cfg(any(target_os = "macos", target_arch = "wasm32"))]
 pub fn begin_eye_dropper() -> Result<u64, EyeDropperError> {
     #[cfg(target_arch = "wasm32")]
@@ -238,8 +239,8 @@ pub fn begin_eye_dropper() -> Result<u64, EyeDropperError> {
 /// 取り出し済み・0・非対応 OS は `None`。結果は 3 値: 色（`Ok`）、利用者の取り消し（`Err(Cancelled)`）、失敗。
 ///
 /// slot の要求が失われた（空・別の id に替わった）ときは、1 度だけ `Err(Internal("eye_dropper lost"))` を返し、
-/// 以後は `None`。本 crate の本番コードに `SLOT.reset()` の呼び出しは無く、将来 slot を落とす経路が足されたときに
-/// 公開側の持ち主が外れず busy が続くのを防ぐ保険で、現状は通常到達しない。
+/// 以後は `None`。本 crate の本番コードに `SLOT.reset()` の呼び出しは無く、将来 slot を落とす経路が足されたときに、
+/// 失われた要求を呼び出し側へ 1 度だけ通知し、公開側の持ち主の記録を外すための保険で、現状は通常到達しない。
 /// 並行して同じ id を poll しても、結果が二重に返ることはない。
 pub fn poll_eye_dropper(request_id: u64) -> Option<Result<PickedColor, EyeDropperError>> {
     #[cfg(any(target_os = "macos", target_arch = "wasm32"))]
@@ -423,7 +424,8 @@ mod tests {
                 Some(Err(EyeDropperError::Internal("eye_dropper lost")))
             );
             assert_eq!(poll_eye_dropper(id), None);
-            // 持ち主が外れたので、次の開始は busy にならない。
+            // 持ち主の記録が外れている（slot が空なので、記録が残っていても開始は断られない）。
+            assert_eq!(bridge::PUBLIC_OWNER.current(), 0);
             assert!(begin_public().is_some());
             reset();
         }
@@ -452,6 +454,7 @@ mod tests {
                 Some(Err(EyeDropperError::Internal("eye_dropper lost")))
             );
             assert_eq!(poll_eye_dropper(id), None);
+            assert_eq!(bridge::PUBLIC_OWNER.current(), 0);
             reset();
         }
 
