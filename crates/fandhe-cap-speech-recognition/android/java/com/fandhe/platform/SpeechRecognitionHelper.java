@@ -93,7 +93,8 @@ final class SpeechRecognitionHelper {
             }
             speechOwner = null;
             if (activity.isChangingConfigurations()) {
-                speechOwnerOrphaned = true;
+                // 追跡中の要求があるときだけ新しい helper へ引き継ぐ（無ければ何も待たない）。
+                speechOwnerOrphaned = speechRequest.current() != RequestTracker.NONE;
                 return;
             }
             interruptListeningLocked();
@@ -107,7 +108,8 @@ final class SpeechRecognitionHelper {
                     nativeOnSpeechResult(id, SPEECH_RESULT_INTERRUPTED, null);
                 }
             } else {
-                speechOwnerOrphaned = true;
+                // システム破棄: 追跡中の要求（権限ダイアログ待ち）が残るときだけ、復元後の helper へ引き継ぐ。
+                speechOwnerOrphaned = speechRequest.current() != RequestTracker.NONE;
             }
         }
     }
@@ -464,6 +466,9 @@ final class SpeechRecognitionHelper {
             return;
         }
         speechRecognizer = recognizer;
+        // 実際に走らせた helper を発行元にする（引き継ぎ待ちの間に別 Activity が発行元になっていても、止める責任は走らせた側）。
+        speechOwner = this;
+        speechOwnerOrphaned = false;
         speechStartPendingResume = false;
         // `onReadyForSpeech` 未到達を明示する初期値（聞き取り上限タイマーは同
         // コールバックで開始する。上記コメント参照）。
@@ -655,6 +660,7 @@ final class SpeechRecognitionHelper {
         if (!speechRequest.complete(requestId)) {
             return false;
         }
+        speechOwner = null;
         cancelSpeechTimeout();
         try {
             speechRecognizer.destroy();
@@ -675,6 +681,7 @@ final class SpeechRecognitionHelper {
     // `finishSpeech` と同じ方針）。
     private static void abortSpeech(int resultCode) {
         long id = speechRequest.take();
+        speechOwner = null;
         cancelSpeechTimeout();
         try {
             speechRecognizer.cancel();

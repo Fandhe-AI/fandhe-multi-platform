@@ -90,7 +90,8 @@ final class MicRecordHelper {
             }
             micOwner = null;
             if (activity.isChangingConfigurations()) {
-                micOwnerOrphaned = true;
+                // 追跡中の要求があるときだけ新しい helper へ引き継ぐ（無ければ何も待たない）。
+                micOwnerOrphaned = micRecordRequest.current() != RequestTracker.NONE;
                 return;
             }
             interruptRecordingLocked();
@@ -102,7 +103,8 @@ final class MicRecordHelper {
                     nativeOnMicRecordResult(id, MIC_RESULT_INTERRUPTED, null, null, 0);
                 }
             } else {
-                micOwnerOrphaned = true;
+                // システム破棄: 追跡中の要求（権限ダイアログ待ち）が残るときだけ、復元後の helper へ引き継ぐ。
+                micOwnerOrphaned = micRecordRequest.current() != RequestTracker.NONE;
             }
         }
     }
@@ -407,6 +409,9 @@ final class MicRecordHelper {
             return;
         }
         micRecorder = recorder;
+        // 実際に走らせた helper を発行元にする（引き継ぎ待ちの間に別 Activity が発行元になっていても、止める責任は走らせた側）。
+        micOwner = this;
+        micOwnerOrphaned = false;
         micTempFile = tempFile;
         micStartedAt = SystemClock.elapsedRealtime();
         nativeOnMicRecordStarted(requestId);
@@ -449,6 +454,7 @@ final class MicRecordHelper {
             // 旧世代・二重完了（`take()` 済みの要求への遅延呼び出し）。
             return;
         }
+        micOwner = null;
         MediaRecorder recorder = micRecorder;
         File tempFile = micTempFile;
         long startedAt = micStartedAt;
