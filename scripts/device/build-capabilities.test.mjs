@@ -72,10 +72,10 @@ test("joinDeclarations: crate に対応表が無い・存在しない crate・�
 test("permText: 非 done は —、OS ごとに宣言から並べ、空は なし", () => {
   const d = {
     ios: { "usage-descriptions": ["NSCameraUsageDescription"], entitlements: { "com.apple.developer.healthkit": true }, extensions: [{ "app-groups": ["widget"], "usage-descriptions": ["NSCameraUsageDescription"] }] },
-    android: { permissions: [{ name: "android.permission.CAMERA" }, { name: "android.permission.READ", "max-sdk": 32 }] },
+    android: { permissions: [{ name: "android.permission.CAMERA" }, { name: "android.permission.READ", "max-sdk": 32 }, { name: "android.permission.SCAN", flags: ["neverForLocation"] }] },
   };
   assert.equal(permText("android", "possible", d), "—");
-  assert.equal(permText("android", "done", d), "android.permission.CAMERA、android.permission.READ（maxSdkVersion 32）");
+  assert.equal(permText("android", "done", d), "android.permission.CAMERA、android.permission.READ（maxSdkVersion 32）、android.permission.SCAN（neverForLocation）");
   assert.equal(permText("ios", "done", d), "NSCameraUsageDescription、com.apple.developer.healthkit、App Group: widget");
   assert.equal(permText("web", "done", d), "なし");
   assert.equal(permText("macos", "done", undefined), "なし");

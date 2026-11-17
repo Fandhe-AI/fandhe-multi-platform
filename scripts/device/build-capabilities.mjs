@@ -188,7 +188,11 @@ function permText(os, status, fandhe) {
   const o = fandhe?.[os];
   const out = [];
   if (os === "android") {
-    for (const p of o?.permissions ?? []) out.push(p.name + (p["max-sdk"] ? `（maxSdkVersion ${p["max-sdk"]}）` : ""));
+    for (const p of o?.permissions ?? []) out.push(
+        p.name +
+          (p["max-sdk"] ? `（maxSdkVersion ${p["max-sdk"]}）` : "") +
+          (p.flags?.length ? `（${p.flags.join("、")}）` : ""),
+      );
   } else if (os === "ios" || os === "macos") {
     for (const part of [o, ...(o?.extensions ?? [])]) {
       out.push(...(part?.["usage-descriptions"] ?? []), ...Object.keys(part?.entitlements ?? {}));
