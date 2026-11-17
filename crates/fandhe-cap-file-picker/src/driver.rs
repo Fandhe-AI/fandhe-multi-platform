@@ -43,7 +43,7 @@
 //! `FANDHE_PROXY_APP` で起動する画面は 1 プロセスに 1 つだけのため、同じプロセスで
 //! 両方の effect ドライバが動くことは無く、共有しても要求が混線しない（`tsv_import.rs`
 //! モジュール doc も参照）。`Outcome` を `PickedSummary` ではなく生の
-//! `Result<Option<PickedFile>, String>` に留めているのは、`tsv_import` 側は
+//! `Result<Option<Arc<PickedFile>>, FilePickerError>` に留めているのは、`tsv_import` 側は
 //! バイト列を解析に使う（要約に潰さない）ため。要約（`PickedSummary` への変換）は
 //! 各画面固有の [`PickHooks::finish`] 側で行う。
 //!
@@ -264,6 +264,18 @@ pub(crate) mod bridge {
         Some(Err(FilePickerError::Internal("file_picker lost")))
     }
 
+    /// 公開入口の自分の分の要求を捨てる（[`super::discard_file_pick`] の本体）。持ち主が `request_id` と一致するときだけ
+    /// slot を空にして持ち主を外し `true`。他人の id・取り出し済み・0 は `false`。poll と同じロックで直列にする。
+    pub(crate) fn discard_public(request_id: u64) -> bool {
+        let _guard = PUBLIC_POLL_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        if request_id == 0 || PUBLIC_OWNER.current() != request_id {
+            return false;
+        }
+        SLOT.clear(request_id);
+        PUBLIC_OWNER.release(request_id);
+        true
+    }
+
     /// 画面が観測する「自分の分の」要求と結果。持ち主が画面でない要求（公開入口の分）は見せず `None` にする
     /// （画面が公開入口の要求を再生成後の復元と取り違えない）。失敗は画面へ渡す文言へ変換する。
     pub(crate) fn screen_snapshot() -> Option<(u64, Option<super::MobileOutcome>)> {
@@ -307,18 +319,16 @@ pub(crate) mod bridge {
     }
 }
 
-/// [`bridge::Outcome`] と同じ形（`bridge` 自体は `cfg(any(ios, android))` のため、
-/// `cfg(test)` のみでホストがコンパイルする [`next_action`]/[`Action`] からは
-/// 型エイリアスの名前を共有できず、こちらを使う。両者は構造的に同一の型）。
+/// 画面へ渡す結果の形。[`bridge::Outcome`] の失敗（`FilePickerError`）を画面向けの文言（`String`）へ変換した型
+/// （[`bridge::screen_snapshot`] が変換する。成功側の `Option<Arc<PickedFile>>` は同一）。
 #[cfg(any(test, target_os = "ios", target_os = "android"))]
 type MobileOutcome = Result<Option<std::sync::Arc<PickedFile>>, String>;
 
-/// [`next_action`] が受け取る「現在の要求と、届いていれば結果」（[`bridge::snapshot`]
-/// の戻り値と同じ形）。
+/// [`next_action`] が受け取る「画面自身の要求と、届いていれば結果」（[`bridge::screen_snapshot`] の戻り値と同じ形）。
 #[cfg(any(test, target_os = "ios", target_os = "android"))]
 type MobileSnapshot = Option<(u64, Option<MobileOutcome>)>;
 
-/// [`drive_mobile_with`] の分岐（`state.phase` × [`bridge::snapshot`]）をホスト側でも
+/// [`drive_mobile_with`] の分岐（`state.phase` × [`bridge::screen_snapshot`]）をホスト側でも
 /// 単体テストできるよう切り出した純関数の出力。`drive_mobile_with` はこの結果を
 /// `CompletionSender` へ写像するだけに徹する（モジュール doc「pull 型」節参照）。
 #[cfg(any(test, target_os = "ios", target_os = "android"))]
@@ -343,7 +353,7 @@ pub(crate) enum Action {
     },
 }
 
-/// `(state.phase, bridge::snapshot())` から次に行う操作を決める純関数
+/// `(state.phase, bridge::screen_snapshot())` から次に行う操作を決める純関数
 /// （[`Action`] doc 参照）。OS 呼び出し・`CompletionSender` へのアクセスを一切含まないため
 /// `cfg` 無しでホスト上の `cargo test` から検証できる（4 腕 + 該当なしの `Nothing`）。
 #[cfg(any(test, target_os = "ios", target_os = "android"))]
@@ -417,7 +427,7 @@ pub(crate) fn drive_mobile_with<S: 'static>(
                     // 複製なしで取り出せる。
                     bridge::clear(request_id);
                     // ここで初めて `Arc<PickedFile>` を剥がす（完了 1 回のみ、
-                    // 毎フレームの `bridge::snapshot` クローンとは別。`bridge::Outcome`
+                    // 毎フレームの `bridge::screen_snapshot` クローンとは別。`bridge::Outcome`
                     // 参照）。他に参照が残っていなければ複製なしで取り出せる。
                     let owned = outcome.map(|opt| {
                         opt.map(|arc| {
@@ -498,8 +508,9 @@ pub fn platform_file_picker() -> Result<&'static dyn crate::contract::FilePicker
 /// `Unsupported` を返す。Linux 等も `Unsupported`。
 ///
 /// 結果の解放: 選んだファイルは OS 側で読み切ってから届くため、結果が握るのはメモリ上のバイト列（上限 `MAX_FILE_BYTES`）だけで、
-/// fd・一時パスは届く前に解放済み。取り出されない結果は slot が握り続け、次の要求も断るため、呼び出し側は必ず [`poll_file_pick`] で
-/// 取り出すこと（取り出すと同時に解放される）。
+/// fd・一時パスは届く前に解放済み。結果は [`poll_file_pick`] で取り出すと同時に解放される。取り出さない要求（id を捨てた、
+/// OS がコールバックしない等）が slot に残ると、次の要求も（画面 effect の開始も）busy で断られるため、不要になった要求は
+/// [`discard_file_pick`] で捨てる。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn begin_file_pick() -> Result<u64, FilePickerError> {
     let request_id = bridge::begin_public().ok_or(FilePickerError::Internal("file_picker busy"))?;
@@ -514,6 +525,23 @@ pub fn begin_file_pick() -> Result<u64, FilePickerError> {
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn begin_file_pick() -> Result<u64, FilePickerError> {
     Err(FilePickerError::Unsupported)
+}
+
+/// [`begin_file_pick`] の自分の要求を捨てて slot を空ける。`request_id` が公開入口の現在の要求のときだけ `true`
+/// （他人の id・画面側の id・取り出し済み・0 は `false` で何もしない）。結果が未取得でも進行中でも捨てる。
+///
+/// 進行中の OS のファイル選択画面は閉じられない。後から届いた結果は id 不一致で捨てられる。捨てたあとは
+/// [`poll_file_pick`] が `None` になり、公開入口も画面 effect も再び開始できる。iOS・Android 以外では常に `false`。
+pub fn discard_file_pick(request_id: u64) -> bool {
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    {
+        bridge::discard_public(request_id)
+    }
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
+        let _ = request_id;
+        false
+    }
 }
 
 /// [`begin_file_pick`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・公開入口でない id・取り出し済みは `None`。
@@ -895,11 +923,68 @@ mod bridge_tests {
         bridge::reset();
     }
 
+    /// 公開入口の要求を捨てると、公開入口も画面も再び開始できる。他人の id では何もしない。
+    #[test]
+    fn discard_frees_slot_for_public_and_screen() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let id = bridge::begin_public().unwrap();
+        // 進行中の要求を、他人の id・0 では捨てられない。
+        assert!(!bridge::discard_public(id + 1));
+        assert!(!bridge::discard_public(0));
+        assert!(bridge::begin_screen().is_none());
+        assert!(bridge::discard_public(id));
+        assert!(bridge::poll_public(id).is_none());
+        assert!(!bridge::discard_public(id));
+        // 結果が未取得でも捨てられ、遅れて届いた結果は捨てられる。
+        let id2 = bridge::begin_public().unwrap();
+        assert!(bridge::deliver(id2, Ok(None)));
+        assert!(bridge::discard_public(id2));
+        assert!(!bridge::deliver(id2, Ok(None)));
+        // 画面の id は公開入口から捨てられない。
+        let screen = bridge::begin_screen().unwrap();
+        assert!(!bridge::discard_public(screen));
+        bridge::clear(screen);
+        assert!(bridge::begin_public().is_some());
+        bridge::reset();
+    }
+
+    /// 失敗の値は変換されずにそのまま返る。
+    #[test]
+    fn failure_values_are_returned_as_is() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        for e in [
+            FilePickerError::InvalidInput("file_picker size"),
+            FilePickerError::Internal("file_picker read"),
+        ] {
+            let id = bridge::begin_public().unwrap();
+            assert!(bridge::deliver(id, Err(e)));
+            assert_eq!(bridge::poll_public(id), Some(Err(e)));
+        }
+        bridge::reset();
+    }
+
+    /// 提示依頼の失敗で登録を取り消すと、slot も持ち主も空になり、再び開始できる。
+    #[test]
+    fn abort_public_empties_slot_and_owner() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let id = bridge::begin_public().unwrap();
+        bridge::abort_public(id);
+        assert!(bridge::snapshot().is_none());
+        assert_eq!(bridge::PUBLIC_OWNER.current(), 0);
+        assert!(bridge::poll_public(id).is_none());
+        assert!(bridge::begin_public().is_some());
+        bridge::reset();
+    }
+
     /// iOS・Android 以外の公開入口は `Unsupported`（デスクトップは同期の `platform_file_picker` を使う）。
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     #[test]
     fn async_entry_is_unsupported_off_mobile() {
         assert_eq!(begin_file_pick(), Err(FilePickerError::Unsupported));
         assert!(poll_file_pick(1).is_none());
+        assert!(!discard_file_pick(1));
     }
 }

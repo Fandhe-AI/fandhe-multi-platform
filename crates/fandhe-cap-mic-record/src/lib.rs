@@ -6,7 +6,7 @@
 //! 契約（`contract`）・失敗の種類（`error`）・effect ドライバ（`driver`）・OS 実装（macOS・iOS は `apple`、Android は `android`、Windows は
 //! `windows`）を 1 つに集める。macOS・iOS・Android・Windows は結果が非同期に届く pull 型の bridge（`RequestSlot`）で受け、
 //! `MicRecorder` トレイトを通らない（入口 [`platform_mic_record`] は `Unsupported` 固定の同期実装を返し、成功を偽装しない）。
-//! 画面の状態型に依存しない非同期の入口は [`begin_mic_record`]（開始）・[`request_stop_mic_record`]（停止要求）・[`poll_mic_record`]（結果を 1 度だけ取得）。
+//! 画面の状態型に依存しない非同期の入口は [`begin_mic_record`]（開始）・[`request_stop_mic_record`]（停止要求）・[`poll_mic_record`]（結果を 1 度だけ取得）・[`discard_mic_record`]（取り出さない要求を捨てる）。
 //! 画面 effect と同じ slot を共有し、片方が進行中・未取得なら他方は `Internal`（busy）で断る。画面の状態型を参照してよいのは `driver` だけ。
 //!
 //! 呼び出し元は最終成果物（`fandhe-gallery`）の画面レジストリ（`mic_record_effect`）と、画面状態が再生成で初期化される構成の

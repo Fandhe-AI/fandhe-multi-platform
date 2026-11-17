@@ -264,6 +264,21 @@ pub(crate) mod bridge {
     pub(crate) static PUBLIC_OWNER: SlotOwner = SlotOwner::new();
     /// 公開側の poll 本体（持ち主の照合・取得・喪失判定・解放）を直列にする。並行 poll で成功と喪失が二重に返らないため。
     pub(crate) static PUBLIC_POLL_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// 公開入口の自分の分の要求を捨てる（`super::discard_*` の本体）。持ち主が `request_id` と一致するときだけ slot を空にして
+    /// 持ち主を外し、「捨てた時点で進行中（結果未着）だったか」を返す。他人の id・取り出し済み・0 は `None`。poll と同じロックで直列にする。
+    pub(crate) fn discard_public(request_id: u64) -> Option<bool> {
+        let _guard = PUBLIC_POLL_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        if request_id == 0 || PUBLIC_OWNER.current() != request_id {
+            return None;
+        }
+        let in_flight = SLOT
+            .snapshot()
+            .is_some_and(|(id, ready)| id == request_id && ready.is_none());
+        SLOT.clear(request_id);
+        PUBLIC_OWNER.release(request_id);
+        Some(in_flight)
+    }
     /// 画面 effect が追う自分の分の要求（公開入口と slot を共有するため区別する）。
     pub(crate) static SCREEN_OWNER: SlotOwner = SlotOwner::new();
 
@@ -571,7 +586,7 @@ fn clamp_max_listen(d: std::time::Duration) -> Result<std::time::Duration, Speec
 /// `PermissionDenied` で届く。それ以外の OS は `Unsupported`。
 ///
 /// 画面側の未取得の結果・進行中の要求が残る間も busy で断られる（画面状態が破棄されて effect が回らないと解消しない。
-/// lan-discovery と同じ構造）。
+/// lan-discovery と同じ構造）。取り出さない自分の要求（id を捨てた・結果を使わない等）は [`discard_speech_recognition`] で捨てて slot を空ける。
 /// 前の要求が失われた（reset 等）あと、その id を poll せずに開始すると、旧 id の喪失は通知されない（旧 id の poll は `None`）。
 #[cfg(any(
     target_os = "macos",
@@ -634,6 +649,45 @@ pub fn request_stop_speech_recognition(request_id: u64) -> bool {
         return request_stop(request_id);
         #[cfg(target_os = "windows")]
         return crate::windows::request_stop(request_id);
+    }
+    #[cfg(not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "android"
+    )))]
+    {
+        let _ = request_id;
+        false
+    }
+}
+
+/// [`begin_speech_recognition`] の自分の要求を捨てて slot を空ける。`request_id` が公開入口の現在の要求のときだけ `true`
+/// （他人の id・画面側の id・取り出し済み・0・非対応 OS は `false` で何もしない）。結果が未取得でも進行中でも捨てる。
+///
+/// 進行中なら、OS 側の停止（[`request_stop_speech_recognition`] と同じ依頼）も出してから捨てる（聞き取りが背景で続かないようにするため）。
+/// 停止の依頼が OS へ渡らなかった（既に終了済み・OS 側に追跡が無い等）場合も Rust 側の要求は捨てて `true` を返す。
+/// OS 側の聞き取りは上限時間で自動停止し、後から届いた結果は id 不一致で捨てられる。OS 側の停止が済むまでの間に
+/// 次の [`begin_speech_recognition`] をすると、OS 側の二重開始として `Internal`（busy）の失敗になりうる。捨てたあとは [`poll_speech_recognition`] が `None` になる。
+pub fn discard_speech_recognition(request_id: u64) -> bool {
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "android"
+    ))]
+    {
+        let Some(in_flight) = bridge::discard_public(request_id) else {
+            return false;
+        };
+        // OS への停止依頼はロックの外で行う（OS 側のコールバックが同じ slot を触るため、ロックを握ったまま呼ばない）。
+        if in_flight {
+            #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+            let _ = request_stop(request_id);
+            #[cfg(target_os = "windows")]
+            let _ = crate::windows::request_stop(request_id);
+        }
+        true
     }
     #[cfg(not(any(
         target_os = "macos",
@@ -1124,6 +1178,46 @@ mod tests {
         bridge::reset();
     }
 
+    /// 公開入口の要求を捨てると、公開入口も画面も再び開始できる。他人の id では何もしない。進行中かどうかを返す。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
+    #[test]
+    fn discard_frees_slot_for_public_and_screen() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let begin_public = || {
+            bridge::PUBLIC_OWNER.begin_excluding(
+                &bridge::SLOT,
+                &[&bridge::SCREEN_OWNER, &bridge::PUBLIC_OWNER],
+            )
+        };
+        let id = begin_public().unwrap();
+        assert_eq!(bridge::discard_public(id + 1), None);
+        assert_eq!(bridge::discard_public(0), None);
+        assert!(
+            bridge::SCREEN_OWNER
+                .begin_keeping_foreign(&bridge::SLOT)
+                .is_none()
+        );
+        // 進行中で捨てると true（呼び出し側が OS へ停止を依頼する）。
+        assert_eq!(bridge::discard_public(id), Some(true));
+        assert!(poll_speech_recognition(id).is_none());
+        assert_eq!(bridge::discard_public(id), None);
+        // 結果が未取得で捨てると false（停止は不要）。遅れて届いた結果は捨てられる。
+        let id2 = begin_public().unwrap();
+        assert!(bridge::deliver(id2, error_from_code(5)));
+        assert_eq!(bridge::discard_public(id2), Some(false));
+        assert!(!bridge::deliver(id2, error_from_code(5)));
+        // 画面の id は公開入口から捨てられない。捨てたあと画面も開始できる。
+        let screen = bridge::SCREEN_OWNER
+            .begin_keeping_foreign(&bridge::SLOT)
+            .unwrap();
+        assert_eq!(bridge::discard_public(screen), None);
+        bridge::SLOT.clear(screen);
+        bridge::SCREEN_OWNER.release(screen);
+        assert!(begin_public().is_some());
+        bridge::reset();
+    }
+
     /// 同じ id を 2 スレッドが同時に poll しても、`Some` は合計 1 件で、成功と喪失が混ざらない。
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
     #[test]
@@ -1197,5 +1291,6 @@ mod tests {
         );
         assert!(!request_stop_speech_recognition(1));
         assert!(poll_speech_recognition(1).is_none());
+        assert!(!discard_speech_recognition(1));
     }
 }
