@@ -347,7 +347,10 @@ fn gradle_srcdirs_and_dependencies_match_build_gradle() {
                 p[p.find("crates/").unwrap()..].to_string()
             })
             .collect();
-        assert_eq!(gradle_dirs(gen, kind), cur, "{kind}");
+        // gen 自身の res（バックアップ規則）は手書きの build.gradle.kts に対応が無い。
+        let mut got = gradle_dirs(gen, kind);
+        got.remove("crates/fandhe-gallery/gen/android/res");
+        assert_eq!(got, cur, "{kind}");
     }
     let env = repo("scripts/android/versions.env");
     let deps: Vec<&str> = gen
@@ -902,4 +905,112 @@ fn new_android_fields_reach_only_the_selecting_app() {
     ] {
         assert!(!x.contains(n), "{n}: {x}");
     }
+}
+
+/// `<exclude domain path>` の集合（節の名前 → (domain, path)）。`<full-backup-content>` は節名 `legacy`。
+fn excludes(xml: &str) -> BTreeSet<(String, String, String)> {
+    let mut section = "legacy".to_string();
+    let mut out = BTreeSet::new();
+    for (name, a) in tags(xml) {
+        match name.as_str() {
+            "cloud-backup" | "device-transfer" => section = name,
+            "exclude" => {
+                out.insert((section.clone(), a["domain"].clone(), a["path"].clone()));
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+#[test]
+fn gallery_backup_exclusions_match_hand_written_rules() {
+    // 寿命: 手書きを gen へ切り替える #1194 で撤去する。
+    let hand = repo("platforms/android/app/src/main/res/xml/data_extraction_rules.xml");
+    let g = gallery();
+    let gen_ = &g["android/res/xml/fandhe_data_extraction_rules.xml"];
+    assert_eq!(excludes(gen_), excludes(&hand));
+    assert!(!excludes(gen_).is_empty());
+    let legacy = excludes(&g["android/res/xml/fandhe_backup_rules.xml"]);
+    assert_eq!(legacy.len(), 1, "{legacy:?}");
+    let m = &g["android/AndroidManifest.xml"];
+    assert!(m.contains("android:dataExtractionRules=\"@xml/fandhe_data_extraction_rules\""));
+    assert!(m.contains("android:fullBackupContent=\"@xml/fandhe_backup_rules\""));
+    assert!(g["android/fandhe.gradle"].contains("android/res"));
+}
+
+#[test]
+fn secure_credential_exclusion_matches_java_file_name() {
+    // Java の保存ファイル名（拡張子なし）と宣言の path の複製を読み合わせる。
+    let java = repo(
+        "crates/fandhe-cap-secure-credential/android/java/com/fandhe/platform/SecureCredentialHelper.java",
+    );
+    let name = java
+        .lines()
+        .find(|l| l.contains("SECURE_CREDENTIAL_FILE ="))
+        .and_then(|l| l.split('"').nth(1))
+        .expect("SECURE_CREDENTIAL_FILE");
+    let m = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.toml");
+    let d = check_workspace(Some(&m))
+        .unwrap()
+        .into_iter()
+        .find(|d| d.id == "secure-credential")
+        .unwrap();
+    let paths: Vec<_> = d
+        .android
+        .unwrap()
+        .backup_exclusions
+        .into_iter()
+        .map(|e| e.path)
+        .collect();
+    assert_eq!(paths, [format!("{name}.xml")]);
+}
+
+#[test]
+fn backup_exclusions_reach_only_the_selecting_app_and_union_with_app_config() {
+    let cap = pkg(
+        "fandhe-cap-bk",
+        "[package.metadata.fandhe]\nid = \"bk\"\n[package.metadata.fandhe.android]\n\
+         backup-exclusions = [{ domain = \"sharedpref\", path = \"a&<b.xml\" }]\n",
+    );
+    let sel = app_pkg(
+        "[dependencies]\nfandhe-cap-bk = { path = \"../fandhe-cap-bk\" }\n\
+         [package.metadata.fandhe-app.android]\nbackup-exclusions = [{ domain = \"file\", path = \"mine\" }]\n",
+    );
+    let m = make_ws(
+        "bk-sel",
+        "app",
+        &[("fandhe-cap-bk", cap.clone()), ("app", sel)],
+    );
+    let f = generate(Some(&m)).unwrap().files;
+    let x = &f["android/res/xml/fandhe_data_extraction_rules.xml"];
+    assert!(x.contains("path=\"a&amp;&lt;b.xml\""), "{x}");
+    assert_eq!(excludes(x).len(), 4, "{x}");
+    assert_eq!(
+        excludes(&f["android/res/xml/fandhe_backup_rules.xml"]).len(),
+        2
+    );
+    assert!(f["android/AndroidManifest.xml"].contains("android:fullBackupContent"));
+
+    // 選ばないアプリには何も出ない。
+    let m = make_ws(
+        "bk-none",
+        "app",
+        &[("fandhe-cap-bk", cap), ("app", app_pkg(""))],
+    );
+    let f = generate(Some(&m)).unwrap().files;
+    assert!(!f.keys().any(|k| k.starts_with("android/res")), "{f:?}");
+    for n in ["dataExtractionRules", "fullBackupContent"] {
+        assert!(!f["android/AndroidManifest.xml"].contains(n));
+    }
+    assert!(!f["android/fandhe.gradle"].contains("android/res"));
+}
+
+#[test]
+fn app_backup_exclusions_reject_bad_path() {
+    let app = app_pkg(
+        "[package.metadata.fandhe-app.android]\nbackup-exclusions = [{ domain = \"file\", path = \".\" }]\n",
+    );
+    let m = make_ws("bk-bad", "app", &[("app", app)]);
+    assert!(errs(generate(Some(&m))).contains("fandhe-app.android.backup-exclusions[0].path"));
 }

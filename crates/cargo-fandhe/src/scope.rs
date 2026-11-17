@@ -9,6 +9,7 @@
 //! Android は加えて aapt2 の xmltree を要素単位で読み、カタログの権限の `usesPermissionFlags`（ビット値）と
 //! MainActivity の許可リスト属性（`MAIN_ACTIVITY_ATTRIBUTES`）を、到達した宣言の値と照合する（フラグ名・属性名は
 //! 他の権限・他 library にも正当に現れるため、トークン照合では扱えない）。
+//! バックアップ除外の path もトークンで照合する（script が `<application>` の 2 属性の参照先 XML を観測に足す）。
 //! 呼び出し元は `main.rs` と統合テスト。範囲外: main-activity の intent-filter・queries（他 library の
 //! manifest にも正当に現れるため。漏れは機能のコンポーネント名で検出できる）、カタログ外の権限のフラグ、Windows、AAB。
 
@@ -86,6 +87,13 @@ fn tokens(d: &Declaration, os: &str) -> Vec<(&'static str, String)> {
                         .iter()
                         .map(|c| ("コンポーネント", c.name.clone())),
                 );
+                // 観測は <application> が指すバックアップ規則 XML（script が aapt2 で足す）。path だけだと
+                // domain 違いの同名除外が許可値に紛れるので、`backup_pairs` と同じ (domain, path) の組で照合する。
+                out.extend(
+                    a.backup_exclusions
+                        .iter()
+                        .map(|e| ("バックアップ除外", backup_token(e.domain.as_str(), &e.path))),
+                );
                 // `group:artifact:version` のうち版は照合に含めない。
                 out.extend(a.gradle.iter().map(|g| {
                     let ga: Vec<&str> = g.splitn(3, ':').take(2).collect();
@@ -145,15 +153,74 @@ fn contains_token(text: &str, needle: &str) -> bool {
     })
 }
 
-/// 観測テキストを禁止集合で照合し、違反を 1 件ずつ返す。
+/// バックアップ除外 1 件の照合用トークン。観測側は `backup_pairs` が同じ形を作る。
+const BACKUP_PREFIX: &str = "backup-exclude:";
+
+fn backup_token(domain: &str, path: &str) -> String {
+    format!("{BACKUP_PREFIX}{domain}:{path}")
+}
+
+/// バックアップ規則 XML の dump（`E: exclude` 直下の名前空間なし `domain`・`path`）を `backup_token` の集合にする。
+/// 組がそろわない・値が引用符つき文字列でない exclude は数だけ返す（読めない観測を通さないため、`scan` が違反にする）。
+fn backup_pairs(observed: &str) -> (BTreeSet<String>, usize) {
+    let mut out = BTreeSet::new();
+    let mut unreadable = 0;
+    let mut cur: Option<(Option<String>, Option<String>)> = None;
+    let mut flush = |c: &mut Option<(Option<String>, Option<String>)>| match c.take() {
+        Some((Some(d), Some(p))) => {
+            out.insert(backup_token(&d, &p));
+        }
+        Some(_) => unreadable += 1,
+        None => {}
+    };
+    for line in observed.lines().map(str::trim) {
+        if let Some(rest) = line.strip_prefix("E: ") {
+            flush(&mut cur);
+            cur = (rest.split_whitespace().next() == Some("exclude")).then_some((None, None));
+        } else if let (Some(rest), Some((d, p))) = (line.strip_prefix("A: "), cur.as_mut()) {
+            let Some((name, rhs)) = rest.split_once('=') else {
+                continue;
+            };
+            // 文字列は `"v" (Raw: "v")`。宣言側が path の `"` を拒むので、最初の `"` までが値。
+            let val = || {
+                rhs.strip_prefix('"')
+                    .and_then(|r| r.split('"').next())
+                    .map(str::to_string)
+            };
+            match name {
+                "domain" => *d = val(),
+                "path" => *p = val(),
+                _ => {}
+            }
+        }
+    }
+    flush(&mut cur);
+    (out, unreadable)
+}
+
+/// 観測テキストを禁止集合で照合し、違反を 1 件ずつ返す。バックアップ除外は組の完全一致で比べる
+/// （トークン境界の照合だと `file:cache` が `file:cache/x` に前方一致して誤検知するため）。
 pub(crate) fn scan(forbidden: &BTreeMap<String, Owner>, observed: &str) -> Vec<String> {
-    forbidden
+    let (pairs, unreadable) = backup_pairs(observed);
+    let mut hits: Vec<String> = forbidden
         .iter()
-        .filter(|(v, _)| contains_token(observed, v))
+        .filter(|(v, _)| {
+            if v.starts_with(BACKUP_PREFIX) {
+                pairs.contains(*v)
+            } else {
+                contains_token(observed, v)
+            }
+        })
         .map(|(v, (id, kind))| {
             format!("選ばなかった機能 {id} の{kind} `{v}` が成果物に含まれています")
         })
-        .collect()
+        .collect();
+    if unreadable > 0 {
+        hits.push(format!(
+            "バックアップ規則の exclude {unreadable} 件で domain と path を読めません（見逃しを防ぐため失敗にします）"
+        ));
+    }
+    hits
 }
 
 /// aapt2 xmltree の `android` 名前空間の URI（属性名の接頭辞）。

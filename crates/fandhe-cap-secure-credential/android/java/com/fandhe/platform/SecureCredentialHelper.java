@@ -15,15 +15,15 @@ import java.security.GeneralSecurityException;
 // Activity のライフサイクルに参加しないため provider は作らない。
 //
 // バックアップ除外: 保存ファイル（`SECURE_CREDENTIAL_FILE`）は端末の Keystore 鍵に紐づくため、別端末へ復元されても
-// 復号できない。アプリ側の `res/xml/data_extraction_rules.xml` が同名のファイルをバックアップから外す責務を持つ
-// （`<application android:dataExtractionRules>` は機能の宣言では表せない。crate doc 参照）。
+// 復号できない。宣言（`Cargo.toml` の `backup-exclusions`）が同名のファイルをバックアップから外し、
+// `cargo fandhe gen` が規則 XML を出す（一致は cargo-fandhe の tests/gen.rs が読み合わせる。crate doc 参照）。
 final class SecureCredentialHelper {
     // 資格情報保存の op 定数。Rust 側 `android.rs` の同名定数と対で決める契約。
     private static final int SECURE_CREDENTIAL_OP_STORE = 0;
     private static final int SECURE_CREDENTIAL_OP_LOAD = 1;
     private static final int SECURE_CREDENTIAL_OP_DELETE = 2;
 
-    // `EncryptedSharedPreferences` の保存ファイル名（固定）。`data_extraction_rules.xml` と一致させる。
+    // `EncryptedSharedPreferences` の保存ファイル名（固定）。宣言の `backup-exclusions`（`<値>.xml`）と一致させる。
     private static final String SECURE_CREDENTIAL_FILE = "fandhe_secure_credential";
 
     // 保存値に付ける固定プレフィックス。`EncryptedSharedPreferences.getDecryptedObject`

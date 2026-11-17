@@ -43,6 +43,9 @@ frameworks = ["Security"]
 [package.metadata.fandhe.android]
 java = ["android/java"]
 gradle = ["androidx.security:security-crypto:1.1.0"]
+# 保存ファイルは Keystore 鍵に紐づくため、復元されると初期化に失敗し続ける。SecureCredentialHelper.java の
+# SECURE_CREDENTIAL_FILE + ".xml" と一致させる（cargo-fandhe の tests/gen.rs が読み合わせる）。
+backup-exclusions = [{ domain = "sharedpref", path = "fandhe_secure_credential.xml" }]
 
 [lints]
 workspace = true
