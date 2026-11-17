@@ -78,6 +78,47 @@ final class SpeechRecognitionHelper {
         }
     }
 
+    // Rust 側 `reset_pending_tracking()`（`android_main`）から JNI で呼ばれる。Rust は保留中の要求を既に捨てて待っていないため、
+    // Java 側も同じ要求を結果を届けずに捨てる: 追跡 id・保留フラグを下ろし、聞き取りが走っていれば止めて資源を解放する。
+    // 権限ダイアログの許可コールバック（main スレッド）とは前後どちらでもよい。コールバックが先なら開始済みの聞き取りをここで止め、
+    // こちらが先ならコールバックは追跡 id が一致しないことを見て何も始めない（その際ダイアログの照合状態はコールバックが下ろす
+    // ため、ここでは触らない）。判定と更新は `speechLock` の内側で行う。`SpeechRecognizer` は main スレッドでしか触れないため、
+    // 認識器の破棄だけ main へ積む（追跡 id は先に捨てているので、積んだ処理が走るまでの間に届く認識器の通知は照合で捨てられる）。
+    static void abortPending() {
+        synchronized (speechLock) {
+            speechStartPendingResume = false;
+            speechRequest.take();
+            SpeechRecognitionHelper[] helpers;
+            synchronized (SpeechRecognitionHelper.class) {
+                helpers = HELPERS.values().toArray(new SpeechRecognitionHelper[0]);
+            }
+            for (SpeechRecognitionHelper helper : helpers) {
+                helper.discardRecognizer();
+            }
+        }
+    }
+
+    // 結果を届けずに認識器を破棄する（`speechLock` の内側で呼ぶ）。
+    private void discardRecognizer() {
+        cancelSpeechTimeout();
+        final SpeechRecognizer recognizer = speechRecognizer;
+        speechRecognizer = null;
+        if (recognizer != null) {
+            speechTimeoutHandler.post(() -> {
+                try {
+                    recognizer.cancel();
+                } catch (RuntimeException e) {
+                    // 破棄が目的のため無視して destroy へ進む。
+                }
+                try {
+                    recognizer.destroy();
+                } catch (RuntimeException e) {
+                    // 参照は既に捨てている。
+                }
+            });
+        }
+    }
+
     // 前面へ戻った（`SpeechRecognitionLifecycle.onHostResumed`）: 許可結果が非前景中に届き `startSpeechRecognizer` を保留していた
     // 要求を再開する（マイク録音の `micStartPendingResume` と同型）。
     static void resumed(Activity activity) {

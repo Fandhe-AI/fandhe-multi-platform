@@ -72,6 +72,41 @@ final class MicRecordHelper {
         }
     }
 
+    // Rust 側 `reset_pending_tracking()`（`android_main`）から JNI で呼ばれる。Rust は保留中の要求を既に捨てて待っていないため、
+    // Java 側も同じ要求を結果を届けずに捨てる: 追跡 id・保留フラグを下ろし、録音が走っていれば止めて資源を解放する。
+    // 権限ダイアログの許可コールバック（main スレッド）とは前後どちらでもよい。コールバックが先なら開始済みの録音をここで止め、
+    // こちらが先ならコールバックは追跡 id が無いことを見て何も始めない。判定と更新は `micLock` の内側で行う。
+    static void abortPending() {
+        synchronized (micLock) {
+            micStartPendingResume = false;
+            micRecordRequest.take();
+            MicRecordHelper[] helpers;
+            synchronized (MicRecordHelper.class) {
+                helpers = HELPERS.values().toArray(new MicRecordHelper[0]);
+            }
+            for (MicRecordHelper helper : helpers) {
+                helper.discardRecorder();
+            }
+        }
+    }
+
+    // 結果を届けずに録音を破棄する（`micLock` の内側で呼ぶ）。`stop()` の失敗は握りつぶすが `release` と一時ファイル削除は必ず行う。
+    private void discardRecorder() {
+        MediaRecorder recorder = micRecorder;
+        File tempFile = micTempFile;
+        micRecorder = null;
+        micTempFile = null;
+        if (recorder != null) {
+            try {
+                recorder.stop();
+            } catch (RuntimeException e) {
+                // 破棄が目的のため、停止の失敗は無視して解放へ進む。
+            }
+            recorder.release();
+        }
+        deleteQuietly(tempFile);
+    }
+
     // 前面へ戻った（`MicRecordLifecycle.onHostResumed`）: 許可結果が非前景中に届き `startMicRecorder` を保留していた要求を
     // 再開する（cursor Bugbot 指摘、PR #962。`micStartPendingResume` doc 参照）。
     static void resumed(Activity activity) {

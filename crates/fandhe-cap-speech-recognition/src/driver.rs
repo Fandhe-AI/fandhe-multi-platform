@@ -509,11 +509,16 @@ pub fn platform_speech_recognition() -> Box<dyn SpeechRecognizer> {
     Box::new(UnsupportedSpeechRecognizer)
 }
 
+/// Rust 側の保留記録を捨て、Java 側の保留・実行中の要求も止める（`abortPending`、結果は届けない）。
+/// 権限ダイアログの許可コールバックが先に来て開始済みでも、後から来ても、画面に反映されない録音・聞き取りは残らない。
+/// 外部アプリ（呼ばない構成）では Java 側が再生成を引き継ぐ。
 /// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照。
 /// `fandhe-cap-biometric-auth` の `reset_pending_tracking` と同じ命名・位置づけ）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
     bridge::reset();
+    // Java 側の保留・実行中の要求も止める（残すと権限許可後に画面へ反映されない録音・聞き取りが走る）。
+    crate::android::abort_pending();
 }
 
 #[cfg(test)]
@@ -799,5 +804,19 @@ mod tests {
         finish(&mut state);
         assert_eq!(state.phase, ListenPhase::Idle);
         assert!(state.error.contains(UNAVAILABLE));
+    }
+
+    /// reset 後に届いた古い id の結果は何も完了させず、reset 後に始めた要求だけが完了する
+    /// （Java 側 `abortPending` が結果を届けない前提と、reset 後の旧結果の遅延到着の両方で安全）。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
+    #[test]
+    fn result_for_pre_reset_request_is_ignored() {
+        let before = bridge::begin();
+        bridge::reset();
+        assert!(!bridge::deliver(before, error_from_code(5)));
+        assert!(bridge::current_request_id().is_none());
+        let after = bridge::begin();
+        assert!(!bridge::deliver(before, error_from_code(5)));
+        assert!(bridge::deliver(after, error_from_code(5)));
     }
 }

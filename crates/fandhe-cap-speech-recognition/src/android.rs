@@ -79,6 +79,32 @@ pub(crate) fn request_speech_stop(request_id: u64) -> bool {
     .is_ok()
 }
 
+/// Java 側 `SpeechRecognitionHelper.abortPending()`（static）を呼び、保留中・実行中の要求を結果を届けずに捨てさせる。`reset_pending_tracking`（Rust 側の
+/// 待ち手の破棄）と対で、Java 側だけが録音・聞き取りを続けて画面に反映されないことを防ぐ。`AndroidApp` が未設定・クラス未ロード・
+/// JNI 失敗でも panic せず黙って戻る（呼び出し元は `android_main`。破棄は best-effort）。
+pub(crate) fn abort_pending() {
+    let Some(app) = fandhe_platform_android::android_app() else {
+        return;
+    };
+    let _ = with_activity_class(
+        &app,
+        jni::jni_str!("com.fandhe.platform.SpeechRecognitionHelper"),
+        |env, _activity, class| -> Result<(), JniCallFailed> {
+            let r = env.call_static_method(
+                class,
+                jni::jni_str!("abortPending"),
+                jni::jni_sig!(() -> ()),
+                &[],
+            );
+            if r.is_err() && env.exception_check() {
+                env.exception_clear();
+            }
+            r?;
+            Ok(())
+        },
+    );
+}
+
 /// Java 側から届いた聞き取り結果を `SpeechOutcome` へ変換する（`nativeOnSpeechResult`
 /// 本体）。`code == 0`（成功）以外は `text` を参照せず
 /// `crate::driver::error_from_code`（Java 側の独自コード体系、
