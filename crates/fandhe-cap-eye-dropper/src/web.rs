@@ -195,7 +195,7 @@ pub fn eye_dropper_pick_effect(state: &EyeDropperState, applier: &Applier<EyeDro
     if already {
         return;
     }
-    // 古い世代が残っていれば中断し、slot と印も空けてから差し替える。
+    // 古い世代が残っていれば中断して差し替える（`open()` 開始済みなら slot と印は確定まで残す）。
     let previous = PICKS.with(|p| {
         p.borrow_mut().insert(
             mount_id,
@@ -208,10 +208,13 @@ pub fn eye_dropper_pick_effect(state: &EyeDropperState, applier: &Applier<EyeDro
     });
     if let Some(prev) = previous {
         if let Some(c) = prev.ctrl {
+            // slot と印は残す（`release_mount` と同じ）。`AbortError` の確定（`settle`）まで、
+            // 新しい要求は下の `begin_excluding` が busy で断る。
             c.abort();
+        } else {
+            SLOT.clear(prev.request_id);
+            SCREEN_OWNER.release(prev.request_id);
         }
-        SLOT.clear(prev.request_id);
-        SCREEN_OWNER.release(prev.request_id);
     }
     applier.apply(mark_picking);
 
