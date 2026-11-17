@@ -193,14 +193,18 @@ pub(crate) fn recording_from_capture(
     target_os = "android"
 ))]
 pub(crate) mod bridge {
-    use fandhe_core::screens::mic_record::RecordOutcome;
+    use fandhe_runtime::request_slot::{RequestSlot, SlotOwner};
 
-    use fandhe_runtime::request_slot::RequestSlot;
-
-    /// 画面へ反映する完了結果（`super::to_outcome` 変換後の形）。
-    pub(crate) type Outcome = Result<RecordOutcome, String>;
+    /// OS からの生の結果。画面へ渡すときは `super::to_outcome` で変換し、公開入口の poll はそのまま返す
+    /// （どちらも同じ slot を共有するため、変換前の形で置く）。
+    pub(crate) type Outcome = Result<crate::contract::Recording, crate::error::MicRecordError>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
+
+    /// 公開入口 [`super::begin_mic_record`] が追う自分の分の要求（画面側が置き換え・横取りしない）。
+    pub(crate) static PUBLIC_OWNER: SlotOwner = SlotOwner::new();
+    /// 画面 effect が追う自分の分の要求（公開入口と slot を共有するため区別する）。
+    pub(crate) static SCREEN_OWNER: SlotOwner = SlotOwner::new();
 
     /// 実際にネイティブ側の録音が開始した request_id（`0` は「まだ未開始」の
     /// 番兵、`RequestSlot::next_request_id` が `1` から採番するのと同じ流儀）。
@@ -208,7 +212,8 @@ pub(crate) mod bridge {
     /// （[`mark_started`]/[`has_started`] 参照、Issue #954 レビュー指摘）。
     static STARTED_REQUEST_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-    /// 録音開始直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
+    /// 持ち主を付けずに登録する（テスト用。本番は [`SCREEN_OWNER`]・[`PUBLIC_OWNER`] 経由で登録する）。
+    #[cfg(test)]
     pub(crate) fn begin() -> u64 {
         SLOT.begin()
     }
@@ -225,8 +230,8 @@ pub(crate) mod bridge {
         STARTED_REQUEST_ID.load(std::sync::atomic::Ordering::Relaxed) == request_id
     }
 
-    /// 現在進行中の要求 ID（ネイティブ側へ停止依頼を渡す際に使う。未開始なら
-    /// `None`）。
+    /// 現在進行中の要求 ID（テスト用。本番は持ち主ごとの `current()` を使う）。
+    #[cfg(test)]
     pub(crate) fn current_request_id() -> Option<u64> {
         SLOT.snapshot().map(|(request_id, _)| request_id)
     }
@@ -240,7 +245,7 @@ pub(crate) mod bridge {
         request_id: u64,
         result: Result<crate::contract::Recording, crate::error::MicRecordError>,
     ) -> bool {
-        SLOT.deliver(request_id, super::to_outcome(result))
+        SLOT.deliver(request_id, result)
     }
 
     /// Android 専用: Activity 再生成直後に `android_main` から呼ぶ
@@ -327,10 +332,18 @@ pub(crate) use fandhe_runtime::tick::measure_dt_ms;
     target_os = "android"
 ))]
 fn drive_callback(state: &MicRecordState, sender: &CompletionSender<MicRecordState>) {
-    if let Some(_request) = take_start_request(state) {
+    if let Some(request) = take_start_request(state) {
         let _ = sender.send(Box::new(mark_recording));
 
-        let request_id = bridge::begin();
+        // 公開入口の進行中・未取得の要求は置き換えず、画面側を処理中の失敗で終える。
+        let Some(request_id) = bridge::SCREEN_OWNER.begin_keeping_foreign(&bridge::SLOT) else {
+            let generation = request.generation;
+            let message = to_message(MicRecordError::Internal("mic_record busy"));
+            let _ = sender.send(Box::new(move |s: &mut MicRecordState| {
+                finish_record(s, generation, Err(message));
+            }));
+            return;
+        };
         let max_duration = std::time::Duration::from_millis(MAX_RECORD_MS);
         #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
         if !present(request_id, max_duration) {
@@ -358,7 +371,8 @@ fn drive_callback(state: &MicRecordState, sender: &CompletionSender<MicRecordSta
         // （既に終了済み等）、自動停止 or 既存の結果配送が追随するため、ここでは
         // 戻り値を追加でハンドリングしない（`biometric_auth.rs` の防御的分岐と
         // 同じ位置づけ）。
-        if let Some(request_id) = bridge::current_request_id() {
+        let request_id = bridge::SCREEN_OWNER.current();
+        if request_id != 0 {
             #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
             let _ = request_stop(request_id);
             #[cfg(target_os = "windows")]
@@ -374,7 +388,8 @@ fn drive_callback(state: &MicRecordState, sender: &CompletionSender<MicRecordSta
     // 時点で先に届くが、その待ち時間まで 30 秒の予算に含めると初回の許可
     // ダイアログが遅い環境で録音が短く打ち切られる（device-bridge-contracts.md
     // 「期限・キャンセル」節・Issue #954 レビュー指摘）。
-    let started = bridge::current_request_id().is_some_and(bridge::has_started);
+    let own = bridge::SCREEN_OWNER.current();
+    let started = own != 0 && bridge::has_started(own);
     let dt_ms = measure_dt_ms(&LAST_TICK, state.phase == RecordPhase::Recording && started);
     if dt_ms > 0 {
         let _ = sender.send(Box::new(move |s: &mut MicRecordState| tick(s, dt_ms)));
@@ -385,11 +400,13 @@ fn drive_callback(state: &MicRecordState, sender: &CompletionSender<MicRecordSta
     }
 
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &bridge::SCREEN_OWNER,
         sender,
         |_request_id| {},
         move |s: &mut MicRecordState, outcome| {
+            let outcome = to_outcome(outcome);
             // 反映できる状態か（`Idle` へ既に戻っていないか）を確かめてから
             // `finish_record` し、反映できたときだけ `true` を返す（`RequestSlot`
             // 側がそれを見て `clear` する）（`fandhe-cap-biometric-auth` の `driver.rs` と同じ判断）。
@@ -398,6 +415,13 @@ fn drive_callback(state: &MicRecordState, sender: &CompletionSender<MicRecordSta
                 true
             } else {
                 false
+            }
+        },
+        // 自分の要求が置き換わった・reset で失われた。待ち続けず失敗で終える（Idle なら何もしない）。
+        move |s: &mut MicRecordState| {
+            if s.phase != RecordPhase::Idle {
+                let message = to_message(MicRecordError::Internal("mic_record lost"));
+                finish_record(s, generation, Err(message));
             }
         },
     );
@@ -462,11 +486,127 @@ pub fn mic_record_effect(state: &MicRecordState, sender: &CompletionSender<MicRe
 }
 
 /// 同期 `MicRecorder` の入口。macOS・iOS・Android・Windows は結果が非同期に届く pull 型の bridge で受け、`MicRecorder` トレイトを
-/// 通らない（モジュール doc 参照）ため、成功を偽装せず `UnsupportedMicRecorder`（常に `Unsupported`）を返す。画面は effect
-/// （`mic_record_effect`）の経路を使う。それ以外の OS（Linux 等）も同じく `Unsupported` で、固定の案内（`UNAVAILABLE`）が画面へ出る。
+/// 通らない（モジュール doc 参照）ため、成功を偽装せず `UnsupportedMicRecorder`（常に `Unsupported`）を返す。
+/// 画面の外のアプリが録音するなら [`begin_mic_record`] / [`request_stop_mic_record`] / [`poll_mic_record`] を使う。
+/// 画面は effect（`mic_record_effect`）の経路を使う。それ以外の OS（Linux 等）も同じく `Unsupported` で、固定の案内（`UNAVAILABLE`）が画面へ出る。
 /// 同期実装が要る OS が出たら、ここで OS ごとの実装へ分岐する。
 pub fn platform_mic_record() -> Box<dyn MicRecorder> {
     Box::new(UnsupportedMicRecorder)
+}
+
+/// 録音を OS へ依頼し、結果を [`poll_mic_record`] で受け取るための要求 id を返す（macOS・iOS・Android・Windows）。
+///
+/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。`max_duration` は 0 なら `InvalidInput`、
+/// 上限（30 秒）を超える分は上限へ丸める。1 プロセスに 1 要求で、画面 effect と slot を共有するため、進行中・結果が
+/// 未取得の要求（画面側の分を含む）があるうちは `Internal`（busy）で断る。画面 effect 側も、この入口の進行中・未取得の
+/// 要求があれば置き換えず処理中の失敗で終える。依頼自体の失敗は `Err`（結果は届かない）。権限の確認は OS が行い、拒否は結果に
+/// `PermissionDenied` で届く。それ以外の OS は `Unsupported`。
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "windows",
+    target_os = "android"
+))]
+pub fn begin_mic_record(max_duration: std::time::Duration) -> Result<u64, MicRecordError> {
+    if max_duration.is_zero() {
+        return Err(MicRecordError::InvalidInput("mic_record duration"));
+    }
+    let max_duration = max_duration.min(std::time::Duration::from_millis(MAX_RECORD_MS));
+    let request_id = bridge::PUBLIC_OWNER
+        .begin_excluding(
+            &bridge::SLOT,
+            &[&bridge::SCREEN_OWNER, &bridge::PUBLIC_OWNER],
+        )
+        .ok_or(MicRecordError::Internal("mic_record busy"))?;
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+    let started = if present(request_id, max_duration) {
+        Ok(())
+    } else {
+        Err(MicRecordError::Internal("mic_record present"))
+    };
+    #[cfg(target_os = "windows")]
+    let started = crate::windows::present(request_id, max_duration);
+    if let Err(e) = started {
+        bridge::SLOT.clear(request_id);
+        bridge::PUBLIC_OWNER.release(request_id);
+        return Err(e);
+    }
+    Ok(request_id)
+}
+
+/// 非対応 OS では成功へ倒さず `Unsupported`。
+#[cfg(not(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "windows",
+    target_os = "android"
+)))]
+pub fn begin_mic_record(max_duration: std::time::Duration) -> Result<u64, MicRecordError> {
+    let _ = max_duration;
+    Err(MicRecordError::Unsupported)
+}
+
+/// [`begin_mic_record`] の録音の停止を依頼する。依頼を OS へ渡せたら `true`。`request_id` が自分の進行中の要求でない・
+/// 既に終わっている場合は `false`（結果は自動停止か既存の配送で届く）。停止後の結果は [`poll_mic_record`] で取る。
+pub fn request_stop_mic_record(request_id: u64) -> bool {
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "android"
+    ))]
+    {
+        if request_id == 0 || bridge::PUBLIC_OWNER.current() != request_id {
+            return false;
+        }
+        #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+        return request_stop(request_id);
+        #[cfg(target_os = "windows")]
+        return crate::windows::request_stop(request_id);
+    }
+    #[cfg(not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "android"
+    )))]
+    {
+        let _ = request_id;
+        false
+    }
+}
+
+/// [`begin_mic_record`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・取り出し済みは `None`。
+/// 結果は 3 値: 録音できた（`Ok`）、利用者の停止による権限確認中のキャンセル（`Err(Cancelled)`）、
+/// 失敗（`Err(PermissionDenied)`・ライフサイクル中断を表す `Internal`・その他）。0 バイト・長さ 0 の録音は成功にせず `InvalidInput`。
+pub fn poll_mic_record(
+    request_id: u64,
+) -> Option<Result<crate::contract::Recording, MicRecordError>> {
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "android"
+    ))]
+    {
+        if request_id == 0 || bridge::PUBLIC_OWNER.current() != request_id {
+            return None;
+        }
+        // 照合・取得・消去を同じロックで行う（並行 poll でも Some は 1 件だけ）。
+        let result = bridge::SLOT.take_ready(request_id)?;
+        bridge::PUBLIC_OWNER.release(request_id);
+        Some(result)
+    }
+    #[cfg(not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "android"
+    )))]
+    {
+        let _ = request_id;
+        None
+    }
 }
 
 /// Rust 側の保留記録を捨て、Java 側の保留・実行中の要求も止める（`abortPending`、結果は届けない）。
@@ -647,6 +787,7 @@ mod tests {
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
     #[test]
     fn stale_interrupt_does_not_complete_new_request_and_delivers_once() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let old = bridge::begin();
         assert!(bridge::deliver(old, Err(error_from_code(5))));
         assert!(!bridge::deliver(old, Err(error_from_code(5))));
@@ -662,6 +803,7 @@ mod tests {
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
     #[test]
     fn result_for_pre_reset_request_is_ignored() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let before = bridge::begin();
         bridge::reset();
         assert!(!bridge::deliver(before, Err(error_from_code(5))));
@@ -669,5 +811,73 @@ mod tests {
         let after = bridge::begin();
         assert!(!bridge::deliver(before, Err(error_from_code(5))));
         assert!(bridge::deliver(after, Err(error_from_code(5))));
+    }
+
+    /// 同じ static slot を触るテストを直列にする。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
+    static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// 公開入口の要求は 1 件だけで、結果は 1 度だけ取れ、画面側が置き換え・横取りしない。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
+    #[test]
+    fn public_request_is_exclusive_and_polled_once() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let public = bridge::PUBLIC_OWNER
+            .begin_excluding(
+                &bridge::SLOT,
+                &[&bridge::SCREEN_OWNER, &bridge::PUBLIC_OWNER],
+            )
+            .unwrap();
+        // 進行中は公開入口の 2 件目も画面側も断る（BUSY）。
+        assert!(
+            bridge::PUBLIC_OWNER
+                .begin_excluding(
+                    &bridge::SLOT,
+                    &[&bridge::SCREEN_OWNER, &bridge::PUBLIC_OWNER]
+                )
+                .is_none()
+        );
+        assert!(
+            bridge::SCREEN_OWNER
+                .begin_keeping_foreign(&bridge::SLOT)
+                .is_none()
+        );
+        assert!(poll_mic_record(public).is_none());
+        // 結果は 3 値のまま届く（キャンセルは Err(Cancelled)）。
+        assert!(bridge::deliver(public, Err(error_from_code(4))));
+        // 未取得の公開入口の結果を画面側が落とさない。
+        assert!(
+            bridge::SCREEN_OWNER
+                .begin_keeping_foreign(&bridge::SLOT)
+                .is_none()
+        );
+        assert!(matches!(
+            poll_mic_record(public),
+            Some(Err(MicRecordError::Cancelled(_)))
+        ));
+        assert!(poll_mic_record(public).is_none());
+        // 取り出したあとは画面側が使える。
+        let screen = bridge::SCREEN_OWNER
+            .begin_keeping_foreign(&bridge::SLOT)
+            .unwrap();
+        assert!(poll_mic_record(screen).is_none());
+        bridge::reset();
+    }
+
+    #[cfg(not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "android"
+    )))]
+    #[test]
+    fn public_entry_is_unsupported_on_other_os() {
+        assert_eq!(
+            begin_mic_record(std::time::Duration::from_secs(1)),
+            Err(MicRecordError::Unsupported)
+        );
+        assert!(!request_stop_mic_record(1));
+        assert!(poll_mic_record(1).is_none());
     }
 }

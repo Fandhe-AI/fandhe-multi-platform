@@ -73,6 +73,6 @@
       "impl": "crates/fandhe-web-dom/src/mic_record.rs + crates/fandhe-web-dom/src/demo.rs（mount_mic_record_screen）、Issue 旧#958"
     }
   },
-  "note": "`AVAudioRecorder` / `MediaRecorder`（Android）/ `AVAudioRecorder`（macOS）/ Windows `MediaCapture` / Web `MediaRecorder` API",
+  "note": "`AVAudioRecorder` / `MediaRecorder`（Android）/ `AVAudioRecorder`（macOS）/ Windows `MediaCapture` / Web `MediaRecorder` API。画面の外のアプリ向けの入口として `begin_mic_record`・`request_stop_mic_record`・`poll_mic_record`（画面の状態型に依存しない非同期）を公開する（macOS・iOS・Android・Windows。それ以外の OS は Unsupported）。画面 effect と同じ要求の slot を共有し、片方が進行中・結果未取得のとき他方は処理中（busy）で断る。同期の `platform_mic_record()` は Unsupported を返す。",
   "capture": "captures/mic-record.png"
 }
