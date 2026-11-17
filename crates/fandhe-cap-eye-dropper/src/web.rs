@@ -1,6 +1,6 @@
 //! 型サンプル「画面のスポイト」の Web 経路（Issue #763、親 #148。#1359 で `fandhe-web-dom` から機能 crate へ移した）。
 //!
-//! 画面の状態型には依存しない（`consumer-app-structure.md` §8.1。画面の状態を扱う effect 本体は
+//! 画面の状態型には依存しない（`consumer-app-structure.md` §8.1。画面の状態の観測と反映を行う effect は
 //! `driver::eye_dropper_pick_effect` で、本モジュールの [`start_screen`] / [`register_release`] を呼ぶ）。
 //! 2 つの入口が同じ `new EyeDropper().open({ signal })` の呼び出し（[`start`]）を使う。
 //! - 画面側 [`start_screen`]: マウント（`mount_id`）と世代ごとに要求を 1 件飛ばし、結果をコールバックで返す。

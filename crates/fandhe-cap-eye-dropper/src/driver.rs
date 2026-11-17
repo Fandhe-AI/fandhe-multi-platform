@@ -8,10 +8,17 @@
 //! # macOS・Web: `bridge` の受け口
 //!
 //! `NSColorSampler` のハンドラ・ブラウザの `EyeDropper.open()` は非同期に届くため、`EyeDropper` トレイトを通さず
-//! `fandhe_runtime::request_slot::RequestSlot` で受ける。画面（macOS・Web の [`eye_dropper_pick_effect`]。Web の本体は `web.rs`）と
+//! `fandhe_runtime::request_slot::RequestSlot` で受ける。画面（macOS・Web の [`eye_dropper_pick_effect`]。Web の `open()`・中断の実体は `web.rs`）と
 //! 公開入口（[`begin_eye_dropper`] / [`poll_eye_dropper`] / [`discard_eye_dropper`]）が同じ slot を共有し、
 //! 持ち主の印（`SlotOwner`）で互いの要求を置き換えない。片方が進行中・結果未取得のあいだ、後から来た方は
 //! `Internal("eye_dropper busy")` で断る（macOS はサンプラーが 2 つ同時に開かないようにするためでもある）。
+//!
+//! # 守らない範囲（macOS の画面）
+//!
+//! 画面の状態が作り直されて古い要求を見失ったとき、解放は画面 effect が `Idle` で走ったときに始まり、
+//! 進行中なら結果の到着（`deliver`）で完了する（再描画を待たない）。画面が描画されなくなる・破棄されて effect が
+//! 二度と走らない場合は、見捨てた記録を付ける機会がなく、公開入口はサンプラーの確定後も busy のままになりうる
+//! （macOS に画面の破棄を知らせる口が無い）。推測の期限では解放しない。
 //!
 //! # 他の OS
 //!
@@ -59,26 +66,59 @@ pub(crate) mod bridge {
     /// 公開側の poll・discard 本体（持ち主の照合・取得・解放）を直列にする。並行 poll で結果が二重に返らないため。
     pub(crate) static PUBLIC_POLL_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+    /// 画面が見捨てた（状態が `Idle` へ戻った後も OS 側で進行中だった）画面要求の id。無ければ `0`。
+    /// [`deliver`] が結果を置いた時点でこの id と一致すれば、再描画を待たずその場で解放する。
+    #[cfg(target_os = "macos")]
+    static ABANDONED_SCREEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+    /// 見捨てた画面要求の結果が届いた（または既に届いていた）ときの解放。`ABANDONED_SCREEN` の
+    /// compare_exchange を取れた側だけが slot と印を空ける（`deliver` と effect が競合しても 1 度だけ・取りこぼしなし）。
+    #[cfg(target_os = "macos")]
+    fn release_if_abandoned(request_id: u64) {
+        use std::sync::atomic::Ordering;
+        if ABANDONED_SCREEN
+            .compare_exchange(request_id, 0, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            SLOT.clear(request_id);
+            SCREEN_OWNER.release(request_id);
+        }
+    }
+
     /// OS からの結果を置く（macOS の main queue から。Web は公開入口の結果だけ `web.rs` が `SLOT` へ
     /// 直接置き、画面 effect は slot を進行中の印にしか使わない）。`request_id` 不一致・
     /// 未登録・既に結果ありは捨てて `false`（古い世代・二重通知が成功へ化けない）。
+    /// 画面が見捨てた要求の結果なら、受け手がいないのでここで slot と印も解放する（公開入口が busy のまま残らない）。
     #[cfg(target_os = "macos")]
     pub(crate) fn deliver(request_id: u64, result: Outcome) -> bool {
-        SLOT.deliver(request_id, result)
+        let placed = SLOT.deliver(request_id, result);
+        if placed {
+            release_if_abandoned(request_id);
+        }
+        placed
     }
 
     /// 画面の状態が `Idle` なのに、画面側の持ち主が残っていれば後始末する（画面 effect が `Idle` のときだけ呼ぶ）。
-    /// 状態の作り直し等で、進行中だった古い要求を画面が見失うと、`Picking` 以外では poll されず、結果が届いても
-    /// `SCREEN_OWNER` と slot が残って公開入口が busy のままになる。届いた結果は画面が受け取れないので捨て、
-    /// 失われた要求（slot が空・別 id）は印だけ外す。進行中（結果未着）は OS の確定を待つため触らない。
+    /// 状態の作り直し等で、進行中だった古い要求を画面が見失うと、`Picking` 以外では poll されない。
+    /// - 結果が届いている: 受け手がいないので捨て、slot と印を空ける。
+    /// - 進行中（結果未着）: OS の確定までは触らず、「見捨てた」と記録する。確定は [`deliver`] が解放する。
+    ///   記録の直後に結果が届いていた場合に備え、記録後にもう一度見て取りこぼさない。
+    /// - 失われた（slot が空・別 id）: 印だけ外す。
     #[cfg(target_os = "macos")]
     pub(crate) fn release_orphaned_screen() {
+        use std::sync::atomic::Ordering;
         let mine = SCREEN_OWNER.current();
         if mine == 0 {
             return;
         }
         match SLOT.snapshot() {
-            Some((id, None)) if id == mine => {}
+            // 進行中は触らない（サンプラーが開いたまま。確定まで次の開始を busy で断る）。
+            Some((id, None)) if id == mine => {
+                ABANDONED_SCREEN.store(mine, Ordering::Release);
+                if matches!(SLOT.snapshot(), Some((id, Some(_))) if id == mine) {
+                    release_if_abandoned(mine);
+                }
+            }
             Some((id, Some(_))) if id == mine => {
                 SLOT.clear(mine);
                 SCREEN_OWNER.release(mine);
@@ -106,6 +146,15 @@ pub(crate) mod bridge {
         }
         PUBLIC_OWNER.release(request_id);
         Some(in_flight)
+    }
+}
+
+/// 画面が `Idle` のときだけ、画面側に残った古い要求の後始末を行う（`Picking` 等の生きた要求には触らない）。
+/// 状態の作り直し・世代の差し替えで `Idle` へ戻った後に残った、自分の古い要求を解放するための入口。
+#[cfg(target_os = "macos")]
+fn release_orphan_when_idle(phase: fandhe_core::screens::eye_dropper_pick::PickPhase) {
+    if phase == fandhe_core::screens::eye_dropper_pick::PickPhase::Idle {
+        bridge::release_orphaned_screen();
     }
 }
 
@@ -138,10 +187,7 @@ fn drive_callback(state: &EyeDropperState, sender: &CompletionSender<EyeDropperS
         return;
     }
 
-    if state.phase == PickPhase::Idle {
-        // 状態の作り直し・世代の差し替えで Idle へ戻った後に届いた、自分の古い要求の結果を解放する。
-        bridge::release_orphaned_screen();
-    }
+    release_orphan_when_idle(state.phase);
     if state.phase != PickPhase::Picking {
         return;
     }
@@ -479,18 +525,18 @@ mod tests {
         }
 
         #[test]
-        fn orphaned_screen_result_is_released_so_public_never_stays_busy() {
+        fn effect_releases_delivered_result_only_when_idle() {
+            use fandhe_core::screens::eye_dropper_pick::PickPhase;
             let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
             reset();
             let screen = begin_screen().unwrap();
-            // 画面の状態が作り直されて Idle へ戻った。進行中は OS の確定まで触らない（busy のまま）。
-            bridge::release_orphaned_screen();
-            assert_eq!(bridge::SCREEN_OWNER.current(), screen);
-            assert!(begin_public().is_none());
-            // サンプラーが閉じて結果が届いた後は、画面が Idle でも slot と持ち主が解放される。
             assert!(bridge::deliver(screen, Ok(color("#aabbcc"))));
-            assert!(begin_public().is_none());
-            bridge::release_orphaned_screen();
+            // Picking の画面の結果は、後で poll して反映するので消さない。
+            release_orphan_when_idle(PickPhase::Picking);
+            assert_eq!(bridge::SCREEN_OWNER.current(), screen);
+            assert!(bridge::SLOT.snapshot().is_some());
+            // Idle なら受け手がいないので解放し、公開入口が開始できる。
+            release_orphan_when_idle(PickPhase::Idle);
             assert_eq!(bridge::SCREEN_OWNER.current(), 0);
             assert_eq!(bridge::SLOT.snapshot(), None);
             assert!(begin_public().is_some());
@@ -498,14 +544,58 @@ mod tests {
         }
 
         #[test]
-        fn orphaned_screen_lost_request_only_drops_owner() {
+        fn idle_effect_never_touches_public_result() {
+            use fandhe_core::screens::eye_dropper_pick::PickPhase;
+            let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            reset();
+            let public = begin_public().unwrap();
+            assert!(bridge::deliver(public, Ok(color("#010203"))));
+            release_orphan_when_idle(PickPhase::Idle);
+            assert_eq!(poll_eye_dropper(public), Some(Ok(color("#010203"))));
+            reset();
+        }
+
+        #[test]
+        fn abandoned_in_flight_screen_request_is_released_by_deliver() {
+            use fandhe_core::screens::eye_dropper_pick::PickPhase;
             let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
             reset();
             let screen = begin_screen().unwrap();
+            // Idle の effect が進行中の画面要求を見つけても、OS の確定までは触らない（busy のまま）。
+            release_orphan_when_idle(PickPhase::Idle);
+            assert_eq!(bridge::SCREEN_OWNER.current(), screen);
+            assert!(begin_public().is_none());
+            // 以後は再描画が無くても、結果が届いた時点で解放される。
+            assert!(bridge::deliver(screen, Ok(color("#aabbcc"))));
+            assert_eq!(bridge::SCREEN_OWNER.current(), 0);
+            assert_eq!(bridge::SLOT.snapshot(), None);
+            assert!(begin_public().is_some());
+            reset();
+        }
+
+        #[test]
+        fn abandoned_mark_after_delivery_is_not_missed() {
+            use fandhe_core::screens::eye_dropper_pick::PickPhase;
+            let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            reset();
+            let screen = begin_screen().unwrap();
+            // 見捨てる前に結果が届いていた場合は、effect がその場で解放する。
+            assert!(bridge::deliver(screen, Ok(color("#aabbcc"))));
+            release_orphan_when_idle(PickPhase::Idle);
+            assert_eq!(bridge::SCREEN_OWNER.current(), 0);
+            assert_eq!(bridge::SLOT.snapshot(), None);
+            reset();
+        }
+
+        #[test]
+        fn orphaned_screen_lost_request_only_drops_owner() {
+            let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            reset();
+            begin_screen().unwrap();
             bridge::SLOT.reset();
             bridge::release_orphaned_screen();
             assert_eq!(bridge::SCREEN_OWNER.current(), 0);
-            let _ = screen;
+            assert_eq!(bridge::SLOT.snapshot(), None);
             reset();
         }
 
