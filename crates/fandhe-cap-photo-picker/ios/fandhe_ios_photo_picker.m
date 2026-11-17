@@ -241,9 +241,12 @@ int32_t fandhe_ios_photo_picker_pick(uint64_t requestId) {
             return;
         }
 
-        // `top` がすでに別の画面を出している・遷移中なら、`presentViewController` は黙って捨てられ delegate が呼ばれない。
-        // 重ねて提示せず busy で返す（この要求にはまだ delegate を持たせていない）。
-        if (top.presentedViewController != nil || top.isBeingPresented || top.isBeingDismissed) {
+        // `top`（最前面）が遷移中（提示の途中・dismiss の途中）なら、`presentViewController` は黙って捨てられ delegate が呼ばれない。
+        // 遷移中だけ重ねて提示せず busy で返す（この要求にはまだ delegate を持たせていない）。安定して出ている別の画面
+        // （別機能の system picker を含む。ファイル選択・色選択など）の上には重ねる: UIKit として正当で、そちらの進行中の判定は
+        // 各機能が自分のピッカーについてだけ持つ（本機能は他機能のピッカーを観測しない）。
+        // `FandheTopmostViewController` は一番奥の提示まで辿るため、`top.presentedViewController` は常に nil で判定に使えない。
+        if (top.isBeingPresented || top.isBeingDismissed) {
             fandhe_rust_photo_picker_outcome(requestId, 3, NULL, 0);
             return;
         }
@@ -261,20 +264,23 @@ int32_t fandhe_ios_photo_picker_pick(uint64_t requestId) {
         g_retainedDelegate = delegate;
         g_activePicker = picker;
 
-        // 提示が実際に成立したかを確かめる。成立していなければ（UIKit が present を捨てた）delegate は呼ばれないため、
-        // この要求に失敗（code 2）を 1 度だけ届けて delegate を外す。delegate の完了経路が先に走っていた場合
-        // （`g_retainedDelegate != delegate`）は何もしない（通知は delegate の同一性で 1 回に絞る）。
-        void (^verifyPresented)(void) = ^{
-          if (g_retainedDelegate == delegate && picker.presentingViewController == nil &&
-              !picker.isBeingPresented) {
-              g_retainedDelegate = nil;
-              g_activePicker = nil;
-              picker.presentationController.delegate = nil;
-              fandhe_rust_photo_picker_outcome(requestId, 2, NULL, 0);
-          }
-        };
-        [top presentViewController:picker animated:YES completion:verifyPresented];
-        verifyPresented();
+        // 提示の成否は completion（提示の完了後、presented 側の `viewDidAppear:` の後に呼ばれる。公式文書）で確かめる。
+        // 直後には確かめない: `presentingViewController` / `isBeingPresented` が提示の直後に立つ保証が文書に無く、立つ前に確かめると
+        // 正しい提示を失敗と誤判定して delegate を外し、選択を捨ててしまう。ここは「completion が来たのに提示が成立していない」
+        // 場合の安全網で、通常は何もしない。delegate の完了経路が先に走っていれば（`g_retainedDelegate != delegate`）何もしない。
+        // 既知の天井: UIKit が提示を捨てたとき completion が呼ばれるかは文書に無く、呼ばれなければこの要求は確定しない。
+        // その場合は picker が解放されて weak の `g_activePicker` が nil になるので、次の要求がここで旧 delegate を失敗（code 2）で
+        // 確定して回収する（推測のタイマーは持たない）。
+        [top presentViewController:picker
+                          animated:YES
+                        completion:^{
+                          if (g_retainedDelegate == delegate && picker.presentingViewController == nil) {
+                              g_retainedDelegate = nil;
+                              g_activePicker = nil;
+                              picker.presentationController.delegate = nil;
+                              fandhe_rust_photo_picker_outcome(requestId, 2, NULL, 0);
+                          }
+                        }];
       }
     });
 
