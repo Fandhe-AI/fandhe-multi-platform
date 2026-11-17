@@ -11,14 +11,14 @@
       "api": "UIKit（`UIDocumentPickerViewController`）",
       "perm": "不要",
       "url": "https://developer.apple.com/documentation/uikit/uidocumentpickerviewcontroller",
-      "note": "実装済み（旧#873、案 B）。`asCopy:YES` + `UTTypeData`（フォルダを除外するため `UTTypeItem` ではない）で任意ファイルを選択。読み取り・8 MiB 判定は `fandhe_device::file_picker::read_picked` に一本化し、OS 側（ObjC）は提示とパス通知のみ。iOS 実機で確認済み（2026-09-15: 選ぶ / キャンセル / 8 MiB 超のエラー / ダークモード切替中・回転中に picker を開いても結果が届く）",
+      "note": "実装済み（旧#873、案 B）。`asCopy:YES` + `UTTypeData`（フォルダを除外するため `UTTypeItem` ではない）で任意ファイルを選択。読み取り・8 MiB 判定は `fandhe_device::file_picker::picked_from_path_bytes`（`read_picked`）に一本化し、OS 側（ObjC）は提示とパス通知のみ。iOS 実機で確認済み（2026-09-15: 選ぶ / キャンセル / 8 MiB 超のエラー / ダークモード切替中・回転中に picker を開いても結果が届く）",
       "sourceName": [
         "ファイル共有（他アプリからの選択）"
       ],
       "detail": "できている（実機）",
       "verified": true,
       "implStatus": "実装済み・実機確認済み",
-      "impl": "`crates/fandhe-egui-proxy/ios/fandhe_ios_file_picker.m` + `crates/fandhe-egui-proxy/src/device/ios.rs`（`present_file_picker` / `fandhe_rust_file_picker_outcome`）、Issue 旧#873"
+      "impl": "`crates/fandhe-cap-file-picker/ios/fandhe_ios_file_picker.m` + `crates/fandhe-cap-file-picker/src/ios.rs`（`present_file_picker` / `fandhe_rust_file_picker_outcome`）、Issue 旧#873"
     },
     "android": {
       "status": "done",
@@ -27,12 +27,12 @@
       "api": "Storage Access Framework（`Intent.ACTION_OPEN_DOCUMENT` / `ACTION_CREATE_DOCUMENT`）",
       "perm": "なし（scoped storage 前提。全ファイルアクセス権限は使わない）",
       "url": "https://developer.android.com/training/data-storage/shared/documents-files",
-      "note": "実装済み（旧#874、案 B・改訂 2・改訂 4）。`ActivityResultContracts.OpenDocument`（`ACTION_OPEN_DOCUMENT`、`*/*`）で開き、選択後は `ParcelFileDescriptor.detachFd()` で所有権を渡した生 fd と表示名のみを Rust へ渡す（`/proc/self/fd/N` の再 open は pipe 型プロバイダで失敗し得るため使わない）。8 MiB 判定・読み取りは `fandhe_device::file_picker::read_picked_from` に一本化（Java 側に読み取りループを持たない、fd は Rust 側で 1 回だけ close）。`FilePicker` trait は通さず、コアの画面状態機械へプロセス内一意な `request_id` 照合で直接書き戻す（`fandhe-web-dom` と同型。OS へ渡す ID は画面の generation ではなく `request_id`）。**pull 型**（改訂 4）: Rust 側 `bridge` は sender も画面の generation も保持せず、OS からの結果を置くだけ。反映は毎フレームその時点の画面状態から観測して行うため、Activity 再生成で画面・チャンネルが作り直されても sender の引き継ぎ自体が不要（`camera`/`tts` の同型の課題は別 issue 旧#881）。キャンセルは `Ok(None)`。固定タイムアウト無し（OS がコールバックしないケースは `Picking` のまま残る既知の天井）。`camera`/`tts` は 旧#881 で doc 化に決定（Java 側が再生成時に中断決着させるため pull 型へ寄せる利得が無い）。Android 実機で確認済み（2026-09-15: 選ぶ / キャンセル / 8 MiB 超のエラー / ダークモード切替中・回転中に picker を開いても結果が届く）",
+      "note": "実装済み（旧#874、案 B・改訂 2・改訂 4）。`ActivityResultContracts.OpenDocument`（`ACTION_OPEN_DOCUMENT`、`*/*`）で開き、選択後は `ParcelFileDescriptor.detachFd()` で所有権を渡した生 fd と表示名のみを Rust へ渡す（`/proc/self/fd/N` の再 open は pipe 型プロバイダで失敗し得るため使わない）。8 MiB 判定・読み取りは `fandhe_device::file_picker::picked_from_document`（`read_picked_from`）に一本化（Java 側に読み取りループを持たない、fd は Rust 側で 1 回だけ close）。`FilePicker` trait は通さず、コアの画面状態機械へプロセス内一意な `request_id` 照合で直接書き戻す（`fandhe-web-dom` と同型。OS へ渡す ID は画面の generation ではなく `request_id`）。**pull 型**（改訂 4）: Rust 側 `bridge` は sender も画面の generation も保持せず、OS からの結果を置くだけ。反映は毎フレームその時点の画面状態から観測して行うため、Activity 再生成で画面・チャンネルが作り直されても sender の引き継ぎ自体が不要（`camera`/`tts` の同型の課題は別 issue 旧#881）。キャンセルは `Ok(None)`。固定タイムアウト無し（OS がコールバックしないケースは `Picking` のまま残る既知の天井）。`camera`/`tts` は 旧#881 で doc 化に決定（Java 側が再生成時に中断決着させるため pull 型へ寄せる利得が無い）。Android 実機で確認済み（2026-09-15: 選ぶ / キャンセル / 8 MiB 超のエラー / ダークモード切替中・回転中に picker を開いても結果が届く）",
       "sourceName": [
         "任意ファイル選択・保存"
       ],
       "implStatus": "実装済み・実機確認済み",
-      "impl": "`crates/fandhe-egui-proxy/src/device/file_pick.rs`（`bridge` モジュール）+ `crates/fandhe-egui-proxy/src/device/android.rs`（`request_file_pick`/`decode_file_pick_result`）+ `platforms/android/app/src/main/java/com/fandhe/platform/MainActivity.java`、Issue 旧#874"
+      "impl": "`crates/fandhe-cap-file-picker/src/driver.rs`（`bridge` モジュール）+ `crates/fandhe-cap-file-picker/src/android.rs`（`request_file_pick`/`decode_file_pick_result`）+ `crates/fandhe-cap-file-picker/android/java/com/fandhe/platform/FilePickerHelper.java` + `crates/fandhe-cap-file-picker/android/java/com/fandhe/platform/FilePickerLifecycle.java`、Issue 旧#874"
     },
     "macos": {
       "status": "done",
@@ -45,20 +45,20 @@
       ],
       "detail": "できている",
       "implStatus": "実装済み",
-      "impl": "`crates/fandhe-device/src/file_picker.rs`（`RfdFilePicker`）、Issue 旧#872"
+      "impl": "`crates/fandhe-cap-file-picker/src/desktop.rs`（`RfdFilePicker`）、Issue 旧#872"
     },
     "windows": {
       "status": "done",
       "api": "WinRT（`Windows.Storage.Pickers.FileOpenPicker` / `FileSavePicker`）、非パッケージ配布は Win32 `IFileOpenDialog`",
       "perm": "なし",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.storage.pickers.fileopenpicker",
-      "note": "PowerShell 子プロセスで `System.Windows.Forms.OpenFileDialog` を開き、終了コードでキャンセルと失敗を区別する（`rfd` は Windows で失敗をキャンセルに潰すため macOS 限定。WinRT `FileOpenPicker` は直接使わない）。`x86_64-pc-windows-gnu` へのコンパイル確認まで、Windows 実機は未了",
+      "note": "PowerShell 子プロセスで `System.Windows.Forms.OpenFileDialog` を開き、終了コードでキャンセルと失敗を区別する（起動と結果の写像は他機能も使う共有部品として `fandhe-device` の `file_picker` に残る）（`rfd` は Windows で失敗をキャンセルに潰すため macOS 限定。WinRT `FileOpenPicker` は直接使わない）。`x86_64-pc-windows-gnu` へのコンパイル確認まで、Windows 実機は未了",
       "sourceName": [
         "ファイルダイアログ"
       ],
       "detail": "できている（未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "impl": "`crates/fandhe-device/src/file_picker.rs`（`RfdFilePicker`）、Issue 旧#872"
+      "impl": "`crates/fandhe-cap-file-picker/src/desktop.rs`（`RfdFilePicker`）、Issue 旧#872"
     },
     "web": {
       "status": "done",

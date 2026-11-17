@@ -1,378 +1,11 @@
-//! iOS 向け `fandhe-device` 実装（Issue #751）。`device.rs` の `storage_note_state` などから呼ばれ、
-//! Documents 配下への保存（[`documents_dir`]）などを提供する。実カメラ撮影は機能 crate
-//! `fandhe-cap-camera-capture` へ移した（Issue #1170）。
-//!
-//! 読み上げ実装（[`IosTts`]、Issue #866）も同型: `ios/fandhe_ios_tts.m`
-//! （AVFoundation の `AVSpeechSynthesizer`）を `unsafe extern "C"` 2 関数で呼び、
-//! `device/tts.rs` の TTS ワーカースレッド（`worker_loop`）から呼ばれる。
-//!
-//! ファイル選択実装（Issue #873、案 B）も `ios/fandhe_ios_file_picker.m`
-//! （`UIDocumentPickerViewController`）を呼ぶ点は同型だが、他 4 実装と異なり
-//! `fandhe_device::file_picker::FilePicker` トレイトを **通らない**
-//! （`device/file_pick.rs` モジュール doc「案 B」参照）。提示関数
-//! [`present_file_picker`] は即時 return し、結果は非同期に
-//! [`fandhe_rust_file_picker_outcome`] 経由で `device/file_pick.rs::bridge` へ
-//! 直接届く。ブロッキング待ちが無いため、`camera`/`tts` のようなワーカースレッド・
-//! mailbox は持たない。
-//!
-//! マイク録音（Issue #954 macOS + #956 iOS）は本モジュールを**通らない**:
-//! `apple/fandhe_apple_mic_record.m`（iOS/macOS 共用）を `device/apple_mic_record.rs`
-//! が呼び、`device/mic_record.rs` の iOS/macOS 経路が直接使う（ファイル選択と同じ
-//! pull 型の橋渡し、`device/mic_record.rs` モジュール doc 参照）。
-//!
-//! 音声認識（Issue #1024 macOS + #1025 iOS）も同型で本モジュールを**通らない**:
-//! `apple/fandhe_apple_speech_recognition.m`（iOS/macOS 共用）を `device/
-//! apple_speech_recognition.rs` が呼び、`device/speech_recognition.rs` の
-//! iOS/macOS 経路が直接使う（`device/speech_recognition.rs` モジュール doc 参照）。
+//! iOS 向け `fandhe-device` 実装（Issue #751）。写真選択（Issue #1104）の `PHPickerViewController` の受け口を持つ。
+//! 実カメラ撮影は機能 crate `fandhe-cap-camera-capture`、読み上げ・ファイル選択・マイク録音・音声認識は機能 crate
+//! `fandhe-cap-tts`・`fandhe-cap-file-picker`・`fandhe-cap-mic-record`・`fandhe-cap-speech-recognition` へ移した
+//! （Issue #1170・#1354）。写真選択の `.m`（`ios/fandhe_ios_photo_picker.m`）は `device/photo_pick.rs` の iOS 経路から呼ばれ、
+//! 結果は非同期に [`fandhe_rust_photo_picker_outcome`] 経由で `device/photo_pick.rs::bridge` 等へ届く。受け取りの検証と読み取りは
+//! `fandhe_device::file_picker::picked_from_path_bytes` に一本化している（ポインタを読む `unsafe` はここに 1 行だけ残る）。
 
-use std::path::Path;
-use std::sync::atomic::AtomicU64;
-use std::sync::{Condvar, Mutex};
-
-use fandhe_device::file_picker::{read_picked, MAX_FILE_BYTES};
-use fandhe_device::tts::Tts;
-use fandhe_device::DeviceError;
-
-// SAFETY: `ios/fandhe_ios_tts.m` が定義する C ABI（`build.rs` が iOS ターゲットの
-// み・feature `device` 有効時のみコンパイル・リンクする）。契約は下記 `IosTts` の
-// 各メソッドのコメントに集約する。
-#[allow(unsafe_code)]
-unsafe extern "C" {
-    fn fandhe_ios_tts_speak(text: *const core::ffi::c_char, request_generation: u64) -> i32;
-    fn fandhe_ios_tts_stop() -> i32;
-}
-
-/// [`fandhe_ios_tts_speak`] が返す世代 id ごとの「真の最終結果が届いたか」を
-/// 仲介する（Android `device/android.rs` の `Mailbox` と同じ動機だが、
-/// `AVSpeechSynthesizerDelegate` は成功と中断（`Ok(())` に写像、`IosTts` doc 参照）
-/// しか通知しないため、運ぶ値は無く「到着したか」だけを追跡すれば足りる）。
-struct TtsOutcome {
-    state: Mutex<TtsOutcomeState>,
-    condvar: Condvar,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum TtsOutcomeState {
-    /// 追跡していない（未登録・既に消費済み）。
-    Idle,
-    /// `generation` の結果待ち。
-    Pending(u64),
-    /// `generation` の結果が到着済み（未消費）。
-    Ready(u64),
-}
-
-impl TtsOutcome {
-    const fn new() -> Self {
-        Self {
-            state: Mutex::new(TtsOutcomeState::Idle),
-            condvar: Condvar::new(),
-        }
-    }
-
-    /// `generation` の結果待ちを無条件に登録する（Android `Mailbox::begin_at` と
-    /// 同じく、単一飛行の保証は呼び出し元（`IosTts::speak` は TTS ワーカースレッド
-    /// 1 本に直列化済み）に委ねる）。登録済みの旧世代の待機があれば `notify_all` で
-    /// 即座に起こし、「別世代に置き換わったら即座に `Ok(())`」契約
-    /// （`Tts::wait_outcome` doc 参照）を満たす。
-    fn begin(&self, generation: u64) {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        *state = TtsOutcomeState::Pending(generation);
-        self.condvar.notify_all();
-    }
-
-    /// [`begin`](Self::begin) で登録した世代の結果を待たず終わらせる
-    /// （`fandhe_ios_tts_speak` 自体が同期的に失敗し、コールバックが二度と来ない
-    /// と分かった場合に使う。Android `Mailbox::cancel` と同じ動機）。
-    fn cancel(&self, generation: u64) {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if *state == TtsOutcomeState::Pending(generation) {
-            *state = TtsOutcomeState::Idle;
-        }
-    }
-
-    /// `.m` 側の delegate コールバック（[`fandhe_rust_tts_outcome`]）から呼ぶ。
-    /// 現在 `Pending` な世代と一致する場合のみ `Ready` へ進める。不一致（既に
-    /// 別世代へ置き換わった・タイムアウトで畳まれた等）は古いコールバックとして
-    /// 無視する。
-    fn resolve(&self, generation: u64) {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if *state == TtsOutcomeState::Pending(generation) {
-            *state = TtsOutcomeState::Ready(generation);
-            self.condvar.notify_all();
-        }
-    }
-
-    /// `generation` の結果が届くまでブロッキングで待つ。追跡していない
-    /// （未登録・空発話で一度も [`begin`](Self::begin) されていない・既に別世代へ
-    /// 置き換わった）場合は古い待機として即座に `Ok(())` を返す
-    /// （`Tts::wait_outcome` の既定実装と同じ契約）。
-    ///
-    /// **時間による打ち切りは行わない**（codex-review P1・Bugbot Medium 是正、
-    /// PR #869 3 巡目: 発話には長さの上限が無く、`CommandTts`（macOS）の
-    /// `wait_outcome` も完了待ちに時間上限を持たない。固定時間で打ち切ると、
-    /// 上限を超えて続く正常な発話が「まだ鳴っているのに失敗表示」になる）。
-    /// 終了する条件は次のいずれかのみ: (1) 対象世代の結果が届く（[`resolve`]、
-    /// 発話完了 or `stop`/後続 speak によるキャンセル）、(2) 対象世代が別の発話へ
-    /// 置き換わる（[`begin`]、後続 speak による世代置換）。
-    ///
-    /// ponytail: `AVSpeechSynthesizerDelegate` のコールバック自体が欠落する
-    /// ケース（オーディオセッションの強制割り込み等、理論上あり得るが未確認）への
-    /// 安全網は持たない。delegate が来なくても、以後に `speak`/`stop` が
-    /// 1 回でも発行されれば世代置換（(2)）で復帰する。実機で恒久的な滞留の報告が
-    /// 出たら見直す。
-    fn wait(&self, generation: u64) -> Result<(), DeviceError> {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        loop {
-            match *state {
-                TtsOutcomeState::Ready(ready) if ready == generation => {
-                    *state = TtsOutcomeState::Idle;
-                    return Ok(());
-                }
-                TtsOutcomeState::Pending(pending) if pending == generation => {
-                    // まだ自分の世代を追跡中。結果到着まで待つ（時間では諦めない）。
-                }
-                _ => return Ok(()),
-            }
-            state = self.condvar.wait(state).unwrap_or_else(|e| e.into_inner());
-        }
-    }
-}
-
-static TTS_OUTCOME: TtsOutcome = TtsOutcome::new();
-
-/// `ios/fandhe_ios_tts.m` の `AVSpeechSynthesizerDelegate` から呼ばれる
-/// `extern "C"` エクスポート関数（Issue #866 是正、PR #869）。
-/// `AVSpeechSynthesizerDelegate` の `didFinishSpeechUtterance:`（`cancelled == 0`）/
-/// `didCancelSpeechUtterance:`（`cancelled != 0`）の双方から呼ばれ、いずれも
-/// [`TTS_OUTCOME`] を `Ok(())` として解決する（`AVSpeechSynthesizerDelegate` は
-/// 発話失敗を通知する API を持たないため、`IosTts::speak` が返した世代の
-/// 非同期失敗は存在しない前提。`.m` ファイル冒頭コメント参照）。
-///
-/// 呼び出しスレッドは AVFoundation の delegate 実行スレッド（メインスレッド想定だが
-/// Apple のドキュメントに保証の明記が無い）。[`TtsOutcome`] は `Mutex`/`Condvar` で
-/// 保護されているため、どのスレッドから呼ばれても安全（`unsafe` 操作を含まない。
-/// `generation`/`cancelled` は素の整数値でポインタを経由しない）。
-///
-/// `#[allow(unsafe_code)]` は `#[no_mangle]`（シンボル名の固定）が `lib.rs` の
-/// iOS `deny(unsafe_code)` 対象になるための宣言上の要請であり、関数本体は
-/// `unsafe` 操作を一切含まない（Android 側 `device/android.rs` の JNI エクスポート
-/// 関数と同じ扱い、coding-rust.md の FFI 例外規定）。
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "C" fn fandhe_rust_tts_outcome(generation: u64, _cancelled: i32) {
-    TTS_OUTCOME.resolve(generation);
-}
-
-/// iOS 実読み上げ実装（`AVSpeechSynthesizer`、Issue #866）。
-/// `device/tts.rs` の TTS ワーカースレッド（`worker_loop`、proxy の FIFO キューを
-/// 処理する唯一のスレッド）から呼ばれる。Rust → `.m` の呼び出し（`speak`/`stop`）は
-/// この 1 本のスレッドに直列化される契約のため、本実装自体は追加の排他制御を
-/// 持たない。ただし `.m` 側は `isSpeaking` 時にメインキューへ積む遅延発話ブロック
-/// （`fandhe_ios_tts_speak` 参照）が別スレッド（メインキュー）で走るため、ワーカー
-/// スレッドとの間で `g_tts_lock` による排他制御を持つ（`.m` ファイルの
-/// `g_tts_lock` 宣言部コメント参照）。
-///
-/// `IosMotion` と違い [`is_main_thread`] 検査を付けない:
-/// `UIPasteboard`/`CMMotionManager` と異なり `AVSpeechSynthesizer` は main
-/// スレッド専用の契約を Apple のドキュメントに持たない。加えて、`stop_shared_tts()`
-/// はアプリ終了時に main スレッドから TTS ワーカーへ要求を送りその完了を待つため
-/// （`device/tts.rs::stop_shared_tts` 参照）、ここで `dispatch_sync(main, ...)` の
-/// ような main スレッドへの同期委譲を挟むと、main が完了を待つ一方でワーカーの
-/// 処理が main の空き待ちになる相互待ち（デッドロック）が起こり得る
-/// （#866 実装計画 §3-2）。
-///
-/// 世代 id の採番元は `IosTts` インスタンス毎ではなく static
-/// [`NEXT_TTS_GENERATION`] にする（codex-review 指摘、PR #869 5 巡目是正）:
-/// 結果の保持先 [`TTS_OUTCOME`] はプロセス全体で 1 個の static のため、採番だけ
-/// インスタンス毎にすると、複数の `IosTts` インスタンス（`Tts` は公開 API で
-/// 誰でも構築できる）が同じ id を独立に払い出しうる。その結果、無関係な
-/// 2 インスタンス A・B が同じ id で `speak`/`wait_outcome` を呼ぶと、B の待機が
-/// A の結果を誤って回収してしまう（「他の世代の結果を絶対に回収しない」契約違反）。
-#[derive(Default)]
-pub struct IosTts;
-
-/// [`IosTts::speak`] が払い出す世代 id の採番元（`IosTts` doc 参照）。
-static NEXT_TTS_GENERATION: AtomicU64 = AtomicU64::new(0);
-
-impl Tts for IosTts {
-    #[allow(unsafe_code)]
-    fn speak(&self, text: &str) -> Result<u64, DeviceError> {
-        // 内部 NUL を含むテキストは C 文字列にできない（`fandhe-cap-clipboard` の `IosClipboard::set_text` と
-        // 同じ判定。`CommandTts::speak` の契約と対称に揃える）。
-        if text.contains('\0') {
-            return Err(DeviceError::InvalidInput("tts text"));
-        }
-
-        // 世代 id は `Tts::speak` の契約により単調増加で払い出す。`.m` 側へそのまま
-        // 渡し、`AVSpeechUtterance` に紐付けた上で delegate コールバック
-        // （[`fandhe_rust_tts_outcome`]）から [`TTS_OUTCOME`] を解決する識別子として
-        // 使う（codex-review 指摘 PR #869 是正、`TtsOutcome` doc 参照）。
-        let generation = NEXT_TTS_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-        // 空文字列・空白のみは発話するものが無いため OS を呼ばずに戻る（`Tts::speak` の契約）。
-        // `TTS_OUTCOME` には一切登録しないため、`wait_outcome(generation)` は
-        // 「追跡していない ID」として即座に `Ok(())` を返す。
-        if text.trim().is_empty() {
-            return Ok(generation);
-        }
-
-        let Ok(c_text) = std::ffi::CString::new(text) else {
-            // 上の NUL 検査で弾いているため到達しないはずだが、契約違反を検出した
-            // 経路として安全側で扱う。
-            return Err(DeviceError::InvalidInput("tts text"));
-        };
-
-        // コールバックが呼ばれる前に登録する（JNI 版 `AndroidTts::speak` と同じ理由:
-        // `fandhe_ios_tts_speak` が返った直後に delegate コールバックが届いても
-        // 取りこぼさない）。
-        TTS_OUTCOME.begin(generation);
-
-        // SAFETY: `fandhe_ios_tts_speak` の契約（`.m` ファイル冒頭コメント）:
-        // 引数は NUL 終端の UTF-8 文字列へのポインタで、ObjC 側は内部でコピーを
-        // 取るため本関数の戻り後に `c_text` を解放してよい（所有権は移らない）。
-        // `c_text` はこの呼び出しの間スコープ内で生存する。
-        let code = unsafe { fandhe_ios_tts_speak(c_text.as_ptr(), generation) };
-
-        match code {
-            // 0 はキュー投入成功に過ぎない。真の完了・中断は
-            // `fandhe_rust_tts_outcome` が非同期に届けるため、ここでは確定させない
-            // （codex-review 指摘 PR #869: 旧実装はここで即成功にしていた）。
-            0 => Ok(generation),
-            1 => {
-                // コールバックは二度と来ないため、登録した待ちを畳んでおく
-                // （Android `Mailbox::cancel` と同じ理由）。
-                TTS_OUTCOME.cancel(generation);
-                Err(DeviceError::Unsupported("tts"))
-            }
-            // 2 やその他未知のコードも安全側で内部エラーに畳む（`.m` の契約）。
-            _ => {
-                TTS_OUTCOME.cancel(generation);
-                Err(DeviceError::Internal("tts speak"))
-            }
-        }
-    }
-
-    #[allow(unsafe_code)]
-    fn stop(&self) -> Result<(), DeviceError> {
-        // SAFETY: `fandhe_ios_tts_stop` は引数を取らず、副作用は発話停止のみ
-        // （`.m` ファイル冒頭コメント）。停止によって中断された発話があれば
-        // `AVSpeechSynthesizerDelegate` の `didCancelSpeechUtterance:` が自動的に
-        // 発火し、その世代の `TTS_OUTCOME` を解決する（`.m` 側 doc 参照）。
-        match unsafe { fandhe_ios_tts_stop() } {
-            0 => Ok(()),
-            _ => Err(DeviceError::Internal("tts stop")),
-        }
-    }
-
-    /// `speak` が返した世代の真の最終結果（発話完了 or 中断）を待つ
-    /// （`Tts::wait_outcome` の契約）。追跡していない世代（未登録・空発話・既に
-    /// 別世代へ置き換わり済み）は [`TtsOutcome::wait`] が即座に `Ok(())` を返す。
-    /// 時間による打ち切りは行わない（`TtsOutcome::wait` doc 参照、codex-review
-    /// P1・Bugbot Medium 是正）。
-    fn wait_outcome(&self, generation: u64) -> Result<(), DeviceError> {
-        TTS_OUTCOME.wait(generation)
-    }
-}
-
-// SAFETY: `ios/fandhe_ios_file_picker.m` が定義する C ABI（`build.rs` が iOS
-// ターゲットのみ・feature `device` 有効時のみコンパイル・リンクする）。契約は
-// 下記 [`present_file_picker`]・[`fandhe_rust_file_picker_outcome`] のコメントに
-// 集約する。
-#[allow(unsafe_code)]
-unsafe extern "C" {
-    fn fandhe_ios_file_picker_pick(request_id: u64) -> i32;
-}
-
-/// `ios/fandhe_ios_file_picker.m` の delegate から呼ばれる `extern "C"` エクスポート
-/// 関数（Issue #873、案 B）。契約（`.m` ファイル冒頭コメント）:
-///   `code`: 0 = 選択（`path_ptr`/`path_len` が tmp コピーの絶対パスを指す UTF-8
-///   バイト列）・1 = キャンセル・それ以外 = 内部エラー。0 以外では `path_ptr` を
-///   参照しない。
-///
-/// 選択時は本関数内で [`read_picked`] を同期に呼び切ってから戻る契約
-/// （`.m` 側はこの呼び出しが戻ってから tmp コピーを削除する。読み取り・8 MiB 判定・
-/// EOF の扱いは `read_picked` に一本化し、`.m` 側で読み取りループを持たない、
-/// `device/file_pick.rs` モジュール doc 参照）。iOS の `asCopy:YES` コピーは
-/// 元のファイル名を保つため、`read_picked` が `path` から導く名前をそのまま使う
-/// （Android のように表示名を別途上書きする必要が無い）。
-///
-/// 呼び出しスレッドは `.m` 側の global queue（main ではない、選択時の同期読み取りで
-/// main を塞がないため）。[`crate::device::file_pick::bridge::deliver`] は
-/// スレッド安全なため、どのスレッドから呼ばれても安全（`unsafe` はポインタを
-/// 読む 1 箇所のみに閉じる）。
-///
-/// `#[allow(unsafe_code)]` は `#[no_mangle]` が `lib.rs` の iOS `deny(unsafe_code)`
-/// 対象になるための宣言上の要請（[`fandhe_rust_tts_outcome`] と同じ扱い）。
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "C" fn fandhe_rust_file_picker_outcome(
-    request_id: u64,
-    code: i32,
-    path_ptr: *const u8,
-    path_len: usize,
-) {
-    let result = picked_from_path(code, path_ptr, path_len, "file_picker");
-    crate::device::file_pick::bridge::deliver(request_id, result);
-    // 改訂 4: pull 型 bridge は sender も画面の `generation` も持たないため、
-    // 結果を置いただけでは次の描画が起きる保証が無い（`file_pick.rs::drive_mobile`
-    // は毎フレームの effect 呼び出しでしか拾えない）。無条件に呼んで確実に起こす
-    // （`crate::ios::request_repaint` doc 参照）。
-    crate::ios::request_repaint();
-}
-
-/// ファイル選択・写真選択の `.m` が共有する「code + 一時ファイルのパス → `PickedFile`」変換
-/// （Issue #1104 で `fandhe_rust_file_picker_outcome` から切り出し。`unsafe` はここ 1 箇所）。
-/// `code`: 0 = 選択（`path_ptr`/`path_len` が UTF-8 の絶対パス）・1 = キャンセル・それ以外 =
-/// 内部エラー。`what` はエラー識別子（利用者向け文言には出ない）。
-/// 読み取り・上限判定は同期に終える（呼び出し元の `.m` は戻ってから一時ファイルを消す）。
-#[allow(unsafe_code)]
-fn picked_from_path(
-    code: i32,
-    path_ptr: *const u8,
-    path_len: usize,
-    what: &'static str,
-) -> Result<Option<fandhe_device::file_picker::PickedFile>, DeviceError> {
-    match code {
-        0 => {
-            if path_ptr.is_null() {
-                // 契約違反（0 を返したのに path_ptr が NULL）を検出した経路。
-                return Err(DeviceError::Internal(what));
-            }
-            // SAFETY: `code == 0` の契約により `path_ptr` は `path_len` バイトの
-            // 有効な読み取り可能領域を指す UTF-8 バイト列。`read_picked` はこの関数内で
-            // 読み切って戻るため、以降このポインタを再利用しない。
-            let path_bytes = unsafe { std::slice::from_raw_parts(path_ptr, path_len) };
-            match std::str::from_utf8(path_bytes) {
-                Ok(path_str) => read_picked(Path::new(path_str), MAX_FILE_BYTES).map(Some),
-                // パスが UTF-8 破損（実務上ほぼ到達しない）の場合は内容を
-                // 推測せず失敗にする（`fandhe-cap-clipboard` の `IosClipboard::get_text` と同じ判断）。
-                Err(_) => Err(DeviceError::Internal(what)),
-            }
-        }
-        1 => Ok(None),
-        _ => Err(DeviceError::Internal(what)),
-    }
-}
-
-/// iOS 提示関数（Issue #873、案 B）。`device/file_pick.rs` のモバイル版
-/// `drive_mobile` から呼ばれる。`request_id` は `bridge::begin` が払い出す
-/// プロセス内一意な ID（画面の `generation` ではない、`device/file_pick.rs::bridge`
-/// のモジュール doc 参照）。即時 return（`.m` 側が `dispatch_async(main)` へ
-/// 提示処理を積んで戻る）ため、呼び出し元をブロックしない。iOS は常に `true`
-/// （`.m` 側の `fandhe_ios_file_picker_pick` は常に 0）を返し、提示失敗
-/// （top view controller 不在等）も code 2 で非同期に通知する（`.m` ファイル
-/// 冒頭コメント参照）。戻り値 `false` は Android の JNI 失敗専用（同期的に
-/// 提示依頼自体が失敗しコールバックが二度と来ないケース）で、iOS では到達しない。
-pub(crate) fn present_file_picker(request_id: u64) -> bool {
-    #[allow(unsafe_code)]
-    // SAFETY: `fandhe_ios_file_picker_pick` の契約（`.m` ファイル冒頭コメント）:
-    // 引数はプリミティブ整数のみでポインタを経由しない。戻り値 0 は提示を
-    // 依頼できたことのみを意味し、実際の選択結果は非同期に
-    // `fandhe_rust_file_picker_outcome` 経由で `bridge` へ届く。
-    unsafe {
-        fandhe_ios_file_picker_pick(request_id) == 0
-    }
-}
+use fandhe_device::file_picker::picked_from_path_bytes;
 
 // SAFETY: `ios/fandhe_ios_photo_picker.m` が定義する C ABI（`build.rs` が iOS
 // ターゲットのみ・feature `device` 有効時のみコンパイル・リンクする）。契約は
@@ -383,9 +16,9 @@ unsafe extern "C" {
 }
 
 /// `ios/fandhe_ios_photo_picker.m` の完了ハンドラから呼ばれる `extern "C"` エクスポート
-/// （Issue #1104）。`code` の意味・パスの寿命は [`fandhe_rust_file_picker_outcome`] と同じ
+/// （Issue #1104）。`code` の意味・パスの寿命は `fandhe-cap-file-picker` の `fandhe_rust_file_picker_outcome` と同じ
 /// （0 = 選択でパスは `NSItemProvider` が渡した一時ファイル、1 = キャンセル、
-/// それ以外 = 変換失敗等の内部エラー）。選択時は [`picked_from_path`] が同期に読み切って
+/// それ以外 = 変換失敗等の内部エラー）。選択時は `fandhe_device::file_picker::picked_from_path_bytes` が同期に読み切って
 /// から戻り、続けて 2 段検査（`validate_photo` → 復号確認）を **この呼び出しスレッド**
 /// （`NSItemProvider` のバックグラウンドキュー）で行う。UI スレッドでは復号しない。
 #[allow(unsafe_code)]
@@ -396,7 +29,15 @@ extern "C" fn fandhe_rust_photo_picker_outcome(
     path_ptr: *const u8,
     path_len: usize,
 ) {
-    let result = picked_from_path(code, path_ptr, path_len, "photo_picker pick");
+    // 0 以外では `path_ptr` を参照しない。0 なのに NULL は契約違反で、`picked_from_path_bytes` が失敗にする（成功にしない）。
+    let path = if code == 0 && !path_ptr.is_null() {
+        // SAFETY: `code == 0` の契約により `path_ptr` は `path_len` バイトの有効な読み取り可能領域を指す UTF-8 バイト列。
+        // `picked_from_path_bytes` はこの呼び出しの中で読み切って戻るため、以降このポインタを再利用しない。
+        Some(unsafe { std::slice::from_raw_parts(path_ptr, path_len) })
+    } else {
+        None
+    };
+    let result = picked_from_path_bytes(code, path, "photo_picker pick");
     // 同じ PHPicker の受け口を写真選択と文字認識（#1252）で共有し、id のタグで振り分ける。
     if crate::device::ios_image_recognition::owns(request_id) {
         crate::device::ios_image_recognition::deliver(request_id, result);
@@ -406,7 +47,7 @@ extern "C" fn fandhe_rust_photo_picker_outcome(
         crate::device::photo_pick::bridge::deliver(request_id, result);
     }
     // pull 型 bridge は sender を持たないため、結果を置いたら描画を起こす
-    // （`fandhe_rust_file_picker_outcome` と同じ）。
+    // （`fandhe-cap-file-picker` の `fandhe_rust_file_picker_outcome` と同じ）。
     crate::ios::request_repaint();
 }
 
@@ -420,83 +61,5 @@ pub(crate) fn present_photo_picker(request_id: u64) -> bool {
     // ことのみを意味し、結果は非同期に `fandhe_rust_photo_picker_outcome` へ届く。
     unsafe {
         fandhe_ios_photo_picker_pick(request_id) == 0
-    }
-}
-
-#[cfg(test)]
-mod tts_outcome_tests {
-    use super::TtsOutcome;
-    use std::time::Duration;
-
-    /// ObjC 側の delegate コールバックを経由しない、`TtsOutcome` 単体のロジック
-    /// 固定テスト（`.m` のビルドを要さず iOS ターゲットでの `cargo test` で回せる）。
-    /// static `TTS_OUTCOME` は使わずローカルに構築する（Android `tts_tests` の
-    /// P2 是正と同じ理由: 並列実行時の他テストとの干渉を避ける）。
-
-    #[test]
-    fn untracked_generation_resolves_immediately() {
-        let outcome = TtsOutcome::new();
-        assert!(outcome.wait(1).is_ok());
-    }
-
-    #[test]
-    fn resolve_completes_matching_generation() {
-        let outcome = TtsOutcome::new();
-        outcome.begin(1);
-        outcome.resolve(1);
-        assert!(outcome.wait(1).is_ok());
-    }
-
-    #[test]
-    fn cancel_stops_tracking_without_resolve() {
-        // 同期失敗（`fandhe_ios_tts_speak` が非 0）時の経路: コールバックが二度と
-        // 来ないため `cancel` で畳み、以後の `wait` は「追跡していない」として
-        // 即座に成功する。
-        let outcome = TtsOutcome::new();
-        outcome.begin(1);
-        outcome.cancel(1);
-        assert!(outcome.wait(1).is_ok());
-    }
-
-    #[test]
-    fn resolve_ignores_mismatched_generation() {
-        // 古いコールバック（既に別世代へ置き換わった後に届く finish/cancel）は
-        // 無視され、新しい世代の追跡状態を壊さない。
-        let outcome = TtsOutcome::new();
-        outcome.begin(1);
-        outcome.begin(2);
-        outcome.resolve(1);
-        assert!(
-            outcome.wait(1).is_ok(),
-            "1 は追跡されていないため即座に成功"
-        );
-        // 2 はまだ resolve されていないため、別スレッドで待つ。
-    }
-
-    #[test]
-    fn begin_wakes_up_a_waiter_blocked_on_the_replaced_generation() {
-        // `wait_outcome(A)` が待機中に `speak(B)` が来て `begin` が世代を
-        // 上書きした場合、（`wait` は時間で打ち切らないため）`notify_all` により
-        // 即座に起こされて `Ok(())` で戻ることを固定する（Android
-        // `wait_or_ok_wakes_immediately...` と同型の担保。この通知が効いて
-        // いなければ `waiter.join()` はテストプロセスごと永久にハングする）。
-        use std::sync::Arc;
-        let outcome = Arc::new(TtsOutcome::new());
-        outcome.begin(1);
-
-        let waiter = {
-            let outcome = Arc::clone(&outcome);
-            std::thread::spawn(move || outcome.wait(1))
-        };
-        std::thread::sleep(Duration::from_millis(50));
-
-        let started = std::time::Instant::now();
-        outcome.begin(2);
-        assert!(waiter.join().expect("panic しない").is_ok());
-        assert!(
-            started.elapsed() < Duration::from_secs(1),
-            "begin による置き換えから wait が戻るまで長く掛かりすぎている: {:?}",
-            started.elapsed()
-        );
     }
 }

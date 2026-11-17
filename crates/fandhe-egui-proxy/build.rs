@@ -55,59 +55,16 @@ fn build() {
         return;
     }
 
-    // `ios/fandhe_ios_tts.m`（Issue #866、`AVSpeechSynthesizer` による読み上げ）。
-    compile_objc("ios/fandhe_ios_tts.m", &["AVFoundation"]);
-
-    // `ios/fandhe_ios_file_picker.m`（Issue #873、`UIDocumentPickerViewController` によるファイル選択）。
-    compile_objc(
-        "ios/fandhe_ios_file_picker.m",
-        &["UIKit", "UniformTypeIdentifiers"],
-    );
-
     // `ios/fandhe_ios_photo_picker.m`（写真選択）。
     compile_objc(
         "ios/fandhe_ios_photo_picker.m",
         &["ImageIO", "PhotosUI", "UIKit", "UniformTypeIdentifiers"],
     );
 
-    // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）も macOS 分岐と
-    // 共用する。
-    compile_apple_mic_record();
-
-    // `apple/fandhe_apple_speech_recognition.m`（Issue #1024 macOS + #1025 iOS）も
-    // macOS 分岐と共用する。
-    compile_apple_speech_recognition();
-
     // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も iOS 分岐と共用する。
     compile_apple_image_recognition();
     // `apple/fandhe_apple_barcode_scan.m`（Issue #557 macOS + #558 iOS）も共用する。
     compile_apple_barcode_scan();
-}
-
-/// `apple/fandhe_apple_mic_record.m` を `cc` でコンパイルし AVFoundation・
-/// AudioToolbox をリンクする（Issue #954 macOS + #956 iOS）。iOS・macOS 双方の
-/// feature `device` 分岐から呼ばれる共通処理（doc 参照）。
-fn compile_apple_mic_record() {
-    compile_objc(
-        "apple/fandhe_apple_mic_record.m",
-        if target_is_ios() {
-            &["AVFoundation", "AudioToolbox", "UIKit"]
-        } else {
-            &["AVFoundation", "AudioToolbox"]
-        },
-    );
-}
-
-/// `apple/fandhe_apple_speech_recognition.m` を `cc` でコンパイルし Speech をリンクする（Issue #1024 macOS + #1025 iOS）。
-fn compile_apple_speech_recognition() {
-    compile_objc(
-        "apple/fandhe_apple_speech_recognition.m",
-        if target_is_ios() {
-            &["AVFoundation", "Speech", "UIKit"]
-        } else {
-            &["AVFoundation", "Speech"]
-        },
-    );
 }
 
 /// `apple/fandhe_apple_barcode_scan.m` を `cc` でコンパイルし Vision をリンクする
@@ -133,8 +90,7 @@ fn compile_apple_image_recognition() {
 }
 
 /// macOS ターゲット向けビルド（Issue #889・#897）。iOS と異なり macOS は位置情報
-/// （機能 crate `fandhe-cap-location` が持つ）などの `apple/*.m` だけを対象とする。既存の `ios/*.m` 群（文字入力・カメラ・傾き・クリップボード・読み上げ・
-/// ファイル選択）は iOS 専用のため対象外。
+/// （機能 crate `fandhe-cap-location` が持つ）などの `apple/*.m` だけを対象とする。既存の `ios/*.m` 群（文字入力・写真選択）は iOS 専用のため対象外。
 ///
 /// feature `device`（既定 on）でのみ `fandhe-device` への依存自体が有効になり、
 /// 呼び出し元の Rust がビルド対象になる（iOS 分岐と同じ判断）。無効時はコンパイルもリンクも行わない。
@@ -142,14 +98,6 @@ fn build_macos() {
     if std::env::var("CARGO_FEATURE_DEVICE").is_err() {
         return;
     }
-
-    // `apple/fandhe_apple_mic_record.m`（Issue #954 macOS + #956 iOS）は iOS 分岐と
-    // 共用する。
-    compile_apple_mic_record();
-
-    // `apple/fandhe_apple_speech_recognition.m`（Issue #1024 macOS + #1025 iOS）も
-    // iOS 分岐と共用する。
-    compile_apple_speech_recognition();
 
     // `apple/fandhe_apple_image_recognition.m`（Issue #1250 macOS + #1252 iOS）も共用する。
     compile_apple_image_recognition();

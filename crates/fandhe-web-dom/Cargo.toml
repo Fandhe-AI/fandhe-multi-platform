@@ -96,6 +96,10 @@ fandhe-cap-system-accent-color = { path = "../fandhe-cap-system-accent-color" }
 fandhe-cap-ar = { path = "../fandhe-cap-ar" }
 # Issue #1187: 単語分割の純関数・定数（`normalize_words`・`validate_input`・`MAX_INPUT_CHARS`）の正本。Web 実装の本体は本クレートに残す。
 fandhe-cap-nlp = { path = "../fandhe-cap-nlp" }
+# mic-record の契約の純関数・定数・失敗型（`build_recording`・`MAX_RECORDING_BYTES`）の正本。Web 実装の本体は本クレートに残す。wasm32 では OS 別の依存が cfg で外れる。
+fandhe-cap-mic-record = { path = "../fandhe-cap-mic-record" }
+# speech-recognition の契約の純関数・定数・失敗型（`outcome_from_transcript`・`MAX_TRANSCRIPT_BYTES`・`SpeechRecognitionError`）の正本。Web 実装の本体は本クレートに残す。wasm32 では OS 別の依存が cfg で外れる。
+fandhe-cap-speech-recognition = { path = "../fandhe-cap-speech-recognition" }
 # http-get の Web 実装（`fetch`）。デモ（`mount_http_fetch_screen`）が effect として呼ぶ。
 fandhe-cap-http-get = { path = "../fandhe-cap-http-get" }
 # multi-display の契約（検証・READ_INTERVAL・ScreenInfo）。Web 実装本体は本クレートに残る。

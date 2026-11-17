@@ -1626,6 +1626,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-file-picker"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "rfd",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "fandhe-cap-file-preview"
 version = "0.2.0"
 dependencies = [
@@ -2018,6 +2032,19 @@ dependencies = [
 
 [[package]]
 name = "fandhe-cap-memory-pressure"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "fandhe-cap-mic-record"
 version = "0.2.0"
 dependencies = [
  "fandhe-core",
@@ -2564,6 +2591,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fandhe-cap-speech-recognition"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+ "windows 0.61.3",
+ "windows-future",
+]
+
+[[package]]
 name = "fandhe-cap-spell-check"
 version = "0.2.0"
 dependencies = [
@@ -2645,6 +2686,18 @@ version = "0.2.0"
 dependencies = [
  "fandhe-core",
  "fandhe-device",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-runtime",
+ "jni 0.22.4",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "fandhe-cap-tts"
+version = "0.2.0"
+dependencies = [
+ "fandhe-core",
  "fandhe-platform-android",
  "fandhe-platform-apple",
  "fandhe-runtime",
@@ -2926,6 +2979,7 @@ dependencies = [
  "fandhe-cap-external-app-launch",
  "fandhe-cap-eye-dropper",
  "fandhe-cap-file-association",
+ "fandhe-cap-file-picker",
  "fandhe-cap-file-preview",
  "fandhe-cap-file-provider",
  "fandhe-cap-file-watch",
@@ -2958,6 +3012,7 @@ dependencies = [
  "fandhe-cap-media-playback",
  "fandhe-cap-media-transcode",
  "fandhe-cap-memory-pressure",
+ "fandhe-cap-mic-record",
  "fandhe-cap-midi",
  "fandhe-cap-ml-inference",
  "fandhe-cap-motion-raw-sensors",
@@ -2999,6 +3054,7 @@ dependencies = [
  "fandhe-cap-sleep-lock-events",
  "fandhe-cap-smart-home",
  "fandhe-cap-sound-classification",
+ "fandhe-cap-speech-recognition",
  "fandhe-cap-spell-check",
  "fandhe-cap-spotlight-index",
  "fandhe-cap-system-accent-color",
@@ -3006,6 +3062,7 @@ dependencies = [
  "fandhe-cap-system-tray",
  "fandhe-cap-tilt-motion",
  "fandhe-cap-translation",
+ "fandhe-cap-tts",
  "fandhe-cap-url-scheme",
  "fandhe-cap-usb-device",
  "fandhe-cap-user-idle",
@@ -3145,6 +3202,7 @@ dependencies = [
  "fandhe-cap-media-playback",
  "fandhe-cap-media-transcode",
  "fandhe-cap-memory-pressure",
+ "fandhe-cap-mic-record",
  "fandhe-cap-midi",
  "fandhe-cap-motion-raw-sensors",
  "fandhe-cap-multi-display",
@@ -3167,6 +3225,7 @@ dependencies = [
  "fandhe-cap-share-receive",
  "fandhe-cap-share-sheet",
  "fandhe-cap-sleep-lock-events",
+ "fandhe-cap-speech-recognition",
  "fandhe-cap-system-accent-color",
  "fandhe-cap-translation",
  "fandhe-cap-usb-device",

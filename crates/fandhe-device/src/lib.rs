@@ -40,21 +40,15 @@ pub mod image_recognition;
 pub mod media_playback;
 /// Issue #1188: MP4 box 読みの共有部品（音声変換は機能 crate `fandhe-cap-media-transcode`、動画変換 `video_transcode` が使う）。
 pub mod media_transcode;
-/// Phase 11（端末機能の拡充ループ、親 #953、Issue #954）: マイク録音。
-pub mod mic_record;
 /// Issue #1188: base64url の共有部品（パスキー本体は機能 crate `fandhe-cap-passkey-signin`）。
 pub mod passkey;
 /// Phase 11（端末機能の拡充ループ、親 #1121、Issue #1254）: 画像 1 枚の写真ライブラリ保存。
 pub mod photo_library;
 /// Phase 11（端末機能の拡充ループ）: 写真 1 枚の選択。
 pub mod photo_picker;
-/// Phase 11（端末機能の拡充ループ、親 #1023、Issue #1024）: 音声認識。
-pub mod speech_recognition;
 pub mod storage;
 /// Phase 11（端末機能の拡充ループ、親 #115、Issue #535）: 端末内翻訳（固定の原文を 1 回訳す）。
 pub mod translation;
-/// Phase 11（端末機能の拡充ループ、Issue #865）: 任意テキストの読み上げ（TTS）。
-pub mod tts;
 /// Phase 11（端末機能の拡充ループ、親 #1116、Issue #1215）: カスタム URL scheme の受信。
 pub mod url_scheme;
 /// Wi-Fi の電源状態の判定（`radio_off`）だけ。wifi-info と wifi-connect が共有する純関数で、機能の契約は `fandhe-cap-wifi-info`
@@ -104,7 +98,7 @@ pub enum DeviceError {
     /// `CaptureFailure::Other` 相当の汎用失敗表示へフォールバックする想定）。
     #[error("内部エラーが発生しました: {0}")]
     Internal(&'static str),
-    /// 端末機能へ渡した入力が契約違反（`tts::Tts::speak` に渡したテキストの NUL
+    /// 端末機能へ渡した入力が契約違反（読み上げ `Tts::speak` に渡したテキストの NUL
     /// 混入等）。第 1 引数は機能名（`"tts text"` 等、内部識別子のみ）。
     #[error("入力が不正です: {0}")]
     InvalidInput(&'static str),

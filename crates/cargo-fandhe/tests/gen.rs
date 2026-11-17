@@ -527,6 +527,12 @@ fn macos_services_and_widget_extension_match_current_settings() {
     let plist = &gallery()["macos/Info.plist"];
     let svc = plist.split("<key>NSServices</key>").nth(1).unwrap();
     let svc = svc.split("</plist>").next().unwrap();
+    // 生成物はキー名の昇順で並ぶため、`NSServices` より後ろに usage description（`NSSpeechRecognitionUsageDescription` など）が
+    // 続くことがある。それらは NSServices の値ではないので、最初の usage description の手前で切る。
+    let svc = svc
+        .split("<key>NSSpeechRecognitionUsageDescription</key>")
+        .next()
+        .unwrap();
     for k in &keys {
         assert!(svc.contains(&format!("<key>{k}</key>")), "{k}");
     }

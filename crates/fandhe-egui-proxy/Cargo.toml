@@ -285,11 +285,6 @@ windows = { workspace = true, optional = true, features = [
     # `PasswordCredential` を呼ぶために使う。`Security_Credentials_UI`（#907）が
     # 含意する feature だが、依存意図を明示するため列挙する。ウィンドウ束縛・unsafe は不要。
     "Security_Credentials",
-    # Issue #955: `device/windows_mic_record.rs` が `MediaCapture`（音声録音）を
-    # 呼ぶために使う。
-    "Media_Capture",
-    # Issue #955: `MediaEncodingProfile::CreateM4a`（AAC エンコード設定）に使う。
-    "Media_MediaProperties",
     # `device/windows_ble_peripheral.rs`（ble-peripheral）が `GattServiceProvider` /
     # `GattLocalCharacteristic`（`Devices_Bluetooth_GenericAttributeProfile`）を呼ぶ。新規パッケージは増えない。
     "Devices_Bluetooth_GenericAttributeProfile",
@@ -394,9 +389,6 @@ windows = { workspace = true, optional = true, features = [
     # （`Win32_UI_Input_KeyboardAndMouse`）を呼ぶ。`GetTickCount` は導入済みの
     # `Win32_System_SystemInformation`。新規パッケージは増えない。
     "Win32_UI_Input_KeyboardAndMouse",
-    # Issue #1024: `device/windows_speech_recognition.rs` が WinRT
-    # `Windows.Media.SpeechRecognition.SpeechRecognizer` を呼ぶために使う。
-    "Media_SpeechRecognition",
     # Issue #1251: `device/windows_image_recognition.rs` が `OcrEngine`（`Media_Ocr`）と
     # `BitmapDecoder` / `SoftwareBitmap` / `BitmapTransform`（`Graphics_Imaging`）を呼ぶ。
     # 新規パッケージは増えない。

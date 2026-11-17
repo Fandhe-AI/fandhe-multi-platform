@@ -1,5 +1,5 @@
 //! request/response 型端末機能（`device/share.rs` / `device/biometric_auth.rs` /
-//! `device/file_pick.rs`）共通の「要求 1 件の追跡」（pull 型 bridge、Issue #943 /
+//! `fandhe-cap-file-picker` の `driver.rs`）共通の「要求 1 件の追跡」（pull 型 bridge、Issue #943 /
 //! 親 #941）。3 機能がそれぞれ逐語コピーしていた `Mutex<Option<Pending>>` +
 //! `AtomicU64` 採番 + `snapshot`/`clear`/`reset` をここへ一本化する。
 //!

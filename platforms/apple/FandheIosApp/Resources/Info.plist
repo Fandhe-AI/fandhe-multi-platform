@@ -83,7 +83,7 @@
 
   NSMicrophoneUsageDescription（Issue #956）: 型サンプル「マイク録音」画面
   （`FANDHE_PROXY_APP=mic_record`）が `AVAudioRecorder`
-  （`crates/fandhe-egui-proxy/apple/fandhe_apple_mic_record.m` は iOS/macOS 共用）を
+  （`crates/fandhe-cap-mic-record/apple/fandhe_apple_mic_record.m` は iOS/macOS 共用）を
   起動するために必須。未設定だと権限要求時にクラッシュする。型サンプル「音声認識」
   画面（`FANDHE_PROXY_APP=speech_recognize`）と「動画の撮影」画面
   （`FANDHE_PROXY_APP=video_capture_show`、撮影 UI が音声を録る）も同じキーを併用する（下記
@@ -91,7 +91,7 @@
 
   NSSpeechRecognitionUsageDescription（Issue #1025）: 型サンプル「音声認識」画面
   （`FANDHE_PROXY_APP=speech_recognize`）が `SFSpeechRecognizer.
-  requestAuthorization:`（`crates/fandhe-egui-proxy/apple/
+  requestAuthorization:`（`crates/fandhe-cap-speech-recognition/apple/
   fandhe_apple_speech_recognition.m` は iOS/macOS 共用）で音声認識の許可を
   要求するために必須。未設定だと権限要求時にクラッシュする。
 

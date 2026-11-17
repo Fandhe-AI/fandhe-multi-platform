@@ -74,26 +74,6 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // `device` feature 無効時（`android_app()` の cfg 撤廃済み）に本 static を必要とするため、
     // `set_android_app` 呼び出し自体は feature に関わらず常に行う。
     set_android_app(app.clone());
-    // Issue #957: `mic_record::bridge::SLOT`/`STARTED_REQUEST_ID` も同じ理由で
-    // プロセス static のため Activity 再生成をまたいで残る。新しい画面
-    // `MicRecordState::default()`（`Idle`）を構築する前にここで捨て、再生成前に
-    // 開始した録音が後から完了しても黙って失われず、以後確実に「未接続」（次の
-    // 操作からやり直し）として扱われるようにする
-    // （`device::mic_record::reset_pending_tracking` doc 参照）。
-    #[cfg(feature = "device")]
-    crate::device::mic_record::reset_pending_tracking();
-    // Issue #1026: `speech_recognition::bridge::SLOT`/`STARTED_REQUEST_ID` も同じ理由で
-    // プロセス static のため Activity 再生成をまたいで残る。新しい画面
-    // `SpeechRecognizeState::default()`（`Idle`）を構築する前にここで捨て、再生成前に
-    // 開始した聞き取りが後から完了しても黙って失われず、以後確実に「未接続」（次の
-    // 操作からやり直し）として扱われるようにする（`device::speech_recognition::
-    // reset_pending_tracking` doc 参照）。Java 側（`MainActivity.onCreate`）に対になる
-    // no-op スタブは置かない: Rust の `request_speech_start` を経ないと Java が
-    // `nativeOnSpeechResult`/`nativeOnSpeechError` を呼ぶ経路自体が無く、
-    // `feature = "device"` 無効ビルドでは到達しないため（`mic_record`/`notification` と
-    // 同じ理由）。
-    #[cfg(feature = "device")]
-    crate::device::speech_recognition::reset_pending_tracking();
     // Issue #1104: `photo_pick::bridge::SLOT` もプロセス static のため再生成をまたいで残る。
     // 写真選択の契約は「保留中の要求は復元せず破棄」（`fandhe_device::photo_picker` モジュール
     // doc）なので、新しい `Idle` の画面状態を作る前に捨て、旧要求の遅延完了を id 不一致で

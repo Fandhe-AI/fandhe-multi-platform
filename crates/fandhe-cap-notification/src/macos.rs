@@ -18,7 +18,7 @@ const OSASCRIPT_PATH: &str = "/usr/bin/osascript";
 /// 「9. 失敗時のリソース解放」参照）。
 const SEND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
-/// `try_wait` のポーリング間隔（`fandhe_device::tts::WAIT_OUTCOME_POLL_INTERVAL` と
+/// `try_wait` のポーリング間隔（`fandhe_cap_tts::WAIT_OUTCOME_POLL_INTERVAL` と
 /// 同型の考え方。短すぎる busy loop を避けつつ、タイムアウト検知の遅延を体感で
 /// 問題にならない範囲に収める）。
 const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(20);
@@ -104,7 +104,7 @@ impl OsascriptNotifier {
     }
 
     /// 任意のプログラムパスで構築する（テストから存在しないパス・`/bin/sh` 等の
-    /// 代替コマンドを注入するための入口。`fandhe_device::tts::CommandTts::with_program`
+    /// 代替コマンドを注入するための入口。`fandhe_cap_tts::CommandTts::with_program`
     /// と同型）。
     fn with_program(program: std::path::PathBuf) -> Result<Self, NotificationError> {
         if !program.is_file() {
