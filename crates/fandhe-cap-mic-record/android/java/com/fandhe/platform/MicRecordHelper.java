@@ -91,20 +91,22 @@ final class MicRecordHelper {
             micOwner = null;
             if (activity.isChangingConfigurations()) {
                 // 追跡中の要求があるときだけ新しい helper へ引き継ぐ（無ければ何も待たない）。
-                micOwnerOrphaned = micRecordRequest.current() != RequestTracker.NONE;
+                micOwnerOrphaned = micRecordRequest.current() != RequestTracker.NONE || micPermissionPending;
                 return;
             }
             interruptRecordingLocked();
             if (activity.isFinishing()) {
                 micOwnerOrphaned = false;
                 micStartPendingResume = false;
+                micPermissionPending = false;
+                micPermissionRequestId = RequestTracker.NONE;
                 long id = micRecordRequest.take();
                 if (id != RequestTracker.NONE) {
                     nativeOnMicRecordResult(id, MIC_RESULT_INTERRUPTED, null, null, 0);
                 }
             } else {
-                // システム破棄: 追跡中の要求（権限ダイアログ待ち）が残るときだけ、復元後の helper へ引き継ぐ。
-                micOwnerOrphaned = micRecordRequest.current() != RequestTracker.NONE;
+                // システム破棄: 追跡中の要求か許可ダイアログの結果待ちが残るときだけ、復元後の helper へ引き継ぐ。
+                micOwnerOrphaned = micRecordRequest.current() != RequestTracker.NONE || micPermissionPending;
             }
         }
     }
@@ -122,8 +124,12 @@ final class MicRecordHelper {
             // main へ積んだだけで未登録の開始要求を無効にする（`requestMicRecordStart` が積む前に読んだ世代と照合する）。
             micAbortGeneration++;
             micStartPendingResume = false;
-            micOwner = null;
-            micOwnerOrphaned = false;
+            // 許可ダイアログが出ている間は発行元を残す。ダイアログを出した Activity の終了（`detach`）で許可待ちの照合状態を
+            // 下ろす入口が要るため（発行元を外すと `detach` が早期 return し、`micPermissionPending` が true のまま残る）。
+            if (!micPermissionPending) {
+                micOwner = null;
+                micOwnerOrphaned = false;
+            }
             micRecordRequest.take();
             recorder = micRecorder;
             tempFile = micTempFile;
@@ -211,10 +217,19 @@ final class MicRecordHelper {
         this.requestMicPermission =
                 activity.getActivityResultRegistry().register("fandhe:MainActivity:2", activity, new ActivityResultContracts.RequestPermission(), granted -> {
                 synchronized (micLock) {
-                    long id = micRecordRequest.current();
-                    if (id == RequestTracker.NONE) {
-                        // 既に破棄済み（`onStop`/`onDestroy`/Rust 側 reset、または二重開始で
-                        // 弾かれた後）。
+                    // このダイアログを出した時点の id。届いたら即座に解除し、以降は新しいダイアログを起動できる
+                    // （`micPermissionPending` doc 参照）。
+                    long id = micPermissionRequestId;
+                    micPermissionRequestId = RequestTracker.NONE;
+                    micPermissionPending = false;
+                    if (micRecordRequest.current() == RequestTracker.NONE) {
+                        // 要求が無いまま発行元だけ残っていた（`abortPending` 後の許可待ち）なら、ここで外す。
+                        micOwner = null;
+                        micOwnerOrphaned = false;
+                    }
+                    if (id == RequestTracker.NONE || micRecordRequest.current() != id) {
+                        // 自分が起動したダイアログの結果ではない（要求が「停止」・reset で破棄された後。許可待ちの間は新しい開始を
+                        // busy で断るため、別の要求に替わっていることは通常無い）。現在の要求を壊さないよう何もしない。
                         return;
                     }
                     if (!granted) {
@@ -313,6 +328,13 @@ final class MicRecordHelper {
     // `locationStartRequestPending` と同型）。`micLock` の内側でのみ読み書きする。
     private static boolean micStartPendingResume;
 
+    // 許可ダイアログを出した要求の id と、その結果がまだ届いていないこと。「停止」・reset で追跡（`micRecordRequest`）だけが先に外れても、
+    // ダイアログは閉じない。結果が届く（`requestMicPermission` コールバック）まで次の開始を busy で断り、届いたときは
+    // ダイアログを出した時点の id と現在の要求を照合して、別の要求を始めない。`micLock` の内側でのみ読み書きする
+    // （`SpeechRecognitionHelper` の `speechPermissionPending` と同型）。
+    private static long micPermissionRequestId = RequestTracker.NONE;
+    private static boolean micPermissionPending;
+
     // `abortPending` が進める取消世代。`micLock` の内側でのみ読み書きする。main へ積んだ開始要求は、積む前の値を持ち、
     // 実行時に照合して違えば（積んでから実行されるまでの間に Rust 側が reset して待たなくなった）何も登録せず通知もしない。
     private static long micAbortGeneration;
@@ -336,8 +358,11 @@ final class MicRecordHelper {
                     // 積んだ後に `abortPending` が来た。Rust 側は待っていないので、登録も通知もしない。
                     return;
                 }
-                if (micRecorder != null || micRecordRequest.current() != RequestTracker.NONE) {
-                    // 既に録音中、または権限確認待ち中の二重開始（現在の要求は壊さない）。
+                if (micRecorder != null || micRecordRequest.current() != RequestTracker.NONE
+                        || micPermissionPending) {
+                    // 既に録音中、権限確認待ち中、または先行する許可ダイアログの結果がまだ届いていない
+                    // （`micPermissionPending` doc 参照。「停止」で追跡だけ先に外れていても、ダイアログ自体は閉じていない）
+                    // 二重開始（現在の要求は壊さない）。
                     nativeOnMicRecordResult(requestId, MIC_RESULT_BUSY, null, null, 0);
                     return;
                 }
@@ -359,10 +384,15 @@ final class MicRecordHelper {
                     return;
                 }
                 try {
+                    // launch 直前に id を退避し、この結果が届くまで次の要求が新しいダイアログを起動しないようにする。
+                    micPermissionRequestId = requestId;
+                    micPermissionPending = true;
                     requestMicPermission.launch(Manifest.permission.RECORD_AUDIO);
                 } catch (RuntimeException e) {
                     // `launch()` 自体が例外を送出した場合（カメラ撮影の `begin` と同じ
                     // 理由）。コールバックは二度と来ないため、ここで直接失敗を通知する。
+                    micPermissionRequestId = RequestTracker.NONE;
+                    micPermissionPending = false;
                     micRecordRequest.take();
                     nativeOnMicRecordResult(requestId, MIC_RESULT_INTERNAL_ERROR, null, null, 0);
                 }

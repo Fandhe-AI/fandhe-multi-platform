@@ -19,6 +19,9 @@ use fandhe_platform_android::{JniCallFailed, with_activity_class};
 use crate::contract::PickedFile;
 use crate::error::FilePickerError;
 
+/// Java 側 `FilePickerHelper` が「追跡中の要求がある間の新しい要求」に返す結果コード（busy）。
+const BUSY_CODE: i32 = 3;
+
 /// Java 側 `FilePickerHelper.request(Activity, long)` を呼び、ダイアログの提示だけを要求する。結果を待たずに即座に戻る点は
 /// カメラ撮影（`fandhe-cap-camera-capture`）と異なり、結果の受け皿は `crate::driver` の `bridge::begin`/`bridge::deliver` が持つ。
 /// 渡す `request_id` は画面状態の generation ではなく `bridge::begin` が発行するプロセス内一意の連番。
@@ -67,6 +70,9 @@ fn decode_file_pick_result(
     name: &jni::objects::JString,
     fd: jni::sys::jint,
 ) -> Result<Option<PickedFile>, FilePickerError> {
+    if code == BUSY_CODE {
+        return Err(FilePickerError::Internal("file_picker busy"));
+    }
     let file = if code == 0 && fd >= 0 {
         // SAFETY: Java 側 `FilePickerHelper.deliverPickedDocument` が `ParcelFileDescriptor.detachFd()` で所有権を手放した直後に
         // 渡す有効な fd で（`code == 0` のときだけ有効）、detach 後は Java 側で close しない契約（detach 後の

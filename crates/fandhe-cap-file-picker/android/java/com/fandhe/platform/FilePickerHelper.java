@@ -29,7 +29,8 @@ import java.util.WeakHashMap;
 // （Activity 再生成で画面状態が作り直され generation が 1 から再開するため、generation をそのまま OS へ渡すと旧要求の遅延完了が
 // 新要求に一致してしまう。`bridge::deliver` が現在追跡中の requestId と不一致 =
 // プロセス死後の再配送・旧要求の遅延到着なら黙って捨てる）。
-// code: 0=選択（name/fd が有効）／1=キャンセル／2=失敗（プロバイダなし・名前解決不能・`launch()` 例外・fd 取得失敗のいずれも
+// code: 0=選択（name/fd が有効）／1=キャンセル／3=busy（追跡中の要求がある間の新しい要求。選択画面が閉じるまで次は始められない。
+// Rust 側は `Internal("file_picker busy")` へ写す）／2=失敗（プロバイダなし・名前解決不能・`launch()` 例外・fd 取得失敗のいずれも
 // 一律ここへ畳む。詳細な原因分類は行わない）。
 // fd: `code == 0` のときのみ有効。`ParcelFileDescriptor.detachFd()` で所有権を Rust へ渡した生 fd（Android は原本パスを持たないため、
 // パス文字列ではなく fd を渡す）。detach 後は Java 側で close しない。読み取り・8 MiB 判定は Rust 側
@@ -68,11 +69,18 @@ final class FilePickerHelper {
         }
     }
 
-    // Activity 破棄時は表から外すだけ。保留中の要求は static の id のまま残し、再生成後の新 helper が結果を拾う
-    // （終了による破棄では結果が届かず `Picking` のまま残る。固定タイムアウトを掛けない既知の天井）。
+    // Activity 破棄時は表から外す。保留中の要求は static の id のまま残し、再生成後の新 helper が結果を拾う。
+    // ただし終了（`isFinishing`）による破棄では、選択画面の結果が二度と届かないため、追跡を外して失敗（code 2）で確定する
+    // （残すと次の要求がずっと busy になる）。構成変更・システム破棄では残す。
     static void detach(Activity activity) {
         synchronized (FilePickerHelper.class) {
             HELPERS.remove(activity);
+        }
+        if (activity.isFinishing()) {
+            long requestId = filePickRequest.take();
+            if (requestId != RequestTracker.NONE) {
+                nativeOnFilePickerResult(requestId, 2, null, -1);
+            }
         }
     }
 
@@ -113,7 +121,12 @@ final class FilePickerHelper {
     }
 
     private void requestFilePick(long requestId) {
-        filePickRequest.track(requestId);
+        // 追跡中の要求（選択画面が開いている）があれば、上書きも再 launch もせず busy を返す。上書きすると、先の画面の結果が
+        // 新しい要求として届く（取り違え）。追跡は callback の `take()`・`launch()` 失敗・終了による破棄（`detach`）で必ず外れる。
+        if (!filePickRequest.tryTrack(requestId)) {
+            nativeOnFilePickerResult(requestId, 3, null, -1);
+            return;
+        }
         activity.runOnUiThread(() -> {
             try {
                 pickDocument.launch(new String[] {"*/*"});

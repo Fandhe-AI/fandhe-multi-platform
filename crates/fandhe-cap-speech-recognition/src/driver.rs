@@ -1200,6 +1200,8 @@ mod tests {
         );
         // 進行中で捨てると true（呼び出し側が OS へ停止を依頼する）。
         assert_eq!(bridge::discard_public(id), Some(true));
+        // 進行中に捨てた id へ後から結果を送っても捨てられる。
+        assert!(!bridge::deliver(id, error_from_code(5)));
         assert!(poll_speech_recognition(id).is_none());
         assert_eq!(bridge::discard_public(id), None);
         // 結果が未取得で捨てると false（停止は不要）。遅れて届いた結果は捨てられる。

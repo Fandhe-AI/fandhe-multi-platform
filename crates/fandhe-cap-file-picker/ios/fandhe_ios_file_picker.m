@@ -30,6 +30,7 @@
 //     0 = 選択（path_ptr/path_len が tmp コピーの絶対パス、UTF-8）
 //     1 = ユーザーがキャンセル（失敗ではない）
 //     2 = 内部エラー（提示失敗・URL 不在・パスの UTF-8 変換失敗等）
+//     3 = busy（進行中の選択画面がある間の新しい要求。Rust 側は `Internal("file_picker busy")` へ写す）
 //   0 以外では path_ptr を参照しない（NULL を渡す）。
 //
 // UIKit は main スレッド必須のため、提示は `dispatch_async(main)` で行う。
@@ -37,9 +38,9 @@
 // ブロックしない。選択時の読み取り（Rust 側 `read_picked`）は dispatch_async(global)
 // の別スレッドへ逃がし、main を長時間塞がない。
 //
-// 進行中フラグ（旧 `g_pick_in_flight`）は持たない: 単一飛行はコア
-// （`fandhe_core::screens::file_pick`）がボタンを隠すことで保証済み
-// （`src/driver.rs` モジュール doc 参照）。
+// 進行中かどうかは OS の観測（提示中の picker が実際に提示されているか）で決める。推測タイマーのフラグは持たない:
+// 画面 effect も公開入口（`begin_file_pick`）も同じこの入口を通るため、Rust 側が slot を捨てた（`discard_file_pick`）後でも、
+// 選択画面が残っている間の新しい要求はここで busy（code 3）にする。
 
 #import <UIKit/UIKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
@@ -49,6 +50,9 @@
 // フラグではなくオブジェクト保持のみ（単一飛行の防止はコア側が担う、上記コメント参照）。
 // main queue からのみ読み書きする（UIKit delegate 契約）。
 static id _Nullable g_retainedDelegate = nil;
+// 提示中の picker（weak）。delegate が残っていても picker が提示されていなければ、完了通知が来ないまま消えた（シーン破棄等）ので
+// 進行中とみなさない（永久に busy にならないため）。main queue からのみ読み書きする。
+static __weak UIDocumentPickerViewController *g_activePicker = nil;
 
 // `ios.rs::fandhe_rust_file_picker_outcome` の宣言（本ファイルの唯一の呼び出し先）。
 extern void fandhe_rust_file_picker_outcome(uint64_t requestId, int32_t code,
@@ -80,8 +84,11 @@ extern void fandhe_rust_file_picker_outcome(uint64_t requestId, int32_t code,
     NSURL *url = urls.firstObject;
     // この時点でこの試行は終了（以降の delegate 呼び出しは来ない契約）。
     // circular reference（delegate ⇄ picker.delegate）を断つため先に解放する。
-    // 以降 `self` に触れないこと（最後の強参照が落ちる）。
-    g_retainedDelegate = nil;
+    // 以降 `self` に触れないこと（最後の強参照が落ちる）。重複して届いた旧 delegate の通知が、
+    // 次の要求の delegate を外さないよう、自分が現在の delegate のときだけ外す。
+    if (g_retainedDelegate == self) {
+        g_retainedDelegate = nil;
+    }
 
     if (url == nil) {
         // 契約違反（選択イベントなのに URL が空）を検出した経路。
@@ -120,7 +127,9 @@ extern void fandhe_rust_file_picker_outcome(uint64_t requestId, int32_t code,
 - (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller {
     uint64_t requestId = self.requestId;
     // 以降 `self` に触れないこと（最後の強参照が落ちる）。
-    g_retainedDelegate = nil;
+    if (g_retainedDelegate == self) {
+        g_retainedDelegate = nil;
+    }
     fandhe_rust_file_picker_outcome(requestId, 1, NULL, 0);
 }
 
@@ -131,7 +140,9 @@ extern void fandhe_rust_file_picker_outcome(uint64_t requestId, int32_t code,
 - (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController {
     uint64_t requestId = self.requestId;
     // 以降 `self` に触れないこと（最後の強参照が落ちる）。
-    g_retainedDelegate = nil;
+    if (g_retainedDelegate == self) {
+        g_retainedDelegate = nil;
+    }
     fandhe_rust_file_picker_outcome(requestId, 1, NULL, 0);
 }
 
@@ -140,6 +151,16 @@ extern void fandhe_rust_file_picker_outcome(uint64_t requestId, int32_t code,
 int32_t fandhe_ios_file_picker_pick(uint64_t requestId) {
     dispatch_async(dispatch_get_main_queue(), ^{
       @autoreleasepool {
+        // 進行中の選択画面（提示中の picker）があれば、重ねて提示せず busy を返す（先の delegate・結果を壊さない）。
+        // delegate が残っていても picker が提示されていなければ完了通知を失った残りなので、解放して続ける。
+        if (g_retainedDelegate != nil) {
+            if (g_activePicker != nil && g_activePicker.presentingViewController != nil) {
+                fandhe_rust_file_picker_outcome(requestId, 3, NULL, 0);
+                return;
+            }
+            g_retainedDelegate = nil;
+            g_activePicker = nil;
+        }
         UIViewController *top = FandheTopmostViewController();
         // `top.view.window == nil` は `presentViewController` がデリゲートを
         // 一切呼ばずに失敗する既知の失敗系（`fandhe_ios_camera.m` と同じ）。
@@ -170,6 +191,7 @@ int32_t fandhe_ios_file_picker_pick(uint64_t requestId) {
         // （上記 interface コメント参照）。
         picker.presentationController.delegate = delegate;
         g_retainedDelegate = delegate;
+        g_activePicker = picker;
 
         // ponytail: 提示直前の判定のみで成否を決め、`presentViewController:` の
         // completion やモーダル遷移中の再判定は持たない（旧実装より単純化。

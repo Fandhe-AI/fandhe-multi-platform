@@ -530,8 +530,12 @@ pub fn begin_file_pick() -> Result<u64, FilePickerError> {
 /// [`begin_file_pick`] の自分の要求を捨てて slot を空ける。`request_id` が公開入口の現在の要求のときだけ `true`
 /// （他人の id・画面側の id・取り出し済み・0 は `false` で何もしない）。結果が未取得でも進行中でも捨てる。
 ///
-/// 進行中の OS のファイル選択画面は閉じられない。後から届いた結果は id 不一致で捨てられる。捨てたあとは
-/// [`poll_file_pick`] が `None` になり、公開入口も画面 effect も再び開始できる。iOS・Android 以外では常に `false`。
+/// discard は選択画面を閉じない（OS の画面は閉じられない）。画面が閉じるまで次の [`begin_file_pick`]（画面 effect の開始も）は
+/// OS 側が busy（`Internal("file_picker busy")`）で断る。後から届いた結果は id 不一致で捨てられる。捨てたあとは
+/// [`poll_file_pick`] が `None` になり、画面が閉じれば公開入口も画面 effect も再び開始できる。iOS・Android 以外では常に `false`。
+///
+/// busy の判定は OS の観測で行う。Android は追跡中の要求（結果の通知・launch 失敗・Activity の終了で外れる）、
+/// iOS は提示中の選択画面（提示されていない残りは進行中とみなさない）。
 pub fn discard_file_pick(request_id: u64) -> bool {
     #[cfg(any(target_os = "ios", target_os = "android"))]
     {
