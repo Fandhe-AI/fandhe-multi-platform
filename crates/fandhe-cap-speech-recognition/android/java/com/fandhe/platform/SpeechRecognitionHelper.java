@@ -171,7 +171,9 @@ final class SpeechRecognitionHelper {
         }
         helper.resumed = true;
         synchronized (speechLock) {
-            if (speechStartPendingResume) {
+            // 発行元の helper の resume だけが保留を消費する。別 Activity の resume では保留に触らない
+            // （構成変更の引き継ぎでは、attach で新しい helper が発行元になり、その resume で再開する）。
+            if (speechStartPendingResume && speechOwner == helper) {
                 speechStartPendingResume = false;
                 long id = speechRequest.current();
                 if (id != RequestTracker.NONE && helper.speechRecognizer == null) {

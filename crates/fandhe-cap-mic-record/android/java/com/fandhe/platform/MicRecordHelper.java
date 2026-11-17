@@ -159,7 +159,9 @@ final class MicRecordHelper {
         }
         helper.resumed = true;
         synchronized (micLock) {
-            if (micStartPendingResume) {
+            // 発行元の helper の resume だけが保留を消費する。別 Activity の resume では保留に触らない
+            // （構成変更の引き継ぎでは、attach で新しい helper が発行元になり、その resume で再開する）。
+            if (micStartPendingResume && micOwner == helper) {
                 micStartPendingResume = false;
                 long id = micRecordRequest.current();
                 if (id != RequestTracker.NONE && micRecorder == null) {
