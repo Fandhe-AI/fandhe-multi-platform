@@ -77,7 +77,9 @@ impl ForwardGeocoder for AppleForwardGeocoder {
 mod tests {
     use super::*;
     use crate::contract::{GEOCODE_DEADLINE, NO_COORDINATE};
-    use fandhe_core::screens::geocoding_search_show::ADDRESS;
+
+    /// 実呼び出しテストの入力（公開の住所。画面の状態型には依存しない）。
+    const ADDRESS: &str = "東京都千代田区丸の内一丁目9番1号";
 
     /// 実呼び出しテストの期限。テスト実行体の main thread は runloop を回さず、MapKit の
     /// 問い合わせが返らないことがあるため（実アプリでは winit の runloop が回る）、短くして
