@@ -5,7 +5,9 @@
 //!
 //! 契約（`contract`）・失敗の種類（`error`）・effect ドライバ（`driver`・`tsv_import`）・OS 実装（macOS・Windows は `desktop`、
 //! iOS は `ios`、Android は `android`）を 1 つに集める。画面の状態型を参照してよいのは `driver`・`tsv_import` だけ。
-//! 入口 [`platform_file_picker`] は画面の状態型に依存しない。他の機能（写真選択・ドラッグ & ドロップ・ファイル関連付け・フォルダ監視）も
+//! 画面の状態型に依存しない入口は、同期の [`platform_file_picker`]（全ターゲットで公開。macOS・Windows は
+//! ダイアログを開いて結果を返し、iOS・Android は `Unsupported` を返す）と、iOS・Android 向けの非同期の [`begin_file_pick`]（開始）・
+//! [`poll_file_pick`]（結果を 1 度だけ取得）。画面 effect と同じ slot を共有し、片方が進行中・未取得なら他方は `Internal`（busy）で断る。他の機能（写真選択・ドラッグ & ドロップ・ファイル関連付け・フォルダ監視）も
 //! 使う部品（`PickedFile`・読み取り・受け取りの検証・Windows のダイアログ起動）は `fandhe-device::file_picker` に残り、この crate は
 //! それを再公開して使う（`docs/operations/capability-crate-migration.md` §7）。
 //!

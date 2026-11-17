@@ -90,8 +90,9 @@ fn to_message(e: FilePickerError) -> String {
 }
 
 /// `Result<Option<PickedFile>, FilePickerError>` を橋渡し共通の生の結果へ変換する
-/// （[`drive_with`]・[`bridge::deliver`] の共通部分）。画面固有の要約
+/// （デスクトップの [`drive_with`] 用。モバイルの [`bridge`] は変換前の生の結果を slot に置く）。画面固有の要約
 /// （`PickedSummary`/バイト列）への変換は行わない（各画面の [`PickHooks::finish`] が担う）。
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 fn to_outcome(
     result: Result<Option<PickedFile>, FilePickerError>,
 ) -> Result<Option<PickedFile>, String> {
@@ -191,55 +192,118 @@ pub(crate) fn drive_with<S: 'static>(
 /// モジュール doc「`bridge` は 2 画面で共有する」節参照）。プロセス死で消えるので、
 /// OS が再配送した旧結果は `deliver` が捨てる。OS へ渡す要求 ID はプロセス内で一意な
 /// 連番 `request_id`（再生成で画面の `generation` が 1 から再開しても衝突しない）。
-#[cfg(any(target_os = "ios", target_os = "android"))]
+///
+/// 画面 effect と公開入口（[`begin_file_pick`] / [`poll_file_pick`]）が同じ slot を共有する。
+/// 持ち主（[`bridge::SCREEN_OWNER`]・[`bridge::PUBLIC_OWNER`]）で自分の分の要求を区別し、片方が進行中・結果未取得のとき
+/// 他方は置き換えず busy で断る。slot には変換前の生の結果（`FilePickerError`）を置き、画面へ渡すときに文言へ変換する。
+///
+/// テストでホストからも検証できるよう `cfg(test)` でもコンパイルする（OS 呼び出しは含まない）。
+#[cfg(any(test, target_os = "ios", target_os = "android"))]
+#[cfg_attr(not(any(target_os = "ios", target_os = "android")), allow(dead_code))]
 pub(crate) mod bridge {
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     use crate::error::FilePickerError;
     use fandhe_device::file_picker::PickedFile;
 
-    use fandhe_runtime::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::{RequestSlot, SlotOwner};
 
-    /// 画面へ反映する完了結果（`super::to_outcome` 後の生の形を `Arc` で包んだもの。
+    /// 公開入口が追う自分の分の要求（画面側が置き換え・横取りしない）。
+    pub(crate) static PUBLIC_OWNER: SlotOwner = SlotOwner::new();
+    /// 画面 effect が追う自分の分の要求（公開入口と slot を共有するため区別する）。
+    pub(crate) static SCREEN_OWNER: SlotOwner = SlotOwner::new();
+    /// 公開側の poll 本体（持ち主の照合・取得・喪失判定・解放）を直列にする。並行 poll で成功と喪失が二重に返らないため。
+    static PUBLIC_POLL_LOCK: Mutex<()> = Mutex::new(());
+
+    /// 画面へ反映する完了結果（OS からの生の結果を `Arc` で包んだもの。
     /// 要約への変換は各画面固有の `PickHooks::finish` が担う、モジュール doc 参照）。
     /// `PickedFile`（公開 API、`bytes: Vec<u8>`）自体は変更せず、ここでのみ `Arc` で
     /// 包んで毎フレームの `snapshot` クローンを参照カウント共有に留める
     /// （Issue #980 codex-review 指摘: 公開 API 破壊の回避）。
-    pub(crate) type Outcome = Result<Option<Arc<PickedFile>>, String>;
+    pub(crate) type Outcome = Result<Option<Arc<PickedFile>>, FilePickerError>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
 
-    /// 提示直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
-    pub(crate) fn begin() -> u64 {
-        SLOT.begin()
+    /// 画面の要求を登録する。公開入口の進行中・未取得の要求があれば置き換えず `None`（busy）。
+    pub(crate) fn begin_screen() -> Option<u64> {
+        SCREEN_OWNER.begin_keeping_foreign(&SLOT)
     }
 
-    /// OS からの結果を `super::to_outcome` で橋渡し共通の形へ変換し、`Arc` で包んでから
-    /// 置く（任意スレッド）。`request_id` 不一致・未登録（プロセス死後の再配送等）・
+    /// 公開入口の要求を登録する。進行中、または結果が未取得の要求（画面側の分を含む）があれば `None`（busy）。
+    pub(crate) fn begin_public() -> Option<u64> {
+        PUBLIC_OWNER.begin_excluding(&SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
+    }
+
+    /// 公開入口の提示依頼が同期的に失敗したときに、登録を取り消す。
+    pub(crate) fn abort_public(request_id: u64) {
+        SLOT.clear(request_id);
+        PUBLIC_OWNER.release(request_id);
+    }
+
+    /// 公開入口の結果を取り出す（[`super::poll_file_pick`] の本体）。届いていれば 1 度だけ `Some`、未着・旧 id・公開入口でない id は `None`。
+    /// slot の要求が失われたとき（reset 等）は、1 度だけ `Err(Internal("file_picker lost"))`、以後は `None`。
+    /// 照合から解放までを直列にし、並行 poll でも成功と喪失が二重に返らない。
+    pub(crate) fn poll_public(
+        request_id: u64,
+    ) -> Option<Result<Option<PickedFile>, FilePickerError>> {
+        let _guard = PUBLIC_POLL_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        if request_id == 0 || PUBLIC_OWNER.current() != request_id {
+            return None;
+        }
+        if let Some(result) = SLOT.take_ready(request_id) {
+            PUBLIC_OWNER.release(request_id);
+            // 取り出した値が唯一の所有者のため、複製せず剥がす（共有が残っていれば複製へ倒す）。
+            return Some(
+                result.map(|opt| opt.map(|a| Arc::try_unwrap(a).unwrap_or_else(|a| (*a).clone()))),
+            );
+        }
+        if SLOT.snapshot().is_some_and(|(id, _)| id == request_id) {
+            return None;
+        }
+        PUBLIC_OWNER.release(request_id);
+        Some(Err(FilePickerError::Internal("file_picker lost")))
+    }
+
+    /// 画面が観測する「自分の分の」要求と結果。持ち主が画面でない要求（公開入口の分）は見せず `None` にする
+    /// （画面が公開入口の要求を再生成後の復元と取り違えない）。失敗は画面へ渡す文言へ変換する。
+    pub(crate) fn screen_snapshot() -> Option<(u64, Option<super::MobileOutcome>)> {
+        let (request_id, ready) = SLOT.snapshot()?;
+        if request_id != SCREEN_OWNER.current() {
+            return None;
+        }
+        Some((request_id, ready.map(|r| r.map_err(super::to_message))))
+    }
+
+    /// OS からの結果を `Arc` で包んでから置く（任意スレッド）。`request_id` 不一致・未登録（プロセス死後の再配送等）・
     /// 既に結果あり（重複通知）は捨てて `false`。再描画の要求は呼び出し元（FFI / JNI
     /// 受け口）がプラットフォーム固有の経路で行う。
     pub(crate) fn deliver(
         request_id: u64,
         result: Result<Option<PickedFile>, FilePickerError>,
     ) -> bool {
-        let outcome = super::to_outcome(result).map(|opt| opt.map(Arc::new));
-        SLOT.deliver(request_id, outcome)
+        SLOT.deliver(request_id, result.map(|opt| opt.map(Arc::new)))
     }
 
-    /// 現在の要求と、届いていれば結果（クローン）。各画面の effect ドライバが
-    /// 毎フレーム観測する。結果が届いてから `Idle` へ反映されるまでの数フレーム、
-    /// この `clone` が毎フレーム走るが、`Outcome` が `PickedFile` を `Arc` で包んでいる
-    /// ため参照カウント共有のみで、最大 `MAX_FILE_BYTES`（8 MiB）のバイト列自体は
-    /// 複製されない（Issue #980 codex-review 指摘の是正。`PickedFile.bytes` は
-    /// `Vec<u8>` のまま、公開 API は変更しない）。
+    /// 現在の要求と、届いていれば結果（クローン）。画面の effect ドライバは [`screen_snapshot`] 経由で毎フレーム観測する。
+    /// 結果が届いてから `Idle` へ反映されるまでの数フレーム、この `clone` が毎フレーム走るが、`Outcome` が `PickedFile` を
+    /// `Arc` で包んでいるため参照カウント共有のみで、最大 `MAX_FILE_BYTES`（8 MiB）のバイト列自体は複製されない
+    /// （Issue #980 codex-review 指摘の是正。`PickedFile.bytes` は `Vec<u8>` のまま、公開 API は変更しない）。
+    #[cfg(test)]
     pub(crate) fn snapshot() -> Option<(u64, Option<Outcome>)> {
         SLOT.snapshot()
+    }
+
+    /// reset 相当（テスト用）。slot を空にして持ち主の印を外す。
+    #[cfg(test)]
+    pub(crate) fn reset() {
+        SLOT.reset();
     }
 
     /// 完了クロージャが画面へ反映できたときだけ呼ぶ。`request_id` が現在の要求と一致する
     /// ときのみ消す（反映確認前に新しい要求が始まることは無いが、契約として照合する）。
     pub(crate) fn clear(request_id: u64) {
-        SLOT.clear(request_id)
+        SLOT.clear(request_id);
+        SCREEN_OWNER.release(request_id);
     }
 }
 
@@ -307,11 +371,19 @@ pub(crate) fn drive_mobile_with<S: 'static>(
     sender: &CompletionSender<S>,
     hooks: PickHooks<S>,
 ) {
-    match next_action((hooks.phase)(state), bridge::snapshot()) {
+    match next_action((hooks.phase)(state), bridge::screen_snapshot()) {
         Action::Nothing => {}
         Action::StartPick => {
             let _ = sender.send(Box::new(move |s: &mut S| (hooks.mark_picking)(s)));
-            let request_id = bridge::begin();
+            // 公開入口の進行中・未取得の要求は置き換えず、画面側を処理中の失敗で終える。
+            let Some(request_id) = bridge::begin_screen() else {
+                let generation = (hooks.generation)(state);
+                let message = to_message(FilePickerError::Internal("file_picker busy"));
+                let _ = sender.send(Box::new(move |s: &mut S| {
+                    (hooks.finish)(s, generation, Err(message));
+                }));
+                return;
+            };
             if !present(request_id) {
                 // 提示依頼自体が同期的に失敗した（コールバックは二度と来ない）。
                 bridge::deliver(
@@ -360,7 +432,7 @@ pub(crate) fn drive_mobile_with<S: 'static>(
 }
 
 /// iOS 提示関数への委譲（`ios.rs::present_file_picker`、Issue #873）。
-/// `request_id` は [`bridge::begin`] が払い出したプロセス内一意な ID
+/// `request_id` は [`bridge`] が払い出したプロセス内一意な ID
 /// （画面の `generation` ではない、[`bridge`] のモジュール doc 参照）。
 #[cfg(target_os = "ios")]
 fn present(request_id: u64) -> bool {
@@ -368,7 +440,7 @@ fn present(request_id: u64) -> bool {
 }
 
 /// Android 提示関数への委譲（`android.rs::request_file_pick`、Issue #874）。
-/// `request_id` は [`bridge::begin`] が払い出したプロセス内一意な ID
+/// `request_id` は [`bridge`] が払い出したプロセス内一意な ID
 /// （画面の `generation` ではない、[`bridge`] のモジュール doc 参照）。
 #[cfg(target_os = "android")]
 fn present(request_id: u64) -> bool {
@@ -381,27 +453,85 @@ fn present(request_id: u64) -> bool {
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 static PICKER: OnceLock<Result<Box<dyn crate::contract::FilePicker>, String>> = OnceLock::new();
 
-/// デスクトップ向けファイル選択実装を返す。macOS/Windows は `RfdFilePicker`、
-/// それ以外（Linux 等）は `Unsupported` を返す。
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
+/// 画面の状態型に依存しない同期の入口（全ターゲットで公開し、戻り値の型は同じ）。
+///
+/// macOS・Windows は `RfdFilePicker`（同期でダイアログを開いて結果を返す。呼び出しは UI スレッドから行う）。Linux 等は `Err`（固定の案内）。
+/// iOS・Android は OS がコールバック型で結果が非同期に届くため同期実装を持たず、`pick()` が `Unsupported` を返す実装を返す
+/// （成功を偽装しない）。モバイルでは [`begin_file_pick`] / [`poll_file_pick`] を使う。
 pub fn platform_file_picker() -> Result<&'static dyn crate::contract::FilePicker, &'static str> {
-    let cached = PICKER.get_or_init(|| {
-        #[cfg(any(target_os = "macos", target_os = "windows"))]
-        {
-            use crate::contract::FilePicker;
-            use crate::desktop::RfdFilePicker;
-            Ok(Box::new(RfdFilePicker::new()) as Box<dyn FilePicker>)
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    {
+        Ok(&crate::contract::UnsupportedFilePicker)
+    }
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
+        let cached = PICKER.get_or_init(|| {
+            #[cfg(any(target_os = "macos", target_os = "windows"))]
+            {
+                use crate::contract::FilePicker;
+                use crate::desktop::RfdFilePicker;
+                Ok(Box::new(RfdFilePicker::new()) as Box<dyn FilePicker>)
+            }
+            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            {
+                Err(FilePickerError::Unsupported.to_string())
+            }
+        });
+        match cached {
+            Ok(picker) => Ok(picker.as_ref()),
+            // 接続時のエラー文言は内部要因を含み得ないが、他ドライバ（clipboard/tts）と
+            // 同じ方針で固定の案内へ畳む（security.md A09）。
+            Err(_) => Err(UNAVAILABLE),
         }
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-        {
-            Err(FilePickerError::Unsupported.to_string())
-        }
-    });
-    match cached {
-        Ok(picker) => Ok(picker.as_ref()),
-        // 接続時のエラー文言は内部要因を含み得ないが、他ドライバ（clipboard/tts）と
-        // 同じ方針で固定の案内へ畳む（security.md A09）。
-        Err(_) => Err(UNAVAILABLE),
+    }
+}
+
+/// ファイル選択を OS へ依頼し、結果を [`poll_file_pick`] で受け取るための要求 id を返す（iOS・Android）。
+///
+/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。選択条件の引数は無い（画面経路と同じく 1 ファイル・
+/// 種類の絞り込みなし）。1 プロセスに 1 要求で、画面 effect と slot を共有するため、進行中・結果が未取得の要求
+/// （画面側の分を含む）があるうちは `Internal`（busy）で断る。画面 effect 側も、この入口の進行中・未取得の要求があれば
+/// 置き換えず処理中の失敗で終える。画面側の未取得の結果・進行中の要求が残る間も busy で断られる（画面状態が破棄されて
+/// effect が回らないと解消しない。lan-discovery と同じ構造）。依頼自体の失敗は `Err`（結果は届かない）。
+///
+/// デスクトップ（macOS・Windows）は同期で使える [`platform_file_picker`] の `pick()` を使うため、この入口は持たず
+/// `Unsupported` を返す。Linux 等も `Unsupported`。
+///
+/// 結果の解放: 選んだファイルは OS 側で読み切ってから届くため、結果が握るのはメモリ上のバイト列（上限 `MAX_FILE_BYTES`）だけで、
+/// fd・一時パスは届く前に解放済み。取り出されない結果は slot が握り続け、次の要求も断るため、呼び出し側は必ず [`poll_file_pick`] で
+/// 取り出すこと（取り出すと同時に解放される）。
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub fn begin_file_pick() -> Result<u64, FilePickerError> {
+    let request_id = bridge::begin_public().ok_or(FilePickerError::Internal("file_picker busy"))?;
+    if !present(request_id) {
+        bridge::abort_public(request_id);
+        return Err(FilePickerError::Internal("file_picker present"));
+    }
+    Ok(request_id)
+}
+
+/// iOS・Android 以外では `Unsupported`（モジュール doc・[`platform_file_picker`] 参照）。
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+pub fn begin_file_pick() -> Result<u64, FilePickerError> {
+    Err(FilePickerError::Unsupported)
+}
+
+/// [`begin_file_pick`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・公開入口でない id・取り出し済みは `None`。
+///
+/// 結果は 3 値: 選択 `Ok(Some(PickedFile))`、キャンセル `Ok(None)`（失敗ではない）、失敗 `Err`
+/// （サイズ超過は `InvalidInput`、読み取り失敗・提示失敗は `Internal`）。
+/// slot の要求が失われたとき（reset 等）は、1 度だけ `Err(Internal("file_picker lost"))` を返し、以後は `None`。
+/// 失われた後に poll せず別の [`begin_file_pick`] をすると持ち主が新しい id へ替わり、旧 id の喪失は通知されず `None` のまま。
+/// 並行して同じ id を poll しても、結果と喪失が二重に返ることはない。
+pub fn poll_file_pick(request_id: u64) -> Option<Result<Option<PickedFile>, FilePickerError>> {
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    {
+        bridge::poll_public(request_id)
+    }
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
+        let _ = request_id;
+        None
     }
 }
 
@@ -643,37 +773,133 @@ mod next_action_tests {
     }
 }
 
-/// [`bridge`] の単体テスト。要求の追跡そのもの（採番・first-wins・照合）は
-/// `fandhe-runtime/src/request_slot.rs::RequestSlot` 側で検証済みのため、ここでは facade が
-/// 担う「`deliver` 境界での `to_outcome` 変換」だけを固定する（Issue #943 で
-/// 3 機能の `bridge_tests` を統合、`share.rs`/`biometric_auth.rs` も同型）。
-/// OS 側実装（`.m`/JNI）のビルドを要さず host 上の `cargo test` で回せる。
-/// iOS/Android ターゲット向けにコンパイルされるときのみ有効（host 上の
-/// `cargo test` ではコンパイル対象外になる既知の制約。実 OS コールバック経路の検証は
-/// ターゲットビルド確認で担保する）。
+/// [`bridge`] と公開入口の単体テスト。OS 呼び出しを含まないためホスト上の `cargo test` で回せる。
+/// 同じ static slot を触るため、テストどうしを `TEST_LOCK` で直列にする。
 #[cfg(test)]
-#[cfg(any(target_os = "ios", target_os = "android"))]
 mod bridge_tests {
-    use super::bridge;
-    use fandhe_device::file_picker::PickedFile;
+    use super::*;
+
+    static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn picked(name: &str) -> PickedFile {
+        PickedFile {
+            name: name.to_string(),
+            bytes: vec![1, 2, 3],
+        }
+    }
 
     #[test]
-    fn deliver_converts_raw_result_via_to_outcome() {
-        let request_id = bridge::begin();
-        assert!(bridge::deliver(
-            request_id,
-            Ok(Some(PickedFile {
-                name: "a.txt".to_string(),
-                bytes: vec![1, 2, 3]
-            }))
-        ));
-        let (_, ready) = bridge::snapshot().expect("begin 済みなので Some");
-        let picked = ready
-            .expect("deliver 済みなので Some")
-            .expect("成功のはず")
-            .expect("選択されたはず");
-        assert_eq!(picked.name, "a.txt");
-        assert_eq!(picked.bytes.to_vec(), vec![1, 2, 3]);
+    fn deliver_keeps_raw_result_and_screen_view_converts_it() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let request_id = bridge::begin_screen().unwrap();
+        assert!(bridge::deliver(request_id, Ok(Some(picked("a.txt")))));
+        let (_, ready) = bridge::screen_snapshot().expect("画面の要求なので見える");
+        let got = ready.unwrap().unwrap().unwrap();
+        assert_eq!(got.name, "a.txt");
+        assert_eq!(got.bytes.to_vec(), vec![1, 2, 3]);
         bridge::clear(request_id);
+        assert!(bridge::screen_snapshot().is_none());
+        // 失敗は画面向けの文言へ変換される。
+        let id = bridge::begin_screen().unwrap();
+        bridge::deliver(id, Err(FilePickerError::InvalidInput("file_picker size")));
+        let (_, ready) = bridge::screen_snapshot().unwrap();
+        assert!(ready.unwrap().unwrap_err().contains("MiB"));
+        bridge::clear(id);
+        bridge::reset();
+    }
+
+    #[test]
+    fn public_request_is_exclusive_and_polled_once() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let public = bridge::begin_public().unwrap();
+        // 進行中は公開入口の 2 件目も画面側も断る（busy）。画面は公開入口の要求を自分のものとして見ない。
+        assert!(bridge::begin_public().is_none());
+        assert!(bridge::begin_screen().is_none());
+        assert!(bridge::screen_snapshot().is_none());
+        assert!(bridge::poll_public(public).is_none());
+        assert!(bridge::deliver(public, Ok(None)));
+        // 未取得の公開入口の結果を画面側が落とさない。
+        assert!(bridge::begin_screen().is_none());
+        // キャンセルは Ok(None)（失敗ではない）で、1 度だけ取れる。
+        assert!(matches!(bridge::poll_public(public), Some(Ok(None))));
+        assert!(bridge::poll_public(public).is_none());
+        // 取り出したあとは画面側が使える。
+        assert!(bridge::begin_screen().is_some());
+        bridge::reset();
+    }
+
+    #[test]
+    fn selected_file_is_returned_with_bytes() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let id = bridge::begin_public().unwrap();
+        bridge::deliver(id, Ok(Some(picked("b.txt"))));
+        let got = bridge::poll_public(id).unwrap().unwrap().unwrap();
+        assert_eq!((got.name.as_str(), got.bytes.len()), ("b.txt", 3));
+        bridge::reset();
+    }
+
+    #[test]
+    fn public_request_lost_by_reset_fails_once() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let id = bridge::begin_public().unwrap();
+        assert!(bridge::poll_public(id).is_none());
+        bridge::reset();
+        assert!(matches!(
+            bridge::poll_public(id),
+            Some(Err(FilePickerError::Internal(_)))
+        ));
+        assert!(bridge::poll_public(id).is_none());
+        assert!(bridge::begin_public().is_some());
+        bridge::reset();
+    }
+
+    #[test]
+    fn concurrent_poll_delivers_once() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        for _ in 0..500 {
+            bridge::reset();
+            let id = bridge::begin_public().unwrap();
+            assert!(bridge::deliver(id, Ok(Some(picked("c.txt")))));
+            let barrier = std::sync::Barrier::new(2);
+            let results: Vec<_> = std::thread::scope(|s| {
+                let hs: Vec<_> = (0..2)
+                    .map(|_| {
+                        s.spawn(|| {
+                            barrier.wait();
+                            bridge::poll_public(id)
+                        })
+                    })
+                    .collect();
+                hs.into_iter().map(|h| h.join().unwrap()).collect()
+            });
+            assert_eq!(results.iter().filter(|r| r.is_some()).count(), 1);
+            assert!(results.iter().flatten().all(|r| r.is_ok()));
+        }
+        bridge::reset();
+    }
+
+    #[test]
+    fn poll_of_unknown_id_is_none() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let old = bridge::begin_public().unwrap();
+        bridge::reset();
+        let new = bridge::begin_public().unwrap();
+        assert!(bridge::poll_public(0).is_none());
+        assert!(bridge::poll_public(old).is_none());
+        assert!(bridge::poll_public(new + 1).is_none());
+        bridge::reset();
+    }
+
+    /// iOS・Android 以外の公開入口は `Unsupported`（デスクトップは同期の `platform_file_picker` を使う）。
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    #[test]
+    fn async_entry_is_unsupported_off_mobile() {
+        assert_eq!(begin_file_pick(), Err(FilePickerError::Unsupported));
+        assert!(poll_file_pick(1).is_none());
     }
 }
