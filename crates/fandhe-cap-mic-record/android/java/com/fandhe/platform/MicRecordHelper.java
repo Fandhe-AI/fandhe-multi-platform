@@ -55,30 +55,54 @@ final class MicRecordHelper {
         synchronized (MicRecordHelper.class) {
             HELPERS.put(activity, helper);
         }
+        // 要求の発行元が構成変更・システム破棄で消えて引き継ぎ待ちなら、この helper が新しい発行元になる。
+        synchronized (micLock) {
+            if (micOwnerOrphaned) {
+                micOwner = helper;
+                micOwnerOrphaned = false;
+            }
+        }
     }
 
-    // Activity 破棄時。構成変更（`isChangingConfigurations()`）では録音も保留中の要求も新しい helper へ引き継ぐため何もしない。
-    // 構成変更でない破棄では録音中なら中断（5）で確定する（`onHostStopped` を経由しない稀な経路への備え）。さらに終了による破棄
-    // （`isFinishing()`）では registry ごと消え、権限ダイアログの結果は二度と届かないため、保留中の要求を中断（5）として 1 度だけ確定する。
-    // 新しい Activity が先に `attach` 済み（旧の破棄が後から来る）なら、static な要求と録音器は新しい側のものなので触らない。
-    // `complete` / `take` が first-wins なので、許可コールバックとの二重通知にならない。
+    // 追跡中の要求（権限ダイアログ待ち・録音中）を発行した helper（`micLock` の内側でのみ読み書きする）。背景遷移の中断・終了時の
+    // 中断は、この発行元の Activity の `stopped` / `detach` だけが行う（別の Activity が止まっても触らない。複数 Activity の
+    // 外部アプリで、A から B へ遷移したあと B が背景へ行ったときに中断し、A の破棄で B の要求を巻き込まないため）。
+    // 構成変更・システム破棄で発行元が破棄されたときは `micOwnerOrphaned` を立て、次に `attach` された helper が引き継ぐ。
+    private static MicRecordHelper micOwner;
+    private static boolean micOwnerOrphaned;
+
+    // Activity 破棄時。この Activity が要求の発行元（`micOwner`）でなければ何もしない（別 Activity の要求を巻き込まない）。
+    // 発行元の破棄では、構成変更なら録音も保留中の要求も新しい helper へ引き継ぐ（`micOwnerOrphaned`）。構成変更でない破棄では
+    // 録音中なら中断（5）で確定する（`onHostStopped` を経由しない稀な経路への備え）。終了（`isFinishing()`）では registry ごと消え、
+    // 権限ダイアログの結果は二度と届かないため、保留中の要求を中断（5）として 1 度だけ確定する。それ以外（システム破棄）は
+    // 復元後の helper が結果を受けるので引き継ぐ。`complete` / `take` が first-wins なので、許可コールバックとの二重通知にならない。
     static void detach(Activity activity) {
-        boolean otherAlive;
+        MicRecordHelper helper;
         synchronized (MicRecordHelper.class) {
-            HELPERS.remove(activity);
-            otherAlive = !HELPERS.isEmpty();
+            helper = HELPERS.remove(activity);
         }
-        if (otherAlive || activity.isChangingConfigurations()) {
+        if (helper == null) {
             return;
         }
-        interruptIfRecording();
-        if (activity.isFinishing()) {
-            synchronized (micLock) {
+        synchronized (micLock) {
+            if (micOwner != helper) {
+                return;
+            }
+            micOwner = null;
+            if (activity.isChangingConfigurations()) {
+                micOwnerOrphaned = true;
+                return;
+            }
+            interruptRecordingLocked();
+            if (activity.isFinishing()) {
+                micOwnerOrphaned = false;
                 micStartPendingResume = false;
                 long id = micRecordRequest.take();
                 if (id != RequestTracker.NONE) {
                     nativeOnMicRecordResult(id, MIC_RESULT_INTERRUPTED, null, null, 0);
                 }
+            } else {
+                micOwnerOrphaned = true;
             }
         }
     }
@@ -92,6 +116,8 @@ final class MicRecordHelper {
         File tempFile;
         synchronized (micLock) {
             micStartPendingResume = false;
+            micOwner = null;
+            micOwnerOrphaned = false;
             micRecordRequest.take();
             recorder = micRecorder;
             tempFile = micTempFile;
@@ -147,25 +173,24 @@ final class MicRecordHelper {
         }
     }
 
-    // 見えなくなった（`MicRecordLifecycle.onHostStopped`）: 構成変更でなければ背景遷移なので、録音中なら中断（5）する
-    // （背景で録音しない、device-bridge-contracts.md「ライフサイクル境界」節）。権限ダイアログ待ちは誤破棄しない
-    // （ダイアログは透過 Activity のため `onStop` を起こさない）。新しい Activity が既にあるときは、録音器は新しい側のものなので触らない。
+    // 見えなくなった（`MicRecordLifecycle.onHostStopped`）: 構成変更でなく、この Activity が要求の発行元なら背景遷移なので、録音中なら
+    // 中断（5）する（背景で録音しない、device-bridge-contracts.md「ライフサイクル境界」節）。権限ダイアログ待ちは誤破棄しない
+    // （ダイアログは透過 Activity のため `onStop` を起こさない）。発行元でない Activity の停止では触らない。
     static void stopped(Activity activity) {
-        synchronized (MicRecordHelper.class) {
-            if (HELPERS.size() > 1) {
-                return;
-            }
+        MicRecordHelper helper = of(activity);
+        if (helper == null || activity.isChangingConfigurations()) {
+            return;
         }
-        if (!activity.isChangingConfigurations()) {
-            interruptIfRecording();
+        synchronized (micLock) {
+            if (micOwner == helper) {
+                interruptRecordingLocked();
+            }
         }
     }
 
-    private static void interruptIfRecording() {
-        synchronized (micLock) {
-            if (micRecorder != null) {
-                finishMicRecord(micRecordRequest.current(), MIC_RESULT_INTERRUPTED);
-            }
+    private static void interruptRecordingLocked() {
+        if (micRecorder != null) {
+            finishMicRecord(micRecordRequest.current(), MIC_RESULT_INTERRUPTED);
         }
     }
 
@@ -297,6 +322,8 @@ final class MicRecordHelper {
                     return;
                 }
                 micRecordRequest.track(requestId);
+                micOwner = this;
+                micOwnerOrphaned = false;
                 micRequestedMaxDurationMs = maxDurationMs;
                 if (activity.isFinishing() || activity.isDestroyed() || !resumed) {
                     // biometric/permission コールバックと同じ非前景ガード

@@ -53,30 +53,52 @@ final class SpeechRecognitionHelper {
     static void attach(ComponentActivity activity) {
         // 再生成: 要求 id・権限ダイアログの照合状態・上限・保留フラグ（いずれも static）は捨てない。権限ダイアログの結果は
         // ActivityResultRegistry が同じキーの新しい許可ランチャーへ配送するため、新 helper の callback が引き継いで聞き取りを始める
-        // （結果は同じ id で 1 度だけ届く）。聞き取り中だった場合は `onHostPaused` が先に中断（5）で確定済みで、追跡は空になっている。
+        // （結果は同じ id で 1 度だけ届く）。聞き取り中だった場合も認識器は static なので、そのまま引き継ぐ（回転で止めない）。
         SpeechRecognitionHelper helper = new SpeechRecognitionHelper(activity);
         synchronized (SpeechRecognitionHelper.class) {
             HELPERS.put(activity, helper);
         }
+        // 要求の発行元が構成変更・システム破棄で消えて引き継ぎ待ちなら、この helper が新しい発行元になる。
+        synchronized (speechLock) {
+            if (speechOwnerOrphaned) {
+                speechOwner = helper;
+                speechOwnerOrphaned = false;
+            }
+        }
     }
 
-    // Activity 破棄時。構成変更（`isChangingConfigurations()`）では聞き取りも保留中の要求も新しい helper へ引き継ぐため何もしない。
-    // 構成変更でない破棄では聞き取り中なら中断（5）で確定する（`onHostStopped` を経由しない稀な経路への備え）。さらに終了による破棄
-    // （`isFinishing()`）では registry ごと消え、権限ダイアログの結果は二度と届かないため、保留中の要求を中断（5）として 1 度だけ確定し、
-    // 権限ダイアログの照合状態を下ろす。新しい Activity が先に `attach` 済み（旧の破棄が後から来る）なら、static な要求と認識器は
-    // 新しい側のものなので触らない。`take` が first-wins なので、許可コールバックとの二重通知にならない。
+    // 追跡中の要求（権限ダイアログ待ち・聞き取り中）を発行した helper（`speechLock` の内側でのみ読み書きする）。背景遷移の中断・
+    // 終了時の中断は、この発行元の Activity の `stopped` / `detach` だけが行う（別の Activity が止まっても触らない）。
+    // 構成変更・システム破棄で発行元が破棄されたときは `speechOwnerOrphaned` を立て、次に `attach` された helper が引き継ぐ。
+    private static SpeechRecognitionHelper speechOwner;
+    private static boolean speechOwnerOrphaned;
+
+    // Activity 破棄時。この Activity が要求の発行元（`speechOwner`）でなければ何もしない（別 Activity の要求を巻き込まない）。
+    // 発行元の破棄では、構成変更なら聞き取りも保留中の要求も新しい helper へ引き継ぐ（`speechOwnerOrphaned`）。構成変更でない破棄では
+    // 聞き取り中なら中断（5）で確定する（`onHostStopped` を経由しない稀な経路への備え）。終了（`isFinishing()`）では registry ごと消え、
+    // 権限ダイアログの結果は二度と届かないため、保留中の要求を中断（5）として 1 度だけ確定し、権限ダイアログの照合状態を下ろす。
+    // それ以外（システム破棄）は復元後の helper が結果を受けるので引き継ぐ。`take` が first-wins なので、許可コールバックとの
+    // 二重通知にならない。
     static void detach(Activity activity) {
-        boolean otherAlive;
+        SpeechRecognitionHelper helper;
         synchronized (SpeechRecognitionHelper.class) {
-            HELPERS.remove(activity);
-            otherAlive = !HELPERS.isEmpty();
+            helper = HELPERS.remove(activity);
         }
-        if (otherAlive || activity.isChangingConfigurations()) {
+        if (helper == null) {
             return;
         }
-        interruptIfListening();
-        if (activity.isFinishing()) {
-            synchronized (speechLock) {
+        synchronized (speechLock) {
+            if (speechOwner != helper) {
+                return;
+            }
+            speechOwner = null;
+            if (activity.isChangingConfigurations()) {
+                speechOwnerOrphaned = true;
+                return;
+            }
+            interruptListeningLocked();
+            if (activity.isFinishing()) {
+                speechOwnerOrphaned = false;
                 speechStartPendingResume = false;
                 speechPermissionPending = false;
                 speechPermissionRequestId = RequestTracker.NONE;
@@ -84,6 +106,8 @@ final class SpeechRecognitionHelper {
                 if (id != RequestTracker.NONE) {
                     nativeOnSpeechResult(id, SPEECH_RESULT_INTERRUPTED, null);
                 }
+            } else {
+                speechOwnerOrphaned = true;
             }
         }
     }
@@ -97,6 +121,8 @@ final class SpeechRecognitionHelper {
     static void abortPending() {
         synchronized (speechLock) {
             speechStartPendingResume = false;
+            speechOwner = null;
+            speechOwnerOrphaned = false;
             speechRequest.take();
             discardRecognizer();
         }
@@ -152,25 +178,25 @@ final class SpeechRecognitionHelper {
         }
     }
 
-    // 見えなくなった（`SpeechRecognitionLifecycle.onHostStopped`）: 構成変更でなければ背景遷移なので、聞き取り中なら中断（5）する
-    // （`cancel()` で OS 側の結果確定を求めない。背景で聞き取らない、device-bridge-contracts.md「ライフサイクル境界」節）。
-    // 権限ダイアログ待ちは誤破棄しない（ダイアログは透過 Activity のため `onStop` を起こさない）。新しい Activity が既にあるときは触らない。
+    // 見えなくなった（`SpeechRecognitionLifecycle.onHostStopped`）: 構成変更でなく、この Activity が要求の発行元なら背景遷移なので、
+    // 聞き取り中なら中断（5）する（`cancel()` で OS 側の結果確定を求めない。背景で聞き取らない、device-bridge-contracts.md
+    // 「ライフサイクル境界」節）。権限ダイアログ待ちは誤破棄しない（ダイアログは透過 Activity のため `onStop` を起こさない）。
+    // 発行元でない Activity の停止では触らない。
     static void stopped(Activity activity) {
-        synchronized (SpeechRecognitionHelper.class) {
-            if (HELPERS.size() > 1) {
-                return;
-            }
+        SpeechRecognitionHelper helper = of(activity);
+        if (helper == null || activity.isChangingConfigurations()) {
+            return;
         }
-        if (!activity.isChangingConfigurations()) {
-            interruptIfListening();
+        synchronized (speechLock) {
+            if (speechOwner == helper) {
+                interruptListeningLocked();
+            }
         }
     }
 
-    private static void interruptIfListening() {
-        synchronized (speechLock) {
-            if (speechRecognizer != null) {
-                abortSpeech(SPEECH_RESULT_INTERRUPTED);
-            }
+    private static void interruptListeningLocked() {
+        if (speechRecognizer != null) {
+            abortSpeech(SPEECH_RESULT_INTERRUPTED);
         }
     }
 
@@ -360,6 +386,8 @@ final class SpeechRecognitionHelper {
                     return;
                 }
                 speechRequest.track(requestId);
+                speechOwner = this;
+                speechOwnerOrphaned = false;
                 speechRequestedMaxListenMs = maxListenMs;
                 if (activity.isFinishing() || activity.isDestroyed() || !resumed) {
                     // `requestMicRecordStart` と同じ非前景ガード。

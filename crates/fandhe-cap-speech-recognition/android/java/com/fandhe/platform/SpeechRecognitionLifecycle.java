@@ -6,7 +6,7 @@ import androidx.activity.ComponentActivity;
 
 // 音声認識が Activity のライフサイクルへ参加するための非公開 ContentProvider（Issue #1354）。
 // 宣言は `fandhe-cap-speech-recognition` の Cargo.toml（`android.components`）にあり、OS がプロセス開始時に生成する。
-// 実処理は `SpeechRecognitionHelper` の `attach` / `detach` / `resumed` / `paused` に任せる（仕組みは `FeatureLifecycleProvider` 参照）。
+// 実処理は `SpeechRecognitionHelper` の `attach` / `detach` / `resumed` / `paused` / `stopped` に任せる（仕組みは `FeatureLifecycleProvider` 参照）。
 // `onHostCreated` は STARTED より前に呼ばれるため、許可ランチャーの登録（`register`）はここで行える。
 //
 // `onHostResumed` / `onHostPaused` / `onHostStopped` / `onHostDestroyed` は `Activity.onResume()` / `onPause()` / `onStop()` /
