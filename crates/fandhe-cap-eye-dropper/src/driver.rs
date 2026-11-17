@@ -60,7 +60,7 @@ pub(crate) mod bridge {
     /// 公開側の poll・discard 本体（持ち主の照合・取得・解放）を直列にする。並行 poll で結果が二重に返らないため。
     pub(crate) static PUBLIC_POLL_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-    /// OS からの結果を置く（macOS の main queue から。Web は `web.rs` が `SLOT` へ直接置く）。`request_id` 不一致・
+    /// OS からの結果を置く（macOS の main queue から。Web は公開入口の結果だけ `web.rs` が `SLOT` へ直接置き、画面 effect は slot を進行中の印にしか使わない）。`request_id` 不一致・
     /// 未登録・既に結果ありは捨てて `false`（古い世代・二重通知が成功へ化けない）。
     #[cfg(target_os = "macos")]
     pub(crate) fn deliver(request_id: u64, result: Outcome) -> bool {
@@ -233,7 +233,7 @@ pub fn begin_eye_dropper() -> Result<u64, EyeDropperError> {
 }
 
 /// [`begin_eye_dropper`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・公開入口でない id・
-/// 取り出し済み・0・非対応 OS は `None`。結果は 3 値: 色（`Ok`）、利用者の取り消し（`Err(Cancelled)`）、失敗。
+/// 取り出し済み・0・非対応 OS は `None`。slot の要求が失われたとき（reset 等）は 1 度だけ `Err(Internal("eye_dropper lost"))`、以後は `None`。結果は 3 値: 色（`Ok`）、利用者の取り消し（`Err(Cancelled)`）、失敗。
 /// 並行して同じ id を poll しても、結果が二重に返ることはない。
 pub fn poll_eye_dropper(request_id: u64) -> Option<Result<PickedColor, EyeDropperError>> {
     #[cfg(any(target_os = "macos", target_arch = "wasm32"))]
@@ -245,9 +245,19 @@ pub fn poll_eye_dropper(request_id: u64) -> Option<Result<PickedColor, EyeDroppe
         if request_id == 0 || bridge::PUBLIC_OWNER.current() != request_id {
             return None;
         }
-        let result = bridge::SLOT.take_ready(request_id)?;
+        if let Some(result) = bridge::SLOT.take_ready(request_id) {
+            bridge::PUBLIC_OWNER.release(request_id);
+            return Some(result);
+        }
+        // slot が空・別の要求に替わっていれば喪失（reset 等）。未着と区別して 1 度だけ失敗で返し、以後は `None`。
+        if bridge::SLOT
+            .snapshot()
+            .is_some_and(|(id, _)| id == request_id)
+        {
+            return None;
+        }
         bridge::PUBLIC_OWNER.release(request_id);
-        Some(result)
+        Some(Err(EyeDropperError::Internal("eye_dropper lost")))
     }
     #[cfg(not(any(target_os = "macos", target_arch = "wasm32")))]
     {
@@ -393,6 +403,22 @@ mod tests {
             let screen = begin_screen().unwrap();
             assert!(bridge::deliver(screen, Ok(color("#aabbcc"))));
             assert_eq!(poll_eye_dropper(screen), None);
+            reset();
+        }
+
+        #[test]
+        fn poll_reports_lost_once_when_slot_was_reset() {
+            let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            reset();
+            let id = begin_public().unwrap();
+            bridge::SLOT.reset();
+            assert_eq!(
+                poll_eye_dropper(id),
+                Some(Err(EyeDropperError::Internal("eye_dropper lost")))
+            );
+            assert_eq!(poll_eye_dropper(id), None);
+            // 持ち主が外れたので、次の開始は busy にならない。
+            assert!(begin_public().is_some());
             reset();
         }
 

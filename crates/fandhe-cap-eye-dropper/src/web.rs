@@ -7,6 +7,8 @@
 //! - 公開入口 [`begin_public`] / [`abort_public`]: `driver` の `begin_eye_dropper` / `discard_eye_dropper` から呼ばれる。
 //!   画面の状態型に依存せず、結果は `driver::bridge::SLOT` へ置く（取り出しは `poll_eye_dropper`）。
 //!
+//! 画面 effect は slot を「進行中の印」としてだけ使い、結果は slot に置かず `finish_pick` で直接画面へ返す。
+//!
 //! 契約（結果の 4 値・`sRGBHex` の検査・例外名の写像）は `fandhe_device::eye_dropper` が SSOT で、
 //! 写像は `web_result` に置く。macOS 実装と同じ slot・持ち主の印で、画面と公開入口が互いの要求を置き換えない。
 //!
@@ -27,7 +29,7 @@
 //! # ライフサイクル
 //!
 //! 要求ごとに `AbortController` を作る。マウント破棄（`release_mount`）・`pagehide`（bfcache 退避を含む）・
-//! 公開入口の discard で `abort()` し、`AbortError` 経由で通常どおり確定させる。確定の前に記録・slot・印を片付ける。
+//! 公開入口の discard で `abort()` し、`AbortError` 経由で通常どおり確定させる。slot・印は確定（`settle`）まで残し、次の開始を busy で断る。
 //!
 //! # 守る範囲 / 守らない範囲
 //!
@@ -74,11 +76,14 @@ thread_local! {
 fn release_mount(mount_id: u64) {
     if let Some(e) = PICKS.with(|p| p.borrow_mut().remove(&mount_id)) {
         if let Some(c) = e.ctrl {
+            // slot と印は残す。`AbortError` の確定（`settle`）が空けるまで次の開始は busy で断られ、
+            // ブラウザの EyeDropper が閉じきる前の `open()`（`InvalidStateError`）を避ける。
             c.abort();
+        } else {
+            // 中断対象が無い（`open()` 前）。確定は来ないのでここで空ける。
+            SLOT.clear(e.request_id);
+            SCREEN_OWNER.release(e.request_id);
         }
-        // 確定を待たずに slot と印を空ける（以後の `AbortError` は id 不一致で捨てられる）。
-        SLOT.clear(e.request_id);
-        SCREEN_OWNER.release(e.request_id);
     }
 }
 
