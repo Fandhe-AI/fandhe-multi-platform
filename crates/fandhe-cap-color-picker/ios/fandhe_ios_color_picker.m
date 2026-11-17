@@ -12,7 +12,8 @@
 //   fandhe_rust_ios_color_picker_outcome(uint64_t request_id, int32_t code, int32_t rgb)
 //     -> Rust 側（`ios_color_picker.rs`）が公開する `extern "C"` 関数。1 要求につき 1 回だけ呼ぶ。
 //        code 表: 0 = 選択（rgb = 0xRRGGBB）、1 = 色を選ばずに閉じた、2 = sRGB 変換の失敗・成分が NaN、
-//        3 = 提示できなかった（背景・提示先なし）。code → 結果の写像の SSOT は Rust の
+//        3 = 提示できなかった（背景・提示先なし）、4 = busy（最前面が遷移中、または自分のピッカーが
+//        提示中・遷移中）。code → 結果の写像の SSOT は Rust の
 //        `fandhe_cap_color_picker::result_from_apple_code`（`.m` では写像しない）。
 //
 // 確定: 確定ボタンは無い。閉じる（colorPickerViewControllerDidFinish: / スワイプ閉じの
@@ -20,10 +21,10 @@
 // selectedColor を結果とする。来ていなければ「選ばずに閉じた」。初期色との比較では推測しない。
 // 初期色はプログラムで入れてから delegate を付ける（プログラムの設定を「選んだ」と取り違えない）。
 //
-// スレッド: 生成・提示・通知はすべて main queue。完了通知は 1 要求につき 1 回（`done`、first-wins）。
+// スレッド: 生成・提示・通知・`g_activePicker` の読み書きはすべて main queue。完了通知は 1 要求につき 1 回（`done`、first-wins）。
 // 通知前に状態を確定し、delegate の強参照を外す。
 //
-// 守らない範囲: 表示中の背景遷移、閉じた通知が届かない場合の復旧、sRGB 外の色の正確さ、
+// 守らない範囲: 他機能のピッカーの進行の観測（安定して出ている別の画面の上には重ねる）、表示中の背景遷移、閉じた通知が届かない場合の復旧、sRGB 外の色の正確さ、
 // iPad での提示形態（既定の sheet のまま）。
 //
 // 情報非保持: 選んだ色はフィンガープリントに使えるため、`NSLog` を含むログ出力は一切行わない。
@@ -57,6 +58,9 @@ static int32_t channel(CGFloat c) {
 
 // delegate は weak 参照のため、完了まで強参照で保持する（完了時に外す）。
 static FandheColorPickerDelegate *g_retainedDelegate = nil;
+// 自分のピッカー本体。delegate だけが残っていても提示されていなければ、閉じた通知を失って消えたものと
+// みなし進行中として扱わない（永久に busy にしないため）。main queue からのみ読み書きする。
+static __weak UIColorPickerViewController *g_activePicker = nil;
 
 @implementation FandheColorPickerDelegate
 
@@ -122,10 +126,22 @@ int32_t fandhe_ios_color_picker_present(uint64_t request_id, int32_t initial_rgb
                 fandhe_rust_ios_color_picker_outcome(request_id, 3, 0);
                 return;
             }
+            // 自分のピッカーが提示中・遷移中なら busy。旧 delegate にはまだ触れない。
+            UIColorPickerViewController *active = g_activePicker;
+            if (active != nil && (active.presentingViewController != nil || active.isBeingPresented ||
+                                  active.isBeingDismissed)) {
+                fandhe_rust_ios_color_picker_outcome(request_id, 4, 0);
+                return;
+            }
             UIViewController *top = FandheTopmostViewController();
-            if (top == nil || top.view.window == nil || top.presentedViewController != nil ||
-                top.isBeingPresented || top.isBeingDismissed) {
+            if (top == nil || top.view.window == nil) {
                 fandhe_rust_ios_color_picker_outcome(request_id, 3, 0);
+                return;
+            }
+            // FandheTopmostViewController は presentedViewController を最奥までたどるため、
+            // top.presentedViewController は常に nil で判定に使えない。遷移中だけ busy で断る。
+            if (top.isBeingPresented || top.isBeingDismissed) {
+                fandhe_rust_ios_color_picker_outcome(request_id, 4, 0);
                 return;
             }
             UIColorPickerViewController *vc = [UIColorPickerViewController new];
@@ -142,11 +158,15 @@ int32_t fandhe_ios_color_picker_present(uint64_t request_id, int32_t initial_rgb
             // 前の要求が未通知のまま枠を上書きされないよう、先に「選ばずに閉じた」で確定する。
             [g_retainedDelegate finishWithCode:1 rgb:0];
             g_retainedDelegate = delegate;
-            // 提示は非同期に確定するため、成否は completion 内で判定する。
+            g_activePicker = vc;
+            // 提示直後の状態は文書で保証されないため、成否は completion 内で判定する。
             [top presentViewController:vc
                               animated:YES
                             completion:^{
-                              if (!delegate.done && top.presentedViewController != vc) {
+                              if (!delegate.done && vc.presentingViewController == nil) {
+                                  if (g_activePicker == vc) {
+                                      g_activePicker = nil;
+                                  }
                                   [delegate finishWithCode:3 rgb:0];
                               }
                             }];
