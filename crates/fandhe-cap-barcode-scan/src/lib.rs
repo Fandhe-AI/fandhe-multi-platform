@@ -4,7 +4,7 @@
 //! この crate の契約の純関数（[`normalize_payloads`]）だけを使う。Android・Windows は OS 標準の API が無く対象外（`Unsupported`）。
 //!
 //! 契約（`contract`）・失敗の種類（`error`）・effect ドライバ（`driver`）・OS 実装（macOS・iOS は `apple`、iOS の写真選択との接続は
-//! `ios`）を 1 つに集める。画面の状態型を参照してよいのは `driver`・`ios` だけ。入口 [`platform_barcode_scan`] は状態型に依存しないため、
+//! `ios`）を 1 つに集める。画面の状態型を参照してよいのは `driver` だけ（iOS の drive も `driver` 内）。入口 [`platform_barcode_scan`] は状態型に依存しないため、
 //! フレームワークの外のアプリも使える（macOS は Vision、それ以外は `Unsupported`）。
 //!
 //! 画像を選ばせる OS 機能は `fandhe-cap-photo-picker` に依存して使う（Android・wasm32 を除く）。呼び出し元は最終成果物
@@ -24,9 +24,10 @@ mod apple;
 mod contract;
 mod driver;
 mod error;
-#[cfg(target_os = "ios")]
-mod ios;
 
 pub use contract::*;
 pub use driver::*;
 pub use error::BarcodeScanError;
+
+/// 契約の入力型（利用者が `fandhe-device` へ直接依存せずに済むよう再公開する）。
+pub use fandhe_device::photo_picker::{ImageFormat, PickedPhoto, validate_photo};

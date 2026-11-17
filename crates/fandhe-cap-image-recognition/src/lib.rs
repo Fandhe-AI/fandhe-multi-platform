@@ -4,7 +4,7 @@
 //! （対応表で `no`。`Unsupported` を返す）、Web は標準 API が無く対象外。
 //!
 //! 契約（`contract`）・失敗の種類（`error`）・effect ドライバ（`driver`）・OS 実装（macOS・iOS は `apple`、iOS の写真選択との接続は
-//! `ios`、Windows は `windows`、Android は `android`）を 1 つに集める。画面の状態型を参照してよいのは `driver`・`ios`・`android` だけ。
+//! `ios`、Windows は `windows`、Android は `android`）を 1 つに集める。画面の状態型を参照してよいのは `driver` だけ（iOS・Android の drive も `driver` 内）。
 //! 入口 [`platform_image_recognition`] は状態型に依存しないため、フレームワークの外のアプリも使える（macOS は Vision、Windows は
 //! `OcrEngine`、iOS・Android・Linux は `Unsupported`）。
 //!
@@ -19,18 +19,17 @@
 #![cfg_attr(not(any(target_os = "ios", target_os = "macos")), forbid(unsafe_code))]
 #![cfg_attr(any(target_os = "ios", target_os = "macos"), deny(unsafe_code))]
 
-#[cfg(target_os = "android")]
-mod android;
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 mod apple;
 mod contract;
 mod driver;
 mod error;
-#[cfg(target_os = "ios")]
-mod ios;
 #[cfg(target_os = "windows")]
 mod windows;
 
 pub use contract::*;
 pub use driver::*;
 pub use error::ImageRecognitionError;
+
+/// 契約の入力型（利用者が `fandhe-device` へ直接依存せずに済むよう再公開する）。
+pub use fandhe_device::photo_picker::{ImageFormat, PickedPhoto, validate_photo};
