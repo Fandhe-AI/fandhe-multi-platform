@@ -35,6 +35,8 @@ unsafe extern "C" {
 #[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_speech_started(request_id: u64) {
     crate::driver::bridge::mark_started(request_id);
+    // iOS は入力が無いと egui が描画しないため、次フレームを起こす（契約表 4）。
+    fandhe_runtime::request_repaint();
 }
 
 /// `.m` 側の聞き取り開始を依頼する（`crate::driver` の effect
@@ -97,4 +99,6 @@ extern "C" fn fandhe_rust_speech_finished(request_id: u64, code: i32, text: *con
         crate::driver::error_from_code(code)
     };
     crate::driver::bridge::deliver(request_id, result);
+    // 結果を共有状態へ入れた直後に次フレームを起こす（契約表 4）。
+    fandhe_runtime::request_repaint();
 }
