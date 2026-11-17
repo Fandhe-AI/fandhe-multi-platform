@@ -1,7 +1,7 @@
 //! iOS / macOS 向けマイク録音実装（Issue #954 macOS + #956 iOS）。
 //! `crate::driver` の iOS/macOS 経路から呼ばれ、`AVAudioRecorder` 実装
-//! （`apple/fandhe_apple_mic_record.m`、`build.rs` が iOS/macOS の feature
-//! `device` 有効時にコンパイル・リンクする）を `unsafe extern "C"` 2 関数（[`present`]/
+//! （`apple/fandhe_apple_mic_record.m`、`build.rs` が iOS/macOS ターゲットで
+//! コンパイル・リンクする）を `unsafe extern "C"` 2 関数（[`present`]/
 //! [`request_stop`]）で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を
 //! 明記する（`apple_biometric.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
@@ -18,7 +18,7 @@ use crate::contract::build_recording;
 use crate::error::MicRecordError;
 
 // SAFETY: `apple/fandhe_apple_mic_record.m` が定義する C ABI（`build.rs` が
-// iOS/macOS ターゲットの feature `device` 有効時にコンパイル・リンクする）。
+// iOS/macOS ターゲットでコンパイル・リンクする）。
 // 契約は `.m` ファイル冒頭コメントおよび下記関数のコメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {

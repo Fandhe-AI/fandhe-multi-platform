@@ -102,7 +102,7 @@ final class TtsHelper {
 
     // Rust 側（crates/fandhe-cap-tts/src/android.rs）の JNI エクスポート関数
     // （Issue #866、Phase 11 型サンプル「読み上げ」の Android 経路に限り追加。
-    // Phase 8 の feature `device` 切り離し時に削除する）。
+    // 機能 crate `fandhe-cap-tts` が持つ）。
     // requestId: `ttsRequest(long, int, String)` が受け取った値をそのまま返す
     // （Rust 側 mailbox が ID 一致を検査し、タイムアウト後の遅延到着を新要求の結果と
     // 取り違えないため。クリップボード経路と同じ理由）。

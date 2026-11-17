@@ -5,8 +5,7 @@
 // 1 ファイルの ObjC コードに実装を閉じ、`extern "C"` 宣言のみを Rust 側へ公開する
 // （`fandhe_ios_clipboard.m` と同型、coding-rust.md の FFI 例外規定）。
 //
-// `build.rs` が iOS ターゲット（`CARGO_CFG_TARGET_OS == "ios"`）かつ feature `device`
-// 有効時のみ `cc` でコンパイルする（他ターゲットのビルドには一切関与しない）。
+// `build.rs` が iOS ターゲット（`CARGO_CFG_TARGET_OS == "ios"`）のみ `cc` でコンパイルする（他ターゲットのビルドには一切関与しない）。
 // AVFoundation は `build.rs` の `compile_objc` で本ファイル自身が宣言してリンクする。
 //
 // 契約（`ios.rs` の `IosTts` doc と対）:

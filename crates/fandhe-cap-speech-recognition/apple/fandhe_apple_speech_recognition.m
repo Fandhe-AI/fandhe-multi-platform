@@ -29,7 +29,7 @@
 //        コールバックは呼ばれない（`fandhe_apple_mic_record_stop` と同じ
 //        非同期の取り違え防止、下記実装参照）。
 //   fandhe_rust_speech_finished(uint64_t request_id, int32_t code, const char *text)
-//     -> Rust 側（`apple_speech_recognition.rs`）が公開する `extern "C"` 関数。
+//     -> Rust 側（`apple.rs`）が公開する `extern "C"` 関数。
 //        code: 0 = 成功（`text` が有効、空文字列もあり得る）。1 = 権限拒否。
 //        2 = 内部エラー（エンジン起動失敗等）。3 = 二重開始（busy）。
 //        4 = 許可確認中に「停止」でキャンセルされた。6 = 認識器を作れない
@@ -155,7 +155,7 @@ static const NSTimeInterval kFandheSpeechFinishGraceSeconds = 3.0;
 static const NSTimeInterval kFandheSpeechInactiveGraceSeconds = 0.5;
 #endif
 
-// Rust 側（`apple_speech_recognition.rs`）が公開する `extern "C"` 関数。
+// Rust 側（`apple.rs`）が公開する `extern "C"` 関数。
 extern void fandhe_rust_speech_finished(uint64_t request_id, int32_t code, const char *text);
 
 // `recognitionTaskWithRequest:` が実際に開始した瞬間に呼ぶ（Rust 側が権限確認中の

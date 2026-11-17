@@ -14,7 +14,7 @@
 //! ため `STARTUP_FAILURE_GRACE`（既定 200ms）だけ同期的に待つ。`drive`/effect は
 //! `ProxyApp::update`（UI スレッド）から毎フレーム呼ばれるため、そのまま同期で呼ぶと
 //! 「読み上げ」を押すたびに描画・入力処理が最低 200ms 止まる（codex-review P1 指摘・
-//! Cursor Bugbot 指摘、`crates/fandhe-device/src/tts.rs` の `STARTUP_FAILURE_GRACE`
+//! Cursor Bugbot 指摘、`contract.rs` の `STARTUP_FAILURE_GRACE`
 //! doc 参照）。発話・停止それぞれの `dispatch_*` は要求を発送済みにする
 //! （`mark_*_dispatched`）完了だけを同期送信し、実際の OS 呼び出しは
 //! [`command_queue`] のワーカースレッドで行う（`http_fetch.rs::spawn_fetch` と同型の
@@ -103,7 +103,7 @@ const UNAVAILABLE: &str = "この環境では読み上げを使えません";
 
 /// 実行対象プラットフォームに応じた `Tts` 実装を返す。
 ///
-/// **接続失敗を成功として偽装しない**（`device/clipboard.rs` と同じ判断、
+/// **接続失敗を成功として偽装しない**（`fandhe-cap-clipboard` の `driver.rs` と同じ判断、
 /// #859 の P1 指摘・親 #864 の再発防止点）。iOS/Android は #866 で
 /// `IosTts`/`AndroidTts` を配線したため常に接続できる（初期化自体が失敗しない
 /// 構成、実際の発話成否は `Tts::speak`/`wait_outcome` の戻り値で個別に判定する）。
@@ -135,7 +135,7 @@ pub fn platform_tts() -> Result<&'static dyn Tts, &'static str> {
     }
 }
 
-/// `TtsError` を画面へ渡す文言へ変換する（`device/clipboard.rs::to_message` と同型）。
+/// `TtsError` を画面へ渡す文言へ変換する（`fandhe-cap-clipboard` の `driver.rs::to_message` と同型）。
 fn to_message(e: TtsError) -> String {
     e.to_string()
 }
@@ -255,7 +255,7 @@ fn dispatch_speak(
 ) -> Option<(u64, String)> {
     let request = take_speak_request(state)?;
     // 受信側（ProxyApp）がドロップ済み（アプリ終了中）の送信失敗は無視してよい
-    // （coding-rust.md: panic を API 契約にしない、`device/tilt.rs` と同じ判断）。
+    // （coding-rust.md: panic を API 契約にしない、`fandhe-cap-tilt-motion` の `driver.rs` と同じ判断）。
     let _ = sender.send(Box::new(mark_speak_dispatched));
     Some(request)
 }

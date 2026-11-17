@@ -30,7 +30,7 @@
 //   fandhe_rust_mic_record_finished(uint64_t request_id, int32_t code,
 //                                    const uint8_t *bytes, uint64_t bytes_len,
 //                                    const char *mime, uint64_t duration_ms)
-//     -> Rust 側（`apple_mic_record.rs`）が公開する `extern "C"` 関数。
+//     -> Rust 側（`fandhe-cap-mic-record` の `apple.rs`）が公開する `extern "C"` 関数。
 //        code: 0 = 成功（bytes/bytes_len/mime/duration_ms が有効）。
 //        1 = 権限拒否。2 = 内部エラー（エンコード失敗等）。3 = 二重開始（busy）。
 //        4 = 許可確認中に「停止」でキャンセルされた（下記「許可確認中のキャンセル」
@@ -142,7 +142,7 @@ static uint64_t FandheMicRecordTicksToMillis(uint64_t ticks) {
     return (uint64_t)(nanos / 1000000.0L);
 }
 
-// Rust 側（`apple_mic_record.rs`）が公開する `extern "C"` 関数。
+// Rust 側（`fandhe-cap-mic-record` の `apple.rs`）が公開する `extern "C"` 関数。
 extern void fandhe_rust_mic_record_finished(uint64_t request_id,
                                              int32_t code,
                                              const uint8_t *bytes,

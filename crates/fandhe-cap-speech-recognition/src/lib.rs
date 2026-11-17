@@ -9,13 +9,13 @@
 //! `SpeechRecognizer` トレイトを通らない（入口 [`platform_speech_recognition`] は `Unsupported` 固定の同期実装を返し、成功を偽装しない）。
 //! 画面の状態型を参照してよいのは `driver` だけ。
 //!
-//! 呼び出し元は最終成果物（`fandhe-gallery`）の画面レジストリ（`speech_recognize_effect`）と、Activity 再生成時の
-//! [`reset_pending_tracking`]（Android）。
+//! 呼び出し元は最終成果物（`fandhe-gallery`）の画面レジストリ（`speech_recognize_effect`）と、画面状態が再生成で初期化される構成の
+//! [`reset_pending_tracking`]（Android、任意）。保留中の要求の回収（再生成の引き継ぎ・終了時の中断）は Java 側がこの crate 内で完結する。
 //!
 //! 守る範囲: 1 プロセス内での要求と結果の順序・嘘の成功の禁止（権限拒否・キャンセル・ライフサイクル中断・認識失敗・認識サービス不在を
 //! 区別し、古い世代の結果は捨てる）・背景（`onPause`・非前景）で聞き取りを始めないこと・認識結果の文字列をログに出さないこと。
 //! 守らない範囲: 連続認識・言語選択（システム言語固定）、認識サービス側のタイムアウトの個別調整、Activity 再生成をまたいだ聞き取りの継続
-//! （`reset_pending_tracking` を呼ぶ構成では破棄する）。
+//! （聞き取り中の `onPause` で中断する。権限ダイアログ待ちの要求は再生成後の helper が引き継ぐ）。
 
 // unsafe は OS 実装の FFI・JNI エクスポートに限る（`// SAFETY:` を付ける）。該当 OS だけ deny へ緩める。
 #![cfg_attr(

@@ -3,22 +3,20 @@
 //! 結果を `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect`
 //! 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。実装済みは macOS・Windows（#1024）・iOS（#1025）・
+//! 全ターゲットでコンパイルされる（OS ごとの実装は各 OS の cfg で切り替える）。実装済みは macOS・Windows（#1024）・iOS（#1025）・
 //! Android（#1026）（Web は親 #1023 の兄弟 issue が担当、実装計画 §0 参照）。
 //!
-//! # macOS/iOS/Windows/Android: pull 型 `bridge`（`mic_record.rs` と同型）
+//! # macOS/iOS/Windows/Android: pull 型 `bridge`（`fandhe-cap-mic-record` の `driver.rs` と同型）
 //!
 //! macOS/iOS の権限確認（`SFSpeechRecognizer.requestAuthorization:`/マイク権限）・
 //! Android の `RECORD_AUDIO` ランタイム許可・認識完了はいずれも非同期に届く。Windows は権限プロンプト自体は出ないが、
 //! `CompileConstraintsAsync`/`RecognizeAsync`/`StopRecognitionAsync` が非同期 API で、
 //! 同一フレーム内で `start`→`stop` を呼び切る同期 `drive` では録音時間 0 ms 相当の
-//! 問題が生じるため、macOS/iOS/Android と同じ pull 型に乗せる（`mic_record.rs` モジュール doc
+//! 問題が生じるため、macOS/iOS/Android と同じ pull 型に乗せる（`fandhe-cap-mic-record` の `driver.rs` モジュール doc
 //! 「同期 drive 経路が使えない理由」と同じ判断）。3 OS とも `SpeechRecognizer`
-//! トレイトを **通らず**コアの状態機械へ直接書き戻す（`fandhe_device::
-//! speech_recognition` モジュール doc 参照）。Android の `present`/`request_stop` は
+//! トレイトを **通らず**コアの状態機械へ直接書き戻す（`crate::contract` の doc 参照）。Android の `present`/`request_stop` は
 //! `android::request_speech_start`/`android::request_speech_stop` へ振り分ける
-//! （`mic_record.rs` の Android 分岐と同型、Issue #1026）。
+//! （`fandhe-cap-mic-record` の `driver.rs` の Android 分岐と同型、Issue #1026）。
 //!
 //! # macOS/iOS/Windows/Android 以外: `SpeechRecognizer` トレイト経由（`UnsupportedSpeechRecognizer` 固定）
 //!
@@ -45,7 +43,7 @@ use fandhe_core::screens::speech_recognize::{
     ListenOutcome, SpeechRecognizeState, finish_listen, mark_listening, take_start_request,
 };
 // ListenPhase は macOS/Windows/Android の `drive_callback`（本番コード）と、それ以外の
-// `drive_reports_unsupported_via_finish_listen`（テストのみ）から使う（`mic_record.rs`
+// `drive_reports_unsupported_via_finish_listen`（テストのみ）から使う（`fandhe-cap-mic-record` の `driver.rs`
 // の `RecordPhase` import と同じ理由）。
 #[cfg(any(
     target_os = "macos",
@@ -57,7 +55,7 @@ use fandhe_core::screens::speech_recognize::{
 use fandhe_core::screens::speech_recognize::ListenPhase;
 // mark_stopping/take_stop_request/tick/MAX_LISTEN_MS は macOS/Windows/Android の pull 型
 // `drive_callback` でのみ使う（それ以外は同期 `drive` が start/stop をまとめて
-// 呼び切るため中間状態を持たない、`mic_record.rs` と同じ判断）。
+// 呼び切るため中間状態を持たない、`fandhe-cap-mic-record` の `driver.rs` と同じ判断）。
 use crate::contract::{SpeechRecognizer, UnsupportedSpeechRecognizer};
 use crate::error::SpeechRecognitionError;
 #[cfg(any(
@@ -105,7 +103,7 @@ fn to_outcome(
     }
 }
 
-/// iOS/macOS `.m`/Android `MainActivity` 側から届く結果コード（`code`）→ `SpeechRecognitionError` の
+/// iOS/macOS `.m`/Android `SpeechRecognitionHelper` 側から届く結果コード（`code`）→ `SpeechRecognitionError` の
 /// 写像（SSOT、実装計画 §3.3・§2.2 の表参照）。Android のコード 5 は `mic_record.rs::
 /// error_from_code` のコード 5（ライフサイクル中断）と同じ意味。
 ///
@@ -190,7 +188,7 @@ pub(crate) fn outcome_from_android_error(
 /// `E_ACCESSDENIED`（`0x80070005`、マイクのプライバシー設定で拒否）と、音声認識の
 /// オンライン音声認識プライバシー設定が未同意のときに返る `0x80045509` のみ
 /// `PermissionDenied("speech_recognition")` へ、それ以外は `Internal(stage)` へ畳む
-/// （既知の天井、実装計画 §3.5）。呼び出し元（`windows_speech_recognition.rs`）は
+/// （既知の天井、実装計画 §3.5）。呼び出し元（`windows.rs`）は
 /// Windows 限定モジュールのため、本関数自体には `cfg` を付けず全ターゲットで
 /// コンパイル・テスト対象にする（`mic_record.rs::error_from_hresult` と同じ方針）。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
@@ -207,7 +205,7 @@ pub(crate) fn error_from_hresult(code: i32, stage: &'static str) -> SpeechRecogn
 /// Windows の `SpeechRecognitionResultStatus`（`windows::Media::SpeechRecognition::
 /// SpeechRecognitionResultStatus`）→ [`crate::contract::
 /// SpeechOutcome`]/`SpeechRecognitionError` の写像（SSOT、実装計画 §3.3 の表参照）。呼び出し元
-/// （`windows_speech_recognition.rs`）は Windows 限定モジュールのため、本関数自体には
+/// （`windows.rs`）は Windows 限定モジュールのため、本関数自体には
 /// `cfg` を付けず全ターゲットでコンパイル・テスト対象にする（[`error_from_hresult`]
 /// と同じ方針）。`status` の生値は `windows` crate の列挙値をそのまま受け取る
 /// （呼び出し元が `.0` を渡す想定、下記テスト参照）。
@@ -245,8 +243,7 @@ pub(crate) fn outcome_from_status(
     }
 }
 
-/// macOS/Windows 経路: OS 側コールバックとの橋渡し（pull 型、`device/
-/// request_slot.rs::RequestSlot` の facade。モジュール doc 参照）。
+/// macOS/Windows 経路: OS 側コールバックとの橋渡し（pull 型、`fandhe-runtime/src/request_slot.rs::RequestSlot` の facade。モジュール doc 参照）。
 #[cfg(any(
     target_os = "macos",
     target_os = "ios",
@@ -294,7 +291,7 @@ pub(crate) mod bridge {
 
     /// OS からの結果を `super::to_outcome` で画面用へ変換してから置く（任意
     /// スレッド。macOS はメインスレッド、Windows はワーカースレッドから届く契約、
-    /// `apple_speech_recognition.rs`/`windows_speech_recognition.rs` の doc
+    /// `apple.rs`/`windows.rs` の doc
     /// 参照）。`request_id` 不一致・未登録・既に結果ありは捨てて `false`。
     pub(crate) fn deliver(
         request_id: u64,
@@ -304,15 +301,17 @@ pub(crate) mod bridge {
     }
 
     /// Android 専用: Activity 再生成直後に `android_main` から呼ぶ
-    /// （`device::mic_record::bridge::reset` と同じ位置づけ）。[`SLOT`]・
+    /// （`fandhe-cap-mic-record` の `bridge::reset` と同じ位置づけ）。[`SLOT`]・
     /// [`STARTED_REQUEST_ID`] はプロセス static のため Activity 再生成をまたいで
     /// 残るが、画面状態（`SpeechRecognizeState`）は再生成のたびに `Default`（`Idle`）
     /// で作り直される。放置すると再生成前に開始した聞き取りが破棄されずに残り、
     /// 新しい `Idle` 状態を [`super::drive_callback`] が見て早期 return するため
     /// 結果が画面へ一切反映されない。ここで両方を丸ごと捨て、以後届く旧
-    /// `request_id` の [`deliver`]/[`mark_started`] を確実に無視させる。対になる
-    /// 後始末として Java 側（`MainActivity::onCreate`）は保留中の `speechRequest` を
-    /// `take()` する。呼び出し順に依存しない（`mic_record::bridge::reset` doc 参照）。
+    /// `request_id` の [`deliver`]/[`mark_started`] を確実に無視させる。Java 側
+    /// （`SpeechRecognitionHelper`）は再生成で保留中の要求を捨てず、権限ダイアログの結果を新しい
+    /// helper が引き継いで同じ id で 1 度だけ届ける（終了による破棄は中断（5）を 1 度だけ届ける）。
+    /// 画面状態が `Idle` へ戻る構成（`fandhe-gallery`）向けで、状態を保つ外部アプリは呼ばなくてよい。
+    /// 呼び出し順に依存しない（`fandhe-cap-mic-record` の `bridge::reset` doc 参照）。
     #[cfg_attr(not(target_os = "android"), allow(dead_code))]
     pub(crate) fn reset() {
         SLOT.reset();
@@ -320,11 +319,11 @@ pub(crate) mod bridge {
     }
 }
 
-/// OS へ聞き取り開始を依頼する（iOS/macOS: `apple_speech_recognition::present`、Android:
+/// OS へ聞き取り開始を依頼する（iOS/macOS: `apple::present`、Android:
 /// `android::request_speech_start`。
 /// Windows は戻り値の形が異なる（`Result<(), SpeechRecognitionError>`）ため、この共通関数には
-/// 含めず `drive_callback` から `windows_speech_recognition::present` を直接呼ぶ、
-/// `mic_record.rs` モジュール doc と同じ判断）。
+/// 含めず `drive_callback` から `windows::present` を直接呼ぶ、
+/// `fandhe-cap-mic-record` の `driver.rs` モジュール doc と同じ判断）。
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 fn present(request_id: u64, max: std::time::Duration) -> bool {
     crate::apple::present(request_id, max)
@@ -347,7 +346,7 @@ fn request_stop(request_id: u64) -> bool {
 }
 
 /// 直近の `speech_recognize_effect` 呼び出し時刻（経過時間の実測用）。`mic_record.rs::
-/// LAST_TICK`/`measure_dt_ms` を共用する（Issue #1024、複製回避、`mic_record.rs`
+/// LAST_TICK`/`measure_dt_ms` を共用する（Issue #1024、複製回避、`fandhe-cap-mic-record` の `driver.rs`
 /// 「1 回の呼び出しで進める経過ミリ秒の上限」節参照）。
 #[cfg(any(
     target_os = "macos",
@@ -384,7 +383,7 @@ fn drive_callback(state: &SpeechRecognizeState, sender: &CompletionSender<Speech
         #[cfg(target_os = "windows")]
         if let Err(e) = crate::windows::present(request_id, max) {
             // 提示依頼自体が同期的に失敗した（聞き取り中で busy、ワーカースレッド
-            // 自体が起動しない。`windows_speech_recognition::present` の doc 参照）。
+            // 自体が起動しない。`windows::present` の doc 参照）。
             bridge::deliver(request_id, Err(e));
         }
         return;
@@ -393,7 +392,7 @@ fn drive_callback(state: &SpeechRecognizeState, sender: &CompletionSender<Speech
     if take_stop_request(state).is_some() {
         let _ = sender.send(Box::new(mark_stopping));
         // 「現在進行中のセッション」の request_id と照合する（macOS は `.m` 側、
-        // Windows は `windows_speech_recognition::SESSION` が照合する契約、
+        // Windows は `windows::SESSION` が照合する契約、
         // `mic_record.rs::drive_callback` の対応する分岐と同じ位置づけ）。停止依頼
         // 自体が届かなくても（既に終了済み等）、自動停止 or 既存の結果配送が
         // 追随するため、ここでは戻り値を追加でハンドリングしない。
@@ -431,7 +430,7 @@ fn drive_callback(state: &SpeechRecognizeState, sender: &CompletionSender<Speech
         move |s: &mut SpeechRecognizeState, outcome| {
             // 反映できる状態か（`Idle` へ既に戻っていないか）を確かめてから
             // `finish_listen` し、反映できたときだけ `true` を返す（`RequestSlot`
-            // 側がそれを見て `clear` する）（`mic_record.rs` と同じ判断）。
+            // 側がそれを見て `clear` する）（`fandhe-cap-mic-record` の `driver.rs` と同じ判断）。
             if s.phase != ListenPhase::Idle {
                 finish_listen(s, generation, outcome);
                 true

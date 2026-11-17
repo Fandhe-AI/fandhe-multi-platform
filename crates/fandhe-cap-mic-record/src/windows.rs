@@ -187,7 +187,7 @@ fn stop_and_read(
     // （WinRT 同期待ち）を終える前に「停止」が押された場合）、`start()`
     // 復帰直後の数 ms（スケジューリング遅延を含む）で `stop()` が呼ばれる。
     // これは実際には録音が始まる前のキャンセルであり失敗ではないため、
-    // macOS 実装（`apple_mic_record.rs::error_from_code` の code 4）と
+    // macOS 実装（`apple.rs`/`driver.rs::error_from_code` の code 4）と
     // 同じく `Cancelled` として扱う（PR #960 レビュー指摘、Bugbot 再指摘）。
     // 開始直後は WinRT 側もまだ録音状態へ遷移しきっていないことがあり、
     // `StopRecordAsync` 自体が stop-too-soon の HRESULT で失敗する場合が
@@ -313,7 +313,7 @@ pub(crate) fn present(request_id: u64, max_duration: Duration) -> Result<(), Mic
 
 /// `crate::driver` の「停止」ボタンハンドラから呼ばれる。`request_id` が
 /// 現在進行中のセッションと一致するときだけ停止合図を送る。不一致・未登録は
-/// `false`（無視。自動停止 or 既存の結果配送が追随する、`apple_mic_record.rs::
+/// `false`（無視。自動停止 or 既存の結果配送が追随する、`apple.rs::
 /// request_stop` と同じ位置づけ）。
 pub(crate) fn request_stop(request_id: u64) -> bool {
     let session = SESSION.lock().unwrap_or_else(|e| e.into_inner());

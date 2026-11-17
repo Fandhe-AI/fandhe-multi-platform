@@ -1,14 +1,13 @@
-//! iOS/macOS 向け音声認識実装（Issue #1024 macOS + #1025 iOS）。`device/
-//! speech_recognition.rs` の iOS/macOS 経路から呼ばれ、`Speech`
+//! iOS/macOS 向け音声認識実装（Issue #1024 macOS + #1025 iOS）。`crate::driver` の iOS/macOS 経路から呼ばれ、`Speech`
 //! （`SFSpeechRecognizer`）実装（`apple/fandhe_apple_speech_recognition.m`、
-//! `build.rs` が iOS/macOS の feature `device` 有効時にコンパイル・リンクする）を
+//! `build.rs` が iOS/macOS ターゲットでコンパイル・リンクする）を
 //! `unsafe extern "C"` 2 関数（[`present`]/[`request_stop`]）で呼ぶ。`unsafe` は
-//! この呼び出しに閉じ `// SAFETY:` で契約を明記する（`apple_mic_record.rs` と同型、
+//! この呼び出しに閉じ `// SAFETY:` で契約を明記する（`fandhe-cap-mic-record` の `apple.rs` と同型、
 //! coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `.m` 側の完了コールバックから [`fandhe_rust_speech_finished`]（本モジュールが
 //! 公開する `extern "C"` 関数）が呼ばれ、`crate::driver::bridge` へ
-//! 結果を push する（pull 型、`apple_mic_record.rs::fandhe_rust_mic_record_finished`
+//! 結果を push する（pull 型、`fandhe-cap-mic-record` の `apple.rs::fandhe_rust_mic_record_finished`
 //! と同じ橋渡し方式）。認識文字列をログへ出力しない（security.md A09）。
 
 use std::ffi::CStr;
@@ -18,7 +17,7 @@ use std::time::Duration;
 use crate::error::SpeechRecognitionError;
 
 // SAFETY: `apple/fandhe_apple_speech_recognition.m` が定義する C ABI（`build.rs` が
-// macOS ターゲットの feature `device` 有効時にコンパイル・リンクする）。契約は
+// iOS/macOS ターゲットでコンパイル・リンクする）。契約は
 // `.m` ファイル冒頭コメントおよび下記関数のコメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {
@@ -27,7 +26,7 @@ unsafe extern "C" {
 }
 
 /// `.m` 側が実際に聞き取りを開始した瞬間に呼ぶ `extern "C"` エクスポート関数
-/// （`apple_mic_record.rs::fandhe_rust_mic_record_started` と同じ位置づけ）。
+/// （`fandhe-cap-mic-record` の `apple.rs::fandhe_rust_mic_record_started` と同じ位置づけ）。
 /// 権限確認待ちの間は呼ばれない。`crate::driver::bridge` へ「実際に
 /// 開始した request_id」を記録し、経過時間の計測（`tick`）をこの時点から
 /// 始められるようにする。

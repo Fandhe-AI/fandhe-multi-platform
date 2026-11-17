@@ -6,7 +6,7 @@
 //! コールバック型で非同期に届く）で、本トレイトを**通らず** `fandhe_core::screens::
 //! speech_recognize`（端末依存ゼロの状態機械）へ 本 crate の `driver` の
 //! `RequestSlot`/`poll_and_finish`（pull 型 bridge）から直接書き戻す
-//! （`mic_record.rs` モジュール doc の判断と同じ）。本トレイトは対応不可プラットフォーム
+//! （`fandhe-cap-mic-record` の `driver.rs` モジュール doc の判断と同じ）。本トレイトは対応不可プラットフォーム
 //! （Web/Linux）向けの [`UnsupportedSpeechRecognizer`] と、
 //! 将来これらが同期実装を持つ場合の受け皿として存在する。
 //!

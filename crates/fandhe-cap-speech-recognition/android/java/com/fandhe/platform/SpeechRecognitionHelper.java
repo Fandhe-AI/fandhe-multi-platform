@@ -43,11 +43,9 @@ final class SpeechRecognitionHelper {
     private static final Map<Activity, SpeechRecognitionHelper> HELPERS = new WeakHashMap<>();
 
     static void attach(ComponentActivity activity) {
-        // 音声認識（Issue #1026）: `speechRequest` は static のため Activity 再生成をまたいで残るが、`SpeechRecognizer`
-        // （`speechRecognizer`）はインスタンスフィールドで旧 helper とともに失われている（新 helper では常に `null`）。保留中の要求
-        // （権限ダイアログ待ち含む）をここで捨て、Rust 側 `android_main` の `reset_pending_tracking()` と対で「宛先を失った」
-        // 要求を残さない（順序非依存）。従来は `MainActivity.onCreate` が同じ `onCreate` の中で行っていた。
-        speechRequest.take();
+        // 再生成: 要求 id・権限ダイアログの照合状態・上限・保留フラグ（いずれも static）は捨てない。権限ダイアログの結果は
+        // ActivityResultRegistry が同じキーの新しい許可ランチャーへ配送するため、新 helper の callback が引き継いで聞き取りを始める
+        // （結果は同じ id で 1 度だけ届く）。聞き取り中だった場合は `onHostPaused` が先に中断（5）で確定済みで、追跡は空になっている。
         SpeechRecognitionHelper helper = new SpeechRecognitionHelper(activity);
         synchronized (SpeechRecognitionHelper.class) {
             HELPERS.put(activity, helper);
@@ -56,6 +54,9 @@ final class SpeechRecognitionHelper {
 
     // Activity 破棄時: 聞き取り中なら破棄する（`onHostPaused` で既に破棄済みなら `speechRecognizer == null` で no-op）。
     // `onPause` を経由せず直接 `onDestroy` へ来るケース（Android の契約上は稀）に備えて同じ処理を置く。
+    // 終了による破棄（`isFinishing()`）では registry ごと消え、権限ダイアログの結果は二度と届かない。保留中の要求を中断（5）として
+    // 1 度だけ確定し、権限ダイアログの照合状態を下ろす。終了でない破棄（再生成・システム破棄）は結果が復元後の helper へ届くため
+    // 何も捨てない。`take` が first-wins なので、許可コールバックとの二重通知にならない。
     static void detach(Activity activity) {
         SpeechRecognitionHelper helper;
         synchronized (SpeechRecognitionHelper.class) {
@@ -63,6 +64,17 @@ final class SpeechRecognitionHelper {
         }
         if (helper != null) {
             helper.interruptIfListening();
+        }
+        if (activity.isFinishing()) {
+            synchronized (speechLock) {
+                speechStartPendingResume = false;
+                speechPermissionPending = false;
+                speechPermissionRequestId = RequestTracker.NONE;
+                long id = speechRequest.take();
+                if (id != RequestTracker.NONE) {
+                    nativeOnSpeechResult(id, SPEECH_RESULT_INTERRUPTED, null);
+                }
+            }
         }
     }
 
@@ -74,12 +86,12 @@ final class SpeechRecognitionHelper {
             return;
         }
         helper.resumed = true;
-        synchronized (helper.speechLock) {
-            if (helper.speechStartPendingResume) {
-                helper.speechStartPendingResume = false;
+        synchronized (speechLock) {
+            if (speechStartPendingResume) {
+                speechStartPendingResume = false;
                 long id = speechRequest.current();
                 if (id != RequestTracker.NONE && helper.speechRecognizer == null) {
-                    helper.startSpeechRecognizer(id, helper.speechRequestedMaxListenMs);
+                    helper.startSpeechRecognizer(id, speechRequestedMaxListenMs);
                 }
             }
         }
@@ -144,7 +156,7 @@ final class SpeechRecognitionHelper {
                         // の同じ分岐、PR #962 是正と同じ理由）。「保留」として扱い、次の
                         // `onResume`（`speechStartPendingResume` 参照）で
                         // `startSpeechRecognizer` を実行する。
-                        this.speechStartPendingResume = true;
+                        speechStartPendingResume = true;
                         return;
                     }
                     if (speechRecognizer != null) {
@@ -224,7 +236,7 @@ final class SpeechRecognitionHelper {
 
     // `speechLock` の内側でのみ読み書きする状態（ライフサイクル・並行性の契約を単一
     // ロックへ集約する、device-bridge-contracts.md 参照）。
-    private final Object speechLock = new Object();
+    private static final Object speechLock = new Object();
     private SpeechRecognizer speechRecognizer;
     private final Handler speechTimeoutHandler = new Handler(Looper.getMainLooper());
     private Runnable speechTimeout;
@@ -245,11 +257,11 @@ final class SpeechRecognitionHelper {
     private boolean speechStopRequested;
     // 権限ダイアログ表示中に `requestSpeechPermission` コールバックが読む上限
     // （`requestSpeechRecognitionStart` が受け取った値をそのまま退避する）。
-    private volatile int speechRequestedMaxListenMs;
+    private static volatile int speechRequestedMaxListenMs;
     // 許可結果が非前景中に届いたため `startSpeechRecognizer` の実行を次の `onResume` へ
     // 保留していることを示すフラグ（`micStartPendingResume` と同型）。`speechLock` の
     // 内側でのみ読み書きする。
-    private boolean speechStartPendingResume;
+    private static boolean speechStartPendingResume;
 
     // 権限ダイアログを起動した時点の要求 id（`requestSpeechRecognitionStart` が launch
     // 直前にここへ退避する）。コールバックは `speechRequest.current()` を直接読まない
@@ -258,7 +270,7 @@ final class SpeechRecognitionHelper {
     // ダイアログへの応答が新要求へ誤って適用される）。コールバック内でこの退避値と
     // `current()` を照合し、一致する場合のみ自分が起動したダイアログの結果とみなす。
     // `speechLock` の内側でのみ読み書きする。
-    private long speechPermissionRequestId = RequestTracker.NONE;
+    private static long speechPermissionRequestId = RequestTracker.NONE;
 
     // 権限ダイアログの結果がまだ届いていないか（launch 直前に true、コールバック冒頭で
     // 必ず false に戻す）。`speechPermissionRequestId` の単純な id 照合だけでは、
@@ -270,7 +282,7 @@ final class SpeechRecognitionHelper {
     // 「並行性・世代」節）。本フラグが true の間は `requestSpeechRecognitionStart` が
     // 新しいダイアログを起動せず BUSY を返し、先行する権限要求が決着する（コールバックが
     // 届く）まで再起動を保留する。`speechLock` の内側でのみ読み書きする。
-    private boolean speechPermissionPending;
+    private static boolean speechPermissionPending;
 
 
     // Rust 側 bridge（`fandhe-cap-speech-recognition/src/driver.rs`）の `present`

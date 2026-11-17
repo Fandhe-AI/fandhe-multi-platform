@@ -2,15 +2,15 @@
 //! Windows 経路から呼ばれ、WinRT `Windows.Media.SpeechRecognition.SpeechRecognizer`
 //! を [`present`]/[`request_stop`] のセッション管理（ワーカースレッド・期限タイマ・
 //! 停止合図）で駆動する（`SpeechRecognizer` トレイトは通さない、`fandhe_device::
-//! speech_recognition` モジュール doc・`windows_mic_record.rs` モジュール doc
+//! speech_recognition` モジュール doc・`windows.rs` モジュール doc
 //! 「同期 `drive` 経路が使えない理由」と同じ判断）。
 //!
 //! # WinRT 呼び出しはワーカースレッド + `.get()` で同期待ち
 //!
 //! `CompileConstraintsAsync`/`RecognizeAsync`/`StopRecognitionAsync` は
-//! `windows-future` の `.get()`（`windows_mic_record.rs` 参照）でブロック待ちできる
+//! `windows-future` の `.get()`（`windows.rs` 参照）でブロック待ちできる
 //! が、egui update ループ（UI スレッド）をブロックしないよう `std::thread::spawn`
-//! のワーカー上で呼ぶ（`windows_mic_record.rs::present` と同型）。`RoInitialize` は
+//! のワーカー上で呼ぶ（`windows.rs::present` と同型）。`RoInitialize` は
 //! 呼ばない（`windows-core` の `CO_E_NOTINITIALIZED` → MTA フォールバック、既存の
 //! Windows 実装群と同じ前提）。`windows` crate 側が safe fn としてラップ済みのため
 //! `unsafe` は不要。
@@ -29,8 +29,7 @@
 //! # 失敗の写像
 //!
 //! `CompileConstraintsAsync`/`RecognizeAsync` の結果 `Status` は
-//! [`crate::driver::outcome_from_status`]（SSOT、`device/
-//! speech_recognition.rs` に `cfg` 無しで置き、ホストの `cargo test` で固定する）で
+//! [`crate::driver::outcome_from_status`]（SSOT、`cfg` 無しで置き、ホストの `cargo test` で固定する）で
 //! 写す。HRESULT 失敗は [`crate::driver::error_from_hresult`] で写す。
 //!
 //! # 並行性・世代
@@ -98,7 +97,7 @@ pub(crate) fn present(request_id: u64, max: Duration) -> Result<(), SpeechRecogn
         let result = run_session(request_id, max, &stop_rx);
 
         // `bridge::deliver` より前に `SESSION` を解除する（自分の request_id と
-        // 一致するときだけ、後続要求を消さない、`windows_mic_record.rs::present`
+        // 一致するときだけ、後続要求を消さない、`windows.rs::present`
         // と同じ順序の理由: UI スレッドが結果を取り込んで即座に次の聞き取りを
         // 開始したとき、まだ `SESSION` が `Some` のままで `present` が誤って
         // busy を返すのを防ぐ）。
@@ -112,7 +111,7 @@ pub(crate) fn present(request_id: u64, max: Duration) -> Result<(), SpeechRecogn
     });
 
     if spawn_result.is_err() {
-        // OS のスレッド生成自体が失敗した（`windows_mic_record.rs::present` と
+        // OS のスレッド生成自体が失敗した（`windows.rs::present` と
         // 同じ理由でここで解除する）。
         let mut session = SESSION.lock().unwrap_or_else(|e| e.into_inner());
         if session.as_ref().is_some_and(|s| s.request_id == request_id) {
@@ -183,7 +182,7 @@ fn run_session(
     // を待ち切ってから読むと、確定済みの結果が最大 `max` 秒間画面へ届かない
     // （codex 指摘）ため、短い間隔（`POLL_INTERVAL`）でポーリングして早期に
     // 気づく。送信側 drop（`Disconnected`）は通常起きないが防御的に停止扱いする
-    // （`windows_mic_record.rs::present` の待ち方と同型）。
+    // （`windows.rs::present` の待ち方と同型）。
     const POLL_INTERVAL: Duration = Duration::from_millis(100);
     let deadline = Instant::now() + max;
     loop {
@@ -243,7 +242,7 @@ fn run_session(
 /// `crate::driver` の「停止」ボタンハンドラから呼ばれる。
 /// `request_id` が現在進行中のセッションと一致するときだけ停止合図を送る。
 /// 不一致・未登録は `false`（無視。自動停止 or 既存の結果配送が追随する、
-/// `apple_speech_recognition.rs::request_stop` と同じ位置づけ）。
+/// `apple.rs::request_stop` と同じ位置づけ）。
 pub(crate) fn request_stop(request_id: u64) -> bool {
     let session = SESSION.lock().unwrap_or_else(|e| e.into_inner());
     match session.as_ref() {

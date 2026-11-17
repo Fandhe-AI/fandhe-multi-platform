@@ -12,7 +12,7 @@ use crate::contract::Tts;
 use crate::error::TtsError;
 
 // SAFETY: `ios/fandhe_ios_tts.m` が定義する C ABI（`build.rs` が iOS ターゲットの
-// み・feature `device` 有効時のみコンパイル・リンクする）。契約は下記 `IosTts` の
+// みコンパイル・リンクする）。契約は下記 `IosTts` の
 // 各メソッドのコメントに集約する。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]

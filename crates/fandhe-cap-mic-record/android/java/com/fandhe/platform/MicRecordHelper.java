@@ -39,11 +39,9 @@ final class MicRecordHelper {
     private static final Map<Activity, MicRecordHelper> HELPERS = new WeakHashMap<>();
 
     static void attach(ComponentActivity activity) {
-        // マイク録音（Issue #957）: `micRecordRequest` は static のため Activity 再生成をまたいで残るが、`MediaRecorder`
-        // （`micRecorder`）はインスタンスフィールドで旧 helper とともに失われている（新 helper では常に `null`）。保留中の要求
-        // （権限ダイアログ待ち含む）をここで捨て、Rust 側 `android_main` の `reset_pending_tracking()` と対で「宛先を失った」
-        // 要求を残さない（順序非依存）。従来は `MainActivity.onCreate` が同じ `onCreate` の中で行っていた。
-        micRecordRequest.take();
+        // 再生成: 要求 id・上限・保留フラグ（いずれも static）は捨てない。権限ダイアログの結果は ActivityResultRegistry が同じキーの
+        // 新しい許可ランチャーへ配送するため、新 helper の callback が引き継いで録音を始める（結果は同じ id で 1 度だけ届く）。
+        // 録音中だった場合は `onHostPaused` が先に中断（5）で確定済みで、追跡は空になっている。
         MicRecordHelper helper = new MicRecordHelper(activity);
         synchronized (MicRecordHelper.class) {
             HELPERS.put(activity, helper);
@@ -52,6 +50,9 @@ final class MicRecordHelper {
 
     // Activity 破棄時: 録音中なら破棄する（`onHostPaused` で既に破棄済みなら `micRecorder == null` で no-op）。`onPause` を経由せず
     // 直接 `onDestroy` へ来るケース（Android の契約上は稀）に備えて同じ処理を置く。
+    // 終了による破棄（`isFinishing()`）では registry ごと消え、権限ダイアログの結果は二度と届かない。保留中の要求を中断（5）として
+    // 1 度だけ確定する。終了でない破棄（再生成・システム破棄）は結果が復元後の helper へ届くため何も捨てない。
+    // `complete` / `take` が first-wins なので、許可コールバックとの二重通知にならない。
     static void detach(Activity activity) {
         MicRecordHelper helper;
         synchronized (MicRecordHelper.class) {
@@ -59,6 +60,15 @@ final class MicRecordHelper {
         }
         if (helper != null) {
             helper.interruptIfRecording();
+        }
+        if (activity.isFinishing()) {
+            synchronized (micLock) {
+                micStartPendingResume = false;
+                long id = micRecordRequest.take();
+                if (id != RequestTracker.NONE) {
+                    nativeOnMicRecordResult(id, MIC_RESULT_INTERRUPTED, null, null, 0);
+                }
+            }
         }
     }
 
@@ -70,12 +80,12 @@ final class MicRecordHelper {
             return;
         }
         helper.resumed = true;
-        synchronized (helper.micLock) {
-            if (helper.micStartPendingResume) {
-                helper.micStartPendingResume = false;
+        synchronized (micLock) {
+            if (micStartPendingResume) {
+                micStartPendingResume = false;
                 long id = micRecordRequest.current();
                 if (id != RequestTracker.NONE && helper.micRecorder == null) {
-                    helper.startMicRecorder(id, helper.micRequestedMaxDurationMs);
+                    helper.startMicRecorder(id, micRequestedMaxDurationMs);
                 }
             }
         }
@@ -135,7 +145,7 @@ final class MicRecordHelper {
                         // なかった。location の `locationStartRequestPending` と同型に
                         // 「保留」として扱い、次の `onResume`（`micStartPendingResume`
                         // 参照）で `startMicRecorder` を実行する。
-                        this.micStartPendingResume = true;
+                        micStartPendingResume = true;
                         return;
                     }
                     if (micRecorder != null) {
@@ -197,19 +207,20 @@ final class MicRecordHelper {
     private static final RequestTracker micRecordRequest = new RequestTracker();
 
     // `micLock` の内側でのみ読み書きする状態（ライフサイクル・並行性の契約を単一
-    // ロックへ集約する、device-bridge-contracts.md 参照）。
-    private final Object micLock = new Object();
+    // ロックへ集約する、device-bridge-contracts.md 参照）。ロックと、再生成をまたいで引き継ぐ
+    // `micRequestedMaxDurationMs` / `micStartPendingResume` は static（新 helper が同じ値で再開できるように）。
+    private static final Object micLock = new Object();
     private MediaRecorder micRecorder;
     private File micTempFile;
     private long micStartedAt;
     // 権限ダイアログ表示中に `requestMicPermission` コールバックが読む上限
     // （`requestMicRecordStart` が受け取った値をそのまま退避する）。
-    private volatile int micRequestedMaxDurationMs;
+    private static volatile int micRequestedMaxDurationMs;
 
     // 許可結果が非前景中に届いたため `startMicRecorder` の実行を次の `onResume` へ
     // 保留していることを示すフラグ（cursor Bugbot 指摘、PR #962。location の
     // `locationStartRequestPending` と同型）。`micLock` の内側でのみ読み書きする。
-    private boolean micStartPendingResume;
+    private static boolean micStartPendingResume;
 
     // マイク録音の実行時許可要求（`CameraCaptureHelper` の `requestCameraPermission`/`requestLocationPermission`
     // と同型）。許可が下りたら `startMicRecorder` を呼ぶ。

@@ -170,7 +170,7 @@ pub(crate) fn drive_with<S: 'static>(
 
     let result = to_outcome(picker.pick());
     // 受信側（ProxyApp）がドロップ済み（アプリ終了中）の送信失敗は無視してよい
-    // （coding-rust.md: panic を API 契約にしない、`device/clipboard.rs` と同じ判断）。
+    // （coding-rust.md: panic を API 契約にしない、`fandhe-cap-clipboard` の `driver.rs` と同じ判断）。
     let _ = sender.send(Box::new(move |s: &mut S| {
         (hooks.finish)(s, generation, result);
     }));
@@ -359,7 +359,7 @@ pub(crate) fn drive_mobile_with<S: 'static>(
     }
 }
 
-/// iOS 提示関数への委譲（`device/ios.rs::present_file_picker`、Issue #873）。
+/// iOS 提示関数への委譲（`ios.rs::present_file_picker`、Issue #873）。
 /// `request_id` は [`bridge::begin`] が払い出したプロセス内一意な ID
 /// （画面の `generation` ではない、[`bridge`] のモジュール doc 参照）。
 #[cfg(target_os = "ios")]
@@ -367,7 +367,7 @@ fn present(request_id: u64) -> bool {
     crate::ios::present_file_picker(request_id)
 }
 
-/// Android 提示関数への委譲（`device/android.rs::request_file_pick`、Issue #874）。
+/// Android 提示関数への委譲（`android.rs::request_file_pick`、Issue #874）。
 /// `request_id` は [`bridge::begin`] が払い出したプロセス内一意な ID
 /// （画面の `generation` ではない、[`bridge`] のモジュール doc 参照）。
 #[cfg(target_os = "android")]

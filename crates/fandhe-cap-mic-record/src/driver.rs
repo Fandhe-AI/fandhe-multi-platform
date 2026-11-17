@@ -3,8 +3,7 @@
 //! 結果を `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect`
 //! 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。
+//! 全ターゲットでコンパイルされる（OS ごとの実装は各 OS の cfg で切り替える）。
 //!
 //! # macOS/iOS/Android/Windows: pull 型 `bridge`（`biometric_auth.rs`/`share.rs` と同型）
 //!
@@ -25,9 +24,9 @@
 //! 自動停止・明示停止・ライフサイクル中断のいずれか片方が届く）につき
 //! `deliver` は 1 回だけ呼ばれる契約（`RequestSlot` の first-wins）。
 //! [`present`]/[`request_stop`] が macOS/iOS/Android の実装（macOS/iOS:
-//! `apple_mic_record`、Android: `android::request_mic_record_start`/
+//! `apple`、Android: `android::request_mic_record_start`/
 //! `android::request_mic_record_stop`）へ振り分け、Windows は
-//! `windows_mic_record::present`/`request_stop` を `drive_callback` から直接呼ぶ
+//! `windows::present`/`request_stop` を `drive_callback` から直接呼ぶ
 //! （エラー型が `Result<(), MicRecordError>` で macOS/iOS/Android の `bool` 戻り値と
 //! 異なるため、共通の [`present`]/[`request_stop`] には含めない）。
 //!
@@ -77,12 +76,12 @@ use fandhe_core::screens::mic_record::{MAX_RECORD_MS, mark_stopping, take_stop_r
 use fandhe_runtime::CompletionSender;
 
 /// `MicRecorder`/`bridge::deliver` 未対応環境（Unsupported）で画面へ出す固定案内
-/// （`MicRecordError` の内部構造は含めない、security.md A09。`device/biometric_auth.rs::
+/// （`MicRecordError` の内部構造は含めない、security.md A09。`fandhe-cap-biometric-auth` の `driver.rs::
 /// UNAVAILABLE` と同型）。
 const UNAVAILABLE: &str = "この環境ではマイク録音を使えません";
 
 /// `MicRecordError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
-/// それ以外は `Display` の文言をそのまま転送する（`device/biometric_auth.rs::
+/// それ以外は `Display` の文言をそのまま転送する（`fandhe-cap-biometric-auth` の `driver.rs::
 /// to_message` と同じ方針）。
 fn to_message(e: MicRecordError) -> String {
     match e {
@@ -119,19 +118,18 @@ fn to_outcome(
 }
 
 /// OS 側から届く結果コード（`code`）→ `MicRecordError` の写像（macOS/iOS `.m`/Android
-/// `MainActivity` 共通の SSOT。3 実装とも二重に写像しない、`apple_mic_record.rs`
-/// から移動、Issue #957）。
+/// `MicRecordHelper` 共通の SSOT。3 実装とも二重に写像しない、Issue #957）。
 ///
 /// | code | 意味 | 写像 |
 /// |---|---|---|
 /// | 1 | 権限拒否 | `PermissionDenied("mic_record")` |
 /// | 3 | 二重開始（busy） | `Internal("mic_record busy")` |
 /// | 4 | 許可確認中に利用者が「停止」でキャンセル（macOS/iOS: `.m` 側「許可確認中の
-///   キャンセル」節、Android: `MainActivity.requestMicRecordStop` の権限確認中
+///   キャンセル」節、Android: `MicRecordHelper.requestMicRecordStop` の権限確認中
 ///   分岐参照） | `Cancelled("mic_record")` |
 /// | 5 | ライフサイクル中断（iOS: バックグラウンド遷移により破棄、`.m` 側
-///   「バックグラウンド」節参照、Issue #956。Android: `onPause`/`onDestroy`/
-///   Activity 再生成で破棄、`MainActivity` 参照） | `Internal("mic_record
+///   「バックグラウンド」節参照、Issue #956。Android: `onPause`・
+///   終了による `onDestroy` で破棄、`MicRecordHelper` 参照） | `Internal("mic_record
 ///   interrupted")` |
 /// | それ以外 | 内部エラー（エンコード失敗等） | `Internal("mic_record")` |
 #[cfg_attr(
@@ -157,7 +155,7 @@ pub(crate) fn error_from_code(code: i32) -> MicRecordError {
 /// （マイク未搭載・他アプリ使用中の HRESULT は Microsoft 文書で一意に確定できない
 /// ため `Internal` に畳む既知の天井、実装計画 §2.4）。HRESULT の生値・`stage` の
 /// 内部識別子は画面へそのまま出さない（`to_message` が `Internal`/`PermissionDenied`
-/// の `Display` を通す、security.md A09）。呼び出し元（`windows_mic_record.rs`）は
+/// の `Display` を通す、security.md A09）。呼び出し元（`windows.rs`）は
 /// Windows 限定モジュールのため、本関数自体には `cfg` を付けず全ターゲットで
 /// コンパイル・テスト対象にする（`biometric_auth::outcome_from_verification` と
 /// 同じ方針、ホスト上の `cargo test` で失敗系を固定する）。
@@ -175,7 +173,7 @@ pub(crate) fn error_from_hresult(code: i32, stage: &'static str) -> MicRecordErr
 /// `crate::contract::Recording` への変換（mime は macOS/iOS 実装と同じ
 /// `"audio/mp4"` 固定。SSOT の [`crate::contract::build_recording`] を
 /// 経由し、0 バイト・`duration_ms == 0`・上限超過を弾く。呼び出し元
-/// （`windows_mic_record.rs`）は Windows 限定モジュールのため、本関数自体には
+/// （`windows.rs`）は Windows 限定モジュールのため、本関数自体には
 /// `cfg` を付けず全ターゲットでコンパイル・テスト対象にする（[`error_from_hresult`]
 /// と同じ方針）。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
@@ -235,8 +233,8 @@ pub(crate) mod bridge {
 
     /// OS からの結果を `super::to_outcome` で画面用へ変換してから置く（任意
     /// スレッド。実際には macOS/iOS はメインスレッド、Android は UI スレッド、
-    /// Windows はワーカースレッドから届く契約、`apple_mic_record.rs`/`android.rs`/
-    /// `windows_mic_record.rs` の doc 参照）。`request_id` 不一致・未登録・既に
+    /// Windows はワーカースレッドから届く契約、`fandhe-cap-mic-record` の `apple.rs`/`android.rs`/
+    /// `windows.rs` の doc 参照）。`request_id` 不一致・未登録・既に
     /// 結果ありは捨てて `false`。
     pub(crate) fn deliver(
         request_id: u64,
@@ -246,15 +244,17 @@ pub(crate) mod bridge {
     }
 
     /// Android 専用: Activity 再生成直後に `android_main` から呼ぶ
-    /// （`device::biometric_auth::bridge::reset` と同じ位置づけ）。[`SLOT`]・
+    /// （`fandhe-cap-biometric-auth` の `bridge::reset` と同じ位置づけ）。[`SLOT`]・
     /// [`STARTED_REQUEST_ID`] はプロセス static のため Activity 再生成をまたいで
     /// 残るが、画面状態（`MicRecordState`）は再生成のたびに `Default`（`Idle`）で
     /// 作り直される。放置すると再生成前に開始した録音が破棄されずに残り、
     /// 新しい `Idle` 状態を [`super::drive_callback`] が見て早期 return するため
     /// 結果が画面へ一切反映されない。ここで両方を丸ごと捨て、以後届く旧
-    /// `request_id` の [`deliver`]/[`mark_started`] を確実に無視させる。対になる
-    /// 後始末として Java 側（`MainActivity::onCreate`）は保留中の
-    /// `micRecordRequest` を `take()` する。呼び出し順に依存しない。
+    /// `request_id` の [`deliver`]/[`mark_started`] を確実に無視させる。Java 側
+    /// （`MicRecordHelper`）は再生成で保留中の要求を捨てず、権限ダイアログの結果を新しい helper が
+    /// 引き継いで同じ id で 1 度だけ届ける（終了による破棄は中断（5）を 1 度だけ届ける）。
+    /// 画面状態が `Idle` へ戻る構成（`fandhe-gallery`）向けで、状態を保つ外部アプリは呼ばなくてよい。
+    /// 呼び出し順に依存しない。
     ///
     /// 呼び出し元（`android::android_main`）は Android にのみ存在するため、
     /// それ以外のターゲット（macOS/iOS/Windows の host 上の `cargo test`）では
@@ -267,12 +267,12 @@ pub(crate) mod bridge {
     }
 }
 
-/// OS へ提示を依頼する（macOS/iOS: `apple_mic_record::present`、Android:
+/// OS へ提示を依頼する（macOS/iOS: `apple::present`、Android:
 /// `android::request_mic_record_start`）。戻り値は「提示依頼を受理できたか」
 /// （`false` は呼び出し元が `Err(Internal("mic_record present"))` として畳む、
-/// `device/biometric_auth.rs::present` と同型）。Windows は戻り値の形が異なる
+/// `fandhe-cap-biometric-auth` の `driver.rs::present` と同型）。Windows は戻り値の形が異なる
 /// （`Result<(), MicRecordError>`）ため、この共通関数には含めず `drive_callback` から
-/// `windows_mic_record::present` を直接呼ぶ（モジュール doc 参照）。
+/// `windows::present` を直接呼ぶ（モジュール doc 参照）。
 #[cfg(target_os = "android")]
 fn present(request_id: u64, max_duration: std::time::Duration) -> bool {
     crate::android::request_mic_record_start(request_id, max_duration.as_millis() as i32)
@@ -284,7 +284,7 @@ fn present(request_id: u64, max_duration: std::time::Duration) -> bool {
 }
 
 /// OS へ停止を依頼する（`present` と同じ振り分け。Windows は `drive_callback` から
-/// `windows_mic_record::request_stop` を直接呼ぶ）。
+/// `windows::request_stop` を直接呼ぶ）。
 #[cfg(target_os = "android")]
 fn request_stop(request_id: u64) -> bool {
     crate::android::request_mic_record_stop(request_id)
@@ -295,7 +295,7 @@ fn request_stop(request_id: u64) -> bool {
     crate::apple::request_stop(request_id)
 }
 
-/// 直近の `mic_record_effect` 呼び出し時刻（経過時間の実測用、`device/tilt.rs::
+/// 直近の `mic_record_effect` 呼び出し時刻（経過時間の実測用、`fandhe-cap-tilt` の `driver.rs::
 /// LAST_TICK` と同じ役割）。`Recording` を離れたら `None` に戻す
 /// （[`measure_dt_ms`] 参照）ことで、次に録音を始めた瞬間に古い時刻との差分を
 /// 使ってしまう飛びを防ぐ。macOS/iOS/Android/Windows の `drive_callback` からのみ
@@ -318,7 +318,7 @@ static LAST_TICK: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None
 ))]
 pub(crate) use fandhe_runtime::tick::measure_dt_ms;
 
-/// macOS/iOS/Android/Windows 経路の effect ドライバ本体（`device/biometric_auth.rs::
+/// macOS/iOS/Android/Windows 経路の effect ドライバ本体（`fandhe-cap-biometric-auth` の `driver.rs::
 /// drive_callback` と同型）。
 #[cfg(any(
     target_os = "macos",
@@ -343,7 +343,7 @@ fn drive_callback(state: &MicRecordState, sender: &CompletionSender<MicRecordSta
         #[cfg(target_os = "windows")]
         if let Err(e) = crate::windows::present(request_id, max_duration) {
             // 提示依頼自体が同期的に失敗した（録音中で busy、ワーカースレッド自体が
-            // 起動しない。`windows_mic_record::present` の doc 参照）。
+            // 起動しない。`windows::present` の doc 参照）。
             bridge::deliver(request_id, Err(e));
         }
         return;
@@ -352,9 +352,9 @@ fn drive_callback(state: &MicRecordState, sender: &CompletionSender<MicRecordSta
     if take_stop_request(state).is_some() {
         let _ = sender.send(Box::new(mark_stopping));
         // 「現在進行中のセッション」の request_id と照合する（macOS/iOS は `.m` 側、
-        // Android は `MainActivity.requestMicRecordStop`、Windows は
-        // `windows_mic_record::SESSION` が照合する契約、`.m` ファイル冒頭コメント/
-        // `windows_mic_record.rs::request_stop` 参照）。停止依頼自体が届かなくても
+        // Android は `MicRecordHelper.requestMicRecordStop`、Windows は
+        // `windows::SESSION` が照合する契約、`.m` ファイル冒頭コメント/
+        // `windows.rs::request_stop` 参照）。停止依頼自体が届かなくても
         // （既に終了済み等）、自動停止 or 既存の結果配送が追随するため、ここでは
         // 戻り値を追加でハンドリングしない（`biometric_auth.rs` の防御的分岐と
         // 同じ位置づけ）。
@@ -392,7 +392,7 @@ fn drive_callback(state: &MicRecordState, sender: &CompletionSender<MicRecordSta
         move |s: &mut MicRecordState, outcome| {
             // 反映できる状態か（`Idle` へ既に戻っていないか）を確かめてから
             // `finish_record` し、反映できたときだけ `true` を返す（`RequestSlot`
-            // 側がそれを見て `clear` する）（`device/biometric_auth.rs` と同じ判断）。
+            // 側がそれを見て `clear` する）（`fandhe-cap-biometric-auth` の `driver.rs` と同じ判断）。
             if s.phase != RecordPhase::Idle {
                 finish_record(s, generation, outcome);
                 true
@@ -404,7 +404,7 @@ fn drive_callback(state: &MicRecordState, sender: &CompletionSender<MicRecordSta
 }
 
 /// macOS/iOS/Android/Windows 以外向け: `MicRecorder` トレイト経由の同期呼び出し
-/// （`device/biometric_auth.rs::drive` と同型）。
+/// （`fandhe-cap-biometric-auth` の `driver.rs::drive` と同型）。
 #[cfg(not(any(
     target_os = "macos",
     target_os = "ios",
@@ -635,5 +635,20 @@ mod tests {
         assert_eq!(recording.bytes, vec![1, 2, 3]);
         assert_eq!(recording.mime, "audio/mp4");
         assert_eq!(recording.duration_ms, 1_500);
+    }
+
+    /// 中断（code 5）は 1 度だけ届き、古い id の中断は後から始めた要求を完了させない
+    /// （Java 側が再生成・終了で届ける中断の Rust 側の受け手）。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
+    #[test]
+    fn stale_interrupt_does_not_complete_new_request_and_delivers_once() {
+        let old = bridge::begin();
+        assert!(bridge::deliver(old, Err(error_from_code(5))));
+        assert!(!bridge::deliver(old, Err(error_from_code(5))));
+
+        let stale = bridge::begin();
+        let current = bridge::begin();
+        assert!(!bridge::deliver(stale, Err(error_from_code(5))));
+        assert!(bridge::deliver(current, Err(error_from_code(5))));
     }
 }
