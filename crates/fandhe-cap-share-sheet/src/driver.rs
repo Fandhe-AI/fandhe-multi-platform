@@ -290,7 +290,7 @@ fn drive_callback(state: &ShareTextState, sender: &CompletionSender<ShareTextSta
 /// 画面ドライバ（[`share_text_effect`]）と同時に使わない（要求の追跡を共有する）。失敗の種類は
 /// `Internal` へ畳む。Windows はフォーカスの観測（`HostView`）なしにキャンセルを検知できないため、
 /// Linux と同じく常に `Unsupported`。
-pub fn platform_share() -> Box<dyn Share> {
+pub fn platform_share_sheet() -> Box<dyn Share> {
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     {
         Box::new(CallbackShare)
@@ -301,7 +301,7 @@ pub fn platform_share() -> Box<dyn Share> {
     }
 }
 
-/// コールバック型の OS 実装を [`Share`] に見せるブロッキング版（[`platform_share`] 参照）。
+/// コールバック型の OS 実装を [`Share`] に見せるブロッキング版（[`platform_share_sheet`] 参照）。
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 struct CallbackShare;
 
