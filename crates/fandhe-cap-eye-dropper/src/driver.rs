@@ -8,7 +8,7 @@
 //! # macOS・Web: `bridge` の受け口
 //!
 //! `NSColorSampler` のハンドラ・ブラウザの `EyeDropper.open()` は非同期に届くため、`EyeDropper` トレイトを通さず
-//! `fandhe_runtime::request_slot::RequestSlot` で受ける。画面（macOS の [`eye_dropper_pick_effect`]・Web の `web.rs`）と
+//! `fandhe_runtime::request_slot::RequestSlot` で受ける。画面（macOS・Web の [`eye_dropper_pick_effect`]。Web の本体は `web.rs`）と
 //! 公開入口（[`begin_eye_dropper`] / [`poll_eye_dropper`] / [`discard_eye_dropper`]）が同じ slot を共有し、
 //! 持ち主の印（`SlotOwner`）で互いの要求を置き換えない。片方が進行中・結果未取得のあいだ、後から来た方は
 //! `Internal("eye_dropper busy")` で断る（macOS はサンプラーが 2 つ同時に開かないようにするためでもある）。
@@ -18,7 +18,6 @@
 //! `UnsupportedEyeDropper` 経由で `Unsupported` を画面へ出す（成功にしない）。公開入口も `Unsupported`。
 
 use fandhe_core::screens::eye_dropper_pick::EyeDropperOutcome;
-#[cfg(not(target_arch = "wasm32"))]
 use fandhe_core::screens::eye_dropper_pick::EyeDropperState;
 use fandhe_device::eye_dropper::PickedColor;
 
@@ -66,6 +65,26 @@ pub(crate) mod bridge {
     #[cfg(target_os = "macos")]
     pub(crate) fn deliver(request_id: u64, result: Outcome) -> bool {
         SLOT.deliver(request_id, result)
+    }
+
+    /// 画面の状態が `Idle` なのに、画面側の持ち主が残っていれば後始末する（画面 effect が `Idle` のときだけ呼ぶ）。
+    /// 状態の作り直し等で、進行中だった古い要求を画面が見失うと、`Picking` 以外では poll されず、結果が届いても
+    /// `SCREEN_OWNER` と slot が残って公開入口が busy のままになる。届いた結果は画面が受け取れないので捨て、
+    /// 失われた要求（slot が空・別 id）は印だけ外す。進行中（結果未着）は OS の確定を待つため触らない。
+    #[cfg(target_os = "macos")]
+    pub(crate) fn release_orphaned_screen() {
+        let mine = SCREEN_OWNER.current();
+        if mine == 0 {
+            return;
+        }
+        match SLOT.snapshot() {
+            Some((id, None)) if id == mine => {}
+            Some((id, Some(_))) if id == mine => {
+                SLOT.clear(mine);
+                SCREEN_OWNER.release(mine);
+            }
+            _ => SCREEN_OWNER.release(mine),
+        }
     }
 
     /// 公開入口の自分の分の要求を捨てる（`super::discard_eye_dropper` の本体）。持ち主が `request_id` と一致するときだけ
@@ -119,6 +138,10 @@ fn drive_callback(state: &EyeDropperState, sender: &CompletionSender<EyeDropperS
         return;
     }
 
+    if state.phase == PickPhase::Idle {
+        // 状態の作り直し・世代の差し替えで Idle へ戻った後に届いた、自分の古い要求の結果を解放する。
+        bridge::release_orphaned_screen();
+    }
     if state.phase != PickPhase::Picking {
         return;
     }
@@ -182,7 +205,7 @@ pub fn platform_eye_dropper() -> Box<dyn EyeDropper> {
 }
 
 /// `registry.rs` の `effect` 区画から `eye_dropper` 画面用に配線される effect ドライバ。
-/// wasm32 では同名の関数を `web.rs`（`Applier` 版）が公開する。
+/// wasm32 では同名の関数（`Applier` 版）を下に別に定義する。
 #[cfg(not(target_arch = "wasm32"))]
 pub fn eye_dropper_pick_effect(
     state: &EyeDropperState,
@@ -192,6 +215,31 @@ pub fn eye_dropper_pick_effect(
     drive_callback(state, sender);
     #[cfg(not(target_os = "macos"))]
     drive(state, sender, &UnsupportedEyeDropper);
+}
+
+/// Web の画面 effect（`fandhe-web-dom` の `mount_with_effect` へ effect として渡す）。要求ごとに 1 回だけ `open()` する。
+/// 画面の状態の観測と反映だけをここで行い、`open()`・中断・slot の扱いは `web.rs`（画面の状態型に依存しない）が持つ。
+#[cfg(target_arch = "wasm32")]
+pub fn eye_dropper_pick_effect(
+    state: &EyeDropperState,
+    applier: &fandhe_platform_web::Applier<EyeDropperState>,
+) {
+    use fandhe_core::screens::eye_dropper_pick::{finish_pick, mark_picking, take_request};
+
+    crate::web::register_release();
+    let Some(generation) = take_request(state) else {
+        return;
+    };
+    let (picking, done) = (applier.clone(), applier.clone());
+    crate::web::start_screen(
+        applier.mount_id(),
+        generation,
+        move || picking.apply(mark_picking),
+        move |result| {
+            let outcome = to_outcome(result);
+            done.apply(move |s| finish_pick(s, generation, outcome));
+        },
+    );
 }
 
 /// 画面の状態型に依存しない入口: 画面上の 1 点の色の取得を始め、要求 id を返す（macOS・Web）。結果は
@@ -427,6 +475,37 @@ mod tests {
             // 持ち主の記録が外れている（slot が空なので、記録が残っていても開始は断られない）。
             assert_eq!(bridge::PUBLIC_OWNER.current(), 0);
             assert!(begin_public().is_some());
+            reset();
+        }
+
+        #[test]
+        fn orphaned_screen_result_is_released_so_public_never_stays_busy() {
+            let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            reset();
+            let screen = begin_screen().unwrap();
+            // 画面の状態が作り直されて Idle へ戻った。進行中は OS の確定まで触らない（busy のまま）。
+            bridge::release_orphaned_screen();
+            assert_eq!(bridge::SCREEN_OWNER.current(), screen);
+            assert!(begin_public().is_none());
+            // サンプラーが閉じて結果が届いた後は、画面が Idle でも slot と持ち主が解放される。
+            assert!(bridge::deliver(screen, Ok(color("#aabbcc"))));
+            assert!(begin_public().is_none());
+            bridge::release_orphaned_screen();
+            assert_eq!(bridge::SCREEN_OWNER.current(), 0);
+            assert_eq!(bridge::SLOT.snapshot(), None);
+            assert!(begin_public().is_some());
+            reset();
+        }
+
+        #[test]
+        fn orphaned_screen_lost_request_only_drops_owner() {
+            let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            reset();
+            let screen = begin_screen().unwrap();
+            bridge::SLOT.reset();
+            bridge::release_orphaned_screen();
+            assert_eq!(bridge::SCREEN_OWNER.current(), 0);
+            let _ = screen;
             reset();
         }
 

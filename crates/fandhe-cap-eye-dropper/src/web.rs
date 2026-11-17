@@ -1,9 +1,9 @@
 //! 型サンプル「画面のスポイト」の Web 経路（Issue #763、親 #148。#1359 で `fandhe-web-dom` から機能 crate へ移した）。
 //!
+//! 画面の状態型には依存しない（`consumer-app-structure.md` §8.1。画面の状態を扱う effect 本体は
+//! `driver::eye_dropper_pick_effect` で、本モジュールの [`start_screen`] / [`register_release`] を呼ぶ）。
 //! 2 つの入口が同じ `new EyeDropper().open({ signal })` の呼び出し（[`start`]）を使う。
-//! - 画面 effect [`eye_dropper_pick_effect`]: `fandhe_core::screens::eye_dropper_pick`（端末依存ゼロ）を
-//!   `fandhe-web-dom` の `mount_with_effect` の effect として観測し、結果を `finish_pick` へ書き戻す
-//!   （呼び出し元は web-dom の `demo.rs` の `mount_eye_dropper_screen`）。
+//! - 画面側 [`start_screen`]: マウント（`mount_id`）と世代ごとに要求を 1 件飛ばし、結果をコールバックで返す。
 //! - 公開入口 [`begin_public`] / [`abort_public`]: `driver` の `begin_eye_dropper` / `discard_eye_dropper` から呼ばれる。
 //!   画面の状態型に依存せず、結果は `driver::bridge::SLOT` へ置く（取り出しは `poll_eye_dropper`）。
 //!
@@ -41,17 +41,13 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use fandhe_core::screens::eye_dropper_pick::{
-    EyeDropperState, finish_pick, mark_picking, take_request,
-};
 use fandhe_device::eye_dropper::PickedColor;
-use fandhe_platform_web::{Applier, on_mount_release};
+use fandhe_platform_web::on_mount_release;
 use js_sys::{Array, Function, Object, Reflect};
 use wasm_bindgen::prelude::*;
 use web_sys::AbortController;
 
 use crate::driver::bridge::{PUBLIC_OWNER, SCREEN_OWNER, SLOT};
-use crate::driver::to_outcome;
 use crate::error::EyeDropperError;
 use crate::web_result::{error_from_name, result_from_resolved};
 
@@ -166,27 +162,34 @@ fn clear_entry(mount_id: u64, generation: u64) {
 
 /// 記録・slot・印を片付けてから結果を届ける（届けた後で片付ける順序にしない）。
 fn settle(
-    applier: &Applier<EyeDropperState>,
     mount_id: u64,
     generation: u64,
     request_id: u64,
     result: Result<PickedColor, EyeDropperError>,
+    on_done: impl FnOnce(Result<PickedColor, EyeDropperError>),
 ) {
     clear_entry(mount_id, generation);
     SLOT.clear(request_id);
     SCREEN_OWNER.release(request_id);
-    let outcome = to_outcome(result);
-    applier.apply(move |s| finish_pick(s, generation, outcome));
+    on_done(result);
 }
 
-/// `mount_with_effect` へ渡す effect。要求 1 件ごとに 1 回だけ `open()` する。
-pub fn eye_dropper_pick_effect(state: &EyeDropperState, applier: &Applier<EyeDropperState>) {
-    // マウント破棄時の解放を登録する（同じ key の再登録は無視される）。
+/// マウント破棄時の解放を登録する（同じ key の再登録は無視される）。`driver` の effect が毎回呼ぶ。
+pub(crate) fn register_release() {
     on_mount_release("eye_dropper", release_mount);
-    let Some(generation) = take_request(state) else {
-        return;
-    };
-    let mount_id = applier.mount_id();
+}
+
+/// 画面側の要求を 1 件飛ばす。`mount_id` と `generation` ごとに 1 回だけ `open()` する（同じ世代の再呼び出しは何もしない）。
+///
+/// 古い世代が残っていれば中断して差し替える（`open()` 開始済みなら slot と印は確定まで残す）。
+/// `on_picking` は要求を受け付けた直後（結果の確定より前）に 1 度呼ぶ。`on_done` は確定のとき 1 度だけ呼ぶ。
+/// どちらも画面の状態型を知らない呼び出し側（`driver`）が、状態への反映に使う。
+pub(crate) fn start_screen(
+    mount_id: u64,
+    generation: u64,
+    on_picking: impl FnOnce(),
+    on_done: impl FnOnce(Result<PickedColor, EyeDropperError>) + 'static,
+) {
     let already = PICKS.with(|p| {
         p.borrow()
             .get(&mount_id)
@@ -195,7 +198,6 @@ pub fn eye_dropper_pick_effect(state: &EyeDropperState, applier: &Applier<EyeDro
     if already {
         return;
     }
-    // 古い世代が残っていれば中断して差し替える（`open()` 開始済みなら slot と印は確定まで残す）。
     let previous = PICKS.with(|p| {
         p.borrow_mut().insert(
             mount_id,
@@ -216,25 +218,25 @@ pub fn eye_dropper_pick_effect(state: &EyeDropperState, applier: &Applier<EyeDro
             SCREEN_OWNER.release(prev.request_id);
         }
     }
-    applier.apply(mark_picking);
+    on_picking();
 
     // 公開入口の進行中・未取得の要求は置き換えず、画面側を処理中の失敗で終える。
     let Some(request_id) = SCREEN_OWNER.begin_excluding(&SLOT, &[&PUBLIC_OWNER]) else {
         return settle(
-            applier,
             mount_id,
             generation,
             0,
             Err(EyeDropperError::Internal("eye_dropper busy")),
+            on_done,
         );
     };
     let Ok(ctrl) = AbortController::new() else {
         return settle(
-            applier,
             mount_id,
             generation,
             request_id,
             Err(error_from_name(None)),
+            on_done,
         );
     };
     PICKS.with(|p| {
@@ -251,12 +253,11 @@ pub fn eye_dropper_pick_effect(state: &EyeDropperState, applier: &Applier<EyeDro
     // クリックからの同期チェーンで呼ぶ（この前に await を挟まない）。
     let promise = match start(&ctrl) {
         Ok(p) => p,
-        Err(e) => return settle(applier, mount_id, generation, request_id, Err(e)),
+        Err(e) => return settle(mount_id, generation, request_id, Err(e), on_done),
     };
-    let applier = applier.clone();
     wasm_bindgen_futures::spawn_local(async move {
         let result = await_result(promise).await;
-        settle(&applier, mount_id, generation, request_id, result);
+        settle(mount_id, generation, request_id, result, on_done);
     });
 }
 

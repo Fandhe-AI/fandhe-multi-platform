@@ -18,7 +18,7 @@
 //! 守る: 1 プロセス内の要求の順序・古い世代の通知の破棄・失敗を成功と見せないこと・複数の入口からの同時起動を busy で断ること。
 //! 守らない: 拾った色の保持（ログにも出さない）、複数タブ・複数プロセスでの同時操作。
 //!
-//! effect ドライバ（`driver`）・OS 実装を 1 つに集める。画面の状態型を参照してよいのは `driver` と `web` だけ。
+//! effect ドライバ（`driver`）・OS 実装を 1 つに集める。画面の状態型を参照してよいのは `driver` だけ（`web` は画面に依存しない口だけを持つ）。
 
 // unsafe は macOS の FFI（`.m` の C ABI と受け口）に限る（`// SAFETY:` を付ける）。macOS だけ deny へ緩める。
 #![cfg_attr(not(target_os = "macos"), forbid(unsafe_code))]
@@ -36,7 +36,5 @@ mod web_result;
 
 pub use driver::*;
 pub use error::EyeDropperError;
-#[cfg(target_arch = "wasm32")]
-pub use web::eye_dropper_pick_effect;
 // 契約の正本は fandhe-device に残し、利用者が直接依存しなくて済むよう再公開する。
 pub use fandhe_device::eye_dropper::{EyeDropper, PickedColor, UnsupportedEyeDropper};
