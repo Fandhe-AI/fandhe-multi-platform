@@ -667,6 +667,7 @@ pub fn request_stop_speech_recognition(request_id: u64) -> bool {
 ///
 /// 進行中なら、OS 側の停止（[`request_stop_speech_recognition`] と同じ依頼）も出してから捨てる（聞き取りが背景で続かないようにするため）。
 /// 停止の依頼が OS へ渡らなかった（既に終了済み・OS 側に追跡が無い等）場合も Rust 側の要求は捨てて `true` を返す。
+/// 権限の許可ダイアログが出ている間は、ダイアログが閉じるまで次の開始は busy で断られる（discard はダイアログを閉じない）。
 /// OS 側の聞き取りは上限時間で自動停止し、後から届いた結果は id 不一致で捨てられる。OS 側の停止が済むまでの間に
 /// 次の [`begin_speech_recognition`] をすると、OS 側の二重開始として `Internal`（busy）の失敗になりうる。捨てたあとは [`poll_speech_recognition`] が `None` になる。
 pub fn discard_speech_recognition(request_id: u64) -> bool {

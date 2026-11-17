@@ -128,14 +128,20 @@ final class FilePickerHelper {
             return;
         }
         activity.runOnUiThread(() -> {
+            // 積んでから実行されるまでの間に、終了による破棄（`detach`）が追跡を外して失敗を通知していたら、選択画面を開かない
+            // （開くと、その結果を次の要求が引き継いでしまう）。追跡の解除と launch はどちらも UI スレッドで行うため、この照合は競合しない。
+            if (filePickRequest.current() != requestId) {
+                return;
+            }
             try {
                 pickDocument.launch(new String[] {"*/*"});
             } catch (RuntimeException e) {
                 // ドキュメントプロバイダが端末に存在しない、または `launch()` 自体が例外を送出した場合
                 // （`onSaveInstanceState` 後の呼び出し等）。ピッカーは開かれておらず callback も来ないため、
-                // ここで直接 code 2 を通知する。
-                filePickRequest.take();
-                nativeOnFilePickerResult(requestId, 2, null, -1);
+                // ここで直接 code 2 を通知する。自分の要求のときだけ外して通知する（別の経路が先に確定していれば二重にしない）。
+                if (filePickRequest.complete(requestId)) {
+                    nativeOnFilePickerResult(requestId, 2, null, -1);
+                }
             }
         });
     }

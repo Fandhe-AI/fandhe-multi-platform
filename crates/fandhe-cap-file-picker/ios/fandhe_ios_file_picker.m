@@ -151,16 +151,18 @@ extern void fandhe_rust_file_picker_outcome(uint64_t requestId, int32_t code,
 int32_t fandhe_ios_file_picker_pick(uint64_t requestId) {
     dispatch_async(dispatch_get_main_queue(), ^{
       @autoreleasepool {
-        // 進行中の選択画面（提示中の picker）があれば、重ねて提示せず busy を返す（先の delegate・結果を壊さない）。
-        // delegate が残っていても picker が提示されていなければ完了通知を失った残りなので、解放して続ける。
-        if (g_retainedDelegate != nil) {
-            if (g_activePicker != nil && g_activePicker.presentingViewController != nil) {
-                fandhe_rust_file_picker_outcome(requestId, 3, NULL, 0);
-                return;
-            }
-            g_retainedDelegate = nil;
-            g_activePicker = nil;
+        // 進行中の選択画面（提示中、または dismiss のアニメーション中の picker）があれば、重ねて提示せず busy を返す。
+        // 判定は delegate の有無ではなく OS の観測（picker の提示状態）で行う: 完了通知で delegate を解放した直後も、
+        // picker は dismiss が終わるまで提示中のままで、その上へ present すると失敗してコールバックが来ない。
+        // picker が解放済み（weak が nil）・dismiss 済みなら進行中ではなく、永久に busy にはならない。
+        UIDocumentPickerViewController *active = g_activePicker;
+        if (active != nil && (active.presentingViewController != nil || active.isBeingDismissed)) {
+            fandhe_rust_file_picker_outcome(requestId, 3, NULL, 0);
+            return;
         }
+        // delegate だけ残っていれば、完了通知を失った残り（シーン破棄等）なので解放して続ける。
+        g_retainedDelegate = nil;
+        g_activePicker = nil;
         UIViewController *top = FandheTopmostViewController();
         // `top.view.window == nil` は `presentViewController` がデリゲートを
         // 一切呼ばずに失敗する既知の失敗系（`fandhe_ios_camera.m` と同じ）。

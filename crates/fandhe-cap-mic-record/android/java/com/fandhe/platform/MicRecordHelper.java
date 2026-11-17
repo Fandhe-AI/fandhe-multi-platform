@@ -374,6 +374,7 @@ final class MicRecordHelper {
                     // biometric/permission コールバックと同じ非前景ガード
                     // （`requestMicPermission` 参照）。ここで弾いておけば、
                     // 権限確認へ進んだ場合もダイアログ表示時点で前景が保証される。
+                    micOwner = null;
                     micRecordRequest.take();
                     nativeOnMicRecordResult(requestId, MIC_RESULT_INTERRUPTED, null, null, 0);
                     return;
@@ -393,6 +394,7 @@ final class MicRecordHelper {
                     // 理由）。コールバックは二度と来ないため、ここで直接失敗を通知する。
                     micPermissionRequestId = RequestTracker.NONE;
                     micPermissionPending = false;
+                    micOwner = null;
                     micRecordRequest.take();
                     nativeOnMicRecordResult(requestId, MIC_RESULT_INTERNAL_ERROR, null, null, 0);
                 }
