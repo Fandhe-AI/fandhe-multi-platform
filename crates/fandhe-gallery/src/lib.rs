@@ -477,7 +477,8 @@ pub fn register_teardown_hooks() {
 #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
 fn shutdown() {
     // 読み上げの子プロセス（`say`・PowerShell）を止める。プロセスが終了すると `static` の `Drop` は走らず、ウィンドウを閉じても
-    // 発話中の子プロセスが残るため、終了フックから明示的に止める（発話要求と同じキューへ積み、発送済みの発話より後に止まる）。
+    // 発話中の子プロセスが残るため、終了フックから明示的に止める（キューがあれば発話要求と同じキューへ積み、発送済みの発話より後に止まる。
+    // 公開入口から直接発話してキューが無いときは、その場で止める）。
     fandhe_cap_tts::shutdown();
     // 進行中の Web 認証（デモサーバーと OS のセッション）を閉じる。
     fandhe_cap_web_auth_session::shutdown();
