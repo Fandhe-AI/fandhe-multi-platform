@@ -345,7 +345,7 @@ wifi-connect・volume-control・sleep-lock-events の 8 機能を移した。残
 | 型 | 扱い |
 |----|------|
 | 他機能と共有する純関数の引き上げ（wifi-connect） | Windows の電源判定 `radio_off` と定数は wifi-info の Windows 実装も使う。複製せず `fandhe-device::wifi_info` へ `pub` で上げ、テストも一緒に移した（先行コミット）。wifi-info の移行を妨げない |
-| 契約を `fandhe-device` に残す機能（eye-dropper） | color-picker（未移行）と Web 実装（`fandhe-web-dom`）が `PickedColor` などを使うため、契約は動かさない。`scaffold` は契約も `git mv` するので使わず、driver・macOS 実装・`.m` だけ手で移す（§13 の drag-drop と同じ）。macOS の `NSColorSampler` は非同期で trait を通らないため、`platform_eye_dropper()` は常に `UnsupportedEyeDropper` を返し、doc に書いた |
+| 契約を `fandhe-device` に残す機能（eye-dropper） | color-picker（未移行）と Web 実装（`fandhe-web-dom`）が `PickedColor` などを使うため、契約は動かさない。`scaffold` は契約も `git mv` するので使わず、driver・macOS 実装・`.m` だけ手で移す（§13 の drag-drop と同じ）。macOS の `NSColorSampler` は非同期で trait を通らないため、`platform_eye_dropper()` は常に `UnsupportedEyeDropper` を返し、doc に書いた。#1359 で画面の状態型に依存しない非同期の入口（`begin_eye_dropper` / `poll_eye_dropper` / `discard_eye_dropper`）を足し、Web 実装を `fandhe-web-dom` から機能 crate へ移した |
 | driver が持つ `extern "C"` の受け口（sleep-lock-events） | `scaffold` は driver に `unsafe` があると止まる。受け口を OS 実装（macOS）のファイルへ移し、driver は `pub(crate)` の `fire` を呼ぶだけにしてから移す |
 | 状態を持たない Helper は Context を取る static に（volume-control） | 状態もライフサイクルも持たない同期呼び出しは provider を作らず、`read(Context)` / `adjust(Context, int)` にして `MainActivity` の 1 行ラッパーを消す（§9）。Android の `unsafe` が `with_activity_class` へ移って残らないため、`lib.rs` の Android を `forbid` へ戻した |
 | 購読・保留要求を持つ Helper（sleep-lock-events・wifi-connect） | `HELPERS`（`WeakHashMap`）と `<Name>Lifecycle` の組にする。Helper が無いとき、`start` は失敗コード、`connect` は `nativeOn…Result` へ FAILED を返して確定する。状態を読むだけの `read` は Helper を要さないので `Context` を取る static にする |

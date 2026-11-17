@@ -49,8 +49,6 @@
 //!   [`location`] と同じ理由で純関数のみ `wasm32` gate の外に置く
 //! - [`midi`]: 「MIDI 入力」画面の Web 経路（Issue #1401）。Web MIDI API。
 //!   [`location`] と同じ理由で純関数のみ `wasm32` gate の外に置く
-//! - [`eye_dropper`]: 「画面のスポイト」画面の Web 経路（Issue #763）。[`location`] と同じ理由で
-//!   純関数（`sRGBHex` → 結果・例外の `name` → 結果）のみ `wasm32` gate の外に置く
 //! - [`color_picker`]: 「システムの色選択ダイアログ」画面の Web 経路（Issue #943）。[`location`] と同じ理由で
 //!   純関数（`change` の値 → 結果）のみ `wasm32` gate の外に置く
 //! - [`local_fonts`]: 「OS 搭載フォント」画面の Web 経路（Issue #1379）。[`location`] と同じ理由で
@@ -217,10 +215,6 @@ pub mod color_picker;
 /// 純関数（ブラウザの生値 → 表示用の読み取り結果）は native からもテストできるよう
 /// クレート単位の `wasm32` gate を外す。
 pub mod device_info;
-/// 型サンプル「画面のスポイト」の Web 経路（Issue #763）。[`location`] と同じ理由で
-/// 純関数（`sRGBHex` → 結果・例外の `name` → 結果）は native からもテストできるよう
-/// クレート単位の `wasm32` gate を外す。
-pub mod eye_dropper;
 /// 型サンプル「ファイルの関連付け」の Web 経路（Issue #419）。[`accessibility_prefs`] と同じ理由で
 /// 純関数は native からもテストできるようクレート単位の `wasm32` gate を外す。
 pub mod file_association;
