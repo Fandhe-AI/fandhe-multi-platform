@@ -36,7 +36,7 @@ import java.util.WeakHashMap;
 // requestId: `request(Activity, long)` が受け取った値をそのまま返す。Rust 側 `bridge` がプロセス内で一意な連番を発行して渡し、
 // 現在の要求と照合する（Activity 再生成後の遅延到着は黙って捨てる）。
 // code: 0=選択（name/fd が有効）／1=キャンセル／2=失敗（`launch()` 例外・fd 取得失敗・JPEG 以外の変換失敗・復号不能・長辺超過・
-// helper なしのいずれも一律ここへ畳む）。
+// helper なしのいずれも一律ここへ畳む）／3=busy（追跡中の要求がある間の新しい要求。name/fd は無効）。
 // name: 固定値 "photo"（表示にもログにも出さない。`FilePickerHelper.nativeOnFilePickerResult` と署名を揃えて、Rust 側の受け取り
 // （`fandhe_device::file_picker::picked_from_document`）を共有するための引数）。
 // fd: `code == 0` のときのみ有効。`detachFd()` で所有権を Rust へ渡した生 fd。読み取り・8 MiB 判定・形式判定・復号確認はすべて
@@ -122,7 +122,13 @@ final class PhotoPickerHelper {
     }
 
     private void requestPhotoPick(long requestId) {
-        photoPickRequest.track(requestId);
+        // 追跡中の要求（選択画面が開いている）があれば、上書きも再 launch もせず busy を返す。上書きすると、先の画面の結果が
+        // 新しい要求として届く（取り違え）。追跡は callback の `take()`・`launch()` 失敗・終了による破棄（`detach`）で必ず外れる。
+        // Rust 側が要求を捨てた（`discard_photo_pick`）後も、選択画面が閉じるまでここで busy になる（OS の観測による判定）。
+        if (!photoPickRequest.tryTrack(requestId)) {
+            nativeOnPhotoPickerResult(requestId, 3, null, -1);
+            return;
+        }
         activity.runOnUiThread(() -> {
             // 積んでから実行されるまでの間に、別の要求への置き換え・終了による破棄が済んでいたら、選択画面を開かない
             // （追跡の解除と launch はどちらも UI スレッドで行うため、この照合は競合しない）。

@@ -34,8 +34,8 @@ impl From<DeviceError> for ImageRecognitionError {
     }
 }
 
-/// 写真選択（`fandhe-cap-photo-picker`）の失敗を、識別子ごと 1:1 に写す。Android は写真選択の crate に依存しない。
-#[cfg(not(target_os = "android"))]
+/// 写真選択（`fandhe-cap-photo-picker`）の失敗を、識別子ごと 1:1 に写す。Android・wasm32 は写真選択の crate に依存しない。
+#[cfg(not(any(target_os = "android", target_arch = "wasm32")))]
 impl From<fandhe_cap_photo_picker::PhotoPickerError> for ImageRecognitionError {
     fn from(e: fandhe_cap_photo_picker::PhotoPickerError) -> Self {
         use fandhe_cap_photo_picker::PhotoPickerError as P;

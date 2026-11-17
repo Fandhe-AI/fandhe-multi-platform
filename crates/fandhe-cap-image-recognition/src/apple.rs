@@ -1,4 +1,4 @@
-//! macOS / iOS 向け文字認識実装（Issue #1250 macOS、iOS は #1252。iOS は `ios::drive` の受け取りが使う）。
+//! macOS / iOS 向け文字認識実装（Issue #1250 macOS、iOS は #1252。iOS は `ios_effect::drive` の受け取りが使う）。
 //! `crate::driver` の macOS 経路から呼ばれ、`apple/fandhe_apple_image_recognition.m`
 //! （Vision `VNRecognizeTextRequest`。`build.rs` が macOS・iOS でコンパイル）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。行は `.m` からコールバックで 1 件ずつ Rust の

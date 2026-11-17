@@ -24,7 +24,7 @@ unsafe extern "C" {
 
 /// `ios/fandhe_ios_photo_picker.m` の完了ハンドラから呼ばれる `extern "C"` エクスポート（Issue #1104）。`code` の意味・パスの寿命は
 /// `fandhe-cap-file-picker` の `fandhe_rust_file_picker_outcome` と同じ（0 = 選択でパスは `NSItemProvider` が渡した一時ファイル、
-/// 1 = キャンセル、それ以外 = 変換失敗等の内部エラー）。選択時は `picked_from_path_bytes` が同期に読み切ってから戻り、続けて
+/// 1 = キャンセル、3 = busy、それ以外 = 変換失敗等の内部エラー）。選択時は `picked_from_path_bytes` が同期に読み切ってから戻り、続けて
 /// 登録された受け取りが 2 段検査（`validate_photo` → 復号確認）などを **この呼び出しスレッド**（`NSItemProvider` のバックグラウンド
 /// キュー）で行う。UI スレッドでは復号しない。知らない id は捨てる。
 ///
@@ -46,8 +46,12 @@ extern "C" fn fandhe_rust_photo_picker_outcome(
     } else {
         None
     };
-    let result =
-        picked_from_path_bytes(code, path, "photo_picker pick").map_err(PhotoPickerError::from);
+    // code 3 = 進行中のピッカーがある間の新しい要求（busy。`.m` 側が返す）。
+    let result = if code == 3 {
+        Err(PhotoPickerError::Internal("photo_picker busy"))
+    } else {
+        picked_from_path_bytes(code, path, "photo_picker pick").map_err(PhotoPickerError::from)
+    };
     PENDING.dispatch(request_id, result);
     fandhe_runtime::request_repaint();
 }

@@ -4,11 +4,12 @@
 //! （対応表で `no`。`Unsupported` を返す）、Web は標準 API が無く対象外。
 //!
 //! 契約（`contract`）・失敗の種類（`error`）・effect ドライバ（`driver`）・OS 実装（macOS・iOS は `apple`、iOS の写真選択との接続は
-//! `ios`、Windows は `windows`、Android は `android`）を 1 つに集める。画面の状態型を参照してよいのは `driver` だけ（iOS・Android の drive も `driver` 内）。
-//! 入口 [`platform_image_recognition`] は状態型に依存しないため、フレームワークの外のアプリも使える（macOS は Vision、Windows は
-//! `OcrEngine`、iOS・Android・Linux は `Unsupported`）。
+//! `ios_effect`（`driver` 内）、Windows は `windows`、Android は `unsupported_effect`（`driver` 内））を 1 つに集める。画面の状態型を参照してよいのは `driver` だけ。
+//! 状態型に依存しない入口は 2 つ。同期の [`platform_image_recognition`]（macOS は Vision、Windows は `OcrEngine`、iOS・Android・Linux は
+//! `Unsupported`）と、iOS の非同期の [`begin_image_recognition`] / [`poll_image_recognition`] / [`discard_image_recognition`]（写真選択を開いて
+//! 選ばれた画像を認識する。画面 effect と同じ slot を持ち主で分けて共有し、進行中は busy で断る）。フレームワークの外のアプリも使える。
 //!
-//! 画像を選ばせる OS 機能は `fandhe-cap-photo-picker` に依存して使う（Android を除く。Android は骨格のため写真選択の宣言を混ぜない）。
+//! 画像を選ばせる OS 機能は `fandhe-cap-photo-picker` に依存して使う（Android・wasm32 を除く。Android は骨格、wasm32 は対象外のため写真選択の宣言を混ぜない）。
 //! 呼び出し元は最終成果物（`fandhe-gallery`）の画面レジストリ（`image_recognize_effect`）。
 //!
 //! 守る範囲: 1 画面・1 プロセス内での要求と完了の順序（画面の世代照合）・嘘の成功の禁止（失敗・復号不能・言語データ不足を 0 行の成功へ

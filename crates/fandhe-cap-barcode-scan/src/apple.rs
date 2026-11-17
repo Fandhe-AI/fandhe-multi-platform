@@ -1,5 +1,5 @@
 //! macOS / iOS 向けバーコード・QR 読み取り実装（Issue #557 macOS、iOS は #558。iOS は
-//! `ios::drive` の受け取りが使う）。`crate::driver` の macOS 経路から呼ばれ、
+//! `ios_effect::drive` の受け取りが使う）。`crate::driver` の macOS 経路から呼ばれ、
 //! `apple/fandhe_apple_barcode_scan.m`（Vision `VNDetectBarcodesRequest`。`build.rs` が macOS・iOS で
 //! コンパイル）を `unsafe extern "C"` 1 関数で呼ぶ。中身は `.m` からコールバックで
 //! 1 件ずつ Rust の `Vec<String>` へ積み、所有権とアロケータは境界を越えない。`unsafe` はこの呼び出しと

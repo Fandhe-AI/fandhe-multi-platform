@@ -194,6 +194,9 @@ graph TD
   フレームワークの外のアプリはこれを使い、effect は自分の状態型で書きます（実例: `fandhe-cap-device-identifier`）。
   `<stem>` は対応表の id の `-` を `_` にした名前で、別名は認めません。
   公開の有無は `node scripts/device/migrate-capability.mjs sync --check` が検査します
+- OS がコールバック型で同期の `platform_<stem>()` では実機能に届かない機能は、begin / poll / discard 型の非同期の入口
+  （例: `begin_file_pick`・`begin_photo_pick`）も公開します。画面 effect と同じ `RequestSlot` を `SlotOwner` で分けて共有し、
+  画面との排他・結果の 1 回配送・失われた要求の通知・discard 後に遅れて届いた結果の破棄を満たします
 - 保存先の解決（Android の `data_dir`・iOS の `documents_dir`・デスクトップの既定）は `fandhe-cap-local-storage-kv` が持ちます。
   他機能は「OS 機能を実際に使う」場合として依存します
 

@@ -19,7 +19,8 @@ thiserror = { workspace = true }
 
 # 画像を選ばせる OS 機能（PHPicker・`NSOpenPanel`・Windows のダイアログ）は写真選択の機能 crate のものを使う（consumer-app-structure.md §8）。
 # Android の文字認識は骨格（`Unsupported` を返す）で写真選択を使わないため、依存を張らない（写真選択の Java helper・provider を混ぜない）。
-[target.'cfg(not(target_os = "android"))'.dependencies]
+# wasm32 も対象外（Web は文字認識の標準 API が無い）で、画像復号の依存を混ぜない。
+[target.'cfg(not(any(target_os = "android", target_arch = "wasm32")))'.dependencies]
 fandhe-cap-photo-picker = { path = "../fandhe-cap-photo-picker" }
 
 # `OcrEngine`（`Media_Ocr`）と `BitmapDecoder` / `SoftwareBitmap` / `BitmapTransform`（`Graphics_Imaging`）、その非同期操作（`windows-future`）。

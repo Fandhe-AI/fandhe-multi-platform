@@ -3,10 +3,11 @@
 //! 画像を 1 枚選ばせ、**復号できることを確かめてから**画面へ返す。
 //!
 //! 契約（`contract`）・失敗の種類（`error`）・effect ドライバ（`driver`）・OS 実装（macOS・Windows は `desktop`、iOS は `ios`、
-//! Android は `android`）を 1 つに集める。画面の状態型を参照してよいのは `driver` だけ。状態型に依存しない入口は 2 つある。
-//! 1 つは同期の [`platform_photo_picker`]（文字認識・バーコード読み取りの機能 crate がデスクトップ経路で使う。macOS・Windows は
-//! ダイアログを開いて結果を返し、iOS・Android・Linux は `Unsupported` を返す）。もう 1 つは iOS 専用の [`present_ios_photo_picker`]
-//! （PHPicker の受け口を共有する文字認識・バーコード読み取りが、要求ごとに受け取りを登録して使う）。
+//! Android は `android`）を 1 つに集める。画面の状態型を参照してよいのは `driver` だけ。状態型に依存しない入口は 3 つある。
+//! 同期の [`platform_photo_picker`]（文字認識・バーコード読み取りの機能 crate がデスクトップ経路で使う。macOS・Windows は
+//! ダイアログを開いて結果を返し、iOS・Android・Linux は `Unsupported` を返す）。iOS・Android の非同期の [`begin_photo_pick`] /
+//! [`poll_photo_pick`] / [`discard_photo_pick`]（画面 effect と同じ slot を持ち主で分けて共有し、進行中は busy で断る）。iOS 専用の
+//! [`present_ios_photo_picker`]（PHPicker の受け口を共有する文字認識・バーコード読み取りが、要求ごとに受け取りを登録して使う）。
 //!
 //! 呼び出し元は最終成果物（`fandhe-gallery`）の画面レジストリ（`photo_pick_effect`）と、Android の `android_main`（`reset_pending_tracking`）。
 //! Android の JNI 受け口（`nativeOnPhotoPickerResult`）と iOS の FFI 受け口は、この crate 内の `bridge::deliver` / 登録済みの受け取りへ

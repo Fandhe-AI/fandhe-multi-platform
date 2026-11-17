@@ -17,6 +17,9 @@ use fandhe_platform_android::{JniCallFailed, with_activity_class};
 
 use crate::error::PhotoPickerError;
 
+/// Java 側 `PhotoPickerHelper` が「追跡中の要求がある間の新しい要求」に返す結果コード（busy）。
+const BUSY_CODE: jni::sys::jint = 3;
+
 /// Java 側 `PhotoPickerHelper.request(Activity, long)` を呼び、ピッカーの提示だけを要求する。結果を待たずに即座に戻る。
 /// 戻り値は JNI 呼び出し自体の成否のみ（`false` はメソッド未検出・例外送出等。呼び出し元が
 /// `Err(PhotoPickerError::Internal("photo_picker present"))` を `deliver` へ渡して畳む）。Helper が無い（生成前・破棄後）要求は
@@ -51,7 +54,8 @@ pub(crate) fn request_photo_pick(request_id: u64) -> bool {
 
 /// Java 側から届いた `code`/`name`/`fd` を `PickedFile` へ変換する（`nativeOnPhotoPickerResult` 本体）。`code` の意味は
 /// Java 側 `PhotoPickerHelper` の宣言コメントと対: 0=選択（name/fd 必須）／1=キャンセル／2=失敗（`launch()` 例外・fd 取得失敗・
-/// JPEG への変換失敗・復号不能・長辺超過のいずれも一律ここへ畳む）。検証と読み取りは `picked_from_document` に委譲する
+/// JPEG への変換失敗・復号不能・長辺超過のいずれも一律ここへ畳む）／3=busy（追跡中の要求がある間の新しい要求。`Internal("photo_picker busy")` へ
+/// 写す。fd は無い）。検証と読み取りは `picked_from_document` に委譲する
 /// （写真選択固有の 2 段検査は `bridge::deliver` 側）。
 ///
 /// `fd` の所有権を、名前の検証より **先に** 取る（後続のどの失敗経路でも `file` の drop で必ず 1 回 close され、detach 済み fd が
@@ -63,6 +67,9 @@ fn decode_photo_pick_result(
     name: &jni::objects::JString,
     fd: jni::sys::jint,
 ) -> Result<Option<PickedFile>, PhotoPickerError> {
+    if code == BUSY_CODE {
+        return Err(PhotoPickerError::Internal("photo_picker busy"));
+    }
     let file = if code == 0 && fd >= 0 {
         // SAFETY: Java 側 `PhotoPickerHelper.deliverPickedPhoto` が `ParcelFileDescriptor.detachFd()` で所有権を手放した直後に渡す
         // 有効な fd で（`code == 0` のときだけ有効）、detach 後は Java 側で close しない契約。`OwnedFd` に包むことで、この関数を

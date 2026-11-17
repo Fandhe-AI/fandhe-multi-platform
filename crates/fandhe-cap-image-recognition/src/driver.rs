@@ -9,9 +9,12 @@
 //!
 //! - macOS: `apple::AppleTextRecognizer`（#1250）
 //! - Windows: `windows`（#1251。WinRT `OcrEngine`）
-//! - iOS: `ios::drive`（#1252。PHPicker + Vision（`.m` は macOS と共用））。写真選択がコールバック型のため同期の `PhotoPicker` を通らず、
-//!   `fandhe_cap_photo_picker::present_ios_photo_picker` へ要求ごとの受け取りを登録する
-//! - Android: `android::drive`（#1253 まで要求を `Unsupported` で完了させる骨格。写真選択の crate には依存しない）
+//! - iOS: `ios_effect::drive`（#1252。PHPicker + Vision（`.m` は macOS と共用））。写真選択がコールバック型のため同期の `PhotoPicker` を通らず、
+//!   `fandhe_cap_photo_picker::present_ios_photo_picker` へ要求ごとの受け取りを登録する。状態型に依存しない入口は begin / poll / discard 型の
+//!   非同期（[`begin_image_recognition`] / [`poll_image_recognition`] / [`discard_image_recognition`]）で、画面 effect と slot を持ち主で分けて共有する
+//!   （`consumer-app-structure.md` §8.2）
+//! - Android: `unsupported_effect::drive`（#1253 まで要求を `Unsupported` で完了させる骨格。写真選択の crate には依存しない）
+//! - wasm32: 同じく `unsupported_effect::drive`（Web は対象外。写真選択の crate に依存しない）
 //! - それ以外（Linux）: `UnsupportedTextRecognizer` 固定（ダミーの成功実装へは倒さない）
 //!
 //! # スレッド（デスクトップ）
@@ -30,29 +33,34 @@
 #[cfg(test)]
 use std::sync::Arc;
 
-#[cfg(any(test, not(any(target_os = "ios", target_os = "android"))))]
+#[cfg(any(
+    test,
+    not(any(target_os = "ios", target_os = "android", target_arch = "wasm32"))
+))]
 use fandhe_cap_photo_picker::PhotoPicker;
 #[cfg(any(test, target_os = "ios"))]
 use fandhe_cap_photo_picker::PhotoPickerError;
 use fandhe_core::screens::image_recognize::{ImageRecognizeState, RecognizeFailure};
-#[cfg(any(test, not(any(target_os = "ios", target_os = "android"))))]
+#[cfg(any(
+    test,
+    not(any(target_os = "ios", target_os = "android", target_arch = "wasm32"))
+))]
 use fandhe_core::screens::image_recognize::{finish_recognize, mark_recognizing, take_request};
-#[cfg(any(test, not(target_os = "android")))]
+#[cfg(any(test, not(any(target_os = "android", target_arch = "wasm32"))))]
 use fandhe_device::photo_picker::{PickedPhoto, precheck_dimensions};
 #[cfg(any(test, target_os = "ios"))]
 use fandhe_device::{file_picker::PickedFile, photo_picker::validate_photo};
 use fandhe_runtime::CompletionSender;
 
 use crate::contract::LANGUAGE_UNAVAILABLE;
-#[cfg(any(test, not(target_os = "android")))]
+#[cfg(any(test, not(any(target_os = "android", target_arch = "wasm32"))))]
 use crate::contract::TextRecognizer;
 use crate::error::ImageRecognitionError;
 
 /// 現在のプラットフォームに応じた [`TextRecognizer`] 実装を返す（プロセスで 1 個）。状態型に依存しない入口で、
 /// フレームワークの外のアプリも自分の状態型の effect から使える。macOS は Vision、Windows は `OcrEngine`、
 /// iOS・Android・Linux は `Unsupported` 固定（iOS は PHPicker が非同期に結果を返すため、同期の入口では使えない。
-/// 画面は [`image_recognize_effect`] の経路を使う。Android は #1253 まで骨格）。
-// ponytail: iOS の同期入口は要求が出たら足す（`ios::drive` の登録・受け取りを同期に直すにはスレッド待ちが要る）。
+/// iOS は [`begin_image_recognition`] / [`poll_image_recognition`] を使う。Android は #1253 まで骨格）。
 pub fn platform_image_recognition() -> std::sync::Arc<dyn crate::contract::TextRecognizer> {
     #[cfg(target_os = "macos")]
     {
@@ -70,7 +78,7 @@ pub fn platform_image_recognition() -> std::sync::Arc<dyn crate::contract::TextR
 
 /// `ImageRecognitionError` を画面の失敗種別へ写す。内部識別子・パス・認識文字は利用者向け文言へ
 /// 出さず、上記以外は固定文言にする（security.md A09）。
-#[cfg_attr(target_os = "android", allow(dead_code))]
+#[cfg_attr(any(target_os = "android", target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn to_failure(e: ImageRecognitionError) -> RecognizeFailure {
     match e {
         ImageRecognitionError::Unsupported(LANGUAGE_UNAVAILABLE) => {
@@ -85,29 +93,204 @@ pub(crate) fn to_failure(e: ImageRecognitionError) -> RecognizeFailure {
 /// OS を呼ぶ前にヘッダーだけで辺・画素数を検査する（デスクトップ・iOS 共通。圧縮爆弾対策）。
 /// 上限超過は `InvalidInput`、ヘッダーを読めない画像は `Internal`（切り詰めて成功にしない）。検査の本体は
 /// `fandhe_device::photo_picker::precheck_dimensions`（バーコード読み取りと共有）。
-#[cfg(any(test, not(target_os = "android")))]
+#[cfg(any(test, not(any(target_os = "android", target_arch = "wasm32"))))]
 pub(crate) fn precheck(photo: &PickedPhoto) -> Result<(), ImageRecognitionError> {
     precheck_dimensions(photo).map_err(ImageRecognitionError::from)
 }
 
-/// iOS の PHPicker 結果（`ios::drive` が登録した受け取りが OS コールバックスレッドで渡す）を
-/// 検査して OCR する純粋関数。キャンセルは `Ok(None)`（失敗にしない）、0 行は成功、
-/// それ以外の失敗は `to_failure` で固定文言へ写す。ホストのテストで検証できるよう分離。
+/// iOS の PHPicker 結果（`ios_effect::drive`・[`begin_image_recognition`] が登録した受け取りが OS コールバックスレッドで渡す）を
+/// 検査して OCR する純粋関数。キャンセルは `Ok(None)`（失敗にしない）、0 行は成功、失敗は種別のまま返す。
+/// ホストのテストで検証できるよう分離。
 #[cfg(any(test, target_os = "ios"))]
+pub(crate) fn recognize_picked_raw(
+    result: Result<Option<PickedFile>, PhotoPickerError>,
+    recognizer: &dyn TextRecognizer,
+) -> Result<Option<Vec<String>>, ImageRecognitionError> {
+    let file = match result {
+        Ok(Some(file)) => file,
+        Ok(None) | Err(PhotoPickerError::Cancelled(_)) => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
+    let photo = validate_photo(file.bytes).map_err(ImageRecognitionError::from)?;
+    precheck(&photo)?;
+    recognizer.recognize(&photo).map(Some)
+}
+
+/// [`recognize_picked_raw`] の失敗を画面の失敗種別へ写す（[`to_failure`] で固定文言へ）。実機では画面側が `to_failure` を直接使うため、テストだけが使う。
+#[cfg(test)]
 pub(crate) fn recognize_picked(
     result: Result<Option<PickedFile>, PhotoPickerError>,
     recognizer: &dyn TextRecognizer,
 ) -> Result<Option<Vec<String>>, RecognizeFailure> {
-    let file = match result {
-        Ok(Some(file)) => file,
-        Ok(None) | Err(PhotoPickerError::Cancelled(_)) => return Ok(None),
-        Err(e) => return Err(to_failure(e.into())),
-    };
-    let photo = validate_photo(file.bytes)
-        .map_err(ImageRecognitionError::from)
-        .map_err(to_failure)?;
-    precheck(&photo).map_err(to_failure)?;
-    recognizer.recognize(&photo).map(Some).map_err(to_failure)
+    recognize_picked_raw(result, recognizer).map_err(to_failure)
+}
+
+/// iOS の PHPicker 結果を受ける slot と持ち主（pull 型、`fandhe_runtime::request_slot::RequestSlot` の facade）。
+///
+/// 画面 effect（`ios_effect::drive`）と公開入口（[`begin_image_recognition`] / [`poll_image_recognition`] / [`discard_image_recognition`]）が同じ slot を共有する。
+/// 持ち主（[`bridge::SCREEN_OWNER`]・[`bridge::PUBLIC_OWNER`]）で自分の分の要求を区別し、片方が進行中・結果未取得のとき他方は置き換えず
+/// busy で断る。slot には変換前の生の結果（ImageRecognitionError）を置き、画面へ渡すときに [`to_failure`] で写す。
+///
+/// テストでホストからも検証できるよう `cfg(test)` でもコンパイルする（OS 呼び出しは含まない）。
+#[cfg(any(test, target_os = "ios"))]
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub(crate) mod bridge {
+    use std::sync::Mutex;
+
+    use fandhe_cap_photo_picker::PhotoPickerError;
+    use fandhe_device::file_picker::PickedFile;
+    use fandhe_runtime::request_slot::{RequestSlot, SlotOwner};
+
+    use crate::contract::TextRecognizer;
+    use crate::error::ImageRecognitionError;
+
+    /// 公開入口が追う自分の分の要求（画面側が置き換え・横取りしない）。
+    pub(crate) static PUBLIC_OWNER: SlotOwner = SlotOwner::new();
+    /// 画面 effect が追う自分の分の要求（公開入口と slot を共有するため区別する）。
+    pub(crate) static SCREEN_OWNER: SlotOwner = SlotOwner::new();
+    /// 公開側の poll・discard（持ち主の照合・取得・喪失判定・解放）を直列にする。並行 poll で成功と喪失が二重に返らないため。
+    static PUBLIC_POLL_LOCK: Mutex<()> = Mutex::new(());
+
+    /// 完了結果（`None` = キャンセル）。
+    pub(crate) type Outcome = Result<Option<Vec<String>>, ImageRecognitionError>;
+
+    pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
+
+    /// 画面の要求を登録する。公開入口の進行中・未取得の要求があれば置き換えず `None`（busy）。
+    pub(crate) fn begin_screen() -> Option<u64> {
+        SCREEN_OWNER.begin_keeping_foreign(&SLOT)
+    }
+
+    /// 公開入口の要求を登録する。進行中、または結果が未取得の要求（画面側の分を含む）があれば `None`（busy）。
+    pub(crate) fn begin_public() -> Option<u64> {
+        PUBLIC_OWNER.begin_excluding(&SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
+    }
+
+    /// 公開入口の提示依頼が同期的に失敗したときに、登録を取り消す。
+    pub(crate) fn abort_public(request_id: u64) {
+        SLOT.clear(request_id);
+        PUBLIC_OWNER.release(request_id);
+    }
+
+    /// 結果を置く（任意スレッド）。`request_id` 不一致・未登録・重複は捨てて `false`。
+    pub(crate) fn deliver(request_id: u64, outcome: Outcome) -> bool {
+        SLOT.deliver(request_id, outcome)
+    }
+
+    /// PHPicker の結果（`NSItemProvider` のキューから呼ばれる）を検査し、OCRまで済ませて slot へ置く。
+    /// 画面・公開入口のどちらの要求も同じ検査（`validate_photo` → ヘッダー検査 → OS）を通る。
+    pub(crate) fn deliver_picked(
+        request_id: u64,
+        result: Result<Option<PickedFile>, PhotoPickerError>,
+        recognizer: &dyn TextRecognizer,
+    ) -> bool {
+        deliver(request_id, super::recognize_picked_raw(result, recognizer))
+    }
+
+    /// 公開入口の結果を取り出す（[`super::poll_image_recognition`] の本体）。届いていれば 1 度だけ `Some`、未着・旧 id・公開入口でない id は `None`。
+    /// slot の要求が失われたとき（reset 等）は、1 度だけ `Err(Internal("image_recognition lost"))`、以後は `None`。
+    /// 照合から解放までを直列にし、並行 poll でも成功と喪失が二重に返らない。
+    pub(crate) fn poll_public(request_id: u64) -> Option<Outcome> {
+        let _guard = PUBLIC_POLL_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        if request_id == 0 || PUBLIC_OWNER.current() != request_id {
+            return None;
+        }
+        if let Some(outcome) = SLOT.take_ready(request_id) {
+            PUBLIC_OWNER.release(request_id);
+            return Some(outcome);
+        }
+        if SLOT.snapshot().is_some_and(|(id, _)| id == request_id) {
+            return None;
+        }
+        PUBLIC_OWNER.release(request_id);
+        Some(Err(ImageRecognitionError::Internal(
+            "image_recognition lost",
+        )))
+    }
+
+    /// 公開入口の自分の分の要求を捨てる（[`super::discard_image_recognition`] の本体）。持ち主が `request_id` と一致するときだけ
+    /// slot を空にして持ち主を外し `true`。他人の id・取り出し済み・0 は `false`。poll と同じロックで直列にする。
+    pub(crate) fn discard_public(request_id: u64) -> bool {
+        let _guard = PUBLIC_POLL_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        if request_id == 0 || PUBLIC_OWNER.current() != request_id {
+            return false;
+        }
+        SLOT.clear(request_id);
+        PUBLIC_OWNER.release(request_id);
+        true
+    }
+
+    /// テスト用: slot を空にする（持ち主の印は残る。喪失の検査に使う）。
+    #[cfg(test)]
+    pub(crate) fn reset() {
+        SLOT.reset();
+    }
+}
+
+/// 写真選択を開き、選ばれた画像をOCR し、結果を [`poll_image_recognition`] で受け取るための要求 id を返す（iOS）。
+///
+/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。画面 effect と slot を共有するため、進行中・結果が未取得の要求
+/// （画面側の分を含む）があれば `Internal("image_recognition busy")` で断る。写真選択（PHPicker）が進行中のとき（[`discard_image_recognition`] で捨てた後を含む）も、
+/// OS の観測で写真選択側が busy を返し、結果は失敗（`Internal`）で届く。依頼自体の失敗は `Err`（結果は届かない）。
+///
+/// 結果の解放: 選んだ画像のバイト列は OS コールバックの中で検査・OCR後に解放され、結果が握るのは認識した行だけ。
+/// 取り出さない要求が slot に残ると次の要求も画面 effect の開始も busy で断られるため、不要な要求は [`discard_image_recognition`] で捨てる。
+///
+/// iOS 以外では `Unsupported`（macOS は同期の [`platform_image_recognition`] と写真選択（`fandhe_cap_photo_picker::platform_photo_picker`）を使う。Android は骨格、Windows・Linux は対象外）。
+#[cfg(target_os = "ios")]
+pub fn begin_image_recognition() -> Result<u64, ImageRecognitionError> {
+    let request_id =
+        bridge::begin_public().ok_or(ImageRecognitionError::Internal("image_recognition busy"))?;
+    let presented = fandhe_cap_photo_picker::present_ios_photo_picker(Box::new(move |result| {
+        bridge::deliver_picked(request_id, result, &crate::apple::AppleTextRecognizer);
+    }));
+    if !presented {
+        bridge::abort_public(request_id);
+        return Err(ImageRecognitionError::Internal("image_recognition present"));
+    }
+    Ok(request_id)
+}
+
+/// iOS 以外では `Unsupported`（[`platform_image_recognition`] 参照）。
+#[cfg(not(target_os = "ios"))]
+pub fn begin_image_recognition() -> Result<u64, ImageRecognitionError> {
+    Err(ImageRecognitionError::Unsupported("image_recognition"))
+}
+
+/// [`begin_image_recognition`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・公開入口でない id・取り出し済みは `None`。
+///
+/// 結果は 3 値: 選択・認識 `Ok(Some(..))`（0 件・0 行は成功）、キャンセル `Ok(None)`（失敗ではない）、失敗 `Err`（上限超過は `InvalidInput`、
+/// ヘッダー不正・OS の失敗・写真選択の失敗・busy は `Internal` 等）。slot の要求が失われたとき（reset 等）は、1 度だけ
+/// `Err(Internal("image_recognition lost"))` を返し、以後は `None`。並行して同じ id を poll しても、結果と喪失が二重に返ることはない。iOS 以外では常に `None`。
+pub fn poll_image_recognition(
+    request_id: u64,
+) -> Option<Result<Option<Vec<String>>, ImageRecognitionError>> {
+    #[cfg(target_os = "ios")]
+    {
+        bridge::poll_public(request_id)
+    }
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = request_id;
+        None
+    }
+}
+
+/// [`begin_image_recognition`] の自分の要求を捨てて slot を空ける。`request_id` が公開入口の現在の要求のときだけ `true`
+/// （他人の id・画面側の id・取り出し済み・0 は `false` で何もしない）。結果が未取得でも進行中でも捨てる。
+///
+/// discard は写真選択の画面を閉じない。画面が閉じるまで次の [`begin_image_recognition`]（画面 effect の開始も）は、OS の観測で写真選択側が busy を返し、
+/// 失敗（`Internal`）で終わる。後から届いた結果は id 不一致で捨てられ、新しい要求へは結びつかない。iOS 以外では常に `false`。
+pub fn discard_image_recognition(request_id: u64) -> bool {
+    #[cfg(target_os = "ios")]
+    {
+        bridge::discard_public(request_id)
+    }
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = request_id;
+        false
+    }
 }
 
 /// `registry.rs` の `effect` 区画から `image_recognize` 画面用に配線される effect ドライバ。
@@ -117,9 +300,9 @@ pub fn image_recognize_effect(
 ) {
     #[cfg(target_os = "ios")]
     ios_effect::drive(state, sender);
-    #[cfg(target_os = "android")]
-    android_effect::drive(state, sender);
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    #[cfg(any(target_os = "android", target_arch = "wasm32"))]
+    unsupported_effect::drive(state, sender);
+    #[cfg(not(any(target_os = "ios", target_os = "android", target_arch = "wasm32")))]
     drive_desktop(
         state,
         sender,
@@ -129,7 +312,10 @@ pub fn image_recognize_effect(
 }
 
 /// デスクトップ版の要求 1 件の処理（テストから任意の実装を差し込めるよう切り出す）。
-#[cfg(any(test, not(any(target_os = "ios", target_os = "android"))))]
+#[cfg(any(
+    test,
+    not(any(target_os = "ios", target_os = "android", target_arch = "wasm32"))
+))]
 fn drive_desktop(
     state: &ImageRecognizeState,
     sender: &CompletionSender<ImageRecognizeState>,
@@ -189,13 +375,15 @@ mod ios_effect {
     //!
     //! # 経路
     //!
-    //! 1. `drive` が要求を観測し、自前の [`SLOT`] で採番した id を持つ受け取り（OCR まで行う閉包）を
-    //!    `fandhe_cap_photo_picker::present_ios_photo_picker` へ登録して PHPicker を出す。
+    //! 1. `drive` が要求を観測し、[`bridge::SLOT`] で採番した id を持つ受け取り（OCR まで行う閉包）を
+    //!    `fandhe_cap_photo_picker::present_ios_photo_picker` へ登録して PHPicker を出す。公開入口（[`super::begin_image_recognition`]）も
+    //!    同じ slot・同じ検査を使い、持ち主（`SCREEN_OWNER` / `PUBLIC_OWNER`）で画面と分ける。
     //! 2. 完了は写真選択の crate の受け口（`NSItemProvider` のバックグラウンドキュー）が、登録された受け取りを id で 1 件取り出して呼ぶ。
     //!    受け取りは元のバイト列をここで検査・OCR する（写真選択の `bridge` は表示用に縮小した画素しか持たず OCR に使えない）。OCR は
     //!    main ではなくこのコールバックスレッドで同期に走る（`.m` が `@autoreleasepool` 内で実行し、`dispatch_sync` は使わない）。
     //!    結果を slot へ置いて戻った直後に、受け口が `request_repaint` で次フレームを起こす。
-    //! 3. `drive` が毎フレーム `request_slot::poll_and_finish` で結果を拾い、`finish_recognize` で反映する。
+    //! 3. `drive` が毎フレーム `request_slot::poll_and_finish_owned` で自分の分の結果を拾い、`finish_recognize` で反映する。slot の要求が
+    //!    失われたとき（reset 等）は処理中のまま止めず失敗で確定する。
     //!
     //! 以前は要求 id の最上位ビットのタグ（`1 << 63`）で写真選択・バーコード読み取りと受け口を共有していたが、要求ごとに受け取りを登録する
     //! 形にしたため、機能ごとの目印・振り分けの順序への依存は無い。
@@ -207,49 +395,40 @@ mod ios_effect {
     //! 縮めることによる精度差、複数プロセス。保留中の要求は復帰時に復元しない（写真選択と同じ）。
 
     use fandhe_core::screens::image_recognize::{
-        ImageRecognizePhase, ImageRecognizeState, RecognizeFailure, finish_recognize,
-        mark_recognizing, take_request,
+        ImageRecognizePhase, ImageRecognizeState, finish_recognize, mark_recognizing, take_request,
     };
-    use fandhe_device::file_picker::PickedFile;
     use fandhe_runtime::CompletionSender;
-    use fandhe_runtime::request_slot::{RequestSlot, poll_and_finish};
+    use fandhe_runtime::request_slot::poll_and_finish_owned;
 
-    use fandhe_cap_photo_picker::{PhotoPickerError, present_ios_photo_picker};
+    use fandhe_cap_photo_picker::present_ios_photo_picker;
 
-    use super::{recognize_picked, to_failure};
+    use super::{bridge, to_failure};
     use crate::apple::AppleTextRecognizer;
     use crate::error::ImageRecognitionError;
-
-    /// 画面へ反映する完了結果（`None` = キャンセル）。
-    type Outcome = Result<Option<Vec<String>>, RecognizeFailure>;
-
-    static SLOT: RequestSlot<Outcome> = RequestSlot::new();
-
-    /// PHPicker の結果（`NSItemProvider` のキューから呼ばれる）を OCR して slot へ置く。
-    /// id 不一致・未登録・重複は捨てて `false`。
-    fn deliver(id: u64, result: Result<Option<PickedFile>, PhotoPickerError>) -> bool {
-        let outcome = recognize_picked(result, &AppleTextRecognizer);
-        SLOT.deliver(id, outcome)
-    }
 
     /// iOS 版 effect 本体。
     pub(crate) fn drive(
         state: &ImageRecognizeState,
         sender: &CompletionSender<ImageRecognizeState>,
     ) {
-        if take_request(state).is_some() {
+        if let Some(generation) = take_request(state) {
             let _ = sender.send(Box::new(mark_recognizing));
-            let id = SLOT.begin();
+            // 公開入口の進行中・未取得の要求は置き換えず、画面側を処理中の失敗で終える。
+            let Some(id) = bridge::begin_screen() else {
+                let failure = to_failure(ImageRecognitionError::Internal("image_recognition busy"));
+                let _ = sender.send(Box::new(move |s: &mut ImageRecognizeState| {
+                    finish_recognize(s, generation, Err(failure));
+                }));
+                return;
+            };
             // iOS では通常 true（提示失敗も非同期に通知される）。false は提示依頼自体の同期的な失敗なので失敗で閉じる。
             let presented = present_ios_photo_picker(Box::new(move |result| {
-                deliver(id, result);
+                bridge::deliver_picked(id, result, &AppleTextRecognizer);
             }));
             if !presented {
-                SLOT.deliver(
+                bridge::deliver(
                     id,
-                    Err(to_failure(ImageRecognitionError::Internal(
-                        "image_recognition present",
-                    ))),
+                    Err(ImageRecognitionError::Internal("image_recognition present")),
                 );
             }
             return;
@@ -258,8 +437,9 @@ mod ios_effect {
             return;
         }
         let generation = state.generation;
-        poll_and_finish(
-            &SLOT,
+        poll_and_finish_owned(
+            &bridge::SLOT,
+            &bridge::SCREEN_OWNER,
             sender,
             |_| {},
             move |s: &mut ImageRecognizeState, outcome| {
@@ -270,17 +450,22 @@ mod ios_effect {
                 if s.generation != generation {
                     return true;
                 }
-                finish_recognize(s, generation, outcome);
+                finish_recognize(s, generation, outcome.map_err(to_failure));
                 true
+            },
+            // slot の要求が失われた（reset 等）。処理中のまま止めず失敗で確定する（`finish_recognize` は世代違い・完了済みを無視する）。
+            move |s: &mut ImageRecognizeState| {
+                let failure = to_failure(ImageRecognitionError::Internal("image_recognition lost"));
+                finish_recognize(s, generation, Err(failure));
             },
         );
     }
 }
 
-#[cfg(target_os = "android")]
-mod android_effect {
-    //! Android 向け文字認識の骨格（Issue #1250 で置いたスタブ。実装は #1253）。
-    //! `crate::driver` の Android 経路から毎フレーム呼ばれる。#1253 が ML Kit の
+#[cfg(any(target_os = "android", target_arch = "wasm32"))]
+mod unsupported_effect {
+    //! Android 向け文字認識の骨格（Issue #1250 で置いたスタブ。実装は #1253）と、wasm32（Web は対象外。写真選択の crate に依存しない）の
+    //! 固定の失敗。`crate::driver` の Android・wasm32 経路から毎フレーム呼ばれる。#1253 が ML Kit の
     //! Java ヘルパークラス・JNI・`RequestSlot` を使った実装に本ファイルの `drive` を置き換える
     //! （dispatch・画面・文言は #1250 で最終形）。
     //!
@@ -293,7 +478,7 @@ mod android_effect {
 
     use fandhe_runtime::CompletionSender;
 
-    /// Android 版 effect 本体。#1253 まで要求を `Unsupported` で完了させるだけ。
+    /// Android・wasm32 版 effect 本体。#1253 まで要求を `Unsupported` で完了させるだけ。
     pub(crate) fn drive(
         state: &ImageRecognizeState,
         sender: &CompletionSender<ImageRecognizeState>,
@@ -602,5 +787,194 @@ mod tests {
             rx.recv_timeout(Duration::from_secs(5)).unwrap()(&mut state);
         }
         assert_eq!(state.error, UNSUPPORTED_STATUS);
+    }
+
+    /// 公開入口の iOS 結果の検査を通す（`bridge::deliver_picked`）。キャンセルは `Ok(None)`、成功は検査・OCRを通った値。
+    fn ok_file() -> Result<Option<PickedFile>, PhotoPickerError> {
+        picked(png_with_size(10, 10))
+    }
+
+    struct Reader(fn() -> Result<Vec<String>, ImageRecognitionError>);
+    impl TextRecognizer for Reader {
+        fn recognize(&self, _p: &PickedPhoto) -> Result<Vec<String>, ImageRecognitionError> {
+            (self.0)()
+        }
+    }
+
+    /// `bridge` の static（slot・持ち主）を触るテストを直列にする。
+    static BRIDGE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn lock() -> std::sync::MutexGuard<'static, ()> {
+        let g = BRIDGE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        g
+    }
+
+    /// 公開入口の要求は画面と排他で、進行中も結果の未取得も画面側が落とさない。結果は 1 度だけ取れる。
+    #[test]
+    fn public_request_is_exclusive_with_screen_and_polled_once() {
+        let _g = lock();
+        let public = bridge::begin_public().unwrap();
+        assert!(bridge::begin_public().is_none());
+        assert!(bridge::begin_screen().is_none());
+        assert!(bridge::poll_public(public).is_none());
+        let reader = Reader(|| Ok(vec!["a".into()]));
+        assert!(bridge::deliver_picked(public, ok_file(), &reader));
+        // 未取得の公開入口の結果を画面側が落とさない。
+        assert!(bridge::begin_screen().is_none());
+        assert_eq!(
+            bridge::poll_public(public),
+            Some(Ok(Some(vec!["a".to_string()])))
+        );
+        assert!(bridge::poll_public(public).is_none());
+        // 取り出したあとは画面側が使え、画面の進行中は公開入口が断られる。画面の id は公開入口から見えず捨てられない。
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::begin_public().is_none());
+        assert!(bridge::poll_public(screen).is_none());
+        assert!(!bridge::discard_public(screen));
+        bridge::reset();
+    }
+
+    /// 検査・OS の結果の 3 値（キャンセル・成功・失敗）が公開入口へそのまま届く。
+    #[test]
+    fn public_result_keeps_three_values() {
+        let _g = lock();
+        let reader = Reader(|| Ok(vec![]));
+        let id = bridge::begin_public().unwrap();
+        bridge::deliver_picked(
+            id,
+            Err(PhotoPickerError::Cancelled("photo_picker")),
+            &reader,
+        );
+        assert_eq!(bridge::poll_public(id), Some(Ok(None)));
+        // 0 件・0 行は成功（空の一覧）。
+        let id = bridge::begin_public().unwrap();
+        bridge::deliver_picked(id, ok_file(), &reader);
+        assert_eq!(bridge::poll_public(id), Some(Ok(Some(vec![]))));
+        // 写真選択の失敗・上限超過・OS の失敗は成功にしない。
+        let id = bridge::begin_public().unwrap();
+        bridge::deliver_picked(
+            id,
+            Err(PhotoPickerError::Internal("photo_picker busy")),
+            &reader,
+        );
+        assert_eq!(
+            bridge::poll_public(id),
+            Some(Err(ImageRecognitionError::Internal("photo_picker busy")))
+        );
+        let id = bridge::begin_public().unwrap();
+        let big = picked(png_with_size(
+            1,
+            fandhe_device::photo_picker::MAX_PHOTO_SIDE + 1,
+        ));
+        bridge::deliver_picked(id, big, &reader);
+        assert!(matches!(
+            bridge::poll_public(id),
+            Some(Err(ImageRecognitionError::InvalidInput(_)))
+        ));
+        let id = bridge::begin_public().unwrap();
+        let failing = Reader(|| Err(ImageRecognitionError::Internal("secret-id")));
+        bridge::deliver_picked(id, ok_file(), &failing);
+        assert_eq!(
+            bridge::poll_public(id),
+            Some(Err(ImageRecognitionError::Internal("secret-id")))
+        );
+        bridge::reset();
+    }
+
+    /// slot の要求が失われたとき（reset 等）は、1 度だけ `Internal("image_recognition lost")` を返し、以後は `None`。
+    #[test]
+    fn public_request_lost_by_reset_fails_once() {
+        let _g = lock();
+        let id = bridge::begin_public().unwrap();
+        assert!(bridge::poll_public(id).is_none());
+        bridge::reset();
+        assert_eq!(
+            bridge::poll_public(id),
+            Some(Err(ImageRecognitionError::Internal(
+                "image_recognition lost"
+            )))
+        );
+        assert!(bridge::poll_public(id).is_none());
+        assert!(bridge::begin_public().is_some());
+        bridge::reset();
+    }
+
+    #[test]
+    fn concurrent_poll_delivers_once() {
+        let _g = lock();
+        let reader = Reader(|| Ok(vec!["x".into()]));
+        for _ in 0..200 {
+            bridge::reset();
+            let id = bridge::begin_public().unwrap();
+            assert!(bridge::deliver_picked(id, ok_file(), &reader));
+            let barrier = std::sync::Barrier::new(2);
+            let results: Vec<_> = std::thread::scope(|s| {
+                let hs: Vec<_> = (0..2)
+                    .map(|_| {
+                        s.spawn(|| {
+                            barrier.wait();
+                            bridge::poll_public(id)
+                        })
+                    })
+                    .collect();
+                hs.into_iter().map(|h| h.join().unwrap()).collect()
+            });
+            assert_eq!(results.iter().filter(|r| r.is_some()).count(), 1);
+            assert!(results.iter().flatten().all(|r| r.is_ok()));
+        }
+        bridge::reset();
+    }
+
+    /// discard は公開入口と画面の両方を再び開始できるようにし、遅れて届いた結果は新しい要求へ結びつかず捨てられる。
+    #[test]
+    fn discard_frees_slot_and_drops_late_result() {
+        let _g = lock();
+        let reader = Reader(|| Ok(vec!["late".into()]));
+        let id = bridge::begin_public().unwrap();
+        // 他人の id・0 では捨てられない。進行中の間は画面も断られる。
+        assert!(!bridge::discard_public(id + 1));
+        assert!(!bridge::discard_public(0));
+        assert!(bridge::begin_screen().is_none());
+        assert!(bridge::discard_public(id));
+        assert!(!bridge::discard_public(id));
+        assert!(bridge::poll_public(id).is_none());
+        // 新しい要求が始まったあとに古い結果が遅れて届いても、新しい要求へは結びつかない。
+        let next = bridge::begin_public().unwrap();
+        assert_ne!(id, next);
+        assert!(!bridge::deliver_picked(id, ok_file(), &reader));
+        assert!(bridge::poll_public(next).is_none());
+        // 結果が未取得でも捨てられ、遅れて届いた結果は捨てられる。
+        assert!(bridge::deliver_picked(next, ok_file(), &reader));
+        assert!(bridge::discard_public(next));
+        assert!(!bridge::deliver_picked(next, ok_file(), &reader));
+        assert!(bridge::poll_public(next).is_none());
+        // 捨てたあとは画面が使える。
+        assert!(bridge::begin_screen().is_some());
+        bridge::reset();
+    }
+
+    /// 提示依頼の失敗で登録を取り消すと、slot も持ち主も空になり、再び開始できる。
+    #[test]
+    fn abort_public_empties_slot_and_owner() {
+        let _g = lock();
+        let id = bridge::begin_public().unwrap();
+        bridge::abort_public(id);
+        assert!(bridge::SLOT.snapshot().is_none());
+        assert_eq!(bridge::PUBLIC_OWNER.current(), 0);
+        assert!(bridge::begin_public().is_some());
+        bridge::reset();
+    }
+
+    /// iOS 以外の公開入口は `Unsupported`。
+    #[cfg(not(target_os = "ios"))]
+    #[test]
+    fn async_entry_is_unsupported_off_ios() {
+        assert_eq!(
+            begin_image_recognition(),
+            Err(ImageRecognitionError::Unsupported("image_recognition"))
+        );
+        assert!(poll_image_recognition(1).is_none());
+        assert!(!discard_image_recognition(1));
     }
 }
