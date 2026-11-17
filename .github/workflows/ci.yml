@@ -432,10 +432,12 @@ jobs:
   # 並列の PR どうしの競合を避けるため git に入れない（手元で生成して見る）。
   # ここではスキーマ違反（必須キー欠落・status の enum 外・id とファイル名の不一致）・
   # 実装パスの不在・Android 権限宣言の漏れと、生成が例外なく通ることを検査する。
+  # あわせて migrate-capability.mjs sync --check で、gallery の feature・依存と gradle の srcDirs の
+  # ずれ、機能 crate の公開入口 platform_<stem>() の欠けを検査する（#1366）。
   # --------------------------------------------------
   capabilities:
     name: capabilities 対応表の検査
-    # 本ジョブは PR 側の scripts/device/build-capabilities.mjs を実行するため、
+    # 本ジョブは PR 側の scripts/device/*.mjs を実行するため、
     # fork PR を除外して untrusted コードの実行経路を断つ（多層防御。ai-review.yml と同一条件）。
     # 本 workflow は push: branches[main] でも起動し、その際は github.event.pull_request が
     # 空で条件が偽になるため、pull_request イベントに限定して判定する
@@ -462,6 +464,9 @@ jobs:
 
       - name: docs/device/capabilities/ を検査
         run: node scripts/device/build-capabilities.mjs --check
+
+      - name: 機能 crate の一覧・公開入口を検査
+        run: node scripts/device/migrate-capability.mjs sync --check
 
   # --------------------------------------------------
   # 完遂判定用の集約ジョブ。branch protection / ruleset の required status check には
