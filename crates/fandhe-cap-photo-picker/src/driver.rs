@@ -290,9 +290,10 @@ fn public_outcome(
 /// 結果の解放: 届く結果は [`validate_photo`] 済みのバイト列（上限 `MAX_PHOTO_BYTES`）だけで、fd・一時パスは届く前に解放済み。
 /// 取り出さない要求が slot に残ると次の要求も画面 effect の開始も busy で断られるため、不要な要求は [`discard_photo_pick`] で捨てる。
 ///
-/// 既知の天井（iOS）: UIKit が提示を捨てて completion も来ない場合、要求は確定せず slot に残る。画面 effect は busy で断られ続け、公開入口は
-/// [`discard_photo_pick`] で捨てるまで確定しない（捨てたあとの次の begin が `.m` の残りを失敗で回収する）。最前面が遷移中なら提示せず
-/// busy にするため、捨てられること自体はほぼ起きない前提。推測のタイマーは持たない。
+/// 既知の天井（iOS）: シーンが切断されたときは `.m` が `UISceneDidDisconnectNotification` の観測で失敗（code 2）を 1 度だけ届けて確定する（切断でピッカーが completion を呼ばずに消える挙動は公式文書で未確認・実機でも未確認）。
+/// 残るのは、UIKit が提示を捨てて completion も来ず、シーンも接続されたままの場合と、提示先のシーンが特定できず切断で確定しない場合（別シーンの切断で正しい選択を落とさないため）で、要求は確定せず slot に残る（これを観測する OS の通知は無い）。
+/// 画面 effect は busy で断られ続け、公開入口は [`discard_photo_pick`] で捨てるまで確定しない（捨てたあとの次の begin が `.m` の残りを失敗で回収する）。
+/// 最前面が遷移中なら提示せず busy にするため、捨てられること自体はほぼ起きない前提。推測のタイマーは持たない。
 ///
 /// デスクトップ（macOS・Windows）は同期の [`platform_photo_picker`] を使うため、この入口は持たず `Unsupported`。Linux 等も `Unsupported`。
 #[cfg(any(target_os = "ios", target_os = "android"))]
