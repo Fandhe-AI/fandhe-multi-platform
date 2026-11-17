@@ -922,3 +922,34 @@ fn queries_validate_and_merge() {
     let m = merge(&[("a", &a), ("b", &b)]).unwrap();
     assert_eq!(m.android.queries.len(), 2);
 }
+
+#[test]
+fn backup_exclusions_validate_and_merge() {
+    let ok = |e: Value| android(json!({"backup-exclusions": e}));
+    assert!(problems(ok(json!([{"domain":"sharedpref","path":"a.xml"}]))).is_empty());
+    assert!(problems(ok(json!([{"domain":"file","path":"d/e.db"}]))).is_empty());
+    for bad in [".", "", "/abs", "../x", "a/../b", "a/./b", "a\\b", "a:b"] {
+        assert_rejected(
+            ok(json!([{"domain":"file","path":bad}])),
+            "backup-exclusions[0].path",
+        );
+    }
+    assert_rejected(
+        ok(json!([{"domain":"file","path":"a"},{"domain":"file","path":"a"}])),
+        "重複",
+    );
+    assert_rejected(ok(json!([{"domain":"nope","path":"a"}])), "nope");
+    assert_rejected(
+        ok(json!([{"domain":"file","path":"a","include":true}])),
+        "include",
+    );
+    // 同じ除外は 1 件、違えば和集合。
+    let a = decl(
+        json!({"id":"a","android":{"backup-exclusions":[{"domain":"file","path":"x"},{"domain":"file","path":"y"}]}}),
+    );
+    let b = decl(
+        json!({"id":"b","android":{"backup-exclusions":[{"domain":"file","path":"y"},{"domain":"database","path":"z"}]}}),
+    );
+    let m = merge(&[("a", &a), ("b", &b)]).unwrap();
+    assert_eq!(m.android.backup_exclusions.len(), 3);
+}

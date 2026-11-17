@@ -18,7 +18,7 @@
 //! Info.plist の説明文（`*UsageDescription`）は既定値を持たず、アプリ側の
 //! `[package.metadata.fandhe-app]` に無ければエラーにする（既定文言のまま審査に出る事故を防ぐ）。
 //! 範囲外: `CFBundleSupportedPlatforms`（シミュレータか実機かは組み立て時に決まる、#1201）、
-//! applicationId・compileSdk・`<application>` の属性、macOS・拡張の Info.plist の確定値化、
+//! applicationId・compileSdk・`<application>` の属性（バックアップ規則の 2 属性を除く）、macOS・拡張の Info.plist の確定値化、
 //! Xcode のターゲット・framework のリンク（#1212）、Windows の identity（#1208）、
 //! 既存設定からの切り替え（#1194）、run/build への組み込み（#1201）。
 
@@ -29,7 +29,10 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use crate::declaration::{main_activity_attribute_allows, ComponentKind, MetaData};
+use crate::declaration::{
+    backup_exclusion_problems, main_activity_attribute_allows, BackupDomain, BackupExclusion,
+    ComponentKind, MetaData,
+};
 use crate::merge::{merge, AndroidMerged, AppleMerged};
 use crate::reach::{lib_name, reachable};
 use crate::workspace::{collect, run_metadata, Found};
@@ -76,6 +79,18 @@ pub(crate) struct AppConfig {
     macos: OsConfig,
     /// Web を出すアプリだけが書く。無いアプリには `web/` を出さない。
     web: Option<WebConfig>,
+    #[serde(default)]
+    android: AndroidConfig,
+}
+
+/// アプリが自前で足すバックアップ除外。機能の分と和集合にして同じ XML へ出す。
+/// アプリの Manifest に `dataExtractionRules`／`fullBackupContent` を手書きすると、overlay の属性と
+/// manifest merger で競合してビルドが失敗する（`tools:replace` は出さない。黙って片方が消えるより失敗させる）。
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+struct AndroidConfig {
+    #[serde(default)]
+    backup_exclusions: Vec<BackupExclusion>,
 }
 
 /// アプリの基礎 manifest。名前・アイコン・`start_url` などアプリが持つ値だけを書く。
@@ -179,6 +194,14 @@ impl AppConfig {
                 errs.push(format!("fandhe-app.web.manifest: `{m}` はアプリの crate からの相対パスにしてください（空・絶対・`..`・`\\`・`:` は不可）"));
             }
         }
+        errs.extend(
+            backup_exclusion_problems(
+                "fandhe-app.android.backup-exclusions",
+                &cfg.android.backup_exclusions,
+            )
+            .iter()
+            .map(|p| p.to_string()),
+        );
         if cfg.macos.bundle_id.is_some() {
             errs.push("fandhe-app.macos.bundle-id: macOS ではまだ使いません（Info.plist は Xcode の変数のままです）".to_string());
         }
@@ -356,7 +379,15 @@ fn android_manifest(m: &AndroidMerged, lib: &str) -> Result<String, String> {
         o.push_str("    </queries>\n");
     }
     {
-        o.push_str("    <application>\n");
+        let backup = if m.backup_exclusions.is_empty() {
+            String::new()
+        } else {
+            xml_attr(
+                "dataExtractionRules",
+                &format!("@xml/{DATA_EXTRACTION_RULES}"),
+            ) + &xml_attr("fullBackupContent", &format!("@xml/{BACKUP_RULES}"))
+        };
+        o.push_str(&format!("    <application{backup}>\n"));
         // 許可リスト外のキーは殻の属性との二重出力や公開範囲の変更になるので、`merge` を直接呼ぶ経路でも拒否する。
         let mut extra = String::new();
         for (k, v) in &m.main_activity_attributes {
@@ -422,6 +453,37 @@ fn android_manifest(m: &AndroidMerged, lib: &str) -> Result<String, String> {
     Ok(o)
 }
 
+/// 生成するバックアップ規則の XML のリソース名（`res/xml/<名前>.xml`）。`fandhe_` 接頭辞でアプリのリソースと衝突させない。
+const DATA_EXTRACTION_RULES: &str = "fandhe_data_extraction_rules";
+const BACKUP_RULES: &str = "fandhe_backup_rules";
+
+/// バックアップ規則の XML 2 本（API 31 以降の `data-extraction-rules`、API 30 以前の `full-backup-content`）。
+/// 除外は両方の節と旧形式の 3 か所へ同じ内容を出す。(domain, path) の昇順で決定的。
+fn backup_rules_xml(set: &BTreeSet<(BackupDomain, String)>) -> (String, String) {
+    const HEAD: &str = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- cargo fandhe gen が生成。編集しない -->\n";
+    let lines = |pad: &str| -> String {
+        set.iter()
+            .map(|(d, p)| {
+                format!(
+                    "{pad}<exclude domain=\"{}\" path=\"{}\" />\n",
+                    d.as_str(),
+                    esc_xml(p)
+                )
+            })
+            .collect()
+    };
+    let extraction = format!(
+        "{HEAD}<data-extraction-rules>\n    <cloud-backup>\n{}    </cloud-backup>\n    <device-transfer>\n{}    </device-transfer>\n</data-extraction-rules>\n",
+        lines("        "),
+        lines("        ")
+    );
+    let legacy = format!(
+        "{HEAD}<full-backup-content>\n{}</full-backup-content>\n",
+        lines("    ")
+    );
+    (extraction, legacy)
+}
+
 /// Gradle の apply 用スクリプト。srcDirs は crate の絶対パス（区切りは `/` に正規化）。
 /// 常に出す: gen の Java（`FandheLibrary`）と Manifest を取り込む配線が要るため。
 /// Manifest はアプリ本体の Manifest を残したまま、全 variant の overlay として manifest merger に載せる。
@@ -433,7 +495,10 @@ fn android_gradle(m: &AndroidMerged, dirs: &BTreeMap<&str, &Path>, gen_dir: &Pat
             .filter_map(|(id, rel)| Some(norm(&dirs.get(id.as_str())?.join(rel))))
             .collect()
     };
-    let (java, res) = (src(&m.java), src(&m.res));
+    let (java, mut res) = (src(&m.java), src(&m.res));
+    if !m.backup_exclusions.is_empty() {
+        res.push(norm(&gen_dir.join("android/res")));
+    }
     let mut o = String::from("// cargo fandhe gen が生成。編集しない\n");
     o.push_str("android {\n    sourceSets {\n        main {\n");
     o.push_str(&format!(
@@ -741,7 +806,17 @@ pub(crate) fn render(
             .ok()
     };
 
-    if let Some(m) = merged("android", android, &mut errs).map(|m| m.android) {
+    if let Some(m) = merged("android", android, &mut errs).map(|m| {
+        // アプリの自前の除外を機能の分へ足す統合点。
+        let mut a = m.android;
+        a.backup_exclusions.extend(
+            cfg.android
+                .backup_exclusions
+                .iter()
+                .map(|e| (e.domain, e.path.clone())),
+        );
+        a
+    }) {
         match &app.cdylib {
             None => errs.push(format!(
                 "android: {} に cdylib の lib target がありません。Cargo.toml の [lib] に crate-type = [\"cdylib\", ...] を足してください",
@@ -760,6 +835,14 @@ pub(crate) fn render(
                         files.insert("android/AndroidManifest.xml".to_string(), s);
                     }
                     Err(e) => errs.push(format!("android: {e}")),
+                }
+                if !m.backup_exclusions.is_empty() {
+                    let (extraction, legacy) = backup_rules_xml(&m.backup_exclusions);
+                    files.insert(
+                        format!("android/res/xml/{DATA_EXTRACTION_RULES}.xml"),
+                        extraction,
+                    );
+                    files.insert(format!("android/res/xml/{BACKUP_RULES}.xml"), legacy);
                 }
                 files.insert(
                     "android/fandhe.gradle".to_string(),

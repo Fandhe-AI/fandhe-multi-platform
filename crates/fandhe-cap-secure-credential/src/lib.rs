@@ -15,9 +15,11 @@
 //! バックアップ・端末移行の挙動の全て。
 //!
 //! 利用者アプリの責務（Android）: 保存ファイル `fandhe_secure_credential.xml` は端末の Keystore 鍵に紐づくため、
-//! バックアップ・端末間移行で復元されると初期化に失敗し続ける。アプリの `res/xml/data_extraction_rules.xml` で
-//! クラウドバックアップ・端末間移行の両方から除外し、`<application android:dataExtractionRules>` で指す。
-//! `<application>` の属性は機能の宣言では表せないため、本 crate は Manifest へ足さない。
+//! バックアップ・端末間移行で復元されると初期化に失敗し続ける。除外は宣言（`Cargo.toml` の
+//! `android.backup-exclusions`）にあり、`cargo fandhe gen` が両方の規則 XML を出して `<application>` から指す。
+//! 利用者は `dataExtractionRules`／`fullBackupContent` を手書きしない（gen の属性と manifest merger で競合して
+//! ビルドが失敗する）。自前の除外は `[package.metadata.fandhe-app.android] backup-exclusions` に書く。
+//! `allowBackup` はアプリの判断で、本 crate は足さない。
 
 // unsafe は OS 実装の FFI に限る（`// SAFETY:` を付ける）。該当 OS だけ deny へ緩める。
 #![cfg_attr(not(any(target_os = "ios", target_os = "macos")), forbid(unsafe_code))]

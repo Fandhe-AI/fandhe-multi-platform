@@ -9,6 +9,7 @@
 //! Android は加えて aapt2 の xmltree を要素単位で読み、カタログの権限の `usesPermissionFlags`（ビット値）と
 //! MainActivity の許可リスト属性（`MAIN_ACTIVITY_ATTRIBUTES`）を、到達した宣言の値と照合する（フラグ名・属性名は
 //! 他の権限・他 library にも正当に現れるため、トークン照合では扱えない）。
+//! バックアップ除外の path もトークンで照合する（script が `<application>` の 2 属性の参照先 XML を観測に足す）。
 //! 呼び出し元は `main.rs` と統合テスト。範囲外: main-activity の intent-filter・queries（他 library の
 //! manifest にも正当に現れるため。漏れは機能のコンポーネント名で検出できる）、カタログ外の権限のフラグ、Windows、AAB。
 
@@ -85,6 +86,12 @@ fn tokens(d: &Declaration, os: &str) -> Vec<(&'static str, String)> {
                     a.components
                         .iter()
                         .map(|c| ("コンポーネント", c.name.clone())),
+                );
+                // 観測は <application> が指すバックアップ規則 XML（script が aapt2 で足す）。
+                out.extend(
+                    a.backup_exclusions
+                        .iter()
+                        .map(|e| ("バックアップ除外", e.path.clone())),
                 );
                 // `group:artifact:version` のうち版は照合に含めない。
                 out.extend(a.gradle.iter().map(|g| {

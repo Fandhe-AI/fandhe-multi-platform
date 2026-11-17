@@ -58,6 +58,7 @@ main-activity-attributes = { supportsPictureInPicture = "true" }  # 書けるキ
 application-meta-data = [{ name = "com.google.android.gms.wallet.api.enabled", value = "true" }]  # resource = "@xml/..." も可
 queries = [{ actions = ["android.intent.action.TTS_SERVICE"] }]  # <queries> の <intent>（action だけ）
 features = [{ name = "android.hardware.nfc.hce", required = false }]
+backup-exclusions = [{ domain = "sharedpref", path = "fandhe_secure_credential.xml" }]  # バックアップ・端末間移行から外す（除外だけ）
 gradle = ["com.google.android.gms:play-services-mlkit-document-scanner:16.0.0"]
 java = ["android/java"]
 res = ["android/res"]
@@ -117,6 +118,7 @@ params = { text = "share_text", url = "share_url" }
 | `queries` | `<queries>` の `<intent>`（Android 11 以降のパッケージ可視性） | `actions` は 1 件以上のドット区切りの識別子。各 action が別々の `<intent>` になり、`<uses-feature>` の後・`<application>` の前に名前順で出す。`<package>`・`categories`・`data` は書けない |
 | `application-meta-data` | `<application>` 直下の `<meta-data>` | `resource`（`@` 始まり）か `value` の一方。コンポーネントの後に `name` 順で出す |
 | `components` | `<activity>`・`<activity-alias>`・`<service>`・`<receiver>`・`<provider>` | `exported` は省略不可。`attributes` は他の `android:*` 属性。`activity-alias` は `target-activity` が必須で、alias は対象の後に出す |
+| `backup-exclusions` | `res/xml` のバックアップ規則 2 本と、`<application>` の `dataExtractionRules`・`fullBackupContent` | 除外だけで、`include`・`allowBackup` は書けない（`include` が 1 件でもあると「それ以外は全部外れる」に意味が反転し、依存 crate がアプリのバックアップ範囲を変えられるため）。`domain` は `root`・`file`・`database`・`sharedpref`・`external`。常に `cloud-backup`・`device-transfer`・`full-backup-content` の 3 か所へ同じ内容を出す |
 | `windows.identity` | パッケージ ID | 生成は #1208 |
 | `web.manifest` | Web App Manifest のメンバー | 書けるのは `share_target` だけ（許可リスト）。基礎 manifest へ足される（7 節、#1238） |
 
@@ -147,6 +149,7 @@ params = { text = "share_text", url = "share_url" }
 - `activity-alias` は `target-activity` が必須で、同じ宣言の `kind = "activity"` の `name` を指します。alias 以外に `target-activity` は書けません
 - `main-activity-attributes` のキーは許可リスト（`supportsPictureInPicture`）だけで、値は属性ごとの値域（`supportsPictureInPicture` は `"true"` / `"false"` の完全一致）を check で検査します。`flags` は `neverForLocation` のみです
 - パスは相対のみです（空・絶対・`..`・`\`・`:` は拒否）。実在と、symlink 解決後に crate 内に収まることも確かめます
+- `backup-exclusions` の `domain` は `root`・`file`・`database`・`sharedpref`・`external` だけです。`path` は相対パスの規則に加えて `.` を含むセグメントを拒否します（`.` はドメイン全体の除外になり、依存 crate がアプリ全体のバックアップを止められるため）。同じ `(domain, path)` の重複は拒否します
 - 文字列と plist の値に制御文字は置けません
 - `web.manifest` のキーは許可リスト（`share_target`）だけで、値はオブジェクトです。`start_url`・`scope`・`name`・`icons` などアプリの同一性に関わる値を、依存 crate が書き換えられないようにするためです。別のメンバーを機能へ移すときは許可リストに足します
 
@@ -167,6 +170,7 @@ params = { text = "share_text", url = "share_url" }
 | `info-plist`・`entitlements` | 同じ値は 1 つ。配列は和集合（出現順）。オブジェクトは再帰。それ以外の不一致はエラー |
 | `components`・`extensions`・`application-meta-data` | `name` で統合。内容が同じなら 1 つ、違えばエラー |
 | `queries` | action の集合として統合。重複は 1 件 |
+| `backup-exclusions` | `(domain, path)` の和集合。除外同士は矛盾しないので競合しない。出力は昇順 |
 | `main-activity-attributes` | キーごとに統合。同値なら 1 つ、違えばエラー |
 | `main-activity-intent-filters` | 内容が同じなら 1 つ |
 | `java`・`res`・`sources` | 統合しない。crate ごとに集める。同名リソースの衝突は Gradle のマージに任せる |
@@ -183,7 +187,7 @@ params = { text = "share_text", url = "share_url" }
 | 形式の版番号 | 未知キーの拒否で足りる。要否は #1224 で判断する |
 | 到達判定（対象アプリが使う機能だけを生成に入れる） | 実装済み（`crates/cargo-fandhe/src/reach.rs`、#1176）。次を満たす: `cargo tree` の文字列解析に頼らず、`cargo metadata` の `resolve` の package ID で対応付ける / feature の統合が他の workspace member から混ざらない（`resolve.nodes[].features` は使わず、アプリの `default` から feature を自前で活性化する。辺は通常依存のみ） / 対象 OS 限定の依存（`[target.'cfg(...)'.dependencies]`）を含める / 取得元違いの同名同版を区別する / default-members に左右されない |
 | MainActivity を指す alias（ランチャーアイコンの切り替え等） | 使う機能が無い。必要になった issue で足す |
-| `<application>` の属性（`localeConfig` 等） | アプリ全体の値で、機能の宣言に書かない |
+| `<application>` の属性（`localeConfig` 等） | アプリ全体の値で、機能の宣言に書かない。例外はバックアップ規則の 2 属性（`backup-exclusions` があるときだけ gen が出す） |
 | `neverForLocation` 以外の権限フラグ | 使う機能が出たとき enum に足す |
 | 統合エラー（flags・meta-data・属性の食い違い）を利用者が上書きする手段 | 追記・`--eject`（#1202）の範囲 |
 | Gradle の版の正本 | #1194 までは `scripts/android/versions.env` が手書きビルドの正本で、宣言の版は突き合わせテストで一致を保証する |
@@ -242,6 +246,15 @@ NSCameraUsageDescription = "撮影に使います"  # 有効な機能が要求�
 [package.metadata.fandhe-app.macos.usage-descriptions]
 ```
 
+アプリ自身もバックアップ除外を足せます。機能の分と和集合にして同じ XML へ出し、検証は機能の宣言と同じ規則です。
+
+```toml
+[package.metadata.fandhe-app.android]
+backup-exclusions = [{ domain = "file", path = "cache-index" }]
+```
+
+除外が 1 件もなければ XML も属性も出しません。アプリの Manifest に `dataExtractionRules`／`fullBackupContent` を手書きして gen の overlay と併用すると、manifest merger が属性の競合でビルドを失敗させます（`tools:replace` は出しません。黙って片方の除外が消えるより失敗させるため）。手書きせず、上の欄に書いてください。
+
 ```toml
 [package.metadata.fandhe-app.ios]
 bundle-id = "com.example.app"               # iOS の Info.plist を出すので必須（macOS はまだ使えずエラー）
@@ -267,7 +280,8 @@ manifest = "web/manifest.webmanifest"       # アプリの crate からの相対
 | パス（`gen/` 配下） | 内容 |
 |------|------|
 | `android/AndroidManifest.xml` | manifest merger 用の overlay（権限と `usesPermissionFlags`・feature・コンポーネント・`<application>` 直下の meta-data、MainActivity の宣言＝`exported`・`launchMode=singleTask`・`configChanges`・機能の許可済み属性・`android.app.lib_name`・MAIN/LAUNCHER と機能の intent-filter） |
-| `android/fandhe.gradle` | `apply from:` 用。常に出す。gen の `android/java` と機能 crate の `java`・`res` を srcDirs に足し、gen の Manifest を全 variant の overlay として登録し（`androidComponents`）、`gradle` の依存（基盤を含む）を `implementation` で足す |
+| `android/res/xml/fandhe_data_extraction_rules.xml`・`fandhe_backup_rules.xml` | バックアップ除外があるときだけ。API 31 以降用（`cloud-backup`・`device-transfer`）と API 30 以前用（`full-backup-content`）。overlay の `<application>` が `dataExtractionRules`・`fullBackupContent` で指す |
+| `android/fandhe.gradle` | `apply from:` 用。常に出す。gen の `android/java` と機能 crate の `java`・`res`（バックアップ規則があれば gen の `android/res` も）を srcDirs に足し、gen の Manifest を全 variant の overlay として登録し（`androidComponents`）、`gradle` の依存（基盤を含む）を `implementation` で足す |
 | `android/java/com/fandhe/platform/FandheLibrary.java` | `NAME` に cdylib 名（`[lib] name`）を持つ。殻は `System.loadLibrary(FandheLibrary.NAME)` と書き、ライブラリ名の正本を `[lib] name` 1 か所にする |
 | `ios/Info.plist` | 確定値の定型キー（上記）、説明文、`info-plist`。機能が無くても出す |
 | `macos/Info.plist` | ビルド設定変数の定型 7 キー、説明文、`info-plist` |
@@ -286,7 +300,7 @@ manifest = "web/manifest.webmanifest"       # アプリの crate からの相対
 
 ### 範囲外
 
-`CFBundleSupportedPlatforms`（シミュレータか実機かは組み立て時に決まる、#1201）、applicationId・compileSdk・`<application>` の属性、macOS・拡張の Info.plist の確定値化、framework のリンクと Xcode のターゲット（#1212）、Windows の identity（#1208）、手書き設定の置き換え（#1194）、`run`/`build` への組み込み（#1201）、追記と `--eject`（#1202）、`verify-scope` の Web 対応。
+`CFBundleSupportedPlatforms`（シミュレータか実機かは組み立て時に決まる、#1201）、applicationId・compileSdk・`<application>` の属性（バックアップ規則の 2 属性を除く）、macOS・拡張の Info.plist の確定値化、framework のリンクと Xcode のターゲット（#1212）、Windows の identity（#1208）、手書き設定の置き換え（#1194）、`run`/`build` への組み込み（#1201）、追記と `--eject`（#1202）、`verify-scope` の Web 対応。
 
 ## 8. 選ばなかった機能の検査（`cargo fandhe verify-scope`）
 
@@ -304,7 +318,7 @@ cargo fandhe verify-scope --catalog <全機能を含む Cargo.toml> \
 - 照合はトークン境界つきです。`android.hardware.camera` は `android.hardware.camera.autofocus` に、`group:artifact` は `group:artifact-ktx` に一致しません
 - 観測テキストが空なら失敗します（ツールの失敗の見逃し防止）。未選択の機能が 0 件でも、禁止トークンの照合対象が空になるだけで、空の観測の検出と Android の構造照合は行います
 - 対象は次の値です
-  - Android: 権限名、`uses-feature` 名、コンポーネント名（`activity-alias` を含む）、`application-meta-data` の名前、Gradle の `group:artifact`。`application-meta-data` の名前が、選んだ機能の依存 library の Manifest にも現れると誤検知しうる（実例が出たら `GENERIC_KEYS` と同じ除外で扱う）
+  - Android: 権限名、`uses-feature` 名、コンポーネント名（`activity-alias` を含む）、`application-meta-data` の名前、Gradle の `group:artifact`、バックアップ除外の `path`（script が `<application>` の 2 属性の参照先 XML を aapt2 で dump して観測に足す。属性があるのに解決できなければ script が失敗する）。アプリが自前で未選択機能と同じ `path` を除外すると誤検知になる。`application-meta-data` の名前が、選んだ機能の依存 library の Manifest にも現れると誤検知しうる（実例が出たら `GENERIC_KEYS` と同じ除外で扱う）
   - Android の構造照合（aapt2 xmltree を要素単位で読む）: カタログにある権限の `usesPermissionFlags` が、その権限を宣言した選んだ機能のフラグの和集合に収まるか。MainActivity の `main-activity-attributes`（許可リストの属性）が、選んだ機能の宣言値だけか。MainActivity が観測テキストに無ければ失敗します。カタログ外の権限は見ません。全機能を選んだアプリでも構造照合は走ります（トークン照合の禁止集合が空になるだけ）。検出は片方向で、宣言にあるのに成果物に無いフラグ・属性は見ません。依存 library が同名の権限にフラグを付けた場合は誤検知になりえます
   - iOS・macOS: entitlement キー（App Group は `com.apple.security.application-groups`）、framework 名、`*UsageDescription` キー、`info-plist` のキー、拡張（`<name>.appex`）
 - 観測ファイルの集め方は `scripts/audit/verify-capability-scope.sh` が担います（aapt2・codesign・otool・plutil。Gradle の依存ツリーは任意）

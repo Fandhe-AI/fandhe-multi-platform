@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::{Map, Value};
 
 use crate::declaration::{
-    Component, Declaration, Extension, IntentFilter, MetaData, PermissionFlag,
+    BackupDomain, Component, Declaration, Extension, IntentFilter, MetaData, PermissionFlag,
 };
 
 /// 統合できない不一致。どの欄で、どの 2 機能が食い違ったかを含む。
@@ -52,6 +52,8 @@ pub struct AndroidMerged {
     pub application_meta_data: BTreeMap<String, MetaData>,
     /// `<queries>` の `<intent>` の action（重複は 1 件に統合）。
     pub queries: BTreeSet<String>,
+    /// バックアップから外す (domain, path)。除外同士は矛盾しないので和集合。
+    pub backup_exclusions: BTreeSet<(BackupDomain, String)>,
     /// feature 名 → `required`。
     pub features: BTreeMap<String, bool>,
     pub gradle: BTreeSet<String>,
@@ -346,6 +348,11 @@ pub fn merge(decls: &[(&str, &Declaration)]) -> Result<Merged, Vec<MergeError>> 
             for q in &a.queries {
                 dst.queries.extend(q.actions.iter().cloned());
             }
+            dst.backup_exclusions.extend(
+                a.backup_exclusions
+                    .iter()
+                    .map(|e| (e.domain, e.path.clone())),
+            );
             dst.java
                 .extend(a.java.iter().map(|p| (id.to_string(), p.clone())));
             dst.res

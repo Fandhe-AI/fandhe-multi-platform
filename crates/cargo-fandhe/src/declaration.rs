@@ -110,6 +110,68 @@ pub struct Android {
     /// action だけを書ける。`<package>`・`categories`・`data` は受けない（最小公開）。
     #[serde(default)]
     pub queries: Vec<QueryIntent>,
+    /// バックアップ・端末間移行から外すファイル。除外だけを書ける（`include`・`allowBackup` は書けない。
+    /// `include` が 1 件でもあると「それ以外は全部外れる」に意味が反転し、依存 crate がアプリのバックアップ範囲を
+    /// 変えられてしまうため）。`gen` は常に `cloud-backup`・`device-transfer`・`full-backup-content` の 3 か所へ出す。
+    #[serde(default)]
+    pub backup_exclusions: Vec<BackupExclusion>,
+}
+
+/// バックアップから外す対象 1 件。Android の `<exclude domain path>` と 1 対 1。
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct BackupExclusion {
+    pub domain: BackupDomain,
+    /// domain 直下からの相対パス。
+    pub path: String,
+}
+
+/// `<exclude domain>` の値。`device_*` は使う機能が出たら足す。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BackupDomain {
+    Root,
+    File,
+    Database,
+    Sharedpref,
+    External,
+}
+
+impl BackupDomain {
+    /// XML へ出す Android の原語。
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Root => "root",
+            Self::File => "file",
+            Self::Database => "database",
+            Self::Sharedpref => "sharedpref",
+            Self::External => "external",
+        }
+    }
+}
+
+/// `backup-exclusions` の検証。機能の宣言（`android.backup-exclusions`）とアプリの入力
+/// （`fandhe-app.android.backup-exclusions`）が同じ規則を通す。
+pub(crate) fn backup_exclusion_problems(field: &str, list: &[BackupExclusion]) -> Vec<Problem> {
+    let mut c = Ctx(Vec::new());
+    let mut seen = BTreeSet::new();
+    for (i, e) in list.iter().enumerate() {
+        let f = format!("{field}[{i}].path");
+        c.check(
+            is_rel_path(&e.path) && e.path.split('/').all(|s| s != "."),
+            &f,
+            format!(
+                "`{}` は domain 直下からの相対パスにしてください（空・絶対・`.`・`..`・`\\`・`:` は不可。`.` はドメイン全体の除外になるため書けません）",
+                e.path
+            ),
+        );
+        c.check(
+            seen.insert((e.domain, e.path.as_str())),
+            &f,
+            format!("`{}` が重複しています", e.path),
+        );
+    }
+    c.0
 }
 
 /// `<queries>` 内の `<intent>` の宣言。`actions` の各要素が別々の `<intent>` になる。
@@ -624,6 +686,10 @@ fn validate_android(c: &mut Ctx, a: &Android) {
             );
         }
     }
+    c.0.extend(backup_exclusion_problems(
+        "android.backup-exclusions",
+        &a.backup_exclusions,
+    ));
     c.intent_filters(
         "android.main-activity-intent-filters",
         &a.main_activity_intent_filters,
