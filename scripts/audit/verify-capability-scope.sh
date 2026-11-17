@@ -13,7 +13,8 @@
 #       ios|macos --app <X.app>
 #
 # 集める観測:
-#   android: aapt2 dump xmltree（AndroidManifest.xml）、任意で Gradle の依存ツリー
+#   android: aapt2 dump xmltree（AndroidManifest.xml と、<application> の dataExtractionRules・fullBackupContent が
+#            指す XML）、任意で Gradle の依存ツリー
 #   ios/macos: codesign の entitlements、otool -L、plutil -p Info.plist、PlugIns/ の一覧
 #              （拡張の appex も同じ観測を足す）。未署名なら警告して続行（それ以外の取得失敗は失敗）
 # 秘密情報は扱わない（引数はファイルパスのみ）。一時ファイルは mktemp -d 配下に作り終了時に削除する。
@@ -78,8 +79,25 @@ observe_android() {
   [[ -f "${apk}" ]] || die "--apk に APK ファイルを指定してください"
   local aapt2
   aapt2="$(find_aapt2)" || die "aapt2 が見つかりません。ANDROID_HOME を設定するか PATH に通してください（scripts/android/android-env.sh 参照）"
-  "${aapt2}" dump xmltree --file AndroidManifest.xml "${apk}" >>"${obs}" ||
+  local mf_dump="${work}/apk-manifest.txt" attr id res path xml
+  "${aapt2}" dump xmltree --file AndroidManifest.xml "${apk}" >"${mf_dump}" ||
     die "aapt2 が失敗しました"
+  cat -- "${mf_dump}" >>"${obs}"
+  # <application> の dataExtractionRules / fullBackupContent が指す XML も観測に足す（バックアップ除外の漏れを
+  # 拾う）。属性が無いのは正常（除外を宣言する機能が無い）。あるのに解決・dump できなければ見逃しになるので失敗にする。
+  res="${work}/resources.txt"
+  "${aapt2}" dump resources "${apk}" >"${res}" || die "aapt2 dump resources が失敗しました"
+  for attr in dataExtractionRules fullBackupContent; do
+    id="$(sed -n "s/.*:${attr}(0x[0-9a-f]*)=@\(0x[0-9a-f]*\).*/\1/p" "${mf_dump}" | head -n 1)"
+    [[ -n "${id}" ]] || continue
+    path="$(awk -v id="${id}" '$1 == "resource" && $2 == id { f = 1; next } f && $1 == "resource" { exit } f { for (i = 1; i < NF; i++) if ($i == "(file)") print $(i + 1) }' "${res}")"
+    [[ -n "${path}" ]] || die "${attr} の参照先 ${id} のファイルを解決できません"
+    # 同じ ID に複数構成（xml / xml-v31 等）があり得るので、全構成を検査する
+    while IFS= read -r xml; do
+      "${aapt2}" dump xmltree --file "${xml}" "${apk}" >>"${obs}" ||
+        die "${xml} の dump に失敗しました"
+    done <<<"${path}"
+  done
   if [[ -n "${gradle_deps}" ]]; then
     [[ -f "${gradle_deps}" ]] || die "--gradle-deps のファイルがありません"
     cat -- "${gradle_deps}" >>"${obs}"

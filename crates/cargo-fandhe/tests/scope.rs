@@ -79,6 +79,10 @@ const SCAN: &str = "\
 [package.metadata.fandhe.android]
 permissions = [{ name = \"android.permission.BLUETOOTH_SCAN\" }]
 ";
+const BK: &str = "\
+[package.metadata.fandhe.android]
+backup-exclusions = [{ domain = \"sharedpref\", path = \"fandhe_bk.xml\" }]
+";
 const PIP: &str = "\
 [package.metadata.fandhe.android.main-activity-attributes]
 supportsPictureInPicture = \"true\"
@@ -101,6 +105,7 @@ fn make_ws(tag: &str, app_deps: &str, extra: &[(&str, String)]) -> PathBuf {
         ("ble", BLE),
         ("scan", SCAN),
         ("pip", PIP),
+        ("bk", BK),
     ] {
         let (dir, toml) = cap(id, rest);
         write_crate(&root, &dir, &toml);
@@ -246,7 +251,7 @@ fn empty_observation_fails_even_when_all_selected() {
     assert!(check("watch", &m, "x").unwrap_err().contains("未知の OS"));
     let m = make_ws(
         "all",
-        &deps(&["cam", "nfc", "both", "ble", "scan", "pip"]),
+        &deps(&["cam", "nfc", "both", "ble", "scan", "pip", "bk"]),
         &[],
     );
     // 全機能選択でも空の観測（aapt2 失敗）は失敗にする。
@@ -398,7 +403,7 @@ fn all_selected_still_checks_structure() {
     // 未選択 0 件でも構造照合は走る。全機能を選んだ正常系（宣言どおりのフラグ・属性）は誤検知しない。
     let m = make_ws(
         "all-flags",
-        &deps(&["cam", "nfc", "both", "ble", "scan", "pip"]),
+        &deps(&["cam", "nfc", "both", "ble", "scan", "pip", "bk"]),
         &[],
     );
     let pip = "        A: http://schemas.android.com/apk/res/android:supportsPictureInPicture(0x010104f7)=true\n";
@@ -459,4 +464,44 @@ N: android=http://schemas.android.com/apk/res/android (line=3)
     let m2 = make_ws("real-forms-nopip", &deps(&["cam", "ble"]), &[]);
     let e = check("android", &m2, obs).unwrap_err();
     assert!(e.contains("supportsPictureInPicture"), "{e}");
+}
+
+#[test]
+fn unselected_backup_exclusion_fails_and_selected_passes() {
+    // 観測は aapt2 が <application> の参照先 XML を dump した形（`A: path="…" (Raw: "…")`）。
+    let rule = "      E: exclude (line=5)\n        A: domain=\"sharedpref\" (Raw: \"sharedpref\")\n        A: path=\"fandhe_bk.xml\" (Raw: \"fandhe_bk.xml\")\n";
+    let m = make_ws("bk-leak", SELECT_CAM, &[]);
+    let e = check("android", &m, &format!("{ANDROID_CLEAN}{rule}")).unwrap_err();
+    assert!(
+        e.contains("bk") && e.contains("バックアップ除外") && e.contains("fandhe_bk.xml"),
+        "{e}"
+    );
+    let m = make_ws("bk-ok", &deps(&["cam", "bk"]), &[]);
+    check("android", &m, &format!("{ANDROID_CLEAN}{rule}")).unwrap();
+    // domain 違いの同名除外は別物。選んだ機能が file の同名を除外していても、未選択の bk の sharedpref の除外は検出する。
+    let bkf = cap(
+        "bkf",
+        "[package.metadata.fandhe.android]\nbackup-exclusions = [{ domain = \"file\", path = \"fandhe_bk.xml\" }]\n",
+    );
+    let other = rule.replace("\"sharedpref\"", "\"file\"");
+    let m = make_ws(
+        "bk-domain",
+        &deps(&["cam", "bkf"]),
+        &[(bkf.0.as_str(), bkf.1.clone())],
+    );
+    check("android", &m, &format!("{ANDROID_CLEAN}{other}")).unwrap();
+    let e = check("android", &m, &format!("{ANDROID_CLEAN}{other}{rule}")).unwrap_err();
+    assert!(e.contains("sharedpref:fandhe_bk.xml"), "{e}");
+    // 属性順が path → domain でも組で取れる。
+    let swapped = "      E: exclude (line=5)\n        A: path=\"fandhe_bk.xml\" (Raw: \"fandhe_bk.xml\")\n        A: domain=\"sharedpref\" (Raw: \"sharedpref\")\n";
+    let m = make_ws("bk-swap", SELECT_CAM, &[]);
+    let e = check("android", &m, &format!("{ANDROID_CLEAN}{swapped}")).unwrap_err();
+    assert!(e.contains("sharedpref:fandhe_bk.xml"), "{e}");
+    // 親子の経路は別物（未選択の `fandhe_bk.xml` が選択側の `fandhe_bk.xml/x` に前方一致しない）。
+    let child = rule.replace("fandhe_bk.xml", "fandhe_bk.xml/x");
+    check("android", &m, &format!("{ANDROID_CLEAN}{child}")).unwrap();
+    // domain と path がそろわない exclude は読めない観測として失敗にする。
+    let broken = "      E: exclude (line=5)\n        A: path=\"y\" (Raw: \"y\")\n";
+    let e = check("android", &m, &format!("{ANDROID_CLEAN}{broken}")).unwrap_err();
+    assert!(e.contains("読めません"), "{e}");
 }

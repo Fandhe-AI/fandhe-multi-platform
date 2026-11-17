@@ -548,7 +548,7 @@ tts・file-picker・tsv-parse・mic-record・speech-recognition は、`MainActiv
 | `DeviceError` の `Cancelled`・`PermissionDenied` を使う機能（contacts） | `scaffold` が写さないので `error.rs` へ手で足し、文言を固定するテストにも足す |
 | macOS だけが usage description を持つ機能（contacts） | 宣言の `macos.usage-descriptions` にキーを書き、文言は `fandhe-gallery` の `[package.metadata.fandhe-app.macos.usage-descriptions]` に置く（`crates/fandhe-egui-proxy/macos/Info.plist` と同じ文言） |
 | 機能ではない行（screen-reader） | crate を作らない。iOS 欄の根拠（`accesskit` を有効にしない理由）は `fandhe-render-egui/Cargo.toml` の iOS 分岐へ移し、対応表の `impl` をそこへ向けた |
-| `<application android:dataExtractionRules>`（secure-credential） | 宣言で表せないためアプリ側（`AndroidManifest.xml`・`res/xml/data_extraction_rules.xml`）に残し、crate doc に利用者の責務として書いた。旧構造の撤去（#1194）までに扱いを決める |
+| `<application android:dataExtractionRules>`（secure-credential） | 宣言の `android.backup-exclusions` へ移した（#1356）。ギャラリーの手書き Manifest と XML は #1194 まで残し、一致は `tests/gen.rs` が保証する |
 
 ### 未了の機能
 
