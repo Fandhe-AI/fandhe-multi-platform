@@ -176,8 +176,9 @@ mod imp {
     use windows::core::{AgileReference, HSTRING};
     use windows_future::IAsyncInfo;
 
-    use crate::contract::{VideoCaptureFailure, VideoCaptureOutcome, VideoCapturer, VideoClip};
-    use fandhe_core::screens::video_capture_show::{PanelCommand, PanelPhase};
+    use crate::contract::{
+        PanelOp, PanelState, VideoCaptureFailure, VideoCaptureOutcome, VideoCapturer, VideoClip,
+    };
 
     use super::{TempClip, duration_ms_from_ticks, failure_from_hresult, retry_leftovers};
     use crate::driver::{complete_from_os, set_panel, try_begin_present};
@@ -188,7 +189,7 @@ mod imp {
     /// ワーカーへの命令。要求・パネル命令・各段の完了・OS の通知はすべてここを順に通る。
     enum Cmd {
         Capture(u64, u32),
-        Panel(u64, PanelCommand),
+        Panel(u64, PanelOp),
         /// `StorageFile` は別スレッドへ渡せないため、`AgileReference` で運ぶ。
         File(u64, windows::core::Result<AgileReference<StorageFile>>),
         Initialized(u64, windows::core::Result<()>),
@@ -309,7 +310,7 @@ mod imp {
     }
 
     /// 撮影パネルのボタンの命令をワーカーへ積む（effect ドライバから）。
-    pub(crate) fn panel_command(request_id: u64, command: PanelCommand) {
+    pub(crate) fn panel_command(request_id: u64, command: PanelOp) {
         if let Some(tx) = WORKER.get().and_then(|w| w.as_ref()) {
             let _ = tx.send(Cmd::Panel(request_id, command));
         }
@@ -463,20 +464,20 @@ mod imp {
                 return self.finish(id, Err(VideoCaptureFailure::Interrupted));
             }
             j.stage = Stage::Ready;
-            set_panel(id, Some(PanelPhase::Ready));
+            set_panel(id, Some(PanelState::Ready));
         }
 
-        fn panel(&mut self, id: u64, c: PanelCommand) {
+        fn panel(&mut self, id: u64, c: PanelOp) {
             let Some(stage) = self.cur(id).map(|j| j.stage) else {
                 return;
             };
             match (stage, c) {
-                (Stage::Ready, PanelCommand::Start) => self.start_recording(id),
-                (Stage::Recording, PanelCommand::Stop) => self.stop_recording(id),
-                (Stage::Ready, PanelCommand::Cancel) => {
+                (Stage::Ready, PanelOp::Start) => self.start_recording(id),
+                (Stage::Recording, PanelOp::Stop) => self.stop_recording(id),
+                (Stage::Ready, PanelOp::Cancel) => {
                     self.finish(id, Ok(VideoCaptureOutcome::Cancelled))
                 }
-                (Stage::Recording, PanelCommand::Cancel) => {
+                (Stage::Recording, PanelOp::Cancel) => {
                     if let Some(j) = self.cur(id) {
                         j.cancelling = true;
                     }
@@ -506,7 +507,7 @@ mod imp {
                 Ok(op) => {
                     j.op = Some(op);
                     j.stage = Stage::Starting;
-                    set_panel(id, Some(PanelPhase::Busy));
+                    set_panel(id, Some(PanelState::Busy));
                 }
                 Err(e) => self.finish(id, Err(failure_from_hresult(e.code().0))),
             }
@@ -521,7 +522,7 @@ mod imp {
             // 期限は録画が始まった時点から単調時計で測る。
             j.deadline = Some(Instant::now() + j.max);
             j.stage = Stage::Recording;
-            set_panel(id, Some(PanelPhase::Recording));
+            set_panel(id, Some(PanelState::Recording));
         }
 
         fn deadline_reached(&mut self) {
@@ -545,7 +546,7 @@ mod imp {
                 Ok(op) => {
                     j.op = Some(op);
                     j.stage = Stage::Stopping;
-                    set_panel(id, Some(PanelPhase::Busy));
+                    set_panel(id, Some(PanelState::Busy));
                 }
                 Err(_) => self.finish(id, Err(VideoCaptureFailure::Internal)),
             }
@@ -625,7 +626,7 @@ mod imp {
             j.stage = Stage::Closing;
             j.deadline = None;
             j.result = Some(result);
-            set_panel(id, Some(PanelPhase::Busy));
+            set_panel(id, Some(PanelState::Busy));
             if let Some(op) = &j.op {
                 // 戻り値は見ない。取り消しを含む完了が届いてから閉じる（契約表 11）。
                 let _ = op.Cancel();

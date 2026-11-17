@@ -17,7 +17,7 @@
         "TSV ファイル選択・解析"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-cap-file-picker/src/tsv_import.rs + crates/fandhe-cap-file-picker/src/driver.rs（`PickHooks` 共有）、Issue 旧#980"
+      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-cap-file-picker/src/driver.rs（`tsv_import_effect`・`PickHooks` 共有）、Issue 旧#980"
     },
     "android": {
       "status": "done",
@@ -29,7 +29,7 @@
         "TSV ファイル選択・解析"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-cap-file-picker/src/tsv_import.rs + crates/fandhe-cap-file-picker/src/driver.rs（`PickHooks` 共有）、Issue 旧#980"
+      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-cap-file-picker/src/driver.rs（`tsv_import_effect`・`PickHooks` 共有）、Issue 旧#980"
     },
     "macos": {
       "status": "done",
@@ -41,7 +41,7 @@
         "TSV ファイル選択・解析"
       ],
       "implStatus": "実装済み",
-      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-cap-file-picker/src/tsv_import.rs + crates/fandhe-cap-file-picker/src/driver.rs（`PickHooks` 共有）、Issue 旧#980"
+      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-cap-file-picker/src/driver.rs（`tsv_import_effect`・`PickHooks` 共有）、Issue 旧#980"
     },
     "windows": {
       "status": "done",
@@ -53,7 +53,7 @@
         "TSV ファイル選択・解析"
       ],
       "implStatus": "実装済み（実機未確認）",
-      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-cap-file-picker/src/tsv_import.rs + crates/fandhe-cap-file-picker/src/driver.rs（`PickHooks` 共有）、Issue 旧#980"
+      "impl": "crates/fandhe-core/src/tsv.rs + crates/fandhe-core/src/screens/tsv_import.rs + crates/fandhe-cap-file-picker/src/driver.rs（`tsv_import_effect`・`PickHooks` 共有）、Issue 旧#980"
     },
     "web": {
       "status": "done",

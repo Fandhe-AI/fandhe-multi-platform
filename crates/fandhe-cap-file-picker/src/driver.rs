@@ -39,10 +39,9 @@
 //!
 //! # `bridge` は `file_pick`/`tsv_import` の 2 画面で共有する
 //!
-//! `bridge::SLOT` は本モジュールと [`crate::tsv_import`] の両方が使う static。
+//! `bridge::SLOT` は本モジュールの `file_pick`・`tsv_import` の両 effect が使う static。
 //! `FANDHE_PROXY_APP` で起動する画面は 1 プロセスに 1 つだけのため、同じプロセスで
-//! 両方の effect ドライバが動くことは無く、共有しても要求が混線しない（`tsv_import.rs`
-//! モジュール doc も参照）。`Outcome` を `PickedSummary` ではなく生の
+//! 両方の effect ドライバが動くことは無く、共有しても要求が混線しない。`Outcome` を `PickedSummary` ではなく生の
 //! `Result<Option<Arc<PickedFile>>, FilePickerError>` に留めているのは、`tsv_import` 側は
 //! バイト列を解析に使う（要約に潰さない）ため。要約（`PickedSummary` への変換）は
 //! 各画面固有の [`PickHooks::finish`] 側で行う。
@@ -64,6 +63,7 @@ use crate::error::FilePickerError;
 use fandhe_core::screens::file_pick::{
     FilePickState, PickPhase, PickedSummary, finish_pick, mark_picking, request_pick,
 };
+use fandhe_core::screens::tsv_import::{self, TsvImportState, finish_import, request_import};
 use fandhe_device::file_picker::{MAX_FILE_BYTES, PickedFile};
 
 use fandhe_runtime::CompletionSender;
@@ -569,7 +569,7 @@ pub fn poll_file_pick(request_id: u64) -> Option<Result<Option<PickedFile>, File
 
 /// `file_pick` 画面用の [`PickHooks`]（`FilePickState` 版）。`finish` は `PickedFile` を
 /// `PickedSummary { name, size }` へ要約してから `finish_pick` へ渡す（本画面の
-/// 従来挙動を保つ、[`super::tsv_import::TSV_IMPORT_HOOKS`] と対）。
+/// 従来挙動を保つ、[`TSV_IMPORT_HOOKS`] と対）。
 const FILE_PICK_HOOKS: PickHooks<FilePickState> = PickHooks {
     phase: |s| s.phase,
     generation: |s| s.generation,
@@ -600,6 +600,52 @@ pub fn file_pick_effect(state: &FilePickState, sender: &CompletionSender<FilePic
     match platform_file_picker() {
         Ok(picker) => drive_with(state, sender, picker, FILE_PICK_HOOKS),
         Err(message) => fail_request_with(state, sender, message, FILE_PICK_HOOKS),
+    }
+}
+
+/// `tsv_import` 画面（TSV 読み込み、親 #979 / Issue #980）用の [`PickHooks`]（`TsvImportState` 版）。
+///
+/// サイズ上限は 2 段。(1) `bridge` 側（[`MAX_FILE_BYTES`]、8 MiB）で選べるファイルを絞り、
+/// (2) 解析側（`fandhe_core::tsv::MAX_TSV_BYTES`、1 MiB）で読み込める行数・列数を絞る。
+/// 前者を通っても後者で `TsvError::TooLarge` になり得る（別々の上限、SSOT を混ぜない）。
+///
+/// `finish` は `PickedFile` を
+/// バイト列（`Vec<u8>`）だけへ潰してから `finish_import` へ渡す（解析は
+/// `fandhe_core::screens::tsv_import::finish_import` 内部で行う。要約に潰す
+/// `driver::FILE_PICK_HOOKS` とはここが異なる）。`PickedFile`（`fandhe_device::
+/// file_picker::PickedFile`、`bytes: Vec<u8>`）は共通コアが依存できない型のため、
+/// この完了時 1 回だけ `Vec<u8>` を取り出す。毎フレームの `RequestSlot::snapshot`
+/// クローンは `bridge::Outcome` が `Arc<PickedFile>` で包んでいるため参照カウント
+/// 共有のみで、バイト列自体はここでの 1 回しか複製されない
+/// （`driver.rs` の `bridge` モジュール doc 参照）。
+const TSV_IMPORT_HOOKS: PickHooks<TsvImportState> = PickHooks {
+    phase: |s| s.phase,
+    generation: |s| s.generation,
+    request: request_import,
+    mark_picking: tsv_import::mark_picking,
+    finish: |s, generation, result| {
+        finish_import(
+            s,
+            generation,
+            result.map(|opt| opt.map(|f: PickedFile| f.bytes)),
+        );
+    },
+};
+
+/// `registry.rs` の `effect` 区画から `tsv_import` 画面用に配線される effect ドライバ
+/// （iOS/Android 版）。
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub fn tsv_import_effect(state: &TsvImportState, sender: &CompletionSender<TsvImportState>) {
+    drive_mobile_with(state, sender, TSV_IMPORT_HOOKS);
+}
+
+/// `registry.rs` の `effect` 区画から `tsv_import` 画面用に配線される effect ドライバ
+/// （デスクトップ版）。
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+pub fn tsv_import_effect(state: &TsvImportState, sender: &CompletionSender<TsvImportState>) {
+    match platform_file_picker() {
+        Ok(picker) => drive_with(state, sender, picker, TSV_IMPORT_HOOKS),
+        Err(message) => fail_request_with(state, sender, message, TSV_IMPORT_HOOKS),
     }
 }
 
@@ -990,5 +1036,122 @@ mod bridge_tests {
         assert_eq!(begin_file_pick(), Err(FilePickerError::Unsupported));
         assert!(poll_file_pick(1).is_none());
         assert!(!discard_file_pick(1));
+    }
+}
+
+#[cfg(test)]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+mod tsv_import_tests {
+    use super::*;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
+    use crate::contract::FilePicker;
+    use crate::error::FilePickerError;
+
+    fn sender_with_channel() -> (
+        CompletionSender<TsvImportState>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<TsvImportState>>,
+    ) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
+    }
+
+    /// 常に指定した結果を返すモック（GUI 無しで `drive_with` を検証する。
+    /// `driver.rs` の `MockPicker` と同型）。
+    struct MockPicker(Result<Option<PickedFile>, FilePickerError>);
+
+    impl FilePicker for MockPicker {
+        fn pick(&self) -> Result<Option<PickedFile>, FilePickerError> {
+            match &self.0 {
+                Ok(v) => Ok(v.clone()),
+                Err(e) => Err(*e),
+            }
+        }
+    }
+
+    fn apply_all(
+        state: &mut TsvImportState,
+        rx: &std::sync::mpsc::Receiver<fandhe_runtime::Completion<TsvImportState>>,
+    ) {
+        while let Ok(apply) = rx.try_recv() {
+            apply(state);
+        }
+    }
+
+    #[test]
+    fn drive_reflects_valid_tsv_as_row_count_status() {
+        let (sender, rx) = sender_with_channel();
+        let mut state = TsvImportState::default();
+        request_import(&mut state);
+
+        drive_with(
+            &state,
+            &sender,
+            &MockPicker(Ok(Some(PickedFile {
+                name: "dict.tsv".to_string(),
+                bytes: b"a\tb\nc\td\n".to_vec(),
+            }))),
+            TSV_IMPORT_HOOKS,
+        );
+        apply_all(&mut state, &rx);
+
+        assert!(state.status.contains("2 行"));
+        assert_eq!(state.error, "");
+    }
+
+    #[test]
+    fn drive_reports_non_utf8_as_error() {
+        let (sender, rx) = sender_with_channel();
+        let mut state = TsvImportState::default();
+        request_import(&mut state);
+
+        drive_with(
+            &state,
+            &sender,
+            &MockPicker(Ok(Some(PickedFile {
+                name: "dict.tsv".to_string(),
+                bytes: vec![0xFF, 0xFE],
+            }))),
+            TSV_IMPORT_HOOKS,
+        );
+        apply_all(&mut state, &rx);
+
+        assert_eq!(state.status, "");
+        assert!(state.error.contains("UTF-8"));
+    }
+
+    #[test]
+    fn drive_reflects_cancel_without_success_wording() {
+        let (sender, rx) = sender_with_channel();
+        let mut state = TsvImportState::default();
+        request_import(&mut state);
+
+        drive_with(&state, &sender, &MockPicker(Ok(None)), TSV_IMPORT_HOOKS);
+        apply_all(&mut state, &rx);
+
+        assert!(!state.status.contains("読み込みました"));
+        assert_eq!(state.error, "");
+    }
+
+    #[test]
+    fn fail_request_reports_unavailable_without_success_wording() {
+        let (sender, rx) = sender_with_channel();
+        let mut state = TsvImportState::default();
+        request_import(&mut state);
+
+        fail_request_with(&state, &sender, UNAVAILABLE, TSV_IMPORT_HOOKS);
+        apply_all(&mut state, &rx);
+
+        assert_eq!(state.error, format!("失敗しました: {UNAVAILABLE}"));
+        assert_eq!(state.status, "");
     }
 }

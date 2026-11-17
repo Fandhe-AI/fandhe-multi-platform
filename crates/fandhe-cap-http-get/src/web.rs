@@ -1,8 +1,7 @@
 //! 型サンプル「HTTP 取得（GET 限定）」の Web 経路（Issue #985）。
 //!
-//! `fandhe_core::screens::http_fetch`（端末依存ゼロ）の要求を
-//! [``fandhe-web-dom` の `mount_with_effect``] の effect として観測し、ブラウザの `fetch`
-//! （Fetch API）で GET だけを行って結果を書き戻す。
+//! ブラウザの `fetch`（Fetch API）で GET だけを行い、取得結果（`Result<Vec<String>, String>`）を返す。
+//! 画面の状態型には依存しない（`driver.rs` の `http_fetch_effect` が呼び、画面へ書き戻す）。
 //!
 //! Web は `crate::contract` の `Http` トレイト（`UreqHttp`）を通らない。`UreqHttp` は
 //! wasm32 では `ureq` の推移依存（`getrandom`）が解決できず存在しない
@@ -29,7 +28,7 @@
 //! web 欄と対）
 //!
 //! 通信失敗・CORS 拒否・2xx 以外・リダイレクト・本文上限超過・解析失敗・期限切れは、
-//! いずれも `finish_fetch(Err(...))` へ畳む（嘘の成功を作らない、
+//! いずれも `Err(...)` へ畳む（`driver` が `finish_fetch` へ渡す）（嘘の成功を作らない、
 //! device-bridge-contracts.md 6 節）。ブラウザは CORS 拒否と通信失敗を区別できない
 //! （どちらも `fetch` の reject・`TypeError`）ため、同じ文言で示す。空配列 `[]` の
 //! 応答は正しい結果（「0 件取得」）であり、失敗の畳み込みではない。
@@ -53,24 +52,8 @@
 //! `abort` して打ち切る（P1 指摘対応。一括確保後の事後確認だと上限がメモリ枯渇防止
 //! として機能しないため）。
 //!
-//! # 二重起動防止
-//!
-//! [`fandhe_platform_web::Applier::apply`] は effect 実行中（`state` が借用中）の同期呼び出しを
-//! マイクロタスクへ退避する（`Applier::apply` の doc 参照）。本モジュールは
-//! `Requested` を見たらまず `spawn_local` へ丸ごと逃がし、その中で `applier.apply` に
-//! より「`Requested` のままか」を確認しつつ `mark_loading` を適用する。`spawn_local` の
-//! タスクが実行される時点では元の `render_once` 呼び出しは終わっており `state` の
-//! 借用は外れているため、`apply` はその場で同期的に実行され、`Rc<Cell<bool>>` へ
-//! 成否を記録できる。これが `true` のときだけ実際の `fetch` を始めるため、同じ
-//! `Requested` を複数回の再描画で観測しても二重取得しない（`fandhe-core::screens::http_fetch`
-//! の `Requested` → `Loading` 二段階契約、device-bridge-contracts.md 2 節）。
-//!
-//! # 画面の固定（他 Web 画面と同じ既知の制約）
-//!
-//! `mount` は `Screen<S>` の再構築に対応しないため、
-//! `current_screen(&HttpFetchState::default())`（「取得」ボタン）で固定する。`Failed`
-//! 時の「再試行」ボタンは表示されないが、「取得」ボタンの `start_fetch` は `Failed`
-//! からも `Requested` へ進むため、`Failed` の表示のまま再度「取得」を押せば再試行できる。
+//! 二重起動防止・画面の固定・結果の書き戻しは `driver.rs`（`http_fetch_effect`）が持つ。本モジュールは
+//! 画面の状態型を知らず、[`fetch_once`] だけを口として出す。
 //!
 //! 取得先・応答本文は `console` 出力・保存・送信を一切行わない（security.md A09）。
 
@@ -224,13 +207,7 @@ fn is_local_plain_http_host(host: &str) -> bool {
 
 #[cfg(target_arch = "wasm32")]
 mod browser {
-    use std::cell::Cell;
-    use std::rc::Rc;
-
     use crate::contract::{TIMEOUT, parse_items};
-    use fandhe_core::screens::http_fetch::{
-        FetchPhase, HttpFetchState, finish_fetch, mark_loading,
-    };
     use js_sys::Uint8Array;
     use wasm_bindgen::JsCast;
     use wasm_bindgen::prelude::*;
@@ -241,7 +218,6 @@ mod browser {
     };
 
     use super::{NETWORK_FAILURE, TIMEOUT_MESSAGE, check_len, check_status, is_allowed_items_url};
-    use fandhe_platform_web::Applier;
 
     /// 取得先 URL（モジュール doc「取得先」節参照）。実行時の利用者入力で変える経路は
     /// 作らない。
@@ -254,40 +230,9 @@ mod browser {
     /// ビルド時定数の妥当性の話なので、`FANDHE_ITEMS_URL` の値自体は出さない（A09）。
     const INVALID_ITEMS_URL: &str = "取得先の設定が不正です";
 
-    /// `mount_with_effect` へ渡す effect。`http_fetch` 画面の取得要求を処理する。
-    ///
-    /// `Requested` 以外では何もしない（`mount` モジュール doc の「effect フック」節の契約）。
-    pub fn http_fetch_effect(state: &HttpFetchState, applier: &Applier<HttpFetchState>) {
-        if state.phase != FetchPhase::Requested {
-            return;
-        }
-
-        // `spawn_local` へ丸ごと逃がす理由はモジュール doc「二重起動防止」節参照。
-        let applier = applier.clone();
-        wasm_bindgen_futures::spawn_local(async move {
-            let started = Rc::new(Cell::new(false));
-            {
-                let started = started.clone();
-                applier.apply(move |s: &mut HttpFetchState| {
-                    if s.phase == FetchPhase::Requested {
-                        mark_loading(s);
-                        started.set(true);
-                    }
-                });
-            }
-            if !started.get() {
-                // 別のタスクが先に mark_loading 済み（二重起動防止が働いた）。
-                return;
-            }
-
-            let result = fetch_once().await;
-            applier.apply(move |s| finish_fetch(s, result));
-        });
-    }
-
     /// 実際の `fetch` 呼び出し 1 回ぶん（期限つき）。成功時は [`parse_items`] を通した
     /// 文字列一覧を返す。
-    async fn fetch_once() -> Result<Vec<String>, String> {
+    pub(crate) async fn fetch_once() -> Result<Vec<String>, String> {
         let Some(window) = web_sys::window() else {
             return Err(NETWORK_FAILURE.to_string());
         };
@@ -417,7 +362,7 @@ mod browser {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub use browser::http_fetch_effect;
+pub(crate) use browser::fetch_once;
 
 #[cfg(test)]
 mod tests {
