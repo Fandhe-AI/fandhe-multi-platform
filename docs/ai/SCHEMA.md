@@ -1094,7 +1094,7 @@ std::thread::spawn(move || {
 ドライバがフレーム末尾で毎回それを見て起動する二段階遷移（`Requested` → ドライバ検知
 → `Capturing`）にするのが契約（同一フレーム内の二重起動観測を避けるため）。
 参照実装は `crates/fandhe-core/src/screens/camera_capture.rs`（状態機械・
-`CameraCaptureState`）と `crates/fandhe-cap-camera-capture/src/lib.rs`
+`CameraCaptureState`）と `crates/fandhe-cap-camera-capture/src/driver.rs`
 （`camera_capture_effect`、機能 crate 内の `Camera` トレイトを呼ぶ側。Issue #1170 で移した）。
 
 **Android の配線先（Issue #750）**: `DataDir`（「メモ保存」の保存先）は
