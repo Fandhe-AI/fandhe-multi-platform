@@ -212,7 +212,7 @@ int32_t fandhe_ios_file_picker_pick(uint64_t requestId) {
             fandhe_rust_file_picker_outcome(requestId, 3, NULL, 0);
             return;
         }
-        // delegate だけ残っていれば、完了通知を失った残り（シーン破棄等）なので解放して続ける。
+        // delegate だけ残っていれば、完了通知を失った残り（シーン破棄等。シーン切断で消える挙動自体は実機未確認）なので解放して続ける。
         g_retainedDelegate = nil;
         g_activePicker = nil;
         g_activeScene = nil;
