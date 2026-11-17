@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "Translation フレームワーク（iOS 26 以上。`LanguageAvailability.status(from:to:)` と `TranslationSession(installedSource:target:)` を直接作る。SwiftUI の `translationTask` は使わず、SwiftUI もホストしない。Swift 専用のため Swift 薄層と `@_cdecl` の C ABI で呼ぶ。macOS と共用）",
-      "perm": "不要（entitlement・Info.plist の追加なし）。言語パックのダウンロード同意 UI は出さない。翻訳する言語（ja・en）は設定で事前に入れておく必要がある",
       "url": "https://developer.apple.com/documentation/translation/translationsession",
       "note": "実装済み（#536、macOS と共用）。固定の日本語文を ja → en に 1 回訳す。iOS 26 未満は Unsupported。言語パックが未導入・取得中なら失敗として出し、ダウンロードは始めない。期限は 30 秒（Rust のドライバだけが持つ）。背景遷移で期限を過ぎたら期限切れで確定する。守る範囲は 1 プロセス内の順序・嘘の成功の禁止・資源の解放で、期限後も OS 側の翻訳が走り切ることは守らない。iOS 実機の確認は #529 で行う",
       "detail": "できている（iOS 実機確認待ち）",
@@ -19,7 +18,6 @@
     "android": {
       "status": "done",
       "api": "android.view.translation（API 31 以上。`TranslationManager.getOnDeviceTranslationCapabilities` で言語の状態を確かめ、端末内に入っている組だけ `createOnDeviceTranslator` → `Translator.translate` で訳す。全経路で `destroy()`）",
-      "perm": "不要（`uses-permission` の追加なし）。言語パックのダウンロードは始めない",
       "url": "https://developer.android.com/reference/android/view/translation/TranslationManager",
       "note": "実装済み（#537）。固定の日本語文を ja → en に 1 回訳す。API 31 未満・翻訳サービスなしは Unsupported、言語の組み合わせ非対応は失敗、言語パック未導入・取得中も失敗として出し、ダウンロードは始めない。端末によって翻訳サービスの有無が違う。期限は 30 秒（Rust のドライバだけが持つ）。Activity 再生成で保留中の要求を中断扱いで破棄する。守る範囲は 1 プロセス内の順序・嘘の成功の禁止・資源の解放で、期限後も OS 側の翻訳が走り切ることは守らない。Android 実機の確認は #529 で行う",
       "detail": "できている（Android 実機確認待ち）",
@@ -29,7 +27,6 @@
     "macos": {
       "status": "done",
       "api": "Translation フレームワーク（macOS 26 以上。`LanguageAvailability.status(from:to:)` と `TranslationSession(installedSource:target:)`。SwiftUI はホストしない。Swift 専用のため Swift 薄層と `@_cdecl` の C ABI で呼ぶ）",
-      "perm": "不要（entitlement・Info.plist の追加なし）。翻訳言語（ja・en）をシステム設定で入れておく必要がある",
       "url": "https://developer.apple.com/documentation/translation/translationsession",
       "note": "固定の日本語文を ja → en に 1 回訳す（元言語は必須で自動判定しない）。macOS 26 未満は Unsupported。言語パックが未導入・取得中なら失敗として出し、ダウンロードは始めない。期限は 30 秒（Rust のドライバだけが持つ）。守る範囲は 1 プロセス内の順序・嘘の成功の禁止・資源の解放で、期限後も OS 側の翻訳が走り切ることは守らない。Mac の目視は #529 で行う",
       "detail": "できている（Mac 目視待ち）",
@@ -39,14 +36,12 @@
     "windows": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "なし",
       "url": "",
       "note": "端末内の翻訳に相当する公開 API は報告で確認できていない（報告に『Windows Translator（制限あり）』とあるが一次情報なし。要確認）"
     },
     "web": {
       "status": "done",
       "api": "Translator API（`Translator.availability()` / `Translator.create()` / `translate()` / `destroy()`）。Chrome 138+ / Edge 148+ のデスクトップで flag 不要。Language Detector API は使わない（元言語は ja 固定）",
-      "perm": "なし（secure context 必須）",
       "url": "https://developer.chrome.com/docs/ai/translator-api",
       "note": "固定の日本語文を ja → en に 1 回訳す。`available` のときだけ `create()` し、`downloadable` / `downloading` は未取得として失敗にする（ダウンロードを始めない）。期限は 30 秒（`performance.now()` が起点）。`pagehide` は中断。全経路で `destroy()`。Android 版 Chrome・Safari・Firefox は `Translator` が無く使えない。守る範囲は 1 マウント内の順序・嘘の成功の禁止・資源の解放で、ブラウザごとの訳文の差・所要時間・期限後もブラウザ側の処理が走り切ること・複数タブ・egui-proxy の wasm canvas 経路は守らない。実ブラウザの確認は #529 で行う",
       "safari": "非対応（`Translator` が無いので Unsupported）",

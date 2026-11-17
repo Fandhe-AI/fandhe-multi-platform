@@ -1,5 +1,6 @@
 {
   "id": "ui-core-nodes",
+  "crate": null,
   "name": "UI 部品（コアノード: Text/Button/TextField/List）",
   "group": "既存機能の棚卸し",
   "order": 0,

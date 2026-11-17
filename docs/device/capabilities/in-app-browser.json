@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "SafariServices `SFSafariViewController`",
-      "perm": "なし",
       "url": "https://developer.apple.com/documentation/safariservices/sfsafariviewcontroller",
       "note": "実装済み（#702）。最前面の View Controller から present し、`safariViewControllerDidFinish` で「閉じた」を返す（読み込みの成功は意味しない）。URL は共通コアで検査し、OS 層でも http / https かを確かめ直す。開くまでの期限は 10 秒（単調時計）で、期限切れ後は表示しない。表示前の背景遷移は中断、表示先なしは表示先なしとして返す。守らない範囲: 開いた後に Rust から閉じること・閲覧内容と遷移先と読み込み失敗の検知・表示中の背景遷移・複数プロセス・プロセス死後の結果。iOS 実機での確認は #699",
       "detail": "できている（iOS 実機確認待ち）",
@@ -19,7 +18,6 @@
     "android": {
       "status": "done",
       "api": "Custom Tabs（`androidx.browser`）",
-      "perm": "なし",
       "url": "https://developer.android.com/develop/ui/views/layout/webapps/overview-of-android-custom-tabs",
       "note": "実装済み（#703）。`androidx.browser` は既存依存（web-auth-session で導入済み）。Custom Tabs 対応ブラウザが無い端末では `CustomTabsIntent` が既定ブラウザで開く（公式の既定動作、https://developer.chrome.com/docs/android/custom-tabs/guide-get-started ）。その場合も離脱して戻れば「閉じた」になる。ブラウザが 1 つも無いと `ActivityNotFoundException` で開けなかった（ブラウザなし）として返す。閉じた通知の専用 API は無いので、起動後の離脱と復帰（`onPause` → `onResume`）で判定する。URL は共通コアで検査し、OS 層でも http / https・host あり・userinfo なしを確かめ直す。開くまでの期限は 10 秒（単調時計）で、期限切れ後は表示しない。非前景は表示先なし、再生成・終了は中断として返す。守らない範囲: 開いた後に Rust から閉じること・閲覧内容と遷移先と読み込み失敗の検知・複数プロセス・プロセス死後の結果。Android 実機での確認は #699",
       "detail": "できている（Android 実機確認待ち）",
@@ -29,21 +27,18 @@
     "macos": {
       "status": "no",
       "api": "SFSafariViewController 相当の公開 API は無い見込み",
-      "perm": "",
       "url": "",
       "note": "要確認。認証用の ASWebAuthenticationSession はあるが汎用ではない。URL 未確認。WKWebView は UI 部品で本機能の範囲外"
     },
     "windows": {
       "status": "no",
       "api": "OS 標準のアプリ内ブラウザ UI は無い見込み",
-      "perm": "",
       "url": "",
       "note": "要確認。WebView2 は UI 部品で範囲外。URL 未確認"
     },
     "web": {
       "status": "n-a",
       "api": "`window.open()`（ポップアップ / 新規タブ）",
-      "perm": "",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/open",
       "note": "アプリの上に重ねて閉じたら戻る、という概念がブラウザに無い。`window.open` は新しいタブを開くだけで、`noopener` 付きでは戻り値が常に null（ブロックと区別できない）、COOP で `closed` も当てにならず、閉じたことを返せない。リンクを新しいタブで開くのはアプリ内ブラウザではない"
     }

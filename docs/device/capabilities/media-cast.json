@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "AVKit `AVRoutePickerView`（AirPlay の出力先選択）+ `AVAudioPlayer`（ループ再生）+ `AVAudioSession.currentRoute`（`AVAudioSessionPortAirPlay` の `portName`）",
-      "perm": "不要。`AVAudioSession` を playback + longFormAudio にし、解放時に元へ戻す。`UIBackgroundModes` は追加しない（既存の `audio` は背景で鳴らすことに使わない）",
       "url": "https://developer.apple.com/documentation/avkit/avroutepickerview",
       "note": "実装済み（#387）。実行時に生成した音をループ再生し、右下に OS の出力先ボタンを重ねる。背景遷移・割り込みで止めて中断表示にし、勝手に再開しない。出力先の名前は AirPlay 出力のときだけ画面に出す（ログ・保存はしない）。守る範囲: 1 プロセス内の操作順・失敗を成功にしないこと・資源と音声セッションの解放。守らない範囲: PiP 等の他画面との AVAudioSession の同時利用、OS の UI で切り替えた反映のポーリング間隔ぶんの遅れ、複数プロセス、受信機側の品質。未確認: AVAudioPlayer の音がそのまま AirPlay へ流れるか、シミュレータのピッカーに機器が出るか（実機確認 #379）",
       "detail": "できている（iOS 実機確認待ち）",
@@ -19,7 +18,6 @@
     "android": {
       "status": "possible",
       "api": "Google Cast SDK（GMS 依存）/ MediaRouter",
-      "perm": "Cast SDK（Google Play services）",
       "url": [
         "https://developers.google.com/cast/docs/android_sender",
         "https://developer.android.com/media/routing/mediarouter"
@@ -30,7 +28,6 @@
     "macos": {
       "status": "done",
       "api": "AVKit `AVRoutePickerView`（macOS 10.15+、`player` は nil）+ `AVAudioPlayer`（ループ再生）+ Core Audio の既定出力デバイスの transport type",
-      "perm": "不要",
       "url": "https://developer.apple.com/documentation/avkit/avroutepickerview",
       "note": "実装済み（#386）。実行時に生成した音をループ再生し、窓の右下に OS の出力先ボタンを重ねる。出力先の名前は、既定出力が AirPlay のときに Core Audio が返した値だけを画面に出す（ログ・保存はしない）。読めなければ「OS の表示で確認してください」と出し、接続中とは言わない（NotReported）。守る範囲: 1 プロセス内の操作順・失敗を成功にしないこと・資源の解放。守らない範囲: OS の UI で切り替えた反映の約 250ms の遅れ、複数プロセス、受信機側の品質。未確認: player が nil のときにシステムの出力が切り替わるか、AVAudioPlayer が既定出力の切り替えに追従するか（Mac 目視 #379。駄目なら AVPlayer 経路へ切り替える）",
       "detail": "できている（Mac 目視待ち）",
@@ -40,7 +37,6 @@
     "windows": {
       "status": "done",
       "api": "`Windows.Media.Casting.CastingDevicePicker` + `CastingConnection` + `MediaPlayer.GetAsCastingSource`（`MediaSource::CreateFromStream` でメモリ上の WAV をループ再生）。旧 `Windows.Media.PlayTo` は Deprecated",
-      "perm": "不要（`IInitializeWithWindow` で owner window を関連付ける。package identity の要否は実機で確認）",
       "url": [
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.casting.castingdevicepicker",
         "https://learn.microsoft.com/en-us/windows/apps/develop/media-playback/media-casting"
@@ -53,7 +49,6 @@
     "web": {
       "status": "done",
       "api": "Remote Playback API（`HTMLMediaElement.remote`）",
-      "perm": "なし",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Remote_Playback_API",
       "safari": "Safari 13.1 から対応（iOS は mirror）。Chrome 121・Chrome Android 56。Firefox は非対応。機器の名前は仕様でページに明かさない",
       "note": "実装済み（#389）。実行時に生成した WAV を blob: URL でループ再生し、アプリのボタンから prompt() で出力先ピッカーを出す。prompt() の NotAllowedError は利用者が閉じたキャンセルとして失敗にせず実際の remote.state から経路を戻し、NotFoundError は「出力先が見つかりません」、NotSupportedError は「この音源は送れません」と出す。出力先の名前は仕様上渡されないため常に出さない。非対応（Firefox）は非対応表示。期限は再生 5 秒・接続 15 秒（単調時計）、pagehide で中断する。守る範囲: 1 マウント内の操作順・失敗を成功にしないこと・資源の解放。守らない範囲: 複数タブ、受信機側で再開した再生の反映、受信機の品質。未確認: 実ブラウザ・実受信機（Chrome の Cast 機器、Safari の AirPlay）で blob: の WAV が送れるか、prompt() が解決する時機、disableRemotePlayback で切断されるか（#379）",

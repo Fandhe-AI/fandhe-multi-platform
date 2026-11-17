@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "MapKit `MKGeocodingRequest`（iOS 26 以上。main queue で開始し completion も main、macOS と同じ `.m`）。`CLGeocoder` は iOS 26 で非推奨。経路の `MKDirections`・地点検索の `MKLocalSearch` は今回の範囲外",
-      "perm": "不要（住所 → 座標は現在地を使わない）",
       "url": [
         "https://developer.apple.com/documentation/mapkit/mkgeocodingrequest",
         "https://developer.apple.com/documentation/corelocation/clgeocoder"
@@ -22,7 +21,6 @@
     "android": {
       "status": "done",
       "api": "`android.location.Geocoder`（API 33 以上は `GeocodeListener` 版、24〜32 は同期版）。経路は標準 API なし",
-      "perm": "不要（住所 → 座標は位置情報の権限を確かめない。`INTERNET` は宣言済み）",
       "url": [
         "https://developer.android.com/reference/android/location/Geocoder",
         "https://developer.android.com/reference/android/location/Geocoder.GeocodeListener"
@@ -35,7 +33,6 @@
     "macos": {
       "status": "done",
       "api": "MapKit `MKGeocodingRequest`（macOS 26 以上。main queue で開始し completion も main、iOS と同じ `.m`）。座標は `MKMapItem.location`",
-      "perm": "不要",
       "url": "https://developer.apple.com/documentation/mapkit/mkgeocodingrequest",
       "note": "実装済み（#691）。画面の固定の公開住所 1 件を座標へ変換し、先頭候補の緯度・経度と候補数を出す。通信不可・回数上限・該当なし・座標なし・時間切れを区別して失敗にし、0 件・座標なし・error 付きを成功にしない。住所・座標・OS のエラー文はログへ出さない。macOS 26 未満は Unsupported（非推奨の CLGeocoder へ倒さない）。素の実行体から MapKit の地理コードが通るかは Mac 目視（#689）で確かめる。守らない範囲: 結果の精度と候補の選択、回数上限、期限後も OS 側の処理が走り切ること",
       "detail": "できている（Mac 目視待ち）",
@@ -45,14 +42,12 @@
     "windows": {
       "status": "no",
       "api": "なし（`Windows.Services.Maps.MapLocationFinder` は Deprecated）",
-      "perm": "",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.services.maps.maplocationfinder",
       "note": "MapLocationFinder は公式に非推奨で、データ元の Bing Maps for Enterprise も提供終了予定。map-view の Windows（no）と揃える。外部の地図サービスを HTTP で呼ぶ形は OS 機能ではないため対象外"
     },
     "web": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "なし",
       "url": "",
       "note": "ブラウザに住所検索・経路の API はない（Geolocation は位置の取得のみで location に既出）"
     }

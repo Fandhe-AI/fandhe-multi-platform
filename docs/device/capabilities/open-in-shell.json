@@ -17,7 +17,6 @@
     "macos": {
       "status": "done",
       "api": "AppKit `NSWorkspace`（開く: `urlForApplication(toOpen:)` で既定アプリの有無を確かめてから `open(_:)`、Finder で選択表示: `selectFile(_:inFileViewerRootedAtPath:)`）。実行可能判定は `URLResourceKey` の `isExecutableKey` / `isApplicationKey` / `isPackageKey`",
-      "perm": "なし（アプリはサンドボックス外。新しい framework・entitlement・Info.plist キーの追加なし）",
       "url": [
         "https://developer.apple.com/documentation/appkit/nsworkspace",
         "https://developer.apple.com/documentation/appkit/nsworkspace/open(_:)",
@@ -34,7 +33,6 @@
     "windows": {
       "status": "done",
       "api": "Win32 `ShellExecuteExW`（verb `open`、引数なし、`SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI`）で開く。開く前に `GetFileAttributesW` で確かめる。`SHOpenFolderAndSelectItems` + `ILCreateFromPathW` / `ILFree` で Explorer に選択表示。危険な型は `AssocIsDangerous` で拒否",
-      "perm": "なし（Win32 desktop の API。package identity は不要。`windows` クレートの feature は既存の `Win32_UI_Shell` / `Win32_UI_Shell_Common` / `Win32_System_Com` / `Win32_Storage_FileSystem` / `Win32_UI_WindowsAndMessaging` で足り、追加なし）",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecuteexw",
         "https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shopenfolderandselectitems",

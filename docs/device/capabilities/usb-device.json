@@ -9,14 +9,12 @@
     "ios": {
       "status": "no",
       "api": "なし（iOS には USB 機器を直接制御する公開 API が無い）",
-      "perm": "なし",
       "url": "",
       "note": "DriverKit は iPadOS 限定の別物（報告の記述。一次情報は未確認）。要確認。"
     },
     "android": {
       "status": "done",
       "api": "`UsbManager.getDeviceList`（USB ホスト）+ `UsbDevice.getVendorId` / `getProductId` / `getProductName`",
-      "perm": "なし。機器を開かないため接続ごとの許可（`requestPermission`）は求めない。`uses-feature android.hardware.usb.host`（required=false）を宣言",
       "url": "https://developer.android.com/develop/connectivity/usb/host",
       "note": "実装済み（#507）。接続中の USB 機器のベンダー ID・製品 ID・製品名を先頭 64 件まで表示し、「再取得」で読み直す。0 件は成功として別に出し、USB ホスト非搭載は非対応、失敗は区別して失敗として出す。シリアル番号・デバイスパス・製造者名は読まない。製品名が取れない機器は名前なしで件数に数える。UI スレッドで同期に 1 回だけ読み、保留中の要求を持たない（Activity 再生成で破棄するものが無い）。守らない範囲: 抜き差しの反映（再取得まで）、OTG 非対応端末、製品名を読むのに許可が要る端末で名前が空になること、OS 呼び出しが戻らない場合の期限。実機確認は #504 で行う。",
       "detail": "できている（Android 実機確認待ち）",
@@ -26,7 +24,6 @@
     "macos": {
       "status": "done",
       "api": "IOKit `IOServiceGetMatchingServices`（`IOUSBHostDevice`）+ `IORegistryEntryCreateCFProperty`（`idVendor` / `idProduct` / `USB Product Name`）",
-      "perm": "なし。機器を開かず非サンドボックスで実行するため `com.apple.security.device.usb` は不要の見込み（推測。#504 の Mac 目視で確認する）",
       "url": "https://developer.apple.com/documentation/iousbhost/iousbhostdevice",
       "note": "実装済み（#505）。接続中の USB 機器のベンダー ID・製品 ID・製品名を先頭 64 件まで表示し、「再取得」で読み直す。0 件は成功として別に出し、非対応・失敗は区別して失敗として出す。シリアル・locationID は読まない。守らない範囲: 抜き差しの反映（再取得まで）、ハブや内蔵機器の扱い（OS 任せ）、Bluetooth HID、OS 呼び出しが戻らない場合の期限。",
       "detail": "できている（Mac 目視待ち）",
@@ -36,7 +33,6 @@
     "windows": {
       "status": "done",
       "api": "Win32 SetupAPI。`SetupDiGetClassDevsW`（`GUID_DEVINTERFACE_USB_DEVICE`、`DIGCF_PRESENT | DIGCF_DEVICEINTERFACE`）で列挙し、`SPDRP_HARDWAREID` から VID/PID を、`DEVPKEY_Device_BusReportedDeviceDesc` から製品名を読む",
-      "perm": "なし。機器を開かず列挙だけで、unpackaged の Win32 なら宣言は不要の見込み（推測。#504 の実機で確認する）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetclassdevsw",
       "note": "実装済み（#506）。macOS と同じ範囲（先頭 64 件、「再取得」、0 件は成功、非対応と失敗の区別、シリアル・インスタンス ID は読まない）。WinRT `Windows.Devices.Usb` は package identity 必須のため使わず、WinUSB は機器を開くため範囲外。守らない範囲: 抜き差しの反映（再取得まで）、ハブや複合機器の扱い（OS 任せ）、Bluetooth HID、iProduct を持たない機器の名前（汎用名へは倒さず名前なし）、OS 呼び出しが戻らない場合の期限。型検査は x86_64-pc-windows-gnu のみ。",
       "detail": "できている（Windows 実機確認待ち）",
@@ -46,7 +42,6 @@
     "web": {
       "status": "done",
       "api": "`navigator.usb.requestDevice({ filters: [] })`（1 台）/ `navigator.hid.requestDevice({ filters: [] })`（`HIDDevice` の配列）。`vendorId` / `productId` / `productName` だけを読む",
-      "perm": "機器ごとに利用者が選ぶ。secure context 必須。Permissions Policy の `usb` / `hid` で禁止されると失敗になる",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebUSB_API",
       "safari": "非対応と認識（要確認）。Firefox も非対応と認識。実行時に API の有無を判定し、無ければ「取得できません」と出す",
       "note": "実装済み（#508）。利用者が選んだ機器のベンダー ID・製品 ID・製品名だけを出す。ダイアログを閉じた場合はキャンセルで、WebHID の空配列も同じ扱い（0 件の成功にしない）。守る範囲: キャンセルを失敗に見せない、非対応・拒否を成功に見せない、シリアルなどの識別子を取らない。守らない範囲: 選ばれた機器だけを出す（`getDevices` は使わない）、抜き差しへの追従、選択ダイアログの期限、Chromium 系以外、保護クラスの扱い（Chrome 任せ）。WebHID: https://developer.mozilla.org/en-US/docs/Web/API/WebHID_API 。実ブラウザの確認は #504。",

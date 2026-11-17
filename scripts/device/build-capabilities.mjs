@@ -14,9 +14,14 @@
  * 毎回コンフリクトするため。
  *
  * 使い方: node scripts/device/build-capabilities.mjs [--check]
- *   --check を付けると書き込まず、スキーマ・url の scheme（https のみ）・実装パス・Android 権限宣言を検査し、生成が例外なく通るかを
+ *   --check を付けると書き込まず、スキーマ・url の scheme（https のみ）・実装パスを検査し、生成が例外なく通るかを
  *   確かめる（終了コードで通知）。
+ *
+ * 権限欄は対応表には書かない（Issue #1195）。正本は各機能 crate の `[package.metadata.fandhe]` で、
+ * `cargo metadata` で読んだ宣言を JSON の id（別名・基盤は `crate` キー）と結合して生成時に出す。
+ * 結合が欠けた・食い違った場合は拒否する（宣言を見ずに「権限なし」と出す嘘の成功を避ける）。
  */
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,10 +43,11 @@ function load() {
   const names = readdirSync(srcDir).filter((n) => n.endsWith(".json") && !n.startsWith("_")).sort();
   const features = names.map((name) => ({ name, body: JSON.parse(readFileSync(join(srcDir, name), "utf8")) }));
   validate(features, meta);
+  fillPermFromDeclarations(features.map((f) => f.body), loadDeclarations());
   // order / priority / bundle は計画用メタデータなので、本体へ混ぜずに落とす
   // （HTML へ埋め込む JSON にも出さない）。order の同値は上のファイル名ソートで決まる。
   const sorted = features.map((f) => f.body).sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : 1));
-  for (const f of sorted) for (const k of ["order", "priority", "bundle"]) delete f[k];
+  for (const f of sorted) for (const k of ["order", "priority", "bundle", "crate"]) delete f[k];
   return { ...meta, features: sorted };
 }
 
@@ -115,9 +121,99 @@ function validate(features, meta) {
   }
 }
 
+/**
+ * 機能 crate（`fandhe-cap-*`）の宣言を id → `[package.metadata.fandhe]` で返す。
+ * TOML は自前で解釈せず cargo に任せる（cargo-fandhe と同じ方針）。build script を走らせない
+ * `--no-deps` と `--offline` で、シェルを介さず固定引数で呼ぶ。失敗時は宣言なしで生成すると
+ * 権限欄が嘘になるため、理由を出して終了する。
+ */
+function loadDeclarations() {
+  try {
+    const out = execFileSync(
+      "cargo",
+      ["metadata", "--no-deps", "--format-version", "1", "--offline", "--manifest-path", join(repoRoot, "Cargo.toml")],
+      { encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] },
+    );
+    const decls = new Map();
+    for (const p of JSON.parse(out).packages) {
+      const f = p.metadata?.fandhe;
+      if (p.name.startsWith("fandhe-cap-") && f?.id) decls.set(f.id, f);
+    }
+    return decls;
+  } catch (e) {
+    console.error(`[crate-join] crate の宣言を cargo metadata で読めない: ${e.message}`);
+    process.exit(1);
+  }
+}
+
+/**
+ * 対応表と crate の宣言の結合規則を検査する。違反の文字列配列を返す（空なら正常）。
+ * `crate` キー = 結合先 crate の id。省略なら自身の id、`null` なら crate を持たない基盤の機能。
+ */
+function joinDeclarations(features, decls) {
+  const errors = [];
+  const ids = new Set(features.map((f) => f.id));
+  for (const id of decls.keys()) if (!ids.has(id)) errors.push(`crate ${id} に対応する docs/device/capabilities/${id}.json が無い`);
+  for (const f of features) {
+    const at = `docs/device/capabilities/${f.id}.json`;
+    for (const [os, p] of Object.entries(f.platforms ?? {})) {
+      if (p && "perm" in p) errors.push(`${at}: platforms.${os}.perm は書かない（権限は crate の宣言から生成する）`);
+    }
+    const hasKey = "crate" in f;
+    if (hasKey && f.crate !== null && typeof f.crate !== "string") {
+      errors.push(`${at}: crate は crate の id（文字列）か null`);
+    } else if (typeof f.crate === "string") {
+      if (f.crate === f.id) errors.push(`${at}: crate が自身の id と同じ（省略する）`);
+      else if (!decls.has(f.crate)) errors.push(`${at}: crate ${f.crate} が存在しない`);
+    } else if (!hasKey && !decls.has(f.id) && Object.values(f.platforms ?? {}).some((p) => p?.status === "done")) {
+      errors.push(`${at}: done のセルがあるのに結合先の crate が無い（別名なら crate に id、基盤なら null を書く）`);
+    }
+  }
+  return errors;
+}
+
+/** 結合先 crate の宣言（無ければ undefined）。 */
+function declOf(f, decls) {
+  const id = "crate" in f ? f.crate : f.id;
+  return id == null ? undefined : decls.get(id);
+}
+
+/**
+ * 1 セルの権限欄の文字列。done 以外は「—」（未実装で宣言が無い。「なし」と誤読させない）。
+ * usage-descriptions・entitlements・app-groups（拡張を含む）・Android permissions を宣言から並べる。
+ * Web の宣言には権限の欄が無く、Windows は宣言する機能がまだ無いため、どちらも「なし」。
+ */
+function permText(os, status, fandhe) {
+  if (status !== "done") return "—";
+  const o = fandhe?.[os];
+  const out = [];
+  if (os === "android") {
+    for (const p of o?.permissions ?? []) out.push(p.name + (p["max-sdk"] ? `（maxSdkVersion ${p["max-sdk"]}）` : ""));
+  } else if (os === "ios" || os === "macos") {
+    for (const part of [o, ...(o?.extensions ?? [])]) {
+      out.push(...(part?.["usage-descriptions"] ?? []), ...Object.keys(part?.entitlements ?? {}));
+      out.push(...(part?.["app-groups"] ?? []).map((g) => `App Group: ${g}`));
+    }
+  }
+  return out.length ? [...new Set(out)].join("、") : "なし";
+}
+
+/** 結合を検査し（違反なら exit 1）、各セルの perm を宣言から埋める。 */
+function fillPermFromDeclarations(features, decls) {
+  const errors = joinDeclarations(features, decls);
+  if (errors.length) {
+    for (const e of errors) console.error(`[crate-join] ${e}`);
+    process.exit(1);
+  }
+  for (const f of features) {
+    const d = declOf(f, decls);
+    for (const [os, p] of Object.entries(f.platforms)) p.perm = permText(os, p.status, d);
+  }
+}
+
 // --- --check 専用の追加検査（Issue #948） ----------------------------------
-// スキーマ検証（validate）は「型が正しいか」までで、impl・perm の自由文が指す実体
-// （ファイル・Android 権限宣言）までは見ない。ここは通常生成時には走らせず、
+// スキーマ検証（validate）は「型が正しいか」までで、impl の自由文が指す実体
+// （ファイル）までは見ない。ここは通常生成時には走らせず、
 // --check でのみ実行する。
 
 // impl 自由文からリポジトリ相対パスのトークンを抜き出す正規表現。
@@ -146,40 +242,6 @@ function checkImplPaths(features, root) {
       for (const p of extractImplPaths(f.platforms[os].impl)) {
         if (!existsSync(join(root, p))) errors.push(`${f.id} / ${os} / ${p}`);
       }
-    }
-  }
-  return errors;
-}
-
-/**
- * Android 権限宣言の検証。status=done かつ perm 欄に `android.permission.X` を
- * 含む機能について、AndroidManifest.xml 側に対応する `<uses-permission>` があるかを見る。
- * perm が短縮形（例: `USE_BIOMETRIC`）のみで完全修飾名を含まない機能は対象外
- * （Issue #948 の検査対象は perm 欄が完全修飾名を書いている場合に限る）。
- */
-function checkAndroidPermissions(features, manifestPath) {
-  let manifest = "";
-  try {
-    manifest = readFileSync(manifestPath, "utf8");
-  } catch {
-    manifest = "";
-  }
-  // XML コメントを除いてから `<uses-permission ...>` 要素を拾い、属性順に依らず
-  // `android:name` の値を集める（コメントアウトされた宣言を「宣言済み」と誤判定しない、
-  // `android:maxSdkVersion` が先に来る宣言を見落とさない。codex-review 指摘 P2、PR #951）。
-  const declared = new Set();
-  const stripped = manifest.replace(/<!--[\s\S]*?-->/g, "");
-  for (const el of stripped.matchAll(/<uses-permission(?:-sdk-23)?\b([^>]*)>/g)) {
-    const name = /android:name\s*=\s*"([^"]+)"/.exec(el[1]);
-    if (name) declared.add(name[1]);
-  }
-  const errors = [];
-  for (const f of features) {
-    const a = f.platforms.android;
-    if (!a || a.status !== "done" || !a.perm) continue;
-    const perms = [...String(a.perm).matchAll(/android\.permission\.[A-Z_]+/g)].map((m) => m[0]);
-    for (const perm of perms) {
-      if (!declared.has(perm)) errors.push(`${f.id} / android / ${perm}`);
     }
   }
   return errors;
@@ -318,7 +380,7 @@ function buildMarkdown() {
     if (f.capture) L.push(`| キャプチャ | [${md(f.capture)}](${f.capture})（Mac の正常系） |`);
     if (f.note) L.push(`| 横断の根拠 | ${md(f.note)} |`);
     L.push("");
-    L.push("| OS | 状態 | API・フレームワーク | 権限・設定キー | 公式ドキュメント | 備考 |");
+    L.push("| OS | 状態 | API・フレームワーク | 権限（crate の宣言） | 公式ドキュメント | 備考 |");
     L.push("| --- | --- | --- | --- | --- | --- |");
     for (const os of platforms) {
       const p = f.platforms[os];
@@ -573,7 +635,7 @@ render();
 }
 
 // --- entry ------------------------------------------------------------------
-// `node --test` からのテストは checkImplPaths / checkAndroidPermissions を直接呼ぶだけで、
+// `node --test` からのテストは checkImplPaths 等を直接呼ぶだけで、
 // このスクリプトを実行ファイルとしては起動しない。import 時に生成物を書き換えないよう、
 // CLI として直接実行されたときだけ以下を走らせる。判定は realpath で正規化して比較する
 // （symlink・相対パス経由の起動で文字列が食い違い、CI の検査が何もせず成功する
@@ -601,13 +663,10 @@ if (invokedAsCli) {
   if (check) {
     const pathErrors = checkImplPaths(features, repoRoot);
     for (const e of pathErrors) console.error(`[impl-path] 実装パスが存在しません: ${e}`);
-    const manifestPath = join(repoRoot, "platforms", "android", "app", "src", "main", "AndroidManifest.xml");
-    const permErrors = checkAndroidPermissions(features, manifestPath);
-    for (const e of permErrors) console.error(`[android-perm] AndroidManifest.xml に uses-permission がありません: ${e}`);
-    if (pathErrors.length > 0 || permErrors.length > 0) process.exit(1);
+    if (pathErrors.length > 0) process.exit(1);
     console.log(`docs/device/capabilities/ の検査を通過（${features.length} 機能）。`);
   }
 }
 
 // テスト（scripts/device/build-capabilities.test.mjs）専用のエクスポート。
-export { checkImplPaths, checkAndroidPermissions, extractImplPaths, badUrls };
+export { checkImplPaths, extractImplPaths, badUrls, joinDeclarations, permText };

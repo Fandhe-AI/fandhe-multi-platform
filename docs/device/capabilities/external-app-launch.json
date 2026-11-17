@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "`UIApplication.open(_:options:completionHandler:)` で `tel:` と Apple 地図の統一 URL（`https://maps.apple.com/place?coordinate=...`）を開く。開けるアプリが無ければ completion の `success` が `false`",
-      "perm": "不要（`open` は `LSApplicationQueriesSchemes` の制約を受けない。制約を受けるのは `canOpenURL`）",
       "url": [
         "https://developer.apple.com/documentation/uikit/uiapplication/open(_:options:completionhandler:)",
         "https://developer.apple.com/documentation/uikit/uiapplication/canopenurl(_:)",
@@ -23,7 +22,6 @@
     "android": {
       "status": "done",
       "api": "`Intent.ACTION_DIAL`（`tel:`）/ `ACTION_VIEW`（`geo:<lat>,<lng>?q=<lat>,<lng>(<label>)`）+ `startActivity`",
-      "perm": "不要（`ACTION_DIAL` は `CALL_PHONE` 不要。`startActivity` は package visibility の対象外で `<queries>` も不要）",
       "url": [
         "https://developer.android.com/guide/components/intents-common",
         "https://developer.android.com/training/package-visibility/use-cases"
@@ -36,7 +34,6 @@
     "macos": {
       "status": "done",
       "api": "`NSWorkspace.open(_:)` で `tel:`（FaceTime / 連携 iPhone）・`maps:` 等を開く",
-      "perm": "不要",
       "url": "https://developer.apple.com/documentation/appkit/nsworkspace/open(_:)",
       "note": "実装済み（#861）。電話・地図とも固定の URL を `NSWorkspace openURL:` に渡し、期限は設けない。`open(_:)` は開けたかの Bool を返し、任意のスレッドから呼べる。`NO` を「開けるアプリなし」として扱う（エラーの詳細は見ない）。`tel:` は FaceTime や連携 iPhone が無いと開けない場合がある。地図は iOS と同じ統一 URL（macOS 15.4 以降が対象）",
       "detail": "できている（Mac 目視待ち）",
@@ -46,7 +43,6 @@
     "windows": {
       "status": "done",
       "api": "`ShellExecuteExW`（`SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI`）で `tel:` を開く。地図は OS を呼ばない",
-      "perm": "不要",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecuteexw",
         "https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-default-app"
@@ -59,7 +55,6 @@
     "web": {
       "status": "done",
       "api": "`location.href`（`Location.set_href`）へ固定の `tel:`（`PHONE_URI`）/ `geo:`（`GEO_URI`）を代入して遷移",
-      "perm": "不要",
       "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/a#linking_to_telephone_numbers",
       "note": "実装済み（#864）。結果は `HandedOff`（ブラウザに渡しただけ）のみ。ハンドラの有無は取れない（例外が出ない）。`set_href` の例外は固定文言の失敗、`window` なしは非対応。クリックから同期に遷移させる。守らない範囲: ハンドラの有無・ブラウザ差・PC ブラウザでの無反応・複数タブ・wasm canvas 経路",
       "detail": "できている（実ブラウザ確認待ち）",

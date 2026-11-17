@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "`Bundle.main.preferredLocalizations` の先頭（`apple/fandhe_apple_per_app_language.m` が固定長バッファへ NUL 終端の UTF-8 で書く）。設定アプリのこのアプリの「言語」で利用者が選ぶ（iOS 13+）",
-      "perm": "なし。`platforms/apple/FandheIosApp/Resources/Info.plist` に対応言語 `CFBundleLocalizations`（`ja`・`en`）を宣言した。`CFBundleDevelopmentRegion` と `.lproj` は足さない",
       "url": [
         "https://developer.apple.com/documentation/foundation/bundle/preferredlocalizations",
         "https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundlelocalizations",
@@ -24,7 +23,6 @@
     "android": {
       "status": "done",
       "api": "`LocaleManager.getApplicationLocales()`（API 33+、アプリ別の設定が無ければ空の LocaleList）と `LocaleManager.getSystemLocales()`（API 33+、アプリ別の上書きを除いた OS 全体の設定）",
-      "perm": "なし。`res/xml/locale_config.xml`（`ja`・`en`）と `<application android:localeConfig>` を宣言する。`READ_APP_SPECIFIC_LOCALES` は他アプリ用で不要",
       "url": [
         "https://developer.android.com/guide/topics/resources/app-languages",
         "https://developer.android.com/reference/android/app/LocaleManager"
@@ -37,7 +35,6 @@
     "macos": {
       "status": "done",
       "api": "`Bundle.main.preferredLocalizations` の先頭（`apple/fandhe_apple_per_app_language.m` が固定長バッファへ NUL 終端の UTF-8 で書く）。システム設定 → 一般 → 言語と地域 → アプリケーションで利用者が選ぶ",
-      "perm": "なし。`crates/fandhe-egui-proxy/macos/Info.plist` に `CFBundleLocalizations`（`ja`・`en`）を宣言する（`.app` 化スクリプトも同じファイルを写す）",
       "url": [
         "https://developer.apple.com/documentation/foundation/bundle/preferredlocalizations",
         "https://support.apple.com/guide/mac-help/change-the-language-your-mac-uses-mh26684/mac"
@@ -50,7 +47,6 @@
     "windows": {
       "status": "no",
       "api": "アプリ別の言語設定（`ApplicationLanguages`）はパッケージアプリ前提の見込み",
-      "perm": "package identity が必要な見込み（要確認）",
       "url": "",
       "note": "要確認。unpackaged の代替は未確認。URL 未確認"
     },

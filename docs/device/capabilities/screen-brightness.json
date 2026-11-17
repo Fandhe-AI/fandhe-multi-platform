@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "UIKit `UIScreen.brightness`（0〜1。端末全体に効き、ロックまで残る）。取得元は前面の `UIWindowScene.screen`（`UIScreen.main` は iOS 26 で非推奨）。利用者の変更は `brightnessDidChangeNotification`。背景遷移（DidEnterBackground）で元の値へ戻し、WillEnterForeground / DidBecomeActive で掛け直す",
-      "perm": "不要（公式に権限の記載なし）",
       "url": [
         "https://developer.apple.com/documentation/uikit/uiscreen/brightness",
         "https://developer.apple.com/documentation/uikit/uiscreen/brightnessdidchangenotification"
@@ -22,7 +21,6 @@
     "android": {
       "status": "done",
       "api": "`WindowManager.LayoutParams.screenBrightness`（0〜1、`BRIGHTNESS_OVERRIDE_NONE` = -1 で解除。ウィンドウが前面の間だけ効く）",
-      "perm": "不要。システム輝度の変更（`Settings.System.SCREEN_BRIGHTNESS`）は `WRITE_SETTINGS` が要るため範囲外",
       "url": [
         "https://developer.android.com/reference/android/view/WindowManager.LayoutParams#screenBrightness",
         "https://developer.android.com/reference/android/view/WindowManager.LayoutParams#BRIGHTNESS_OVERRIDE_NONE",
@@ -36,14 +34,12 @@
     "macos": {
       "status": "no",
       "api": "公開 API を確認できず",
-      "perm": "-",
       "url": "",
       "note": "調査では macOS の公開 API を確認できなかった（一般知識、要確認）。URL 未確認"
     },
     "windows": {
       "status": "no",
       "api": "アプリ単位の上書きは WinRT `BrightnessOverride`（10.0.15063+）だが、`GetForCurrentView` は CoreWindow が要り、`GetDefaultForSystem` は IoT の Embedded mode 前提の `systemManagement` 能力が要るため、Win32 アプリからは使えない。WMI `WmiMonitorBrightnessMethods`（内蔵パネルのみ）はシステム輝度そのものを変える。外部モニターの DDC/CI（`SetMonitorBrightness`）は公式が未定義動作を警告",
-      "perm": "WMI は管理者権限の要否が公式に未記載",
       "url": [
         "https://learn.microsoft.com/en-us/uwp/api/windows.graphics.display.brightnessoverride",
         "https://learn.microsoft.com/en-us/windows/win32/wmicoreprov/wmisetbrightness-method-in-class-wmimonitorbrightnessmethods",
@@ -54,7 +50,6 @@
     "web": {
       "status": "no",
       "api": "ブラウザに画面輝度の API なし",
-      "perm": "-",
       "url": "",
       "safari": "非対応",
       "note": "公開 API はない"

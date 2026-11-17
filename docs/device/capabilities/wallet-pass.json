@@ -9,7 +9,6 @@
     "ios": {
       "status": "possible",
       "api": "PassKit `PKAddPassesViewController`（`PKPass(data:)` で読んだ `.pkpass` を渡して追加画面を出す。追加できるかは `canAddPasses()`）",
-      "perm": "アプリ側の entitlement は追加画面を出すだけなら不要（要確認）。`.pkpass` は Pass Type ID 証明書の秘密鍵で署名したもの（PKCS #7 detached signature）に限り、証明書は Certificates, Identifiers & Profiles で作る（Account Holder か Admin のみ）",
       "url": [
         "https://developer.apple.com/documentation/passkit/pkaddpassesviewcontroller",
         "https://developer.apple.com/documentation/walletpasses/building-a-pass",
@@ -22,7 +21,6 @@
     "android": {
       "status": "possible",
       "api": "Google Wallet Android SDK（`com.google.android.gms:play-services-pay`。`PayClient.savePasses` に未署名の JWT、`savePassesJwt` に署名済みの JWT を渡す）",
-      "perm": "アプリで宣言する権限はページに記載なし。Google Pay & Wallet Console の発行者アカウント、パスの Class の作成、アプリのパッケージ名と署名証明書の SHA-1 の登録が要る",
       "url": [
         "https://developers.google.com/wallet/generic/android",
         "https://developers.google.com/wallet/generic/getting-started/onboarding-guide",
@@ -35,7 +33,6 @@
     "macos": {
       "status": "possible",
       "api": "PassKit `PKPassLibrary.addPasses(_:withCompletionHandler:)`（macOS 10.12 以上。結果の `PKPassLibraryAddPassesStatus` は macOS 10.13 以上）。`PKAddPassesViewController` は macOS 版が無い",
-      "perm": "iOS と同じく、Pass Type ID 証明書で署名した `.pkpass` が要る",
       "url": [
         "https://developer.apple.com/documentation/passkit/pkpasslibrary/addpasses(_:withcompletionhandler:)",
         "https://developer.apple.com/documentation/passkit/pkpasslibraryaddpassesstatus",
@@ -47,14 +44,12 @@
     "windows": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "なし",
       "url": "",
       "note": "Windows にウォレットへパスを追加する公開 API は報告で確認できていない"
     },
     "web": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "なし",
       "url": [
         "https://developer.apple.com/documentation/walletpasses/distributing-and-updating-a-pass",
         "https://developers.google.com/wallet/generic/use-cases/jwt"

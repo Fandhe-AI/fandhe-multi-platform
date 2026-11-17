@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "録画・ミラーリングは `UITraitCollection.sceneCaptureState`（iOS 17+）、スクリーンショットは `UIApplicationUserDidTakeScreenshotNotification`（撮影の後に通知）。防止の公式 API なし",
-      "perm": "不要（公式に権限の記載なし）",
       "url": [
         "https://developer.apple.com/documentation/uikit/uitraitcollection/scenecapturestate",
         "https://developer.apple.com/documentation/uikit/uiapplication/userdidtakescreenshotnotification"
@@ -22,7 +21,6 @@
     "android": {
       "status": "done",
       "api": "防止は `FLAG_SECURE`。スクリーンショット検知は `Activity.registerScreenCaptureCallback`（API 34+）、録画検知は `WindowManager.addScreenRecordingCallback`（API 35+）",
-      "perm": "検知のみ `DETECT_SCREEN_CAPTURE`（34+）・`DETECT_SCREEN_RECORDING`（35+）、いずれも install-time。防止は不要",
       "url": [
         "https://developer.android.com/security/fraud-prevention/activities",
         "https://developer.android.com/about/versions/14/features/screenshot-detection",
@@ -36,7 +34,6 @@
     "macos": {
       "status": "no",
       "api": "`NSWindow.sharingType = .none` は Apple が旧定数としており、キャプチャ除外には使えない。検知の公開 API も確認できず",
-      "perm": "-",
       "url": [
         "https://developer.apple.com/documentation/appkit/nswindow/sharingtype-swift.enum/none",
         "https://developer.apple.com/forums/thread/808016"
@@ -46,7 +43,6 @@
     "windows": {
       "status": "done",
       "api": "防止は `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)`（Windows 10 2004+）、読み戻しは `GetWindowDisplayAffinity`。2004 より前は黒塗りになる",
-      "perm": "不要と見込む（package identity の要件の記載はない）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowdisplayaffinity",
       "note": "防止のみ。自分のプロセスのトップレベルウィンドウが対象で、DWM が合成しているときだけ効く。DRM ではなく、写真での撮影は防げない。他者の録画を知る公開 API は確認できず。実装済み（#582）: 掛ける / 外すは `SetWindowDisplayAffinity`、表示は `GetWindowDisplayAffinity` の読み戻しが保護のときだけ「保護中」にする（未知の値・読み戻し失敗は保護中にしない）。2004 より前の黒塗り（`WDA_MONITOR`）も保護中と表示する。録画・スクリーンショットは画面に「非対応」と出す。守る範囲: 1 プロセス内の順序・嘘の成功の禁止。守らない範囲: 複数ウィンドウ、掛ける前に始まっていた録画の撮影済みフレーム、外部カメラでの撮影、終了時の後片付け（ウィンドウと一緒に属性が消える）",
       "detail": "できている（Windows 実機確認待ち）",
@@ -56,7 +52,6 @@
     "web": {
       "status": "no",
       "api": "ブラウザに画面キャプチャの防止 API なし",
-      "perm": "-",
       "url": "",
       "safari": "非対応",
       "note": "防止・検知とも標準 API はない（EME の保護コンテンツを除く）"

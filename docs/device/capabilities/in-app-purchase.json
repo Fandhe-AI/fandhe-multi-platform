@@ -8,7 +8,6 @@
     "ios": {
       "status": "possible",
       "api": "StoreKit（StoreKit 2 / `SKPaymentQueue`）",
-      "perm": "In-App Purchase capability（有料の Apple Developer Program のみ。無料登録では不可）",
       "url": [
         "https://developer.apple.com/documentation/storekit",
         "https://developer.apple.com/documentation/storekit/testing-in-app-purchases-with-sandbox",
@@ -23,7 +22,6 @@
     "android": {
       "status": "possible",
       "api": "Play Billing Library 9.1.0（`com.android.billingclient:billing`）",
-      "perm": "なし（Google Play Console 側の商品設定が必要）",
       "url": [
         "https://developer.android.com/google/play/billing/integrate",
         "https://developer.android.com/google/play/billing/test"
@@ -37,7 +35,6 @@
     "macos": {
       "status": "possible",
       "api": "StoreKit",
-      "perm": "In-App Purchase capability（有料の Apple Developer Program のみ。Developer ID・無料登録では不可）",
       "url": [
         "https://developer.apple.com/documentation/storekit",
         "https://developer.apple.com/help/account/reference/supported-capabilities-macos"
@@ -51,7 +48,6 @@
     "windows": {
       "status": "possible",
       "api": "WinRT（`Windows.Services.Store.StoreContext`）",
-      "perm": "Partner Center のアカウント・MSIX（package identity）・Store の認証",
       "url": [
         "https://learn.microsoft.com/en-us/uwp/api/windows.services.store",
         "https://learn.microsoft.com/en-us/windows/uwp/monetize/in-app-purchases-and-trials"
@@ -66,7 +62,6 @@
       "status": "no",
       "detail": "できない（ブラウザにストア課金の API が無い。Digital Goods API は Android の Trusted Web Activity の中だけ）",
       "api": "なし（Digital Goods API は Trusted Web Activity 限定）",
-      "perm": "-",
       "url": "https://developer.chrome.com/docs/android/trusted-web-activity/receive-payments-play-billing",
       "safari": "対応なし",
       "note": "Payment Request API は一般の決済で、`payment-request` の行で扱う",

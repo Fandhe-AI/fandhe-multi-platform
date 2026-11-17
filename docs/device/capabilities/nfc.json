@@ -9,7 +9,6 @@
     "ios": {
       "status": "possible",
       "api": "CoreNFC `NFCNDEFReaderSession`（`invalidateAfterFirstRead`）。`NFCTagReaderSession`（タグ種別ごとの生データ）は範囲外",
-      "perm": "`NFCReaderUsageDescription` + Near Field Communication Tag Reading capability（entitlement `com.apple.developer.nfc.readersession.formats` の `NDEF`）",
       "url": [
         "https://developer.apple.com/documentation/corenfc/nfcndefreadersession",
         "https://developer.apple.com/documentation/corenfc/building-an-nfc-tag-reader-app",
@@ -27,7 +26,6 @@
       "implStatus": "Android 実機確認待ち（#1040）",
       "impl": "crates/fandhe-cap-nfc/android/java/com/fandhe/platform/NfcReadHelper.java + crates/fandhe-cap-nfc/src/android.rs + crates/fandhe-cap-nfc/src/driver.rs + crates/fandhe-core/src/screens/nfc_read.rs + crates/fandhe-cap-nfc/src/contract.rs、Issue #1045",
       "api": "`NfcAdapter.enableReaderMode`（前面の Activity の間だけ）+ `Ndef.getCachedNdefMessage`",
-      "perm": "`<uses-permission android:name=\"android.permission.NFC\" />`（normal、実行時の許可ダイアログなし）+ `<uses-feature android:name=\"android.hardware.nfc\" android:required=\"false\" />`",
       "url": [
         "https://developer.android.com/reference/android/nfc/NfcAdapter",
         "https://developer.android.com/reference/android/nfc/tech/Ndef",
@@ -45,7 +43,6 @@
     "windows": {
       "status": "possible",
       "api": "`Windows.Networking.Proximity.ProximityDevice`（`GetDefault` が null なら無し、`SubscribeForMessage` で受ける）",
-      "perm": "パッケージの capability `proximity`",
       "url": [
         "https://learn.microsoft.com/en-us/uwp/api/windows.networking.proximity.proximitydevice",
         "https://learn.microsoft.com/en-us/uwp/api/windows.networking.proximity.proximitydevice.subscribeformessage"
@@ -57,7 +54,6 @@
       "status": "done",
       "detail": "できている（実ブラウザ確認待ち）",
       "api": "`NDEFReader.scan()`（`reading` / `readingerror`、`AbortSignal`）",
-      "perm": "権限 `nfc`（利用者操作への応答で求める）、secure context・top-level 文書",
       "safari": "API なし（MDN）",
       "url": [
         "https://w3c-cg.github.io/web-nfc/",

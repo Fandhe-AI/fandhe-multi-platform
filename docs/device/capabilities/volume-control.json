@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "AVFAudio `AVAudioSession.outputVolume`（0.0〜1.0、読み取りのみ）。変更は MediaPlayer `MPVolumeView`（OS の音量スライダー）を画面に置き、利用者が操作する。アプリから音量を設定する公開 API は無い（`MPMusicPlayerController.volume` は iOS 7 で非推奨）",
-      "perm": "不要（usage description・entitlement の追加なし）。音声セッションの category・有効化は変えない。AVFoundation・MediaPlayer はリンク済み",
       "url": [
         "https://developer.apple.com/documentation/avfaudio/avaudiosession/outputvolume",
         "https://developer.apple.com/documentation/mediaplayer/mpvolumeview",
@@ -23,7 +22,6 @@
     "android": {
       "status": "done",
       "api": "`AudioManager.getStreamVolume` / `getStreamMaxVolume` / `isStreamMute`（API 23+）/ `isVolumeFixed`（API 21+）/ `adjustStreamVolume(STREAM_MUSIC, ADJUST_RAISE | ADJUST_LOWER, 0)`",
-      "perm": "不要（uses-permission の追加なし）。おやすみモードを切り替える変更は通知ポリシーへのアクセス許可が無いと `SecurityException`（API 24+、公式）",
       "url": [
         "https://developer.android.com/reference/android/media/AudioManager#adjustStreamVolume(int,%20int,%20int)",
         "https://developer.android.com/reference/android/media/AudioManager#isVolumeFixed()",
@@ -37,7 +35,6 @@
     "macos": {
       "status": "done",
       "api": "Core Audio `AudioObjectGetPropertyData` / `AudioObjectSetPropertyData` / `AudioObjectIsPropertySettable`。既定の出力機器（`kAudioHardwarePropertyDefaultOutputDevice`）の `kAudioHardwareServiceDeviceProperty_VirtualMainVolume`（Float32、0.0〜1.0、AudioToolbox）と `kAudioDevicePropertyMute`（output scope・main element）",
-      "perm": "不要（I/O を開かない）。CoreAudio・AudioToolbox はリンク済み",
       "url": [
         "https://developer.apple.com/documentation/audiotoolbox/kaudiohardwareservicedeviceproperty_virtualmainvolume",
         "https://developer.apple.com/documentation/coreaudio/kaudiohardwarepropertydefaultoutputdevice",
@@ -52,7 +49,6 @@
     "windows": {
       "status": "done",
       "api": "Core Audio `IMMDeviceEnumerator::GetDefaultAudioEndpoint(eRender, eConsole)` → `IMMDevice::Activate` で `IAudioEndpointVolume`（`GetMasterVolumeLevelScalar` / `GetMute` / `VolumeStepUp` / `VolumeStepDown`）",
-      "perm": "不要（package identity 不要）。`windows` クレートに feature `Win32_Media_Audio_Endpoints` を 1 つ足す（新しいクレートは増えない）",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/endpointvolume/nn-endpointvolume-iaudioendpointvolume",
         "https://learn.microsoft.com/en-us/windows/win32/api/endpointvolume/nf-endpointvolume-iaudioendpointvolume-volumestepup",
@@ -67,7 +63,6 @@
     "web": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "-",
       "url": "",
       "note": "ブラウザから OS のシステム音量を読み書きする API はない（`HTMLMediaElement.volume` は要素単位のみ）。"
     }

@@ -1,5 +1,6 @@
 {
   "id": "ui-widget-catalog",
+  "crate": null,
   "name": "UI 部品（Widget 拡張: `catalog.rs` の 22 種）",
   "group": "既存機能の棚卸し",
   "order": 1,

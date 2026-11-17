@@ -9,7 +9,6 @@
     "ios": {
       "status": "no",
       "api": "CarPlay framework（`CPTemplateApplicationScene` と `CPInterfaceController` に `CPTemplate` を渡す）",
-      "perm": "CarPlay の entitlement（アプリの種別ごとに別。`com.apple.developer.carplay-audio`・`-communication`・`-maps`・`-parking`・`-charging`・`-quick-ordering` など）",
       "url": [
         "https://developer.apple.com/documentation/carplay",
         "https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements",
@@ -20,7 +19,6 @@
     "android": {
       "status": "done",
       "api": "Android for Cars App Library（`androidx.car.app`）の `CarAppService`・`Session`・`Screen`。`Screen.onGetTemplate` が返す `PaneTemplate` をホスト（Android Auto）が描く。見出しと行の title は固定し、行の本文に共通コアの文言を出す。文言の差し替えは `Screen.invalidate()`",
-      "perm": "`uses-permission` は不要。Manifest に置くもの: exported の `<service>`（action `androidx.car.app.CarAppService`、category `androidx.car.app.category.IOT`）、meta-data `androidx.car.app.minCarApiLevel`（7）、`com.google.android.gms.car.application`（`res/xml/automotive_app_desc.xml`）。接続できるホストは `createHostValidator` で絞る（debuggable だけ全ホストを許し、それ以外は同梱の許可リスト `androidx.car.app.R.array.hosts_allowlist_sample`）。依存は `scripts/android/versions.env` の `CAR_APP_VERSION`（1.7.0。minCompileSdk=34 で compileSdk 35 のまま使える）。推移依存の guava は `GUAVA_VERSION` へ引き上げる",
       "url": [
         "https://developer.android.com/training/cars/apps",
         "https://developer.android.com/training/cars/apps/library/set-up-project",

@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "CoreMotion `CMAltimeter.startRelativeAltitudeUpdates` の `pressure`（kPa を hPa へ換算）。近接は `UIDevice.isProximityMonitoringEnabled` / `proximityState` / `proximityStateDidChangeNotification`。UI スレッドから 100 ms ごとに pull",
-      "perm": "気圧は `NSMotionUsageDescription` が必須（無いと API を呼んだ時点で落ちる）。拒否は `CMAltimeter.authorizationStatus`（iOS 11+）で読む。近接は権限不要",
       "url": [
         "https://developer.apple.com/documentation/coremotion/cmaltimeter",
         "https://developer.apple.com/documentation/coremotion/cmaltitudedata/pressure",
@@ -26,7 +25,6 @@
       "implStatus": "Android 実機確認待ち（#602）",
       "impl": "crates/fandhe-cap-environment-sensors/src/android.rs + crates/fandhe-cap-environment-sensors/android/java/com/fandhe/platform/EnvironmentSensorsHelper.java + crates/fandhe-cap-environment-sensors/android/java/com/fandhe/platform/EnvironmentSensorsLifecycle.java + crates/fandhe-cap-environment-sensors/src/driver.rs + crates/fandhe-core/src/screens/environment_sensors_show.rs + crates/fandhe-cap-environment-sensors/src/contract.rs、Issue #611",
       "api": "`SensorManager` の `TYPE_PRESSURE` / `TYPE_LIGHT` / `TYPE_PROXIMITY`",
-      "perm": "不要（`HIGH_SAMPLING_RATE_SENSORS` は 200 Hz を超える motion / position センサーにだけ要る）",
       "url": [
         "https://developer.android.com/develop/sensors-and-location/sensors/sensors_environment",
         "https://developer.android.com/develop/sensors-and-location/sensors/sensors_position",
@@ -37,14 +35,12 @@
     "macos": {
       "status": "no",
       "api": "公開 API を確認できず",
-      "perm": "-",
       "url": "",
       "note": "Mac の環境光センサー等の公開 API は確認できなかった（要確認）。URL 未確認"
     },
     "windows": {
       "status": "done",
       "api": "WinRT `Windows.Devices.Sensors` の `Barometer`（`StationPressureInHectopascals`）・`LightSensor`（`IlluminanceInLux`）・`ProximitySensor`（`GetDefault` は無く、`GetDeviceSelector` + `FromId` で取り、`IsDetected` を読む）",
-      "perm": "要確認（パッケージ無しの exe で読めるかは実機待ち。宣言する capability は無い）",
       "url": [
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.barometer",
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.lightsensor",
@@ -58,7 +54,6 @@
     "web": {
       "status": "no",
       "api": "Generic Sensor の `AmbientLightSensor`（照度のみ）。気圧・近接の API は無し",
-      "perm": "secure context 必須。センサー権限のプロンプトあり（要確認）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Sensor_APIs",
       "safari": "AmbientLightSensor 非対応",
       "note": "Generic Sensor の AmbientLightSensor は Chromium でも実験フラグ配下のため no（既存 image-recognition / ml-inference の Web 判定に揃える。要確認）。気圧・近接は Web から取得できない。Chromium のみで、フラグが要るとの認識（要確認）。W3C 草案。気圧・近接は取得不可"

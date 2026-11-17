@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "`URLSessionConfiguration.background(withIdentifier:)`",
-      "perm": "なし（ローカルの確認用サーバーへつなぐため、Info.plist に `NSAllowsLocalNetworking` を置く）",
       "url": [
         "https://developer.apple.com/documentation/foundation/urlsessionconfiguration/background(withidentifier:)",
         "https://developer.apple.com/documentation/foundation/downloading-files-in-the-background"
@@ -22,7 +21,6 @@
     "android": {
       "status": "done",
       "api": "`DownloadManager`",
-      "perm": "`INTERNET`（宣言済み）。アプリ専用の外部領域（`getExternalFilesDir`）へ保存するので保存の権限は要らない。ローカルの確認用サーバー（127.0.0.1・localhost）にだけ平文を許す network security config を置く",
       "url": "https://developer.android.com/reference/android/app/DownloadManager",
       "note": "実装済み（#392）。固定 URL の小さなファイル 1 つを `DownloadManager` に依頼し、待機・転送中・完了（サイズ）・取り消し・失敗を出す。pull 型の同期 JNI で、ダウンロード id は `SharedPreferences` に保存し、状態は OS の行から読む。結果は取り消し・行が消えた転送（取り消し扱い）と、HTTP エラー・0 バイト・保存失敗・接続失敗（失敗）を分ける。保存先はアプリ専用の外部領域の固定名 1 ファイルで、開始と取り消しで消す。転送の持ち主は OS なので Activity の作り直しでは取り消さない。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、開始失敗と取り消しでファイルと id を残さない。守らない範囲: 再起動後の完了・失敗表示は失われる、リダイレクト先を再検証できない、`check_url` が通す私設 IPv4 への平文は OS 側で失敗し「HTTP 400」と出ることがある、接続できない間は転送中のままになりうる、複数プロセス。実機での正常系・サーバー停止・取り消し・アプリ終了後も続くか（`adb reverse tcp:8787 tcp:8787`）は #380 で確かめる",
       "detail": "できている（Android 実機確認待ち）",
@@ -32,7 +30,6 @@
     "macos": {
       "status": "done",
       "api": "`URLSessionConfiguration.background(withIdentifier:)`（`NSURLSession` の background session）",
-      "perm": "なし（App Sandbox は使わない素の実行体。ローカルの確認用サーバーへつなぐため `NSAllowsLocalNetworking` を置く）",
       "url": "https://developer.apple.com/documentation/foundation/urlsessionconfiguration/background(withidentifier:)",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#380）",
@@ -42,7 +39,6 @@
     "windows": {
       "status": "done",
       "api": "BITS（`IBackgroundCopyManager`。`BackgroundDownloader` は package identity が要るため使わない）",
-      "perm": "なし（BITS は package identity 不要）。サーバーは HEAD でサイズを返し、GET で Content-Range に対応する必要がある",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/bits/about-bits",
         "https://learn.microsoft.com/en-us/windows/apps/develop/networking/background-transfers"
@@ -55,7 +51,6 @@
     "web": {
       "status": "done",
       "api": "Background Fetch API",
-      "perm": "専用の service worker が要る。secure context 必須（localhost は secure context）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Background_Fetch_API",
       "safari": "非対応（Chrome 74 以降のみ。Firefox も非対応）",
       "note": "実装済み（#393）。専用の Service Worker と専用 scope で `backgroundFetch.fetch` を呼び、同一オリジンの小さなファイル 1 つを依頼する。結果と本文は Cache Storage に置き、取り消し（失敗にしない）・HTTP エラー・0 バイト・保存ファイル欠落・許可外の最終 URL（失敗）を分ける。守る範囲: 1 マウント内の順序、世代による古い完了の破棄、嘘の成功の禁止。守らない範囲: 複数タブ、再起動後の完了理由の正確さ、ブラウザ UI から取り消したときの反映の時間差。タブを閉じても続くか、Firefox・Safari の非対応表示、シークレットは #380 の目視で確かめる。進捗と取り消しはブラウザの UI にも出る",

@@ -9,7 +9,6 @@
     "ios": {
       "status": "possible",
       "api": "`DeclaredAgeRange` の `AgeRangeService.shared.requestAgeRange(ageGates:_:_:in:)`（iOS 26 以上、Swift 専用の `async throws`。区切りは最大 3 つ・各幅 2 年以上）、`isEligibleForAgeFeatures`（26.2 以上）",
-      "perm": "`com.apple.developer.declared-age-range` entitlement（Xcode の capability。有料の Apple Developer Program のチームのみで、Personal Team では capability が出ない）。Info.plist の usage description は公式に記載なし",
       "url": [
         "https://developer.apple.com/documentation/declaredagerange",
         "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.declared-age-range",
@@ -21,7 +20,6 @@
     "android": {
       "status": "possible",
       "api": "Play Age Signals API（beta、`com.google.android.play:age-signals` 0.0.4）の `AgeSignalsManager.requestAgeSignalsAccess(Activity)` → `SHARED` のときだけ `checkAgeSignals()`（`ageLower`・`ageUpper`・`ageRangeSource`）。API 23 以上",
-      "perm": "アプリで宣言する権限なし。Play ストアと Play services が要る（GMS 非搭載端末は `PLAY_STORE_NOT_FOUND` 等）。Play から入れた版に限る（それ以外は `APP_NOT_OWNED`、-9、再試行不可）",
       "url": [
         "https://developer.android.com/google/play/age-signals/overview",
         "https://developer.android.com/google/play/age-signals/use-age-signals-api",
@@ -34,7 +32,6 @@
     "macos": {
       "status": "possible",
       "api": "`DeclaredAgeRange` の `requestAgeRange(ageGates:_:_:in: NSWindow)`（macOS 26 以上）",
-      "perm": "iOS と同じ `com.apple.developer.declared-age-range` entitlement（有料の Apple Developer Program のチームのみ）",
       "url": [
         "https://developer.apple.com/documentation/declaredagerange/agerangeservice/requestagerange(agegates:_:_:in:)-4yo3r",
         "https://developer.apple.com/documentation/declaredagerange/agerangeservice/iseligibleforagefeatures",
@@ -46,14 +43,12 @@
     "windows": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "-",
       "url": "",
       "note": "年齢区分を返す OS の公開 API はない。"
     },
     "web": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "-",
       "url": "",
       "note": "年齢区分を返すブラウザの標準 API はない。"
     }

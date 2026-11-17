@@ -9,21 +9,18 @@
     "ios": {
       "status": "n-a",
       "api": "該当概念なし",
-      "perm": "なし",
       "url": "",
       "note": "iOS にアプリ外のキー入力を拾う概念はない"
     },
     "android": {
       "status": "n-a",
       "api": "該当概念なし",
-      "perm": "なし",
       "url": "",
       "note": "Android にアプリ外のキー入力を拾う概念はない"
     },
     "macos": {
       "status": "done",
       "api": "Carbon（HIToolbox）`RegisterEventHotKey` / `UnregisterEventHotKey`。押下は `GetApplicationEventTarget()` に `InstallEventHandler` した `kEventClassKeyboard` / `kEventHotKeyPressed` で受ける。`NSEvent.addGlobalMonitorForEvents` は使わない",
-      "perm": "なし（アクセシビリティ・入力監視の許可を求めない方式を選ぶ。新しい entitlement・Info.plist キーの追加なし。`Carbon.framework` のリンクを足す）",
       "url": [
         "https://developer.apple.com/documentation/appkit/nsevent/addglobalmonitorforevents(matching:handler:)",
         "https://developer.apple.com/forums/thread/763878",
@@ -37,7 +34,6 @@
     "windows": {
       "status": "done",
       "api": "Win32 `RegisterHotKey` / `UnregisterHotKey`（`hWnd` = NULL、`MOD_NOREPEAT`）。`WM_HOTKEY` は登録したスレッドのメッセージキューへ届く",
-      "perm": "なし（デスクトップアプリ専用。`windows` クレートの既存 feature `Win32_UI_Input_KeyboardAndMouse`・`Win32_UI_WindowsAndMessaging`・`Win32_System_Threading` で足りる）",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey",
         "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-unregisterhotkey",
@@ -52,7 +48,6 @@
     "web": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "なし",
       "url": "",
       "note": "ページが非アクティブなときのキー入力を拾う API はない"
     }

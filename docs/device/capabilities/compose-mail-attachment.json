@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "MessageUI `MFMailComposeViewController addAttachmentData:mimeType:fileName:`",
-      "perm": "なし",
       "url": "https://developer.apple.com/documentation/messageui/mfmailcomposeviewcontroller/addattachmentdata(_:mimetype:filename:)",
       "note": "メールに 1 件だけ。NSData を直接渡すので一時ファイルは作らない（バイト列は FFI の return 前にコピー）。到達する結果は compose-mail-sms と同じ。SMS への添付は範囲外（`MFMessageComposeViewController` の `addAttachmentData:typeIdentifier:filename:` と `canSendAttachments` が使える見込みで、後続の候補）。シミュレータは `canSendMail` が false で NoHandler",
       "detail": "できている（iOS 実機確認待ち）",
@@ -19,7 +18,6 @@
     "android": {
       "status": "done",
       "api": "`ACTION_SEND` + `EXTRA_STREAM`（`androidx.core.content.FileProvider` の content URI）+ `setSelector(ACTION_SENDTO mailto:)`",
-      "perm": "なし",
       "url": "https://developer.android.com/reference/androidx/core/content/FileProvider",
       "note": "メールに 1 件だけ。保存先は `cache/compose/` 配下の要求ごとのディレクトリ。次回の添付要求時に 10 分より古いものだけを回収し、10 分以内の複数要求では複数件が残る。書き込み失敗と `startActivity` の例外では即削除し、`HandedOff` では受け手が後から読むため残す（10 分を過ぎた後の次回の添付要求と OS の cacheDir 掃除で消える）。FileProvider は exported=false・grantUriPermissions=true で、読み取り権限は Intent 単位のみ。新しい権限は足さない。既知の天井: 受け手が 10 分を超えて読まずに別の添付要求が来ると、その古い添付は読めなくなる（各 1 MiB 以下）、一部のメールアプリは selector 経由の `EXTRA_STREAM` を無視しうる。SMS（MMS）は範囲外",
       "detail": "できている（Android 実機確認待ち）",
@@ -29,7 +27,6 @@
     "macos": {
       "status": "done",
       "api": "`NSSharingService`（`composeEmail`）。宛先は `recipients`（To のみ）、件名は `subject`、本文は `NSString`、添付は file URL の item。`canPerformWithItems:` が NO なら `NoHandler`",
-      "perm": "なし",
       "url": [
         "https://developer.apple.com/documentation/appkit/nssharingservice/name/composeemail",
         "https://developer.apple.com/documentation/appkit/nssharingservice",
@@ -46,7 +43,6 @@
     "windows": {
       "status": "done",
       "api": "Simple MAPI `MAPISendMailW`（`mapi32.dll` を `LoadLibraryExW(LOAD_LIBRARY_SEARCH_SYSTEM32)` + `GetProcAddress` で解決、`MAPI_DIALOG | MAPI_LOGON_UI`、作業スレッドで呼ぶ）",
-      "perm": "なし",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/mapi/nc-mapi-mapisendmailw",
         "https://support.microsoft.com/en-us/office/new-outlook-users-unexpectedly-see-the-welcome-to-outlook-2016-setup-wizard-a3f77cbb-2476-4d09-b051-f38a4afe9e23",
@@ -62,10 +58,10 @@
     "web": {
       "status": "no",
       "api": "`mailto:`（RFC 6068）は添付を持てない",
-      "perm": "なし",
       "url": "https://www.rfc-editor.org/rfc/rfc6068",
       "note": "添付付き要求は遷移せず `Unsupported` を表示する。Web Share API の files は共有シート（share-sheet）の範囲"
     }
   },
-  "note": "compose-mail-sms（Issue #32 で添付だけを分離）の添付版。添付はメールに 1 件、ファイル名 `[A-Za-z0-9._-]` 64 バイト以下・MIME は `type/subtype`・データ 1 バイト〜1 MiB（0 バイトは拒否）。出どころは画面側の固定値（`fandhe-sample.txt`）で、file-picker の選択ファイルとの連携は未対応。Web で添付付きの要求を受けたら `Unsupported` を返す（添付を黙って落とさない）。macOS の添付付きの要求は CC / BCC を付けない（macOS の proxy が外す。コア画面の要求と iOS / Android は CC / BCC を保持する）。範囲: 添付はメール 1 件・画面の固定値のまま。file-picker 連携・SMS への添付・複数添付・送信の確認は扱わず、添付なしの要求の経路（`mailto:`）は変えない。種別: 作成画面を開く依頼を OS が受けた（`HandedOff`。開いたか・送ったかは分からない）、利用者が閉じた（`Cancelled`、Windows のみ。macOS は取り消しを知る手段が無い）、失敗の三値で、取れない・欠けた結果を成功に畳まない。OS を正にする: 開けるかは OS に問い（macOS `canPerformWithItems:`、Windows は呼んだ戻り値）、既定のメールアプリ名・レジストリ・新しい Outlook の有無を事前に判定せず、完了の通知が無い macOS で推測のタイマーから「キャンセル」「送った」を作らない。守る範囲: 1 プロセス内の要求と完了の順序、入力不正を OS へ渡さないこと、CC / BCC・添付を黙って落とさないこと、`HandedOff` を送信済みと見せないこと、一時ファイルの解放（全経路）と解放失敗の追跡（削除に失敗したパスは次の添付要求の前に消し直し、消せなければ OS を呼ばず失敗で返す）。守らない範囲: 作成画面を開いた後の利用者の操作、Mail 以外が既定の macOS の挙動差、`didShareItems:` / `didFail` の到着、受け手が 10 分を超えて読まずに次の添付要求が来た場合の macOS の古い添付（各 1 MiB 以下）、新しい Outlook や MAPI の初回設定ウィザードなど OS・メールアプリが出す画面、Windows の作成画面を開いたまま画面を離れた場合、複数プロセス・複数窓、前のプロセスが残した macOS の添付（OS の一時領域の掃除に任せる。各 1 MiB 以下）。"
+  "note": "compose-mail-sms（Issue #32 で添付だけを分離）の添付版。添付はメールに 1 件、ファイル名 `[A-Za-z0-9._-]` 64 バイト以下・MIME は `type/subtype`・データ 1 バイト〜1 MiB（0 バイトは拒否）。出どころは画面側の固定値（`fandhe-sample.txt`）で、file-picker の選択ファイルとの連携は未対応。Web で添付付きの要求を受けたら `Unsupported` を返す（添付を黙って落とさない）。macOS の添付付きの要求は CC / BCC を付けない（macOS の proxy が外す。コア画面の要求と iOS / Android は CC / BCC を保持する）。範囲: 添付はメール 1 件・画面の固定値のまま。file-picker 連携・SMS への添付・複数添付・送信の確認は扱わず、添付なしの要求の経路（`mailto:`）は変えない。種別: 作成画面を開く依頼を OS が受けた（`HandedOff`。開いたか・送ったかは分からない）、利用者が閉じた（`Cancelled`、Windows のみ。macOS は取り消しを知る手段が無い）、失敗の三値で、取れない・欠けた結果を成功に畳まない。OS を正にする: 開けるかは OS に問い（macOS `canPerformWithItems:`、Windows は呼んだ戻り値）、既定のメールアプリ名・レジストリ・新しい Outlook の有無を事前に判定せず、完了の通知が無い macOS で推測のタイマーから「キャンセル」「送った」を作らない。守る範囲: 1 プロセス内の要求と完了の順序、入力不正を OS へ渡さないこと、CC / BCC・添付を黙って落とさないこと、`HandedOff` を送信済みと見せないこと、一時ファイルの解放（全経路）と解放失敗の追跡（削除に失敗したパスは次の添付要求の前に消し直し、消せなければ OS を呼ばず失敗で返す）。守らない範囲: 作成画面を開いた後の利用者の操作、Mail 以外が既定の macOS の挙動差、`didShareItems:` / `didFail` の到着、受け手が 10 分を超えて読まずに次の添付要求が来た場合の macOS の古い添付（各 1 MiB 以下）、新しい Outlook や MAPI の初回設定ウィザードなど OS・メールアプリが出す画面、Windows の作成画面を開いたまま画面を離れた場合、複数プロセス・複数窓、前のプロセスが残した macOS の添付（OS の一時領域の掃除に任せる。各 1 MiB 以下）。",
+  "crate": "compose-mail-sms"
 }

@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "AlarmKit（`AlarmManager.shared.schedule(id:configuration:)` に `Alarm.Schedule.fixed(Date)`、一覧は `alarms`、取り消しは `cancel(id:)`。iOS 26 以上の Swift 専用 API を `@_cdecl` の Swift 薄層で包む）",
-      "perm": "Info.plist の `NSAlarmKitUsageDescription`（無い・空だと予約できない）と実行時の許可（`requestAuthorization()`）。entitlement は不要",
       "url": [
         "https://developer.apple.com/documentation/alarmkit",
         "https://developer.apple.com/documentation/alarmkit/scheduling-an-alarm-with-alarmkit",
@@ -25,7 +24,6 @@
     "android": {
       "status": "done",
       "api": "`AlarmManager.setAlarmClock`（`PendingIntent`〔`FLAG_ONE_SHOT`〕で自アプリの `BroadcastReceiver` を起こし、アラーム用チャンネルの通知を鳴らす）。予約の有無は同じ `PendingIntent` を `FLAG_NO_CREATE` で引けるかで読む",
-      "perm": "`android.permission.SCHEDULE_EXACT_ALARM`（API 31 以上で必須。target 33 以上の新規インストールでは既定で拒否、利用者が設定の『アラームとリマインダー』で許可する）。通知を出すため `android.permission.POST_NOTIFICATIONS`（宣言済み）。`USE_EXACT_ALARM`・`RECEIVE_BOOT_COMPLETED` は足さない",
       "url": [
         "https://developer.android.com/develop/background-work/services/alarms",
         "https://developer.android.com/about/versions/14/changes/schedule-exact-alarms",
@@ -41,14 +39,12 @@
     "macos": {
       "status": "no",
       "api": "アラーム専用の公開 API は確認できず",
-      "perm": "",
       "url": "",
       "note": "AlarmKit は iOS・iPadOS・Mac Catalyst のみで、macOS の AppKit アプリは対象外（公式の対応 OS 表記）。時刻指定の通知は notification（既存 id）で代替でき、画面ロック中に鳴り続ける専用機能とは別"
     },
     "windows": {
       "status": "done",
       "api": "`ScheduledToastNotification` + `ToastNotifier.AddToSchedule`（`scenario=\"alarm\"` のトースト）、取り消しは `GetScheduledToastNotifications` + `RemoveFromSchedule`",
-      "perm": "なし。送り手は notification（既存 id）がスタートメニューのショートカットで登録した AUMID を使い、package identity は持たない",
       "url": [
         "https://learn.microsoft.com/en-us/windows/apps/develop/notifications/app-notifications/app-notifications-scheduled",
         "https://learn.microsoft.com/en-us/uwp/api/windows.ui.notifications.toastnotifier.addtoschedule",
@@ -62,7 +58,6 @@
     "web": {
       "status": "no",
       "api": "起動していないページを指定時刻に起こす標準 API は無い",
-      "perm": "",
       "url": "https://developer.chrome.com/docs/web-platform/notification-triggers",
       "safari": "対応なし",
       "note": "時刻指定の通知（Notification Triggers の `TimestampTrigger`）は Chrome のオリジントライアルで終わり、出荷されていない（Chrome の解説ページの状態表で Launch が未着手）"

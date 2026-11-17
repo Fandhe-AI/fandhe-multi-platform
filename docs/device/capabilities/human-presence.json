@@ -9,21 +9,18 @@
     "ios": {
       "status": "no",
       "api": "公開 API を確認できず",
-      "perm": "-",
       "url": "",
       "note": "在席を返す公開 API は確認できず"
     },
     "android": {
       "status": "no",
       "api": "公開 API を確認できず",
-      "perm": "-",
       "url": "",
       "note": "在席を返す公開 API は確認できず"
     },
     "macos": {
       "status": "no",
       "api": "公開 API を確認できず",
-      "perm": "-",
       "url": "",
       "note": "在席を返す公開 API は確認できず（一般知識、要確認）"
     },
@@ -33,7 +30,6 @@
       "implStatus": "Windows 実機確認待ち（#954）",
       "impl": "crates/fandhe-cap-human-presence/src/windows.rs + crates/fandhe-cap-human-presence/src/driver.rs + crates/fandhe-core/src/screens/human_presence_read.rs + crates/fandhe-cap-human-presence/src/contract.rs、Issue #960",
       "api": "WinRT `Windows.Devices.Sensors.HumanPresenceSensor`。`GetDefaultAsync` → `GetCurrentReading` の `Presence`（`Present` / `NotPresent` / `Unknown`）を押したときに 1 回読む。`ReadingChanged` は購読しない。`UniversalApiContract` v15（Windows 11 22H2 以降。公式頁の要件欄は 22621 と 23504 で食い違う）",
-      "perm": "宣言不要（パッケージ無しの exe は設定の「デスクトップ アプリに Presence Sensing へのアクセスを許可する」でまとめて制御。capability `humanPresence` はパッケージ化したアプリの宣言）",
       "url": [
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.humanpresencesensor",
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.sensors.humanpresencesensor.getcurrentreading",
@@ -46,7 +42,6 @@
     "web": {
       "status": "no",
       "api": "公開 API を確認できず",
-      "perm": "-",
       "url": "",
       "note": "在席を返すブラウザ API はない（Idle Detection は入力ベースで user-idle の領域）"
     }

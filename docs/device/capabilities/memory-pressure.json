@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "`UIApplication.didReceiveMemoryWarningNotification`（userInfo なし）。`DISPATCH_SOURCE_TYPE_MEMORYPRESSURE`（normal / warning / critical の変化）",
-      "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/uikit/uiapplication/didreceivememorywarningnotification",
         "https://developer.apple.com/documentation/dispatch/dispatch_source_type_memorypressure",
@@ -23,7 +22,6 @@
     "android": {
       "status": "done",
       "api": "`ComponentCallbacks2.onTrimMemory(level)`。API 34 以上は `TRIM_MEMORY_UI_HIDDEN` / `TRIM_MEMORY_BACKGROUND` のみ届き、`onLowMemory` は API 34 以上で呼ばれない。今の状態は `ActivityManager.MemoryInfo.lowMemory`",
-      "perm": "不要",
       "url": [
         "https://developer.android.com/reference/android/content/ComponentCallbacks2",
         "https://developer.android.com/reference/android/app/ActivityManager.MemoryInfo"
@@ -36,7 +34,6 @@
     "macos": {
       "status": "done",
       "api": "`DISPATCH_SOURCE_TYPE_MEMORYPRESSURE`（libdispatch の C API。normal / warning / critical）",
-      "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/dispatch/dispatch_source_type_memorypressure",
         "https://developer.apple.com/documentation/dispatch/dispatchsource/memorypressureevent"
@@ -49,7 +46,6 @@
     "windows": {
       "status": "done",
       "api": "`CreateMemoryResourceNotification`（`LowMemoryResourceNotification` / `HighMemoryResourceNotification`）+ 待機。今の状態は `QueryMemoryResourceNotification`",
-      "perm": "不要",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-creatememoryresourcenotification",
         "https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-querymemoryresourcenotification"
@@ -62,7 +58,6 @@
     "web": {
       "status": "done",
       "api": "Compute Pressure API（`PressureObserver.observe(\"cpu\")`、nominal / fair / serious / critical）。メモリ逼迫の標準通知は無い",
-      "perm": "不要（Permissions Policy `compute-pressure`）",
       "url": [
         "https://developer.mozilla.org/en-US/docs/Web/API/Compute_Pressure_API",
         "https://developer.mozilla.org/en-US/docs/Web/API/PressureObserver/observe",

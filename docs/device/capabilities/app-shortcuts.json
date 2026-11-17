@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "`UIApplicationShortcutItem`（Info.plist の静的項目）。受け取りは scene 形態の `windowScene:performActionForShortcutItem:completionHandler:`（起動中）と `UISceneConnectionOptions.shortcutItem`（未起動から）で、通知を経由して url-scheme の受け口へ入る。`launchOptions` と `application:performActionForShortcutItem:` は scene 形態では使わない",
-      "perm": "なし（静的項目を Info.plist の `UIApplicationShortcutItems` に宣言）",
       "url": "https://developer.apple.com/documentation/uikit/uiapplicationshortcutitem",
       "note": "ホーム画面のアイコン長押しに「デモを開く」が出て、選ぶと `fandhe://shortcut/open-demo` が url-scheme の受け口に入り、画面に 2 行目が出る。表示できたかは確かめられないので「宣言済み」と出す。守る範囲: 1 プロセス内の受信順、未起動から起動したときの分を落とさないこと、completion を 1 回だけ呼ぶこと、嘘の成功を出さないこと。守らない範囲: 他アプリから同じ URL が来た場合と区別しないこと、項目の動的な書き換え、ポーリング間隔ぶんの表示遅れ",
       "detail": "できている（iOS 実機確認待ち）",
@@ -19,7 +18,6 @@
     "android": {
       "status": "done",
       "api": "`ShortcutManager.setDynamicShortcuts`（API 25+、明示 intent の `ACTION_VIEW` に `SINGLE_TOP` と `CLEAR_TOP`）。静的ショートカットは `CLEAR_TASK` 固定で MainActivity を作り直すため不採用（#259）。intent の宛先は `getLaunchIntentForPackage` の component（取れなければ登録せず失敗にする）",
-      "perm": "なし",
       "url": "https://developer.android.com/develop/ui/views/launch/shortcuts",
       "note": "実装済み（#426）。画面を一度開いたときに 1 回だけ登録し、選ぶと `fandhe://shortcut/open-demo` が既存の url-scheme 経路（`onNewIntent` / `onCreate`）で受け口に入る。API 24 は非対応。守らない範囲: 画面を開くまで出ない、他アプリからの同じ URL と区別しない、ランチャーごとの表示差、失敗後にプロセス内で再試行しない",
       "detail": "できている（Android 実機確認待ち）",
@@ -29,7 +27,6 @@
     "macos": {
       "status": "done",
       "api": "`NSApplicationDelegate.applicationDockMenu(_:)`。winit 0.30.13 の `WinitApplicationDelegate` へ `class_addMethod` で足す",
-      "perm": "なし",
       "url": "https://developer.apple.com/documentation/appkit/nsapplicationdelegate/applicationdockmenu(_:)",
       "note": "起動中のみ Dock の右クリックに「デモを開く」が出る。選ぶと `fandhe://shortcut/open-demo` が url-scheme の受け口に入る。winit は delegate を登録しており差し替えると panic するため、メソッドを足す方式にした。守らない範囲: 他アプリから同じ URL が来た場合と区別しない、終了中は出ない、メソッドが既にある場合は失敗として扱う",
       "detail": "できている（Mac 目視待ち）",
@@ -39,7 +36,6 @@
     "windows": {
       "status": "done",
       "api": "Win32 `ICustomDestinationList`（`AddUserTasks` に `IShellLink` 1 件、表示名は `PKEY_Title`、引数は `\"fandhe://shortcut/open-demo\"`）。AUMID は明示しない（`SetAppID` なし）。WinRT `JumpList` は不採用",
-      "perm": "なし（unpackaged の desktop app。package identity 不要と見込む、実機未検証）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-icustomdestinationlist",
       "note": "画面を一度開くと、タスクバーのジャンプリストに「デモを開く」が出る。選ぶと exe が引数 `\"fandhe://shortcut/open-demo\"` で起動し、url-scheme の転送経路（起動中なら pipe、未起動ならコールドスタート）で画面に 2 行目が出る。守る範囲: 1 プロセス 1 回の登録、COM の失敗を成功にしないこと、途中失敗時の `AbortList`、HRESULT をエラー文言へ出さないこと。守らない範囲: 画面を開くまで項目が出ない、終了後もタスクが残る、exe を動かすと古いパスが残り次に画面を開くと置き換わる、他アプリから同じ URL が来た場合と区別しない、通知（`windows_notification`）が途中で明示の AUMID を付けたプロセスではジャンプリストが出なくなることがある（#413 で確かめる）、MTA で動くことは未検証（推測）、解除ボタン・複数項目・項目の書き換え",
       "detail": "できている（Windows 実機確認待ち）",
@@ -49,7 +45,6 @@
     "web": {
       "status": "done",
       "api": "Web App Manifest の `shortcuts`。`url` は url-scheme の受け口（`?screen=url_scheme_show&url=web%2Bfandhe%3A%2F%2Fshortcut%2Fopen-demo`）に向ける",
-      "perm": "なし（PWA のインストールが前提。secure context）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/shortcuts",
       "note": "インストール済み PWA のアイコンの右クリック・長押しに「デモを開く」が出て、選ぶと `web+fandhe://shortcut/open-demo` が url-scheme の受け口に入り、画面に 2 行目が出る。表示状態は「宣言済み」。対応ブラウザは Chrome / Edge と見込むが MDN の対応表は未確認（要確認）。守る範囲: 1 プロセス内の受信、不正な URL を出さないこと、非 secure と manifest 欠落で成功を出さないこと。守らない範囲: 未インストールの PWA や Firefox・Safari で項目が出なくても「宣言済み」と表示されること、同じ URL を他ページから開いた場合と区別しないこと、項目の動的な書き換え、複数タブ・複数ウィンドウ",
       "detail": "できている（実ブラウザ確認待ち）",

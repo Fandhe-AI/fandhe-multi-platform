@@ -9,7 +9,6 @@
     "ios": {
       "status": "possible",
       "api": "Share Extension（アプリ拡張ターゲット）。共有された項目は `NSExtensionItem` で届く",
-      "perm": "Share Extension ターゲット + App Groups（アプリ本体と拡張の両ターゲット）",
       "url": [
         "https://developer.apple.com/documentation/foundation/nsextensionitem",
         "https://developer.apple.com/library/archive/documentation/General/Conceptual/ExtensibilityPG/ExtensionScenarios.html"
@@ -21,7 +20,6 @@
       "status": "done",
       "detail": "できている（Android 実機確認待ち）",
       "api": "`ACTION_SEND` + `mimeType=\"text/plain\"` の intent-filter。`EXTRA_TEXT` のみ読む（`EXTRA_STREAM` は読まない）",
-      "perm": "なし（Manifest への intent-filter 追加のみ）",
       "url": "https://developer.android.com/training/sharing/receive",
       "note": "実装済み（#607）。url-scheme と同じ `onCreate`（`savedInstanceState` なし・Recents 起動でないときだけ）/ `onNewIntent` 経路で受ける。読むのは `EXTRA_TEXT` のみ。`EXTRA_STREAM` 付き・`ACTION_SEND_MULTIPLE`・`text/plain` 以外は拒否として件数だけ数える。守る範囲は 1 プロセス内の受信順・不正入力（空・16 KiB 超・制御文字・不正な UTF-8）を表示しないこと・コールドスタート分を落とさないこと・嘘の成功の禁止・本文をログに出さないこと・回転や Recents 復帰で二重に受けないこと、守らない範囲はプロセス死亡後の再表示・ポーリング間隔内に連続して届いた分は最後の 1 件だけ表示・起動中の共有で上に重なった外部 Activity が閉じられること。実機確認は #601",
       "implStatus": "Android 実機確認待ち（#601）",
@@ -31,7 +29,6 @@
       "status": "done",
       "detail": "できている（Mac 目視待ち）",
       "api": "Info.plist `NSServices`（サービスメニュー）+ `NSApplication.servicesProvider`。Share Extension は使わない",
-      "perm": "Info.plist の宣言のみ（.app 化が前提。entitlement・拡張ターゲット・App Group は不要）",
       "url": [
         "https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/SysServices/Articles/properties.html",
         "https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/SysServices/Articles/providing.html"
@@ -43,7 +40,6 @@
     "windows": {
       "status": "no",
       "api": "`Windows.ApplicationModel.DataTransfer.ShareTarget`",
-      "perm": "package identity（要確認）",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.datatransfer.sharetarget",
       "note": "Windows の共有ターゲットは UWP の ShareTarget 契約で、package identity が要ると認識。unpackaged での代替が見つからない（要確認）"
     },
@@ -51,7 +47,6 @@
       "status": "done",
       "detail": "できている（実ブラウザ確認待ち）",
       "api": "manifest `share_target`（`method: GET`、Service Worker 不要）",
-      "perm": "なし（PWA のインストールが前提）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/share_target",
       "note": "実装済み（#608）。MDN は Limited availability 表示。Chromium は対応、Safari・Gecko は非対応と認識（報告より）。インストール済みの PWA のみ。GET はクエリを置き換えるため、画面の選択はパラメーター名で行う。本文が URL に載るので、配信サーバーのアクセスログに残りうる。`share_target` には機能検出 API が無く、このブラウザが共有先になれるかは JS から判定できない。パラメーター名は `share_text` / `share_url`。両方あるとき、text が url を含まなければ「text、改行、url」を 1 件として扱い、含めば text のみ、片方が空なら他方を使う。読み込み時に 1 回だけ読み、直後に `history.replaceState` で共有パラメーターを消す（再読み込みで二重に数えない）。secure context 外は PWA を入れられないため未対応と表示する",
       "safari": "非対応と認識",

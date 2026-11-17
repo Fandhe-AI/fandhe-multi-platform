@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "UIKit `UITextChecker`",
-      "perm": "不要（Info.plist・entitlement 不要）",
       "url": "https://developer.apple.com/documentation/uikit/uitextchecker",
       "note": "実装済み（#579）。`UITextChecker.availableLanguages` で言語の辞書を確かめ、無ければ失敗表示にする（「誤り 0 件」にしない）。クラスが `NS_SWIFT_UI_ACTOR` のため呼び出しを main queue に集約し、誤り 1 件ずつに刻んで main を長く占有しない。期限切れの後は Rust のバッファへ書かない。`learnWord:`・`ignoreWord:` は呼ばず、端末のユーザー辞書を変えない。iOS 3.2+。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・UITextChecker の解放・入力と誤り語のログ非出力。守らない範囲: 期限後も OS 側の検査が走り切ること、利用者が OS に学習させた語による結果の違い。正常系・失敗系の確認は iOS 実機確認（#574）で行う。",
   "detail": "できている（iOS 実機確認待ち）",
@@ -19,7 +18,6 @@
     "android": {
       "status": "done",
       "api": "`TextServicesManager.newSpellCheckerSession`（`referToSpellCheckerLanguageSettings=false`）+ `SpellCheckerSession.getSentenceSuggestions`（API 16）。専用 HandlerThread で呼び、全経路で `cancel()`・`close()`",
-      "perm": "不要（`<queries>` も不要。現在のスペルチェッカーはパッケージ可視性の対象外と SDK に明記）",
       "url": [
         "https://developer.android.com/reference/android/view/textservice/TextServicesManager",
         "https://developer.android.com/reference/android/view/textservice/SpellCheckerSession"
@@ -32,7 +30,6 @@
     "macos": {
       "status": "done",
       "api": "AppKit `NSSpellChecker`",
-      "perm": "不要",
       "url": "https://developer.apple.com/documentation/appkit/nsspellchecker",
       "note": "実装済み（#578）。呼び出しごとに document tag を取り、`closeSpellDocumentWithTag:` で全経路解放する。言語は `availableLanguages` から選んで明示し（無ければ失敗表示）、`setLanguage:` は呼ばない（共有状態を変えない）。`guessesForWord:` は 10.6 で非推奨のため使わない。呼び出しは main queue に集約し、期限切れの後は Rust のバッファへ書かない。守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止・document tag の解放・入力と誤り語のログ非出力。守らない範囲: 期限後も OS 側の検査が走り切ること、利用者が OS に学習させた語による結果の違い。正常系・失敗系の目視は Mac 目視（#574）で確かめる。",
       "detail": "できている（Mac 目視待ち）",
@@ -42,7 +39,6 @@
     "windows": {
       "status": "done",
       "api": "`ISpellCheckerFactory` / `ISpellChecker`（spellcheck.h、Windows 8+）",
-      "perm": "不要（desktop apps / UWP apps 対応と Learn に明記、package identity 不要）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/spellcheck/nn-spellcheck-ispellchecker",
       "note": "実装済み（#581）。ワーカーで MTA を初期化し、`SupportedLanguages` で辞書の有無を確かめてから `CreateSpellChecker` を呼ぶ（無い言語は失敗表示で、誤り 0 件にしない）。OS が返す文字列は RAII ガードで `CoTaskMemFree` を 1 回だけ呼ぶ。重複語（`CORRECTIVE_ACTION_DELETE`）は扱わず、端末のユーザー辞書（`Add` / `Ignore` / `AutoCorrect`）は変えない。誤りごとに期限を確かめる。守らない範囲は、期限切れ後に走り始めた `Check` / `Suggest` が走り切ること、利用者が OS に学習させた語による結果の違い。正常系・失敗系の確認は Windows 実機確認（#574）で行う。",
       "detail": "できている（Windows 実機確認待ち）",
@@ -52,7 +48,6 @@
     "web": {
       "status": "no",
       "api": "スペルチェックを呼び出す JS API は無い（`spellcheck` 属性は入力要素のブラウザ組み込みのみ）",
-      "perm": "",
       "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/spellcheck",
       "safari": "入力要素の属性のみ",
       "note": "ページの JS からスペルチェックの結果を取る API は無い（`spellcheck` 属性は入力要素のブラウザ組み込みの下線のみ）"

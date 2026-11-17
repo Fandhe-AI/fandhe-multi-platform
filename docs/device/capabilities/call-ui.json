@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "CallKit（`CXProvider` / `CXProviderDelegate` / `CXCallController`）",
-      "perm": "Apple の文書に CallKit 単体の entitlement の記載は無く、Info.plist のキーも追加していない。Background Modes の `voip` は付けていない。`unentitled` が出たら失敗として表示し、実機確認（#275）で判断する",
       "url": "https://developer.apple.com/documentation/callkit/cxprovider",
       "note": "実装済み（Issue #277）。`CXProvider` の `reportNewIncomingCall` で OS の着信画面を出し、delegate の結果を main queue から Rust へ返す。受理（completion が error なし）を確認してから Ringing を通知する。拒否・終了・応答なしは失敗にしない。報告エラーは `CXErrorCodeIncomingCallError` の全コードを写像し、おやすみモード・ブロックリスト・制限共有モード・保護された通話・センシティブな参加者は Disallowed、それ以外（unknown・unentitled・UUID 重複・未知のコード）は Failed。取り消しや差し替えの後に遅れて届いた受理は通知せず OS 側で閉じる。通話履歴には残さない。`AVAudioSession` には触れない。守る範囲は 1 プロセス内の順序・嘘の成功の禁止・`CXCall` の解放で、背景での通話継続・プロセス死・複数通話は守らない。審査上の注意として、中国 App Store では CallKit の無効化を求められた経緯がある（2018 年、Guideline 5.0）。ストア提出は範囲外。着信 UI は実機でのみ確認可能（#275）",
       "sourceName": [
@@ -22,7 +21,6 @@
     "android": {
       "status": "done",
       "api": "Telecom の self-managed `ConnectionService`（`TelecomManager.registerPhoneAccount` + `PhoneAccount.CAPABILITY_SELF_MANAGED`）。Jetpack `androidx.core:core-telecom` は Kotlin 前提",
-      "perm": "`MANAGE_OWN_CALLS`（normal）、`USE_FULL_SCREEN_INTENT`（着信通知の投稿条件）、API 33+ は `POST_NOTIFICATIONS`（実行時許可）。FGS（`FOREGROUND_SERVICE_PHONE_CALL`）は使わない。マニフェストに `BIND_TELECOM_CONNECTION_SERVICE` を要求する `ConnectionService` 宣言と、exported=false の Receiver を置く",
       "url": "https://developer.android.com/develop/connectivity/telecom",
       "note": "範囲: 疑似着信 1 件・固定の発信者名。音声・VoIP push・発信・履歴は扱わない。API 26+ で動作し、24〜25 と Telecom 機能の無い端末は Unsupported を返す。`CAPABILITY_SELF_MANAGED` は API 37 で非推奨のため、compileSdk を 37 に上げるときに CoreTelecom への移行を見直す。拒否・終了・応答なしは失敗にしない。期限切れ（Unanswered）も取り消しも `DisconnectCause.LOCAL` で閉じ、`MISSED` は区別しない（trait の `end` に理由引数が無いため）。通知の投稿に成功した後にだけ Ringing を返す。守る範囲: 1 プロセス内の順序（Java は main looper 1 本、Rust は `SLOT` 1 本）、嘘の成功の禁止、通知・Connection の解放。守らない範囲: 背景での通話の継続、プロセス死、`PhoneAccount` の登録を残すこと。API 34+ で full-screen intent の許可が切られた場合の挙動は実機で確認する（#275）",
       "detail": "できている（Android 実機確認待ち）",
@@ -32,7 +30,6 @@
     "macos": {
       "status": "no",
       "api": "CallKit（`CXProvider`）",
-      "perm": "なし",
       "url": "https://developer.apple.com/documentation/callkit/cxprovider",
       "note": "framework 全体のページには macOS 13.0 の表記があるが、`CXProvider` 自体の platforms に macOS は無い。Mac Catalyst 化は前提（素の AppKit 実行体）に合わない",
       "detail": "できない（`CXProvider` の対応は iOS / iPadOS / Mac Catalyst / visionOS / watchOS のみで、macOS ネイティブは対象外）"
@@ -40,7 +37,6 @@
     "windows": {
       "status": "no",
       "api": "`Windows.ApplicationModel.Calls.VoipCallCoordinator`",
-      "perm": "App capabilities: `voipCall`（`phoneCallHistory` 系も記載）",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.calls.voipcallcoordinator",
       "note": "「identity 必須」は一次情報の明示記述ではなく、capability が manifest 宣言である仕組みからの推定（実機未検証）。デスクトップアプリ向けにリソース予約は不要との記述はあり",
       "detail": "できない（`voipCall` capability はパッケージマニフェストでの宣言が前提と推定。package identity の無い素の exe では使えない。公式に identity 不要の記述なし）"
@@ -48,7 +44,6 @@
     "web": {
       "status": "no",
       "api": "（着信 UI 相当の API なし。Media Session の `hangup` / `togglemicrophone` アクションは進行中通話の制御のみ）",
-      "perm": "なし",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/MediaSession/setActionHandler",
       "safari": "Media Session 自体の対応は MDN で「Limited availability」。`hangup` 等の Safari 対応は未確認",
       "note": "Web Notifications でのアプリ内通知は通話 UI 統合ではない",

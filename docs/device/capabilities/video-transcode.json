@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "AVFoundation `AVAssetWriter`（`AVAssetWriterInputPixelBufferAdaptor` で BGRA のフレームを 1 枚ずつ書き、H.264 の MP4 の元動画を一時ファイルへ）+ `AVAssetExportSession`（`AVAssetExportPreset640x480`、MPEG-4）。期限切れは `cancelWriting` / `cancelExport`",
-      "perm": "不要（一時ファイルは `NSTemporaryDirectory`（`std::env::temp_dir`）＝アプリのサンドボックス内。usage description は要らない）",
       "url": [
         "https://developer.apple.com/documentation/avfoundation/avassetexportsession",
         "https://developer.apple.com/documentation/avfoundation/avassetexportsession/exportasynchronously(completionhandler:)",
@@ -27,7 +26,6 @@
       "status": "done",
       "impl": "crates/fandhe-cap-video-transcode/android/java/com/fandhe/platform/VideoTranscodeHelper.java + crates/fandhe-cap-video-transcode/src/android.rs + crates/fandhe-cap-video-transcode/src/driver.rs + crates/fandhe-core/src/screens/video_transcode.rs + crates/fandhe-cap-video-transcode/src/contract.rs、Issue #1017",
       "api": "`MediaCodec`（H.264 の符号化器・復号器、`getInputImage` / `getOutputImage`）+ `MediaMuxer`。Media3 Transformer は不採用（Gradle の新規依存を避ける。media-transcode と同じ判断）",
-      "perm": "不要（一時ファイルはアプリの `getCacheDir()`）",
       "url": [
         "https://developer.android.com/reference/android/media/MediaCodec",
         "https://developer.android.com/reference/android/media/MediaMuxer",
@@ -41,7 +39,6 @@
     "macos": {
       "status": "done",
       "api": "AVFoundation `AVAssetWriter`（`AVAssetWriterInputPixelBufferAdaptor` で BGRA のフレームを 1 枚ずつ書き、H.264 の MP4 の元動画を一時ファイルへ）+ `AVAssetExportSession`（`AVAssetExportPreset640x480`、MPEG-4）。期限切れは `cancelWriting` / `cancelExport`",
-      "perm": "不要（App Sandbox 無効の素の実行体）",
       "url": [
         "https://developer.apple.com/documentation/avfoundation/avassetexportsession",
         "https://developer.apple.com/documentation/avfoundation/avassetexportsession/exportasynchronously(completionhandler:)",
@@ -58,7 +55,6 @@
     "windows": {
       "status": "done",
       "api": "`Windows.Media.Transcoding.MediaTranscoder`。1 段目 `MediaStreamSource`（無圧縮 BGRA、1280×720・15 fps）+ `PrepareMediaStreamSourceTranscodeAsync`（`CreateMp4(HD720p)`、`SetAudio(None)`）で元動画を一時ファイルへ、2 段目 `PrepareStreamTranscodeAsync`（`CreateMp4(Vga)`、`SetAudio(None)`）で小さい動画の MP4 へ。期限切れは `Cancel()`",
-      "perm": "不要（文書に package identity の要件記載なし。unpackaged の exe で動くかは #310 で確認）",
       "url": [
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.transcoding.mediatranscoder",
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.transcoding.mediatranscoder.preparemediastreamsourcetranscodeasync",
@@ -73,7 +69,6 @@
     "web": {
       "status": "done",
       "api": "WebCodecs の `VideoEncoder` / `VideoDecoder` / `VideoFrame`（BGRA 入力）を `js_sys::Reflect` 経由で呼ぶ。`isConfigSupported` で `avc1.42001f` → `vp09.00.10.08` → `vp8` の順に対応を確かめる。mux は作らない",
-      "perm": "不要。secure context 必須",
       "url": [
         "https://www.w3.org/TR/webcodecs/#dom-videoencoderconfig-width",
         "https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API",

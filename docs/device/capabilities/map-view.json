@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "MapKit（`MKMapSnapshotter` で静止画取得 → 画像として描画。ライブ表示は `MKMapView`）",
-      "perm": "不要（現在地表示を重ねる場合のみ CoreLocation の権限が別途必要）",
       "url": "https://developer.apple.com/documentation/mapkit/mkmapsnapshotter",
       "note": "固定 480x320（1x）の静止画を `MKMapSnapshotter` で 1 枚取得し RGBA に変換して描く（プリセット 3 地点・15 秒の期限・オフラインの事前判定）。守る範囲: 1 プロセス・1 画面の順序、結果は 1 回きり、画像なし・0 寸法・エラー付きを成功にしない、資源の解放、座標をログへ出さない。守らない範囲: タイルの内容と鮮度、Apple 側のレート制限、複数プロセス。iOS 固有: 背景にいる間の取得は期限切れの失敗になり、復帰後に届いた結果は捨てる。既知の天井: オンラインなのに空タイルが返る場合は合図が無い。帰属表示は固定文言のみで、ストア配布の前に HIG・規約を人が確認する",
       "sourceName": [
@@ -22,7 +21,6 @@
     "android": {
       "status": "no",
       "api": "Maps SDK for Android（`com.google.android.gms.maps`）。OS 標準の地図ビュー・スナップショット API は無い",
-      "perm": "API キー + 課金設定が必須。`INTERNET`",
       "url": "https://developers.google.com/maps/documentation/android-sdk/config",
       "note": "Maps SDK for Android は端末に Google Play services が入っていることを要求する。GMS を追加しない前提に合わない。AOSP 側に地図描画 API は無い。代替はサードパーティ（Mapbox・OSM タイル直取得）で OS 機能ではない",
       "detail": "できない（Google Maps SDK が GMS 必須・API キー必須。OS 標準の地図 API は無い）"
@@ -30,7 +28,6 @@
     "macos": {
       "status": "done",
       "api": "MapKit（`MKMapSnapshotter`）",
-      "perm": "不要（現在地表示を重ねる場合のみ CoreLocation の権限が別途必要）",
       "url": "https://developer.apple.com/documentation/mapkit/mkmapsnapshotter",
       "note": "固定 480x320 の静止画を `MKMapSnapshotter` で 1 枚取得し RGBA に変換して描く（プリセット 3 地点・15 秒の期限・オフラインの事前判定）。守る範囲: 1 プロセス・1 画面の順序、結果は 1 回きり、画像なし・0 寸法・エラー付きを成功にしない、資源の解放、座標をログへ出さない。守らない範囲: タイルの内容と鮮度、Apple 側のレート制限、複数プロセス、背景にいる間の取得。既知の天井: オンラインなのに空タイルが返る場合は合図が無い。素の実行体でタイルを取れるかは #272 で確かめる。帰属表示は固定文言のみで、ストア配布の前に HIG・規約を人が確認する",
       "detail": "できている（Mac 目視待ち）",
@@ -40,7 +37,6 @@
     "windows": {
       "status": "no",
       "api": "`Windows.UI.Xaml.Controls.Maps.MapControl` / `Windows.Services.Maps`（`MapService.ServiceToken`）",
-      "perm": "マップ認証キー（`MapServiceToken` / `MapService.ServiceToken`）が必須",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.ui.xaml.controls.maps.mapcontrol.mapservicetoken",
       "note": "`MapControl` は UWP（XAML）のコントロールで、素の exe から使えない。`MapServiceToken` は Deprecated 表記で認証キー必須。基盤の Bing Maps for Enterprise は廃止予定で、廃止後は `MapControl` と `Windows.Services.Maps` がデータを受け取れなくなる。代替は Azure Maps（REST / Web SDK）だが OS 機能ではない",
       "detail": "できない（UWP 専用・API キー必須・基盤の Bing Maps for Enterprise が廃止予定）"
@@ -48,7 +44,6 @@
     "web": {
       "status": "no",
       "api": "ブラウザ標準の地図 API は無い",
-      "perm": "-",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API",
       "safari": "該当なし（標準 API 自体が無い）",
       "note": "MDN の Web API 一覧に地図表示・地図スナップショット API は存在しない（Geolocation は座標取得のみで別機能）。代替は Mapbox / MapLibre / OSM タイル等のサードパーティで、ブラウザの端末機能ではない",

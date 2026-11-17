@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "`NSUserDefaults` の `objectForKey:@\"com.apple.configuration.managed\"`（辞書であることを `isKindOfClass:` で確かめる。`dictionaryForKey:` は「無い」と「辞書でない」がどちらも nil）",
-      "perm": "不要（MDM 側の配布設定が前提）",
       "url": [
         "https://developer.apple.com/library/archive/samplecode/sc2279/introduction/intro.html",
         "https://developer.apple.com/documentation/devicemanagement/configuring-managed-apps-and-extensions"
@@ -22,7 +21,6 @@
     "android": {
       "status": "done",
       "api": "`RestrictionsManager.getApplicationRestrictions()`（制限が無ければ `null`。ディスク I/O のため main スレッドで呼ばない）。`res/xml` に制限スキーマの宣言が必要（`ACTION_APPLICATION_RESTRICTIONS_CHANGED` は動的登録のみ届く。本実装は押下ごとに再読込）",
-      "perm": "不要（MDM / EMM 側の配布が前提）",
       "url": [
         "https://developer.android.com/reference/android/content/RestrictionsManager#getApplicationRestrictions()",
         "https://developer.android.com/work/managed-configurations"
@@ -35,7 +33,6 @@
     "macos": {
       "status": "done",
       "api": "構成プロファイル `com.apple.ManagedClient.preferences` がアプリの domain へ強制したキーを `CFPreferencesCopyAppValue` + `CFPreferencesAppValueIsForced` で読む",
-      "perm": "不要（MDM 側の配布が前提）",
       "url": [
         "https://developer.apple.com/documentation/devicemanagement/managedpreferences",
         "https://developer.apple.com/documentation/corefoundation/cfpreferencesappvalueisforced(_:_:)"
@@ -48,14 +45,12 @@
     "windows": {
       "status": "no",
       "api": "アプリ設定向けの共通 API なし",
-      "perm": "-",
       "url": "",
       "note": "Windows にアプリ単位の管理構成を読む共通 API は無い（Intune はポリシー / レジストリ経由で独自）"
     },
     "web": {
       "status": "n-a",
       "api": "概念なし",
-      "perm": "-",
       "url": "",
       "note": "ブラウザ管理ポリシーは存在するがアプリ設定を読む API は無い"
     }

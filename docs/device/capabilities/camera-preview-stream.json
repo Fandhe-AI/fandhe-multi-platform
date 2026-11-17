@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "AVFoundation `AVCaptureSession`（`sessionPreset` = `vga640x480`）+ `AVCaptureVideoDataOutput`（`setSampleBufferDelegate:queue:` に serial queue、`kCVPixelBufferPixelFormatTypeKey` = 32BGRA）、`CMSampleBufferGetImageBuffer` + `CVPixelBufferLockBaseAddress`。ズームは `AVCaptureDevice.videoZoomFactor`（`lockForConfiguration` 必須、範囲は `minAvailableVideoZoomFactor`〜`maxAvailableVideoZoomFactor`）。中断は `AVCaptureSessionWasInterruptedNotification` / `InterruptionEndedNotification`、実行時の失敗は `AVCaptureSessionRuntimeErrorNotification`",
-      "perm": "`NSCameraUsageDescription`（宣言済み。文言に本機能の画面名を含む）、実行時のカメラの許可（`AVCaptureDevice.requestAccess`）",
       "url": [
         "https://developer.apple.com/documentation/avfoundation/avcapturesession",
         "https://developer.apple.com/documentation/avfoundation/avcapturevideodataoutput/setsamplebufferdelegate(_:queue:)",
@@ -26,7 +25,6 @@
     "android": {
       "status": "done",
       "api": "Camera2（`CameraManager.openCamera` + `CameraDevice.StateCallback`、`createCaptureSession`（API 28 以上は `SessionConfiguration`）、`ImageReader`（`YUV_420_888`、`acquireLatestImage`））。ズームは API 30 以上で `CaptureRequest.CONTROL_ZOOM_RATIO`（範囲は `CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE`、適用値は `CaptureResult` から読む）",
-      "perm": "`CAMERA`（宣言済み、実行時の許可）。uses-permission・Gradle 依存は足さない",
       "url": [
         "https://developer.android.com/reference/android/hardware/camera2/CameraManager",
         "https://developer.android.com/reference/android/hardware/camera2/CameraDevice.StateCallback",
@@ -43,7 +41,6 @@
     "macos": {
       "status": "done",
       "api": "AVFoundation `AVCaptureSession` + `AVCaptureVideoDataOutput`（iOS と同じ `.m` を共有。`sessionPreset` = `vga640x480`（通らなければ既定）、32BGRA、`setSampleBufferDelegate:queue:` に serial queue）。中断は `AVCaptureSessionWasInterruptedNotification` / `InterruptionEndedNotification`、実行時の失敗は `AVCaptureSessionRuntimeErrorNotification`、カメラの取り外しは `AVCaptureDeviceWasDisconnectedNotification`。ズームの API（`videoZoomFactor`・`minAvailableVideoZoomFactor`・`maxAvailableVideoZoomFactor`）は macOS では使えない",
-      "perm": "`NSCameraUsageDescription`（埋め込み Info.plist に宣言済み。文言に本機能の画面名を含む）、実行時のカメラの許可（`AVCaptureDevice.requestAccess`）。App Sandbox・Hardened Runtime を使わない素の実行体のため `com.apple.security.device.camera` は不要",
       "url": [
         "https://developer.apple.com/documentation/avfoundation/avcapturevideodataoutput",
         "https://developer.apple.com/documentation/bundleresources/information-property-list/nscamerausagedescription",
@@ -62,7 +59,6 @@
     "windows": {
       "status": "done",
       "api": "WinRT `MediaCapture`（`InitializeWithSettingsAsync`、`StreamingCaptureMode::Video`・`MemoryPreference::Cpu`・`SharingMode::ExclusiveControl`）+ `MediaFrameReader`（`CreateFrameReaderWithSubtypeAsync(Bgra8)`、`AcquisitionMode` = Realtime、`FrameArrived` → `TryAcquireLatestFrame`、`StartAsync` の status で開始を確定）、`VideoMediaFrame.SoftwareBitmap` を `CopyToBuffer` で読む。ズームは `VideoDeviceController.ZoomControl`（`Supported` / `Min` / `Max` / `Configure(ZoomSettings)`）。中断・失敗は `MediaCapture.CameraStreamStateChanged` / `Failed`。背面のカメラは `DeviceInformation` の `EnclosureLocation.Panel`",
-      "perm": "unpackaged の実行では宣言不要の見込み（設定の「デスクトップ アプリにカメラへのアクセスを許可する」に従い、拒否は開始失敗（権限）になる）。パッケージ時は `webcam` capability（対象外）。`windows` クレートの feature は導入済みで追加なし",
       "url": [
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.mediacapture",
         "https://learn.microsoft.com/en-us/uwp/api/windows.media.capture.frames.mediaframereader",
@@ -81,7 +77,6 @@
     "web": {
       "status": "done",
       "api": "`MediaDevices.getUserMedia({ video })` + 非表示の `<video>`、`HTMLVideoElement.requestVideoFrameCallback` で新しいフレームごとに `<canvas>` の `drawImage` → `getImageData`（RGBA）。実装は `getUserMedia({ video: { facingMode: { ideal: \"environment\" } }, audio: false })`（背面が無ければ既定のカメラ）、`requestVideoFrameCallback` は web-sys に型が無いため `Reflect` で呼ぶ、`fandhe_device` の `preview_size` で縮めたキャンバスへ `drawImage` → `getImageData`、中断・再開はトラックの `mute` / `unmute`、実行中の失敗は `ended`",
-      "perm": "カメラの許可（camera-capture の Web と同じ）、secure context 必須。ズーム（`zoom` 制約）は `camera` の許可を `panTiltZoom: true` 付きで得る必要がある",
       "url": [
         "https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia",
         "https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement/requestVideoFrameCallback",

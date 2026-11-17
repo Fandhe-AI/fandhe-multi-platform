@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "ActivityKit（`Activity<Attributes>.request(attributes:content:pushType:)` / `update` / `end`、iOS 16.1+）。表示は Widget Extension の `ActivityConfiguration`（SwiftUI）",
-      "perm": "Info.plist の `NSSupportsLiveActivities` + 別 Widget Extension ターゲット。ローカル開始・更新のみなら `pushType: nil`（リモート更新は Push 通知 entitlement が要るため今回外す）",
       "url": "https://developer.apple.com/documentation/activitykit",
       "note": "Swift 薄層（`@_cdecl`）と Widget Extension で実装。`Activity` は Swift 専用 API のため `build.rs` が swiftc で静的ライブラリ化して C ABI で呼ぶ。拡張はシミュレータ向けバンドルにだけ `PlugIns/` として同梱する。実機ビルドは拡張を同梱せず、開始は `Unsupported` を返す（成功に見せない）。理由は実機の署名手順がアプリ 1 つ分しか無いこと。追跡は #293。ユーザーがライブアクティビティを無効にしていると `PermissionDenied`、利用者が閉じた後の更新は `Dismissed`。守る範囲: 1 プロセス内の要求と完了の順序（main actor の直列チェーン）、失敗を成功へ倒さない、`ActivityAuthorizationError` の全種の写像。守らない範囲: プロセス死後の表示の残り（次回起動で片付ける）、利用者が閉じてから次の操作までの表示の食い違い、OS が描画へ反映するまでの時間差、iOS の 8 時間上限",
       "sourceName": [
@@ -22,7 +21,6 @@
     "android": {
       "status": "done",
       "api": "進行中通知 `NotificationCompat.Builder.setOngoing(true)` + `setProgress`。タグ付きの固定 ID 通知 1 件、専用チャンネル `IMPORTANCE_LOW`。Live Updates（API 36）は使わない",
-      "perm": "`POST_NOTIFICATIONS`（API 33+ は実行時許可、開始時のみ求める）。`POST_PROMOTED_NOTIFICATIONS` は宣言しない",
       "url": "https://developer.android.com/develop/ui/views/notifications/live-update",
       "note": "実装済み（Issue #296）。数値 1 つの開始・更新・終了、同時 1 件。API 24〜25 は Unsupported。拒否・通知オフ・チャンネルブロックは PermissionDenied。更新時に通知が無ければ Dismissed（再投稿しない）。終了は冪等で許可を求めない。Cancelled は出さない。再生成時と起動時は保留中の要求を破棄し、通知を閉じる。守る範囲: 1 プロセス内の要求順序・拒否/通知オフを成功に畳まないこと・通知の解放。守らない範囲: 利用者が閉じてから次の操作までの画面表示の食い違い、OEM 独自の表示規則。Live Updates への昇格は範囲外（compileSdk 36 と androidx.core の引き上げが要る）",
       "detail": "できている（Android 実機確認待ち）",
@@ -32,7 +30,6 @@
     "macos": {
       "status": "no",
       "api": "なし（ActivityKit は iOS / iPadOS / Mac Catalyst のみ）",
-      "perm": "なし",
       "url": "https://developer.apple.com/documentation/activitykit",
       "note": "Apple のメタデータで ActivityKit の対応が iOS / iPadOS / Mac Catalyst（16.1+）であることを確認。メニューバー表示は https://www.apple.com/newsroom/2025/06/macos-tahoe-26-makes-the-mac-more-capable-productive-and-intelligent-than-ever/ に記載",
       "detail": "できない（Mac アプリから Live Activity を起動する公開 API が無い。Mac は近くの iPhone の Live Activity をメニューバーに表示するだけ）"

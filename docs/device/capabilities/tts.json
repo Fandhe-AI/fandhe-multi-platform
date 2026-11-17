@@ -12,7 +12,6 @@
       "detail": "できている（実機）",
       "verified": true,
       "api": "AVFoundation（`AVSpeechSynthesizer`）",
-      "perm": "不要",
       "url": "https://developer.apple.com/documentation/avfoundation/avspeechsynthesizer",
       "note": "実装済み（旧#866）。`AVSpeechSynthesizer` を ObjC + `extern \"C\"` で橋渡し（`fandhe_ios_clipboard.m` と同型）。VoiceOver（スクリーンリーダー）とは別 API で、画面の読み上げではなくアプリが指定した文字列の発話。iOS 実機で確認済み（2026-09-15: 読み上げ / 発話中の停止 / 空文字のエラー）",
       "sourceName": [
@@ -26,7 +25,6 @@
       "detail": "できている（実機）",
       "verified": true,
       "api": "`TextToSpeech`（`android.speech.tts`）",
-      "perm": "なし",
       "url": "https://developer.android.com/reference/android/speech/tts/TextToSpeech",
       "note": "実装済み（旧#866）。`TtsHelper.request`（`TtsLifecycle` が Activity ごとに生成。`MainActivity` には配線を書かない）が `runOnUiThread` で `TextToSpeech` を操作し、非同期初期化（`OnInitListener`）完了を待ってから発話・停止を `nativeOnTtsResult` で Rust 側 mailbox へ返す（初期化未完了時に偽の成功を返さない設計）。TalkBack（スクリーンリーダー、上表の該当行）とは別 API で、画面の読み上げではなくアプリが指定した文字列の発話。再生成中の発話は `TtsLifecycle.onHostDestroyed`（`TtsHelper.detach`）が確定させ、新画面には『読み上げました』が出ない既知の天井（旧#881）。Android 実機で確認済み（2026-09-15: 読み上げ / 発話中の停止 / 空文字のエラー）",
       "sourceName": [
@@ -39,7 +37,6 @@
       "status": "done",
       "detail": "できている",
       "api": "AVFoundation（`AVSpeechSynthesizer`）/ AppKit（`NSSpeechSynthesizer`、非推奨）",
-      "perm": "なし",
       "url": "https://developer.apple.com/documentation/avfoundation/avspeechsynthesizer",
       "note": "実装済み（旧#865）。`AVSpeechSynthesizer` を自前で叩くと 機能 crate の `#![forbid(unsafe_code)]` を破るため、OS 同梱コマンド `say`（内部で AVFoundation を使う）を `std::process::Command` で起動する方式にした（`tts` クレート（crates.io）は `Send`/`Sync` 非対応・保守終了気味の依存を引くため不採用、判断根拠は PR 本文参照）。Mac で実アプリを動かし、読み上げ・停止・OS 未対応時のエラー表示（偽の成功を出さないこと）を目視・聴取で確認済み",
       "sourceName": [
@@ -52,7 +49,6 @@
       "status": "done",
       "detail": "できている（未確認）",
       "api": "WinRT（`Windows.Media.SpeechSynthesis.SpeechSynthesizer`）",
-      "perm": "なし",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.media.speechsynthesis.speechsynthesizer",
       "note": "実装済み（旧#865）。WinRT `SpeechSynthesizer` は直接は使わず、PowerShell 経由の `System.Speech.Synthesis.SpeechSynthesizer`（SAPI）で同じ OS の読み上げ機能を呼ぶ（`arboard` 経由のクリップボードと同型の判断）。テキストはスクリプト文字列へ連結せず環境変数 `FANDHE_TTS_TEXT` で渡す（コマンドインジェクション対策）。Windows 実機での確認は未了",
       "sourceName": [
@@ -65,7 +61,6 @@
       "status": "done",
       "detail": "できている（未確認）",
       "api": "Web Speech API（`SpeechSynthesis`）",
-      "perm": "なし（Safari はユーザー操作起点でのみ発話）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesis",
       "safari": "対応（ユーザー操作起点が必要）",
       "note": "実装済み（旧#867）。`fandhe-web-dom` の `mount_with_effect` + `tts` モジュールが `window.speechSynthesis` / `SpeechSynthesisUtterance` へ配線する（wasm32 では `fandhe-cap-tts` の `Tts` トレイトを通らない）。非対応ブラウザでは Err を返し偽の成功を出さない。スクリーンリーダーへの AX ツリー公開とは別 API。実ブラウザでの確認は未了",

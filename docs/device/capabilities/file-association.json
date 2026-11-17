@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "Info.plist `CFBundleDocumentTypes`（`public.plain-text`、`LSHandlerRank=Alternate`）+ `LSSupportsOpeningDocumentsInPlace=false`。受信は scene delegate の `scene:openURLContexts:` / `connectionOptions.URLContexts`（通知経由）",
-      "perm": "Info.plist の宣言のみ（新たな権限なし）",
       "url": "https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundledocumenttypes",
       "detail": "できている（iOS 実機確認待ち）",
       "implStatus": "iOS 実機確認待ち（#414）",
@@ -19,7 +18,6 @@
     "android": {
       "status": "possible",
       "api": "intent-filter `ACTION_VIEW` + `mimeType`（`content:` URI には `pathPattern` が効かないため mimeType だけ）",
-      "perm": "なし",
       "url": "https://developer.android.com/guide/components/intents-filters",
       "note": "未実装。content URI が届くため読み取りは ContentResolver を使う。未マージの実装は PR #436",
       "deferred": "送り手の ContentProvider が読み取りを止めると、Java の read を中断できず fd・一時ファイル・スレッドが回収できない（資源の漏れは守らない範囲にできない）。kill でも回収できない場合があると分かり、別プロセスで読み proxy fd は読まない設計を docs/architecture/android-file-association-read.md に書いた。設計の未確認事項の確認と実装が済むまで保留（#451）"
@@ -27,7 +25,6 @@
     "macos": {
       "status": "done",
       "api": "Apple Event `kAEOpenDocuments`（winit の app delegate を差し替えない）+ Info.plist `CFBundleDocumentTypes`（`public.plain-text`、`LSHandlerRank=Alternate`）",
-      "perm": "Info.plist の宣言（.app 化が前提。bundle スクリプトが足す）",
       "url": "https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundledocumenttypes",
       "detail": "できている（Mac 目視待ち）",
       "implStatus": "Mac 目視待ち（#414）",
@@ -37,7 +34,6 @@
     "windows": {
       "status": "done",
       "api": "`HKCU\\Software\\Classes\\Fandhe.EguiProxy.Txt.1`（ProgID と `shell\\open\\command` = `\"<exe>\" --fandhe-open-file \"%1\"`）と `.txt\\OpenWithProgids` への値の追加。既定値は触らない。登録・解除の後に `SHChangeNotify(SHCNE_ASSOCCHANGED)`",
-      "perm": "なし。HKCU による利用者単位の登録は File Types の文書に書かれており、管理者権限は要らない。MSIX は使わない。unpackaged での動作は実機で未確認",
       "url": "https://learn.microsoft.com/en-us/windows/win32/shell/fa-file-types",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#414）",
@@ -47,7 +43,6 @@
     "web": {
       "status": "done",
       "api": "manifest `file_handlers`（`text/plain` → `.txt`）+ `window.launchQueue.setConsumer`（Reflect で呼ぶ）。`FileSystemFileHandle.getFile()` で読む",
-      "perm": "なし（PWA のインストールが前提）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/file_handlers",
       "note": "実装済み（#419）。bcd では Chrome / Edge 102+ のデスクトップ版のみ。Chrome Android・Firefox・Safari は非対応で、画面は「この OS では未対応です」を出す。PWA としてインストールし、.txt を「このアプリで開く」で渡すと、名前・サイズ・先頭 16 バイト・受信時刻を出す。拡張子・種別の検査を通らないものは件数だけ数え、読めない・8 MiB 超・フォルダは失敗として理由を出す。通常起動（ファイル無し）は失敗にしない。守る範囲: 1 プロセス内の受信順、不正入力の非表示、非対応ブラウザで偽の成功を出さないこと。守らない範囲: 未インストールの PWA、Chromium 以外・Chrome Android、`launch_handler` を指定しないため複数ウィンドウが開きうること、複数タブ。実ブラウザでの確認は #414",
       "safari": "非対応（bcd で false）",

@@ -9,21 +9,18 @@
     "ios": {
       "status": "no",
       "api": "画面全体から色を拾う公開 API は無い",
-      "perm": "",
       "url": "",
       "note": "要確認。報告では iOS・Android・Windows とも標準 API なし。URL 未確認"
     },
     "android": {
       "status": "no",
       "api": "画面全体から色を拾う公開 API は無い",
-      "perm": "",
       "url": "",
       "note": "要確認。URL 未確認"
     },
     "macos": {
       "status": "done",
       "api": "AppKit `NSColorSampler`（macOS 10.15+、`showSamplerWithSelectionHandler:`）。結果の `NSColor` を `colorUsingColorSpace:NSColorSpace.sRGBColorSpace` で sRGB に直して読む",
-      "perm": "なし（画面収録の許可は要らない。新しい framework・entitlement・Info.plist キーの追加なし。AppKit は既存のリンク）",
       "url": [
         "https://developer.apple.com/documentation/appkit/nscolorsampler",
         "https://developer.apple.com/documentation/appkit/nscolorsampler/show(selectionhandler:)",
@@ -37,14 +34,12 @@
     "windows": {
       "status": "no",
       "api": "OS 標準のスポイト API は無い",
-      "perm": "",
       "url": "",
       "note": "要確認。画面キャプチャ（`Windows.Graphics.Capture`）で自前実装は可能だが、標準機能ではなく範囲外。URL 未確認"
     },
     "web": {
       "status": "done",
       "api": "`EyeDropper` API（`new EyeDropper().open({ signal })`、結果は `sRGBHex`）。`Reflect` で呼び、`AbortController` の `signal` を渡す",
-      "perm": "なし（secure context 限定。`open()` はユーザー操作（transient activation）の中で呼ぶ。外だと `NotAllowedError`）",
       "url": [
         "https://developer.mozilla.org/en-US/docs/Web/API/EyeDropper_API",
         "https://developer.mozilla.org/en-US/docs/Web/API/EyeDropper/open",

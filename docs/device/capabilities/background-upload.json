@@ -12,7 +12,6 @@
       "implStatus": "iOS 実機確認待ち（#833）",
       "impl": "crates/fandhe-cap-background-upload/src/ios.rs + crates/fandhe-cap-background-upload/src/apple.rs + crates/fandhe-cap-background-upload/apple/fandhe_apple_background_upload.m + crates/fandhe-platform-apple/ios/fandhe_ios_app_delegate.m + crates/fandhe-cap-background-upload/src/driver.rs + crates/fandhe-core/src/screens/background_upload.rs + crates/fandhe-cap-background-upload/src/contract.rs + scripts/device/serve-upload-sink.mjs、Issue #836",
       "api": "`URLSessionConfiguration.background(withIdentifier:)` の session で `uploadTask(with:fromFile:)`。走行中の転送は `getAllTasks(completionHandler:)`、進み具合は `countOfBytesSent` / `countOfBytesExpectedToSend`、終わりは delegate の `urlSession(_:task:didCompleteWithError:)`。背景起動は `application(_:handleEventsForBackgroundURLSession:completionHandler:)` と `urlSessionDidFinishEvents(forBackgroundURLSession:)`",
-      "perm": "不要（`UIBackgroundModes` は足さない。ローカルの確認用の受け口へつなぐ `NSAllowsLocalNetworking` は background-download で宣言済み）",
       "url": [
         "https://developer.apple.com/documentation/foundation/downloading-files-in-the-background",
         "https://developer.apple.com/documentation/foundation/urlsessionconfiguration/background(withidentifier:)",
@@ -28,7 +27,6 @@
       "implStatus": "Android 実機確認待ち（#833）",
       "impl": "crates/fandhe-cap-background-upload/src/android.rs + crates/fandhe-cap-background-upload/android/java/com/fandhe/platform/BackgroundUploadHelper.java + crates/fandhe-cap-background-upload/android/java/com/fandhe/platform/BackgroundUploadWorker.java + crates/fandhe-cap-background-upload/android/java/com/fandhe/platform/BackgroundUploadLifecycle.java + crates/fandhe-cap-background-upload/src/driver.rs + crates/fandhe-core/src/screens/background_upload.rs + crates/fandhe-cap-background-upload/src/contract.rs + scripts/device/serve-upload-sink.mjs、Issue #837",
       "api": "WorkManager（`androidx.work`、導入済み）の `OneTimeWorkRequest` を `enqueueUniqueWork`（`ExistingWorkPolicy.REPLACE`、`NetworkType.CONNECTED` の制約）で依頼し、Worker が `HttpURLConnection` で送る。状態は `getWorkInfosForUniqueWork` / `getWorkInfosForUniqueWorkLiveData` の `WorkInfo`（`State`・`getProgress`・`getOutputData`）から読み、取り消しは `cancelUniqueWork`。OS 管理の送信専用 API（DownloadManager の送信版）は無い",
-      "perm": "不要（`INTERNET` は宣言済み。小さなファイル 1 つで前面サービスを使わないため、`POST_NOTIFICATIONS`・`FOREGROUND_SERVICE_DATA_SYNC` は足さない。ローカルの確認用の受け口への平文は background-download の network security config で許可済み）",
       "url": [
         "https://developer.android.com/develop/background-work/background-tasks/persistent",
         "https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/manage-work",
@@ -44,7 +42,6 @@
       "implStatus": "Mac 目視待ち（#833）",
       "impl": "crates/fandhe-cap-background-upload/src/apple.rs + crates/fandhe-cap-background-upload/apple/fandhe_apple_background_upload.m + crates/fandhe-cap-background-upload/src/driver.rs + crates/fandhe-core/src/screens/background_upload.rs + crates/fandhe-cap-background-upload/src/contract.rs + scripts/device/serve-upload-sink.mjs、Issue #835",
       "api": "iOS と同じ background `NSURLSession`（`uploadTask(with:fromFile:)`、`getAllTasks`、delegate の完了通知）",
-      "perm": "不要（App Sandbox を使わない素の実行体。`NSAllowsLocalNetworking` は background-download で宣言済み）",
       "url": [
         "https://developer.apple.com/documentation/foundation/downloading-files-in-the-background",
         "https://developer.apple.com/documentation/foundation/urlsessionconfiguration/background(withidentifier:)",
@@ -55,7 +52,6 @@
     "windows": {
       "status": "possible",
       "api": "WinRT `Windows.Networking.BackgroundTransfer.BackgroundUploader`（package identity 必須）。BITS（`IBackgroundCopyManager` の `BG_JOB_TYPE_UPLOAD`）は受け口に BITS Upload Protocol を要求する",
-      "perm": "`BackgroundUploader` は package identity が要る。BITS は不要だが、受け口が IIS の BITS 拡張相当である必要がある",
       "url": [
         "https://learn.microsoft.com/en-us/windows/apps/develop/networking/background-transfers",
         "https://learn.microsoft.com/en-us/windows/win32/bits/about-bits",
@@ -68,7 +64,6 @@
     "web": {
       "status": "no",
       "api": "Background Fetch API（`BackgroundFetchManager.fetch()` に本文付きの `Request`。`uploadTotal` / `uploaded`）。Background Synchronization API（`SyncManager`）は Service Worker の `sync` イベントで自前の `fetch` を走らせるだけで、転送の代行ではない",
-      "perm": "専用の Service Worker が要る。secure context 必須",
       "url": [
         "https://wicg.github.io/background-fetch/",
         "https://developer.mozilla.org/en-US/docs/Web/API/BackgroundFetchRegistration",

@@ -9,7 +9,6 @@
     "ios": {
       "status": "possible",
       "api": "WidgetKit の Control Widget（`ControlWidget` / `ControlWidgetButton`、iOS 18+）。操作は App Intents の `AppIntent`",
-      "perm": "権限ダイアログなし。Widget Extension ターゲットに加え、アプリへ操作を届けるには App Group（有料の Apple Developer Program が前提）か、アプリ側にも同じ `OpenIntent` を置くこと（公式: intent の Target Membership をアプリと拡張の両方に）が要る",
       "url": [
         "https://developer.apple.com/documentation/swiftui/controlwidget",
         "https://developer.apple.com/documentation/widgetkit/creating-controls-to-perform-actions-across-the-system"
@@ -20,7 +19,6 @@
     "android": {
       "status": "done",
       "api": "`TileService`（API 24+）の `onClick`。追加はユーザーがクイック設定の編集から行う（API 33+ の `StatusBarManager.requestAddTileService` は使わない）",
-      "perm": "なし（アプリが `uses-permission` で要求する権限は無い）。Manifest に `<service>`（exported=true、intent-filter は `android.service.quicksettings.action.QS_TILE`）を置き、`android:permission` に `BIND_QUICK_SETTINGS_TILE`（システムだけが持つ権限。bind できるのはシステムだけになる）を書く",
       "url": [
         "https://developer.android.com/develop/ui/views/quicksettings-tiles",
         "https://developer.android.com/reference/android/service/quicksettings/TileService"
@@ -33,7 +31,6 @@
     "macos": {
       "status": "done",
       "api": "SwiftUI `ControlWidget` / `ControlWidgetButton`（macOS 26+）。操作は App Intents の `AppIntent`（拡張内で実行）。Rust は App Group コンテナの回数ファイルを読むだけ",
-      "perm": "権限ダイアログなし。home-widget の macOS で導入済みの Widget Extension（`FandheTextWidget`、ホストアプリ `FandheWidgetHost`）と App Group（`<Team ID>.com.fandhe.widget`）を再利用し、新しいターゲット・entitlement は足さない",
       "url": [
         "https://developer.apple.com/documentation/swiftui/controlwidget",
         "https://developer.apple.com/documentation/widgetkit/creating-controls-to-perform-actions-across-the-system"
@@ -46,7 +43,6 @@
     "windows": {
       "status": "no",
       "api": "クイック設定に項目を追加する公開 API は調査で見つからず",
-      "perm": "",
       "url": "",
       "note": "要確認。報告に Windows の記載なし。URL 未確認"
     },

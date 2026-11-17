@@ -10,7 +10,6 @@
       "detail": "できている（実機）",
       "verified": true,
       "api": "UIKit（`UIPasteboard`）/ UIKit（`UIPasteControl`）",
-      "perm": "Info.plist キーは不要。ただし iOS 16 以降、他アプリがコピーした内容を `UIPasteboard.general.string` 等でプログラムから読むと実行時に許可アラートが出て、拒否されると読み取れない",
       "url": "https://developer.apple.com/documentation/uikit/uipastecontrol",
       "note": "実装済み（旧#859）。`UIPasteboard` を ObjC + `extern \"C\"` で橋渡し。型サンプルは自アプリで書いて自アプリで読む往復のため、iOS 16 以降の許可アラートに阻まれずデモできる。iOS 実機で確認済み（2026-09-15: 往復 / 他アプリへ / 他アプリから / 空）",
       "sourceName": [
@@ -24,7 +23,6 @@
       "detail": "できている（実機）",
       "verified": true,
       "api": "`ClipboardManager`",
-      "perm": "なし",
       "url": "https://developer.android.com/develop/ui/views/user-interaction/copy-paste",
       "note": "実装済み（旧#859）。`MainActivity.clipboardRequest` が `runOnUiThread` で `ClipboardManager` を操作し、`nativeOnClipboardResult` で Rust 側 mailbox へ返す（`android_main` は UI スレッドと別のため往復にする）。Android 実機で確認済み（2026-09-15: 往復 / 他アプリへ / 他アプリから / 空）",
       "sourceName": [
@@ -37,7 +35,6 @@
       "status": "done",
       "detail": "できている（未確認）",
       "api": "AppKit（`NSPasteboard`）",
-      "perm": "なし（サンドボックス下でも既定で利用可）",
       "url": "https://developer.apple.com/documentation/appkit/nspasteboard",
       "note": "実装済み（旧#859）。`arboard` 経由で `NSPasteboard` を使う（`fandhe-device` の `#![forbid(unsafe_code)]` を維持するため各 OS の API を自前で叩かない）。Mac 上で実アプリを動かし、他アプリとのコピー／貼り付けの相互運用を目視確認済み",
       "sourceName": [
@@ -50,7 +47,6 @@
       "status": "done",
       "detail": "できている（未確認）",
       "api": "WinRT（`Windows.ApplicationModel.DataTransfer.Clipboard`）",
-      "perm": "なし",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.datatransfer.clipboard",
       "note": "実装済み（旧#859）。macOS / Linux と同じ `arboard` 経由の共通実装（`ArboardClipboard`）でカバーする。Windows 実機での確認は未了",
       "sourceName": [
@@ -63,7 +59,6 @@
       "status": "done",
       "detail": "できている（未確認）",
       "api": "Clipboard API（`navigator.clipboard`）",
-      "perm": "secure context 必須、書き込みはユーザー操作起因が必要",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Clipboard_API",
       "safari": "対応（一部読み取り API に制限あり）",
       "note": "実装済み（旧#859）。`fandhe-web-dom` の `mount_with_effect` + `clipboard` モジュールが `navigator.clipboard` へ配線する（wasm32 では `fandhe-device` の `Clipboard` トレイトを通らない。`device.rs` の非 wasm32 限定の制約）。secure context（https / localhost）必須で、読み取りはブラウザごとに追加の許可が要る。実ブラウザでの確認は未了",

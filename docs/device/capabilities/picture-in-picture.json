@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "AVKit `AVPictureInPictureController`（動画再生中の小窓）",
-      "perm": "`UIBackgroundModes` に `audio`（Apple の文書で PiP に必須。背景での音声再生には使わない）。`AVAudioSession` は playback + mixWithOthers にして、解放時に元へ戻す",
       "url": [
         "https://developer.apple.com/documentation/avkit/avpictureinpicturecontroller",
         "https://developer.apple.com/documentation/avkit/adopting-picture-in-picture-in-a-custom-player"
@@ -22,7 +21,6 @@
     "android": {
       "status": "done",
       "api": "`Activity.enterPictureInPictureMode`（API 26+）、manifest `supportsPictureInPicture`",
-      "perm": "不要（manifest の `supportsPictureInPicture` 宣言のみ）",
       "url": "https://developer.android.com/develop/ui/views/picture-in-picture",
       "note": "実装済み（#366）。Activity ごと小窓になるので egui の画面がそのまま入る（API 26+、`FEATURE_PICTURE_IN_PICTURE` が無い端末は非対応）。小窓に入る呼び出しが成功を返した時点で「小窓に出ている」とし、小窓から戻った・利用者が閉じた・開始中の取り消しは失敗ではなく「戻った」にする。設定で無効など OS が許さない場合は「小窓にできない」、例外は内部エラーに分ける。小窓に入るときの `onPause` は中断扱いにしない。守る範囲: 1 プロセス内の操作順、世代の照合、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: 小窓の間は winit が描画を止めるため入る直前の画面が静止して残ること、モード変更通知の到着までの表示の遅れ（通知は `MainActivity` が `ComponentActivity` のリスナーで受ける、#1327）、小窓の位置・大きさ（OS が決める）、複数プロセス。Android 実機の確認は #363 で行う。",
       "detail": "できている（Android 実機確認待ち）",
@@ -32,7 +30,6 @@
     "macos": {
       "status": "done",
       "api": "AVKit `AVPictureInPictureController`（sample buffer 経路、`AVSampleBufferDisplayLayer`、macOS 12.0+）",
-      "perm": "不要",
       "url": "https://developer.apple.com/documentation/avkit/avpictureinpicturecontroller",
       "note": "実装済み（#364）。範囲は実行時に生成する単色映像（5 色を 1 秒ごとに切り替え）を `AVSampleBufferDisplayLayer` から小窓へ出す「小窓にする」「小窓をやめる」のみ（音声・シーク・自動開始・Document PiP は範囲外）。sample buffer 経路は macOS 12.0+ で、実行体の最低版は 11.0 のため 12 未満と `isPictureInPictureSupported` が NO の環境は非対応にする。AppKit のアプリでも準備中から「小窓にできる」へ進むことは確認済み。結果は小窓中、小窓から戻った（失敗ではない。OS 側の閉じる操作と開始中のキャンセルを含む）、失敗（小窓にできない・期限切れ）、非対応を分けて表示する。窓が背面・最小化でも小窓は続き、終了時に止める。守る範囲: 1 プロセス内の操作順、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: ポーリング間隔ぶんの表示の遅れ、画面内プレビューと OS 側の映像の色替えの時刻ずれ、小窓の位置・大きさ（OS が決める）、複数窓・複数プロセス。Mac 実機の目視は #363 で行う。",
       "detail": "できている（Mac 目視待ち）",
@@ -42,7 +39,6 @@
     "windows": {
       "status": "possible",
       "api": "`AppWindow` の CompactOverlay プレゼンター（常に手前の小窓。動画 PiP とは別）",
-      "perm": "Windows App SDK（ランタイムの配布）。package identity の要否は未確認",
       "url": [
         "https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.windowing.appwindow",
         "https://learn.microsoft.com/en-us/windows/apps/develop/ui/manage-app-windows"
@@ -53,7 +49,6 @@
     "web": {
       "status": "done",
       "api": "Picture-in-Picture API（`video.requestPictureInPicture()` / `document.exitPictureInPicture()`）",
-      "perm": "なし（ユーザー操作の中で呼ぶ必要あり）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Picture-in-Picture_API",
       "safari": "動画 PiP は対応（Safari 13.1+、iOS Safari 13.1+）。Document PiP は非対応",
       "note": "実装済み（#367）。実行時に生成する単色 canvas（5 色を 1 秒ごとに切り替え）を `captureStream()` で `<video>` に入れ、「小窓にする」「小窓をやめる」だけを扱う（Document PiP・音声・自動開始は範囲外）。`pictureInPictureEnabled` が真でない・`requestPictureInPicture` / `captureStream` が無い環境（Firefox 153 未満・Firefox Android）は非対応表示にする。クリックから同期に連なる中で呼び、状態は `enterpictureinpicture` / `leavepictureinpicture` を真実とする（`leave` は失敗ではなく「戻った」）。準備・開始・終了の各遷移に 5 秒の期限を掛け、拒否（NotAllowedError）は「ブラウザに止められました」と出す。`pagehide` で小窓を閉じ、失敗・期限切れ・マウント破棄でストリーム・`<video>`・リスナー・タイマーを解放する。守る範囲: 1 マウント内の操作順、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: 複数タブ・複数マウント、画面内プレビューと小窓の色替えの時刻ずれ、小窓の位置・大きさ、期限後にブラウザが遅れて切り替えた場合の失敗文言、egui-proxy の wasm canvas 経路。実ブラウザの確認は #363 で行う。",

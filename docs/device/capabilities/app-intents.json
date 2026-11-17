@@ -9,7 +9,6 @@
     "ios": {
       "status": "possible",
       "api": "App Intents（`AppIntent` / `AppShortcutsProvider`。iOS 16 以上）",
-      "perm": "権限ダイアログなし。entitlement は不要と認識（Siri capability は SiriKit 用で、App Shortcuts に要るかは未確認）",
       "url": [
         "https://developer.apple.com/documentation/appintents",
         "https://developer.apple.com/videos/play/wwdc2022/10032/",
@@ -21,7 +20,6 @@
     "android": {
       "status": "possible",
       "api": "AppFunctions（`androidx.appfunctions` 1.0.0-beta01、2026-10-21。Android 16 以上）",
-      "perm": "公開側は宣言のみ。呼び出し側に `EXECUTE_APP_FUNCTIONS` が要る",
       "url": [
         "https://developer.android.com/ai/appfunctions",
         "https://developer.android.com/jetpack/androidx/releases/appfunctions"
@@ -32,7 +30,6 @@
     "macos": {
       "status": "done",
       "api": "App Intents（`AppIntent` / `AppShortcutsProvider`。macOS 13 以上）",
-      "perm": "権限ダイアログなし。entitlement は不要と認識",
       "url": [
         "https://developer.apple.com/documentation/appintents",
         "https://developer.apple.com/videos/play/wwdc2022/10032/"
@@ -45,17 +42,16 @@
     "windows": {
       "status": "no",
       "api": "App Actions on Windows（`Windows.AI.Actions`）",
-      "perm": "package identity（MSIX のマニフェストで登録）",
       "url": "https://learn.microsoft.com/en-us/windows/ai/app-actions/",
       "note": "公式は「Apps must have package identity in order to register an app action」とし、アクションの定義は MSIX のマニフェストから参照する JSON で行う。MSIX なし・identity なしの素の exe では登録できないため no（calendar と同じ扱い）"
     },
     "web": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "なし",
       "url": "",
       "note": "Web にアシスタントへ機能を公開する API はない"
     }
   },
-  "note": "spotlight-index・share-receive とは別: 本機能は音声・ショートカットから呼ばれる『アクション』を公開する。app-shortcuts（ホーム画面の長押し・Dock・ジャンプリスト）とも別。どの OS も新しいビルド構成か依存が要るため（iOS・macOS は Xcode によるメタデータ抽出、Android は Android 16 と Kotlin・KSP）、iOS・Android は保留、macOS は既存ホストアプリで実装（#1148）、Windows・Web はできない。条件が揃ったら保留の一覧から見直す。範囲（再開時の案）: 固定のアクション 1 つ（画面に文字列を出す）を公開し、呼び出し時に画面へ反映するだけ。反映の経路は url-scheme の受け口を再利用する（app-shortcuts と同じ）"
+  "note": "spotlight-index・share-receive とは別: 本機能は音声・ショートカットから呼ばれる『アクション』を公開する。app-shortcuts（ホーム画面の長押し・Dock・ジャンプリスト）とも別。どの OS も新しいビルド構成か依存が要るため（iOS・macOS は Xcode によるメタデータ抽出、Android は Android 16 と Kotlin・KSP）、iOS・Android は保留、macOS は既存ホストアプリで実装（#1148）、Windows・Web はできない。条件が揃ったら保留の一覧から見直す。範囲（再開時の案）: 固定のアクション 1 つ（画面に文字列を出す）を公開し、呼び出し時に画面へ反映するだけ。反映の経路は url-scheme の受け口を再利用する（app-shortcuts と同じ）",
+  "crate": "url-scheme"
 }

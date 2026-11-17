@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "`UIScene` の `didActivateNotification` / `willDeactivateNotification` / `didEnterBackgroundNotification` / `willEnterForegroundNotification` と、今の状態の `activationState`",
-      "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/uikit/managing-your-app-s-life-cycle",
         "https://developer.apple.com/documentation/uikit/uiscene"
@@ -22,7 +21,6 @@
     "android": {
       "status": "done",
       "api": "`Activity` の `onResume` / `onPause` / `onStart` / `onStop`、`isChangingConfigurations()`、今の状態の `ActivityManager.getMyMemoryState`（`importance`）",
-      "perm": "不要",
       "url": [
         "https://developer.android.com/guide/components/activities/activity-lifecycle",
         "https://developer.android.com/reference/android/app/Activity#isChangingConfigurations()",
@@ -36,7 +34,6 @@
     "macos": {
       "status": "done",
       "api": "`NSApplication.didBecomeActiveNotification` / `didResignActiveNotification` / `didChangeOcclusionStateNotification`（受けたら `occlusionState` を問い直す）",
-      "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/appkit/nsapplication/didbecomeactivenotification",
         "https://developer.apple.com/documentation/appkit/nsapplication/didchangeocclusionstatenotification"
@@ -49,7 +46,6 @@
     "windows": {
       "status": "done",
       "api": "Win32 `WM_ACTIVATEAPP` / `WM_SIZE`（`SIZE_MINIMIZED` / `SIZE_RESTORED` / `SIZE_MAXIMIZED`）をメインウィンドウの観測専用サブクラスで受ける",
-      "perm": "不要",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-activateapp",
         "https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-size"
@@ -62,7 +58,6 @@
     "web": {
       "status": "done",
       "api": "Page Visibility API（`visibilitychange`）、`window` の `focus` / `blur`、Page Lifecycle の `freeze` / `resume`、`pageshow` の `persisted`（bfcache 復帰）、今の状態の `document.hasFocus()` と `visibilityState`",
-      "perm": "不要",
       "url": [
         "https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API",
         "https://developer.chrome.com/docs/web-platform/page-lifecycle-api"

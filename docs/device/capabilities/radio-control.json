@@ -9,14 +9,12 @@
     "ios": {
       "status": "no",
       "api": "切り替え用の公開 API なし",
-      "perm": "-",
       "url": "",
       "note": "無線の切り替えは不可。Bluetooth の状態読み取りは bluetooth-le の `CBCentralManager.state` で足りる"
     },
     "android": {
       "status": "done",
       "api": "読み取りは `BluetoothAdapter.getState` / `WifiManager.getWifiState`。Bluetooth のオンは `ACTION_REQUEST_ENABLE`（OS のダイアログ）、オフは `Settings.ACTION_BLUETOOTH_SETTINGS` を開く。Wi-Fi は `Settings.Panel.ACTION_WIFI`（API 29+）/ `Settings.ACTION_WIFI_SETTINGS`（API 24〜28）を開く",
-      "perm": "android.permission.BLUETOOTH_CONNECT（API 31+、`ACTION_REQUEST_ENABLE` にだけ要る。宣言済み）・android.permission.ACCESS_WIFI_STATE（宣言済み）",
       "url": [
         "https://developer.android.com/reference/android/net/wifi/WifiManager#setWifiEnabled(boolean)",
         "https://developer.android.com/reference/android/net/wifi/WifiManager#getWifiState()",
@@ -33,7 +31,6 @@
     "macos": {
       "status": "done",
       "api": "CoreWLAN `CWInterface.powerOn` / `setPower(_:)`（Wi-Fi）。Bluetooth は `IOBluetoothHostController.powerState` の読み取りのみ（切り替えの公開 API なし）",
-      "perm": "宣言不要。`setPower` は管理者パスワードを求めることがある（公式）",
       "url": [
         "https://developer.apple.com/documentation/corewlan/cwinterface/setpower(_:)",
         "https://developer.apple.com/documentation/corewlan/cwinterface/poweron()",
@@ -48,7 +45,6 @@
     "windows": {
       "status": "done",
       "api": "WinRT `Windows.Devices.Radios.Radio`（`GetRadiosAsync` / `SetStateAsync`、`RequestAccessAsync`）",
-      "perm": "パッケージ化したアプリは `<DeviceCapability Name=\"radios\"/>`。素の exe は宣言の対象外（読み取りは常に許可、切り替えは実機確認）",
       "url": [
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radio",
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radio.requestaccessasync",
@@ -66,7 +62,6 @@
     "web": {
       "status": "no",
       "api": "公開 API を確認できず",
-      "perm": "-",
       "url": "",
       "note": "ブラウザから無線の状態を取得・切り替える API はない"
     }

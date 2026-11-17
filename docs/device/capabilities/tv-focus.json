@@ -1,5 +1,6 @@
 {
   "id": "tv-focus",
+  "crate": null,
   "name": "TV フォーカス操作（十字キー）",
   "group": "既存機能の棚卸し",
   "order": 7,

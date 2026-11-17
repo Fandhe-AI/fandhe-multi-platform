@@ -9,7 +9,6 @@
     "ios": {
       "status": "possible",
       "api": "`SHSession`（`matchStreamingBuffer:atTime:` + `SHSessionDelegate`。Objective-C で呼べる、iOS 15+）。`SHManagedSession` は iOS 17+ の Swift 専用",
-      "perm": "マイク（`NSMicrophoneUsageDescription`、宣言済み）。entitlement なし。App ID で ShazamKit の App Service の有効化が要る",
       "url": [
         "https://developer.apple.com/documentation/shazamkit/shsession",
         "https://developer.apple.com/help/account/configure-app-services/shazamkit",
@@ -22,7 +21,6 @@
     "android": {
       "status": "possible",
       "api": "ShazamKit for Android（Apple 配布の AAR、minSdk 21）。`ShazamKit.createShazamCatalog(DeveloperTokenProvider)`",
-      "perm": "`RECORD_AUDIO`（宣言済み）+ `INTERNET`。Apple の developer token（media identifier と Media Services 秘密鍵で署名する JWT）が要る",
       "url": [
         "https://developer.apple.com/shazamkit/android/",
         "https://developer.apple.com/help/account/capabilities/create-a-media-identifier-and-private-key"
@@ -33,7 +31,6 @@
     "macos": {
       "status": "possible",
       "api": "`SHSession`（`matchStreamingBuffer:atTime:` + `SHSessionDelegate`、macOS 12+）。`SHManagedSession` は macOS 14+ の Swift 専用",
-      "perm": "マイク（`NSMicrophoneUsageDescription`、宣言済み）。entitlement なし。App ID で ShazamKit の App Service の有効化が要る",
       "url": [
         "https://developer.apple.com/documentation/shazamkit",
         "https://developer.apple.com/documentation/shazamkit/shsession",
@@ -45,14 +42,12 @@
     "windows": {
       "status": "no",
       "api": "公開 API を確認できず",
-      "perm": "-",
       "url": "",
       "note": "OS 標準の楽曲認識 API はない"
     },
     "web": {
       "status": "no",
       "api": "公開 API を確認できず",
-      "perm": "-",
       "url": "",
       "note": "ブラウザ標準の楽曲認識 API はない"
     }

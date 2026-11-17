@@ -20,14 +20,12 @@
       "implStatus": "Mac 目視待ち（#629）",
       "impl": "crates/fandhe-cap-window-management/src/macos.rs + crates/fandhe-cap-window-management/macos/fandhe_macos_window_management.m + crates/fandhe-cap-window-management/src/driver.rs + crates/fandhe-core/src/screens/window_management_show.rs + crates/fandhe-cap-window-management/src/contract.rs、Issue #636",
       "api": "変更は winit（eframe `ViewportCommand::OuterPosition` / `InnerSize` / `WindowLevel`）、読み取りは AppKit `NSWindow.level`・`NSWindow.screen.visibleFrame`",
-      "perm": "不要",
       "url": "https://developer.apple.com/documentation/appkit/nswindow",
       "note": "実装済み（#636）。確認済み: winit で位置・サイズ・最前面を変更でき、最前面の読み戻しと作業領域だけ AppKit を読む。全画面中は OS へ依頼せず断り、最小化中は位置と大きさを読めないと出す。位置・サイズの保存と復元は扱わない"
     },
     "windows": {
       "status": "done",
       "api": "変更は winit（内部は `SetWindowPos`）、読み取りは `GetWindowLongW(GWL_EXSTYLE)` の `WS_EX_TOPMOST`、`MonitorFromWindow` + `GetMonitorInfoW` の `rcWork`。`AppWindow` は使わない",
-      "perm": "不要",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowpos",
         "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getmonitorinfow"
@@ -43,7 +41,6 @@
       "implStatus": "実ブラウザ確認待ち（#629）",
       "impl": "crates/fandhe-web-dom/src/window_management.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/window_management_show.rs + crates/fandhe-cap-window-management/src/contract.rs、Issue #638",
       "api": "`window.moveTo` / `resizeTo`（インストールした PWA の窓のみ）、`screenX` / `screenY` / `innerWidth` / `innerHeight` で読み戻し、`screen.availLeft` / `availTop`。Window Management API は使わない（画面の列挙は multi-display）",
-      "perm": "不要",
       "url": [
         "https://developer.mozilla.org/en-US/docs/Web/API/Window/moveTo",
         "https://developer.mozilla.org/en-US/docs/Web/API/Window/resizeTo"
