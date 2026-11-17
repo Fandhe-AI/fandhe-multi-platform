@@ -11,7 +11,7 @@
 //! | --- | --- | --- | --- |
 //! | `Ok(PickedColor)` | 閉じるまでに色の変化通知が 1 回以上 | `ChooseColorW` が非 0 | 閉じるまでに選択通知が 1 回以上 |
 //! | `Cancelled("color_picker")` | 変化通知 0 回のまま閉じた | 戻り値 0 かつ拡張エラー 0 | 選択通知 0 回のまま閉じた |
-//! | `Internal(..)` | `NSApp` 無し・sRGB 変換失敗・NaN | owner 窓無し・拡張エラー非 0・`rgbResult` の最上位バイトが非 0 | 提示先無し・変換失敗 |
+//! | `Internal(..)` | `NSApp` 無し・sRGB 変換失敗・NaN | owner 窓無し・拡張エラー非 0・`rgbResult` の最上位バイトが非 0 | 提示先無し・変換失敗・遷移中や自分のピッカーが出ている間（busy） |
 //!
 //! `Unsupported("color_picker")` は Android・Linux など実装の無い OS が返す。権限は要らないので
 //! `PermissionDenied` は返さない（該当なし）。「選んだ」は OS の通知・戻り値だけで決め、
@@ -51,13 +51,14 @@ fn rgb_err(e: fandhe_device::DeviceError) -> ColorPickerError {
 }
 
 /// Apple（macOS・iOS 共用）の `.m` 側の結果コード → 結果の写像（SSOT）。0 = 選択（`rgb` を検査）、
-/// 1 = 選ばずに閉じた、2 = sRGB 変換の失敗・NaN、3 = 提示できなかった。未知は `Internal`。
+/// 1 = 選ばずに閉じた、2 = sRGB 変換の失敗・NaN、3 = 提示できなかった、4 = busy（iOS のみ）。未知は `Internal`。
 pub fn result_from_apple_code(code: i32, rgb: i32) -> Result<PickedColor, ColorPickerError> {
     match code {
         0 => color_from_rgb(i64::from(rgb)).map_err(rgb_err),
         1 => Err(ColorPickerError::Cancelled),
         2 => Err(ColorPickerError::Internal("color_picker convert")),
         3 => Err(ColorPickerError::Internal("color_picker present")),
+        4 => Err(ColorPickerError::Internal("color picker busy")),
         _ => Err(ColorPickerError::Internal("color_picker outcome")),
     }
 }
@@ -136,7 +137,11 @@ mod tests {
             result_from_apple_code(3, 0),
             Err(ColorPickerError::Internal("color_picker present"))
         ));
-        for code in [-1, 4, 99] {
+        assert_eq!(
+            result_from_apple_code(4, 0),
+            Err(ColorPickerError::Internal("color picker busy"))
+        );
+        for code in [-1, 5, 99] {
             assert!(matches!(
                 result_from_apple_code(code, 0x12_3456),
                 Err(ColorPickerError::Internal("color_picker outcome"))
