@@ -9,7 +9,7 @@
 //! 1 つは同期の [`platform_file_picker`]。全ターゲットで公開し、macOS・Windows はダイアログを開いて結果を返し、iOS・Android は `Unsupported` を返す。
 //! もう 1 つは iOS・Android 向けの非同期の [`begin_file_pick`]（開始）・[`poll_file_pick`]（結果を 1 度だけ取得）・
 //! [`discard_file_pick`]（取り出さない要求を捨てる）。
-//! 非同期の入口は画面 effect と同じ slot を共有し、片方が進行中・未取得なら他方は `Internal`（busy）で断る。他の機能（写真選択・ドラッグ & ドロップ・ファイル関連付け・フォルダ監視）も
+//! 非同期の入口は画面 effect と同じ slot を共有し、進行中は busy。公開側の未取得の結果は守り、画面側の届いた未取得の結果は公開入口が置き換える。他の機能（写真選択・ドラッグ & ドロップ・ファイル関連付け・フォルダ監視）も
 //! 使う部品（`PickedFile`・読み取り・受け取りの検証・Windows のダイアログ起動）は `fandhe-device::file_picker` に残り、この crate は
 //! それを再公開して使う（`docs/operations/capability-crate-migration.md` §7）。
 //!
