@@ -125,6 +125,8 @@ final class SpeechRecognitionHelper {
     // 認識器の破棄だけ main へ積む（追跡 id は先に捨てているので、積んだ処理が走るまでの間に届く認識器の通知は照合で捨てられる）。
     static void abortPending() {
         synchronized (speechLock) {
+            // main へ積んだだけで未登録の開始要求を無効にする（`requestSpeechRecognitionStart` が積む前に読んだ世代と照合する）。
+            speechAbortGeneration++;
             speechStartPendingResume = false;
             // 権限ダイアログが出ている間は発行元を残す。ダイアログを出した Activity の終了（`detach`）で許可待ちの照合状態を
             // 下ろす入口が要るため（発行元を外すと `detach` が早期 return し、`speechPermissionPending` が true のまま残る）。
@@ -359,6 +361,10 @@ final class SpeechRecognitionHelper {
     // 内側でのみ読み書きする。
     private static boolean speechStartPendingResume;
 
+    // `abortPending` が進める取消世代。`speechLock` の内側でのみ読み書きする。main へ積んだ開始要求は、積む前の値を持ち、
+    // 実行時に照合して違えば（積んでから実行されるまでの間に Rust 側が reset して待たなくなった）何も登録せず通知もしない。
+    private static long speechAbortGeneration;
+
     // 権限ダイアログを起動した時点の要求 id（`requestSpeechRecognitionStart` が launch
     // 直前にここへ退避する）。コールバックは `speechRequest.current()` を直接読まない
     // （ダイアログ表示中に「停止」で `speechRequest.take()` された後、許可結果が届く前に
@@ -387,8 +393,16 @@ final class SpeechRecognitionHelper {
     // `MAX_LISTEN_MS`（30 秒固定）をそのまま `Handler.postDelayed` へ渡す（期限を
     // 複製しない、device-bridge-contracts.md「期限・キャンセル」節）。
     private void requestSpeechRecognitionStart(long requestId, int maxListenMs) {
+        final long generation;
+        synchronized (speechLock) {
+            generation = speechAbortGeneration;
+        }
         activity.runOnUiThread(() -> {
             synchronized (speechLock) {
+                if (generation != speechAbortGeneration) {
+                    // 積んだ後に `abortPending` が来た。Rust 側は待っていないので、登録も通知もしない。
+                    return;
+                }
                 if (speechRecognizer != null || speechRequest.current() != RequestTracker.NONE
                         || speechPermissionPending) {
                     // 既に聞き取り中、権限確認待ち中、または先行する権限ダイアログの

@@ -117,6 +117,8 @@ final class MicRecordHelper {
         MediaRecorder recorder;
         File tempFile;
         synchronized (micLock) {
+            // main へ積んだだけで未登録の開始要求を無効にする（`requestMicRecordStart` が積む前に読んだ世代と照合する）。
+            micAbortGeneration++;
             micStartPendingResume = false;
             micOwner = null;
             micOwnerOrphaned = false;
@@ -307,6 +309,10 @@ final class MicRecordHelper {
     // `locationStartRequestPending` と同型）。`micLock` の内側でのみ読み書きする。
     private static boolean micStartPendingResume;
 
+    // `abortPending` が進める取消世代。`micLock` の内側でのみ読み書きする。main へ積んだ開始要求は、積む前の値を持ち、
+    // 実行時に照合して違えば（積んでから実行されるまでの間に Rust 側が reset して待たなくなった）何も登録せず通知もしない。
+    private static long micAbortGeneration;
+
     // マイク録音の実行時許可要求（`CameraCaptureHelper` の `requestCameraPermission`/`requestLocationPermission`
     // と同型）。許可が下りたら `startMicRecorder` を呼ぶ。
 
@@ -316,8 +322,16 @@ final class MicRecordHelper {
     // そのまま `MediaRecorder.setMaxDuration` へ渡す（期限を複製しない、
     // device-bridge-contracts.md「期限・キャンセル」節）。
     private void requestMicRecordStart(long requestId, int maxDurationMs) {
+        final long generation;
+        synchronized (micLock) {
+            generation = micAbortGeneration;
+        }
         activity.runOnUiThread(() -> {
             synchronized (micLock) {
+                if (generation != micAbortGeneration) {
+                    // 積んだ後に `abortPending` が来た。Rust 側は待っていないので、登録も通知もしない。
+                    return;
+                }
                 if (micRecorder != null || micRecordRequest.current() != RequestTracker.NONE) {
                     // 既に録音中、または権限確認待ち中の二重開始（現在の要求は壊さない）。
                     nativeOnMicRecordResult(requestId, MIC_RESULT_BUSY, null, null, 0);
