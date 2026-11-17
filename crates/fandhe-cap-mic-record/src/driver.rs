@@ -203,6 +203,8 @@ pub(crate) mod bridge {
 
     /// 公開入口 [`super::begin_mic_record`] が追う自分の分の要求（画面側が置き換え・横取りしない）。
     pub(crate) static PUBLIC_OWNER: SlotOwner = SlotOwner::new();
+    /// 公開側の poll 本体（持ち主の照合・取得・喪失判定・解放）を直列にする。並行 poll で成功と喪失が二重に返らないため。
+    pub(crate) static PUBLIC_POLL_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     /// 画面 effect が追う自分の分の要求（公開入口と slot を共有するため区別する）。
     pub(crate) static SCREEN_OWNER: SlotOwner = SlotOwner::new();
 
@@ -504,6 +506,7 @@ pub fn platform_mic_record() -> Box<dyn MicRecorder> {
 ///
 /// 画面側の未取得の結果・進行中の要求が残る間も busy で断られる（画面状態が破棄されて effect が回らないと解消しない。
 /// lan-discovery と同じ構造）。
+/// 前の要求が失われた（reset 等）あと、その id を poll せずに開始すると、旧 id の喪失は通知されない（旧 id の poll は `None`）。
 #[cfg(any(
     target_os = "macos",
     target_os = "ios",
@@ -579,7 +582,12 @@ pub fn request_stop_mic_record(request_id: u64) -> bool {
     }
 }
 
-/// [`begin_mic_record`] の結果を取り出す。Android の reset で要求を失ったときは 1 度だけ `Err(Internal("mic_record lost"))`、以後は `None`。届いていれば 1 度だけ `Some`、未着・旧 id・取り出し済みは `None`。
+/// [`begin_mic_record`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・公開入口でない id・取り出し済みは `None`。
+///
+/// slot の要求が失われたとき（Android の reset 等）は、1 度だけ `Err(Internal("mic_record lost"))` を返し、以後は `None`。
+/// 失われた後に poll せず別の [`begin_mic_record`] をすると持ち主が新しい id へ替わり、旧 id の喪失は通知されず `None` のまま。
+/// 並行して同じ id を poll しても、結果と喪失が二重に返ることはない。
+///
 /// 結果は 3 値: 録音できた（`Ok`）、利用者の停止による権限確認中のキャンセル（`Err(Cancelled)`）、
 /// 失敗（`Err(PermissionDenied)`・ライフサイクル中断を表す `Internal`・その他）。0 バイト・長さ 0 の録音は成功にせず `InvalidInput`。
 pub fn poll_mic_record(
@@ -592,10 +600,13 @@ pub fn poll_mic_record(
         target_os = "android"
     ))]
     {
+        // 照合から解放までを直列にする。後から来た poll は先の poll が持ち主を外した後に走り、照合で `None` になる。
+        let _guard = bridge::PUBLIC_POLL_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if request_id == 0 || bridge::PUBLIC_OWNER.current() != request_id {
             return None;
         }
-        // 照合・取得・消去を同じロックで行う（並行 poll でも Some は 1 件だけ）。
         if let Some(result) = bridge::SLOT.take_ready(request_id) {
             bridge::PUBLIC_OWNER.release(request_id);
             return Some(result);
@@ -901,6 +912,68 @@ mod tests {
         ));
         assert!(poll_mic_record(id).is_none());
         assert!(begin().is_some());
+        bridge::reset();
+    }
+
+    /// 同じ id を 2 スレッドが同時に poll しても、`Some` は合計 1 件で、成功と喪失が混ざらない。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
+    #[test]
+    fn concurrent_poll_delivers_once() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        for _ in 0..500 {
+            bridge::reset();
+            let id = bridge::PUBLIC_OWNER
+                .begin_excluding(
+                    &bridge::SLOT,
+                    &[&bridge::SCREEN_OWNER, &bridge::PUBLIC_OWNER],
+                )
+                .unwrap();
+            assert!(bridge::deliver(id, Err(error_from_code(4))));
+            let barrier = std::sync::Barrier::new(2);
+            let results: Vec<_> = std::thread::scope(|s| {
+                let hs: Vec<_> = (0..2)
+                    .map(|_| {
+                        s.spawn(|| {
+                            barrier.wait();
+                            poll_mic_record(id)
+                        })
+                    })
+                    .collect();
+                hs.into_iter().map(|h| h.join().unwrap()).collect()
+            });
+            assert_eq!(results.iter().filter(|r| r.is_some()).count(), 1);
+            assert!(
+                !results
+                    .iter()
+                    .flatten()
+                    .any(|r| matches!(r, Err(MicRecordError::Internal(m)) if m.ends_with("lost")))
+            );
+        }
+        bridge::reset();
+    }
+
+    /// 旧 id・公開入口でない id・0 の poll は `None`。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
+    #[test]
+    fn poll_of_unknown_id_is_none() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let old = bridge::PUBLIC_OWNER
+            .begin_excluding(
+                &bridge::SLOT,
+                &[&bridge::SCREEN_OWNER, &bridge::PUBLIC_OWNER],
+            )
+            .unwrap();
+        bridge::reset();
+        let new = bridge::PUBLIC_OWNER
+            .begin_excluding(
+                &bridge::SLOT,
+                &[&bridge::SCREEN_OWNER, &bridge::PUBLIC_OWNER],
+            )
+            .unwrap();
+        assert!(poll_mic_record(0).is_none());
+        assert!(poll_mic_record(old).is_none());
+        assert!(poll_mic_record(new + 1).is_none());
         bridge::reset();
     }
 
