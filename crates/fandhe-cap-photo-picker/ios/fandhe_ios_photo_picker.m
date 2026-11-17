@@ -225,13 +225,26 @@ int32_t fandhe_ios_photo_picker_pick(uint64_t requestId) {
             return;
         }
         // delegate だけ残っていれば、完了通知を失った残り（シーン破棄等）なので解放して続ける。
+        // 解放する旧 delegate の要求には失敗（code 2）を 1 度だけ届ける（画面が `Picking` のまま、公開入口が未確定のまま止まらない）。
+        // 旧 delegate は通知経路から外れているため、ここでの通知は重複しない。
+        FandhePhotoPickerDelegate *stale = g_retainedDelegate;
         g_retainedDelegate = nil;
         g_activePicker = nil;
+        if (stale != nil) {
+            fandhe_rust_photo_picker_outcome(stale.requestId, 2, NULL, 0);
+        }
         UIViewController *top = FandheTopmostViewController();
         // `top.view.window == nil` は `presentViewController` が delegate を一切呼ばずに失敗する
         // 既知の失敗系（`fandhe_ios_file_picker.m` と同じ）。提示成否はここで一度だけ決める。
         if (top == nil || top.view.window == nil) {
             fandhe_rust_photo_picker_outcome(requestId, 2, NULL, 0);
+            return;
+        }
+
+        // `top` がすでに別の画面を出している・遷移中なら、`presentViewController` は黙って捨てられ delegate が呼ばれない。
+        // 重ねて提示せず busy で返す（この要求にはまだ delegate を持たせていない）。
+        if (top.presentedViewController != nil || top.isBeingPresented || top.isBeingDismissed) {
+            fandhe_rust_photo_picker_outcome(requestId, 3, NULL, 0);
             return;
         }
 
@@ -248,7 +261,20 @@ int32_t fandhe_ios_photo_picker_pick(uint64_t requestId) {
         g_retainedDelegate = delegate;
         g_activePicker = picker;
 
-        [top presentViewController:picker animated:YES completion:nil];
+        // 提示が実際に成立したかを確かめる。成立していなければ（UIKit が present を捨てた）delegate は呼ばれないため、
+        // この要求に失敗（code 2）を 1 度だけ届けて delegate を外す。delegate の完了経路が先に走っていた場合
+        // （`g_retainedDelegate != delegate`）は何もしない（通知は delegate の同一性で 1 回に絞る）。
+        void (^verifyPresented)(void) = ^{
+          if (g_retainedDelegate == delegate && picker.presentingViewController == nil &&
+              !picker.isBeingPresented) {
+              g_retainedDelegate = nil;
+              g_activePicker = nil;
+              picker.presentationController.delegate = nil;
+              fandhe_rust_photo_picker_outcome(requestId, 2, NULL, 0);
+          }
+        };
+        [top presentViewController:picker animated:YES completion:verifyPresented];
+        verifyPresented();
       }
     });
 
