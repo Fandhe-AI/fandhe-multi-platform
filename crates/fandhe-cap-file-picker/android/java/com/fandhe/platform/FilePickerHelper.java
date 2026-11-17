@@ -58,6 +58,8 @@ final class FilePickerHelper {
     private final Activity activity;
     // この helper が `pickDocument.launch` した要求の id。終了時に外してよいのは自分が launch した要求だけ（別の Activity の
     // 終了で他の Activity の選択を失敗にしない、#1361）。UI スレッドでのみ読み書きする。
+    // 結果 callback（`take()`）では消さない。要求 id は Rust 側で単調に採番され、`save` と `detach` が `current()` / `complete()` で
+    // 照合するため、結果受領後に古い id が残っても別の要求を巻き込まない。
     private long launchedId = RequestTracker.NONE;
     // Storage Access Framework の「開く」ダイアログ。Activity 再生成後も同一キーで再登録されるため、`ActivityResultRegistry` は
     // 旧 helper で保留中だった選択結果を新 helper のこの callback へ実際に配送し得る。`filePickRequest.take()` で読み取りと同時に
@@ -163,7 +165,10 @@ final class FilePickerHelper {
             // 投げずに何もしないことがあり、追跡が残って以後ずっと busy になる。この helper が表から外れている・Activity が
             // 終了中・破棄済みなら、選択画面を開けないので失敗（code 2）で確定する。構成変更で新しい helper へ引き継ぐのは、
             // 既に launch 済みの要求の結果だけで、この未 launch の要求は引き継げない（旧 Activity では開けない）ため、同じく失敗にしてよい。
-            if (activity.isFinishing() || activity.isDestroyed() || of(activity) != this) {
+            // `isChangingConfigurations()`（回転等で再生成の途中）も同様: `onSaveInstanceState` の後に launch すると Bundle に id が
+            // 入らず、新 helper が追跡を引き継げないまま残って以後ずっと busy になる。
+            if (activity.isFinishing() || activity.isDestroyed() || activity.isChangingConfigurations()
+                    || of(activity) != this) {
                 if (filePickRequest.complete(requestId)) {
                     nativeOnFilePickerResult(requestId, 2, null, -1);
                 }
