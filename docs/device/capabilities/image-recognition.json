@@ -17,7 +17,7 @@
       ],
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-cap-image-recognition/apple/fandhe_apple_image_recognition.m + crates/fandhe-cap-image-recognition/src/ios.rs + crates/fandhe-cap-image-recognition/src/apple.rs + crates/fandhe-cap-image-recognition/src/driver.rs + crates/fandhe-cap-image-recognition/src/contract.rs + crates/fandhe-cap-photo-picker/ios/fandhe_ios_photo_picker.m + crates/fandhe-core/src/screens/image_recognize.rs、Issue 旧#1252・#1355",
+      "impl": "crates/fandhe-cap-image-recognition/apple/fandhe_apple_image_recognition.m + crates/fandhe-cap-image-recognition/src/apple.rs + crates/fandhe-cap-image-recognition/src/driver.rs + crates/fandhe-cap-image-recognition/src/contract.rs + crates/fandhe-cap-photo-picker/ios/fandhe_ios_photo_picker.m + crates/fandhe-core/src/screens/image_recognize.rs、Issue 旧#1252・#1355",
       "verified": true
     },
     "android": {
