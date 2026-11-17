@@ -971,7 +971,7 @@ fn backup_exclusions_reach_only_the_selecting_app_and_union_with_app_config() {
     let cap = pkg(
         "fandhe-cap-bk",
         "[package.metadata.fandhe]\nid = \"bk\"\n[package.metadata.fandhe.android]\n\
-         backup-exclusions = [{ domain = \"sharedpref\", path = \"a&\\\"b.xml\" }]\n",
+         backup-exclusions = [{ domain = \"sharedpref\", path = \"a&<b.xml\" }]\n",
     );
     let sel = app_pkg(
         "[dependencies]\nfandhe-cap-bk = { path = \"../fandhe-cap-bk\" }\n\
@@ -984,7 +984,7 @@ fn backup_exclusions_reach_only_the_selecting_app_and_union_with_app_config() {
     );
     let f = generate(Some(&m)).unwrap().files;
     let x = &f["android/res/xml/fandhe_data_extraction_rules.xml"];
-    assert!(x.contains("path=\"a&amp;&quot;b.xml\""), "{x}");
+    assert!(x.contains("path=\"a&amp;&lt;b.xml\""), "{x}");
     assert_eq!(excludes(x).len(), 4, "{x}");
     assert_eq!(
         excludes(&f["android/res/xml/fandhe_backup_rules.xml"]).len(),

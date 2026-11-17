@@ -154,28 +154,34 @@ fn contains_token(text: &str, needle: &str) -> bool {
 }
 
 /// バックアップ除外 1 件の照合用トークン。観測側は `backup_pairs` が同じ形を作る。
+const BACKUP_PREFIX: &str = "backup-exclude:";
+
 fn backup_token(domain: &str, path: &str) -> String {
-    format!("backup-exclude:{domain}:{path}")
+    format!("{BACKUP_PREFIX}{domain}:{path}")
 }
 
-/// バックアップ規則 XML の dump（`E: exclude` 直下の名前空間なし `domain`・`path`）を `backup_token` の行にする。
-fn backup_pairs(observed: &str) -> String {
-    let mut out = String::new();
+/// バックアップ規則 XML の dump（`E: exclude` 直下の名前空間なし `domain`・`path`）を `backup_token` の集合にする。
+/// 組がそろわない・値が引用符つき文字列でない exclude は数だけ返す（読めない観測を通さないため、`scan` が違反にする）。
+fn backup_pairs(observed: &str) -> (BTreeSet<String>, usize) {
+    let mut out = BTreeSet::new();
+    let mut unreadable = 0;
     let mut cur: Option<(Option<String>, Option<String>)> = None;
-    let flush = |c: &mut Option<(Option<String>, Option<String>)>, out: &mut String| {
-        if let Some((Some(d), Some(p))) = c.take() {
-            out.push_str(&backup_token(&d, &p));
-            out.push('\n');
+    let mut flush = |c: &mut Option<(Option<String>, Option<String>)>| match c.take() {
+        Some((Some(d), Some(p))) => {
+            out.insert(backup_token(&d, &p));
         }
+        Some(_) => unreadable += 1,
+        None => {}
     };
     for line in observed.lines().map(str::trim) {
         if let Some(rest) = line.strip_prefix("E: ") {
-            flush(&mut cur, &mut out);
+            flush(&mut cur);
             cur = (rest.split_whitespace().next() == Some("exclude")).then_some((None, None));
         } else if let (Some(rest), Some((d, p))) = (line.strip_prefix("A: "), cur.as_mut()) {
             let Some((name, rhs)) = rest.split_once('=') else {
                 continue;
             };
+            // 文字列は `"v" (Raw: "v")`。宣言側が path の `"` を拒むので、最初の `"` までが値。
             let val = || {
                 rhs.strip_prefix('"')
                     .and_then(|r| r.split('"').next())
@@ -188,20 +194,33 @@ fn backup_pairs(observed: &str) -> String {
             }
         }
     }
-    flush(&mut cur, &mut out);
-    out
+    flush(&mut cur);
+    (out, unreadable)
 }
 
-/// 観測テキストを禁止集合で照合し、違反を 1 件ずつ返す。
+/// 観測テキストを禁止集合で照合し、違反を 1 件ずつ返す。バックアップ除外は組の完全一致で比べる
+/// （トークン境界の照合だと `file:cache` が `file:cache/x` に前方一致して誤検知するため）。
 pub(crate) fn scan(forbidden: &BTreeMap<String, Owner>, observed: &str) -> Vec<String> {
-    let observed = format!("{observed}\n{}", backup_pairs(observed));
-    forbidden
+    let (pairs, unreadable) = backup_pairs(observed);
+    let mut hits: Vec<String> = forbidden
         .iter()
-        .filter(|(v, _)| contains_token(&observed, v))
+        .filter(|(v, _)| {
+            if v.starts_with(BACKUP_PREFIX) {
+                pairs.contains(*v)
+            } else {
+                contains_token(observed, v)
+            }
+        })
         .map(|(v, (id, kind))| {
             format!("選ばなかった機能 {id} の{kind} `{v}` が成果物に含まれています")
         })
-        .collect()
+        .collect();
+    if unreadable > 0 {
+        hits.push(format!(
+            "バックアップ規則の exclude {unreadable} 件で domain と path を読めません（見逃しを防ぐため失敗にします）"
+        ));
+    }
+    hits
 }
 
 /// aapt2 xmltree の `android` 名前空間の URI（属性名の接頭辞）。

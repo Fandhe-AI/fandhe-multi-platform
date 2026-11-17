@@ -492,4 +492,16 @@ fn unselected_backup_exclusion_fails_and_selected_passes() {
     check("android", &m, &format!("{ANDROID_CLEAN}{other}")).unwrap();
     let e = check("android", &m, &format!("{ANDROID_CLEAN}{other}{rule}")).unwrap_err();
     assert!(e.contains("sharedpref:fandhe_bk.xml"), "{e}");
+    // 属性順が path → domain でも組で取れる。
+    let swapped = "      E: exclude (line=5)\n        A: path=\"fandhe_bk.xml\" (Raw: \"fandhe_bk.xml\")\n        A: domain=\"sharedpref\" (Raw: \"sharedpref\")\n";
+    let m = make_ws("bk-swap", SELECT_CAM, &[]);
+    let e = check("android", &m, &format!("{ANDROID_CLEAN}{swapped}")).unwrap_err();
+    assert!(e.contains("sharedpref:fandhe_bk.xml"), "{e}");
+    // 親子の経路は別物（未選択の `fandhe_bk.xml` が選択側の `fandhe_bk.xml/x` に前方一致しない）。
+    let child = rule.replace("fandhe_bk.xml", "fandhe_bk.xml/x");
+    check("android", &m, &format!("{ANDROID_CLEAN}{child}")).unwrap();
+    // domain と path がそろわない exclude は読めない観測として失敗にする。
+    let broken = "      E: exclude (line=5)\n        A: path=\"y\" (Raw: \"y\")\n";
+    let e = check("android", &m, &format!("{ANDROID_CLEAN}{broken}")).unwrap_err();
+    assert!(e.contains("読めません"), "{e}");
 }

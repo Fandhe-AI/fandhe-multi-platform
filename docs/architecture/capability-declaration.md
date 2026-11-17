@@ -149,7 +149,7 @@ params = { text = "share_text", url = "share_url" }
 - `activity-alias` は `target-activity` が必須で、同じ宣言の `kind = "activity"` の `name` を指します。alias 以外に `target-activity` は書けません
 - `main-activity-attributes` のキーは許可リスト（`supportsPictureInPicture`）だけで、値は属性ごとの値域（`supportsPictureInPicture` は `"true"` / `"false"` の完全一致）を check で検査します。`flags` は `neverForLocation` のみです
 - パスは相対のみです（空・絶対・`..`・`\`・`:` は拒否）。実在と、symlink 解決後に crate 内に収まることも確かめます
-- `backup-exclusions` の `domain` は `root`・`file`・`database`・`sharedpref`・`external` だけです。`path` は相対パスの規則に加えて `.` を含むセグメントを拒否します（`.` はドメイン全体の除外になり、依存 crate がアプリ全体のバックアップを止められるため）。同じ `(domain, path)` の重複は拒否します
+- `backup-exclusions` の `domain` は `root`・`file`・`database`・`sharedpref`・`external` だけです。`path` は相対パスの規則に加えて、`.` のセグメント（ドメイン全体の除外になり、依存 crate がアプリ全体のバックアップを止められるため）、空のセグメント（`a//b`・末尾 `/`。同じ対象の別の綴りが照合をすり抜けるため）、`"`（verify-scope が aapt2 の出力から値を切り出せないため）を拒否します。同じ `(domain, path)` の重複は拒否します
 - 文字列と plist の値に制御文字は置けません
 - `web.manifest` のキーは許可リスト（`share_target`）だけで、値はオブジェクトです。`start_url`・`scope`・`name`・`icons` などアプリの同一性に関わる値を、依存 crate が書き換えられないようにするためです。別のメンバーを機能へ移すときは許可リストに足します
 
@@ -318,7 +318,7 @@ cargo fandhe verify-scope --catalog <全機能を含む Cargo.toml> \
 - 照合はトークン境界つきです。`android.hardware.camera` は `android.hardware.camera.autofocus` に、`group:artifact` は `group:artifact-ktx` に一致しません
 - 観測テキストが空なら失敗します（ツールの失敗の見逃し防止）。未選択の機能が 0 件でも、禁止トークンの照合対象が空になるだけで、空の観測の検出と Android の構造照合は行います
 - 対象は次の値です
-  - Android: 権限名、`uses-feature` 名、コンポーネント名（`activity-alias` を含む）、`application-meta-data` の名前、Gradle の `group:artifact`、バックアップ除外の `(domain, path)` の組（script が `<application>` の 2 属性の参照先 XML を aapt2 で dump して観測に足し、`exclude` 要素の `domain`・`path` を組で照合する。domain が違えば同名でも別の除外として扱う。属性があるのに解決できなければ script が失敗する）。アプリが自前で未選択機能と同じ組を除外すると誤検知になる。`application-meta-data` の名前が、選んだ機能の依存 library の Manifest にも現れると誤検知しうる（実例が出たら `GENERIC_KEYS` と同じ除外で扱う）
+  - Android: 権限名、`uses-feature` 名、コンポーネント名（`activity-alias` を含む）、`application-meta-data` の名前、Gradle の `group:artifact`、バックアップ除外の `(domain, path)` の組（script が `<application>` の 2 属性の参照先 XML を aapt2 で dump して観測に足し、`exclude` 要素の `domain`・`path` を組で照合する。domain が違えば同名でも別の除外として扱い、組の完全一致で比べるので親子の経路は前方一致しない。属性があるのに解決できない場合と、domain・path を読めない exclude がある場合は失敗する）。アプリが自前で未選択機能と同じ組を除外すると誤検知になる。`application-meta-data` の名前が、選んだ機能の依存 library の Manifest にも現れると誤検知しうる（実例が出たら `GENERIC_KEYS` と同じ除外で扱う）
   - Android の構造照合（aapt2 xmltree を要素単位で読む）: カタログにある権限の `usesPermissionFlags` が、その権限を宣言した選んだ機能のフラグの和集合に収まるか。MainActivity の `main-activity-attributes`（許可リストの属性）が、選んだ機能の宣言値だけか。MainActivity が観測テキストに無ければ失敗します。カタログ外の権限は見ません。全機能を選んだアプリでも構造照合は走ります（トークン照合の禁止集合が空になるだけ）。検出は片方向で、宣言にあるのに成果物に無いフラグ・属性は見ません。依存 library が同名の権限にフラグを付けた場合は誤検知になりえます
   - iOS・macOS: entitlement キー（App Group は `com.apple.security.application-groups`）、framework 名、`*UsageDescription` キー、`info-plist` のキー、拡張（`<name>.appex`）
 - 観測ファイルの集め方は `scripts/audit/verify-capability-scope.sh` が担います（aapt2・codesign・otool・plutil。Gradle の依存ツリーは任意）
