@@ -36,8 +36,8 @@ import java.util.WeakHashMap;
 // パス文字列ではなく fd を渡す）。detach 後は Java 側で close しない。読み取り・8 MiB 判定は Rust 側
 // `fandhe_device::file_picker::read_picked_from` に一本化する（Java 側では読み取りループを書かない）。
 //
-// 「いま待っている要求 id」は static: 「進行中か」「中断されたか」を表すフラグ・ロックは持たない（単一飛行はコアが
-// 「ファイルを選ぶ」ボタンを隠すことで保証済み）。画面回転等の Activity 再生成は同一プロセス内で新しい helper を作るが、
+// 「いま待っている要求 id」は static で、追跡（`RequestTracker`）の照合で単一飛行を守る: 追跡中は新しい要求を busy（code 3）で断り、
+// 追跡は結果の通知・`launch()` 失敗・終了による破棄（`detach`）で外れる。別のフラグ・ロックは持たない。画面回転等の Activity 再生成は同一プロセス内で新しい helper を作るが、
 // `ActivityResultRegistry` は再生成前から保留中だった選択結果を新 helper の callback へ実際に配送し得る。id を instance field に
 // すると新 helper では `NONE` に初期化され、実際に届く結果を「`NONE` なら捨てる」判定で誤って破棄し、コアが `Picking` のまま
 // 固着する（画面回転中に選択、という頻出シナリオ）。static なら再生成を跨いで生き残るため、新 helper の callback でも requestId が
@@ -131,6 +131,16 @@ final class FilePickerHelper {
             // 積んでから実行されるまでの間に、終了による破棄（`detach`）が追跡を外して失敗を通知していたら、選択画面を開かない
             // （開くと、その結果を次の要求が引き継いでしまう）。追跡の解除と launch はどちらも UI スレッドで行うため、この照合は競合しない。
             if (filePickRequest.current() != requestId) {
+                return;
+            }
+            // `request` が helper を取った直後に破棄が済んでいた（追跡は破棄の後で立った）場合、破棄済みの launcher は例外を
+            // 投げずに何もしないことがあり、追跡が残って以後ずっと busy になる。この helper が表から外れている・Activity が
+            // 終了中・破棄済みなら、選択画面を開けないので失敗（code 2）で確定する。構成変更で新しい helper へ引き継ぐのは、
+            // 既に launch 済みの要求の結果だけで、この未 launch の要求は引き継げない（旧 Activity では開けない）ため、同じく失敗にしてよい。
+            if (activity.isFinishing() || activity.isDestroyed() || of(activity) != this) {
+                if (filePickRequest.complete(requestId)) {
+                    nativeOnFilePickerResult(requestId, 2, null, -1);
+                }
                 return;
             }
             try {
