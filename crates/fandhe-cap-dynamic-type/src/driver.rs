@@ -313,7 +313,7 @@ mod tests {
     /// 返す（誤って「読めた」扱いにしていない、モジュール doc 参照）。
     #[cfg(not(any(target_os = "windows", target_os = "ios", target_os = "android")))]
     #[test]
-    fn platform_text_scale_is_unsupported_outside_windows_ios_and_android() {
+    fn platform_dynamic_type_is_unsupported_outside_windows_ios_and_android() {
         let err = platform_dynamic_type().scale_factor().unwrap_err();
         assert!(matches!(err, DynamicTypeError::Unsupported));
     }
