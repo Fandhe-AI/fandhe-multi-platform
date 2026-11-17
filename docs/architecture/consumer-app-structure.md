@@ -194,6 +194,19 @@ graph TD
   フレームワークの外のアプリはこれを使い、effect は自分の状態型で書きます（実例: `fandhe-cap-device-identifier`）。
   `<stem>` は対応表の id の `-` を `_` にした名前で、別名は認めません。
   公開の有無は `node scripts/device/migrate-capability.mjs sync --check` が検査します
+- OS がコールバック型で結果が非同期に届くため、同期の `platform_<stem>()` では実機能に届かない OS がある機能は、
+  その OS 向けに begin / poll / discard 型の非同期の入口も crate ルートから公開します。
+  前例は `fandhe-cap-file-picker` の `begin_file_pick` / `poll_file_pick` / `discard_file_pick` です。
+  同期の `platform_<stem>()` はその OS で `Unsupported` のままにします（成功を偽装しません）。
+  非同期の入口は次を満たします。実装の形は `docs/operations/capability-crate-migration.md` の
+  「begin / poll / discard 型の公開入口」の行を参照します
+  - 画面 effect と同じ要求の受け口を共有し、片方が進行中・結果未取得なら他方は busy で断ります（画面との排他）
+  - 結果は要求ごとに 1 回だけ届けます
+  - 結果が届かないまま失われた要求は、失敗として 1 回だけ知らせます
+  - discard は Rust 側の記録だけを捨てます。遅れて届いた結果は id で照合して捨て、新しい要求へ結びつけません
+  - OS 側でまだ進行中なら、次の begin を OS の観測で busy にします
+- 次の機能は非同期の入口を要しません。同期の入口が OS の完了まで待って実結果を返せる機能と、
+  実機能に届く経路がどこにもない OS（対応表で `no` や保留のもの。`Unsupported` 固定）です
 - 保存先の解決（Android の `data_dir`・iOS の `documents_dir`・デスクトップの既定）は `fandhe-cap-local-storage-kv` が持ちます。
   他機能は「OS 機能を実際に使う」場合として依存します
 
