@@ -18,7 +18,7 @@ import androidx.core.content.ContextCompat;
 
 import java.util.ArrayList;
 import java.util.Map;
-import java.util.WeakHashMap;
+import java.util.HashMap;
 
 // 音声認識（Issue #1026）の Android 実装ヘルパー（Issue #1354 で `MainActivity` から機能 crate へ移した）。
 // `SpeechRecognitionLifecycle` が Activity ごとに生成する（Rust の `fandhe-cap-speech-recognition/src/android.rs` が static メソッド
@@ -30,6 +30,14 @@ import java.util.WeakHashMap;
 // 前面かどうか（`resumed`）は `SpeechRecognitionLifecycle` の `onHostResumed` / `onHostPaused` が写す。どちらも `super.onResume()` /
 // `super.onPause()` の中で届き、従来の `MainActivity` が `super` の後で更新していたのとは前後だけが違う。許可ダイアログの応答との
 // 到着順（契約表 1）は、応答側が `resumed` を見て保留（`speechStartPendingResume`）にし、次の `onHostResumed` で再開する形で保つ。
+//
+// 再生成（回転等の構成変更）: 認識器（`speechRecognizer`）・リスナー・タイマー・要求 id・ロックは static で、新しい helper へそのまま
+// 引き継がれる。認識器は旧 Activity でなくアプリケーション Context で作り（Activity で作ると破棄時にサービス接続が漏れとして
+// 外される）、リスナーは static メソッドで作るため旧 helper / Activity を参照しない。結果は static な要求 id の照合で配送される。
+// 構成変更では聞き取りを中断しない。背景遷移（構成変更でない停止）では `onHostStopped` が中断（5）する（背景で聞き取らない、契約表 1）。
+// 中断を `onPause` でなく `onStop` で行うのは、`isChangingConfigurations()` が `onStop` / `onDestroy` で確実に読めるため
+// （`Activity.isChangingConfigurations` の文書は `onStop` での利用を想定している。`onPause` 時点の値は文書で保証されていない）。
+// 権限ダイアログは透過 Activity で `onPause` だけを起こし `onStop` は起こさないため、許可待ちを誤って中断しない。
 // `RecognitionService` の検出（Android 11 以降のパッケージ可視性）は宣言の `android.queries` が担う。
 final class SpeechRecognitionHelper {
     private final Activity activity;
@@ -40,7 +48,7 @@ final class SpeechRecognitionHelper {
     private final ActivityResultLauncher<String> requestSpeechPermission;
 
     // Activity ごとの helper。`SpeechRecognitionLifecycle`（`FeatureLifecycleProvider`）が生成時に付け、破棄時に外す。
-    private static final Map<Activity, SpeechRecognitionHelper> HELPERS = new WeakHashMap<>();
+    private static final Map<Activity, SpeechRecognitionHelper> HELPERS = new HashMap<>();
 
     static void attach(ComponentActivity activity) {
         // 再生成: 要求 id・権限ダイアログの照合状態・上限・保留フラグ（いずれも static）は捨てない。権限ダイアログの結果は
@@ -52,19 +60,21 @@ final class SpeechRecognitionHelper {
         }
     }
 
-    // Activity 破棄時: 聞き取り中なら破棄する（`onHostPaused` で既に破棄済みなら `speechRecognizer == null` で no-op）。
-    // `onPause` を経由せず直接 `onDestroy` へ来るケース（Android の契約上は稀）に備えて同じ処理を置く。
-    // 終了による破棄（`isFinishing()`）では registry ごと消え、権限ダイアログの結果は二度と届かない。保留中の要求を中断（5）として
-    // 1 度だけ確定し、権限ダイアログの照合状態を下ろす。終了でない破棄（再生成・システム破棄）は結果が復元後の helper へ届くため
-    // 何も捨てない。`take` が first-wins なので、許可コールバックとの二重通知にならない。
+    // Activity 破棄時。構成変更（`isChangingConfigurations()`）では聞き取りも保留中の要求も新しい helper へ引き継ぐため何もしない。
+    // 構成変更でない破棄では聞き取り中なら中断（5）で確定する（`onHostStopped` を経由しない稀な経路への備え）。さらに終了による破棄
+    // （`isFinishing()`）では registry ごと消え、権限ダイアログの結果は二度と届かないため、保留中の要求を中断（5）として 1 度だけ確定し、
+    // 権限ダイアログの照合状態を下ろす。新しい Activity が先に `attach` 済み（旧の破棄が後から来る）なら、static な要求と認識器は
+    // 新しい側のものなので触らない。`take` が first-wins なので、許可コールバックとの二重通知にならない。
     static void detach(Activity activity) {
-        SpeechRecognitionHelper helper;
+        boolean otherAlive;
         synchronized (SpeechRecognitionHelper.class) {
-            helper = HELPERS.remove(activity);
+            HELPERS.remove(activity);
+            otherAlive = !HELPERS.isEmpty();
         }
-        if (helper != null) {
-            helper.interruptIfListening();
+        if (otherAlive || activity.isChangingConfigurations()) {
+            return;
         }
+        interruptIfListening();
         if (activity.isFinishing()) {
             synchronized (speechLock) {
                 speechStartPendingResume = false;
@@ -88,18 +98,12 @@ final class SpeechRecognitionHelper {
         synchronized (speechLock) {
             speechStartPendingResume = false;
             speechRequest.take();
-            SpeechRecognitionHelper[] helpers;
-            synchronized (SpeechRecognitionHelper.class) {
-                helpers = HELPERS.values().toArray(new SpeechRecognitionHelper[0]);
-            }
-            for (SpeechRecognitionHelper helper : helpers) {
-                helper.discardRecognizer();
-            }
+            discardRecognizer();
         }
     }
 
     // 結果を届けずに認識器を破棄する（`speechLock` の内側で呼ぶ）。
-    private void discardRecognizer() {
+    private static void discardRecognizer() {
         cancelSpeechTimeout();
         final SpeechRecognizer recognizer = speechRecognizer;
         speechRecognizer = null;
@@ -138,20 +142,31 @@ final class SpeechRecognitionHelper {
         }
     }
 
-    // 前面を離れた（`SpeechRecognitionLifecycle.onHostPaused`）: バックグラウンド遷移で聞き取り中なら破棄する
-    // （`cancel()` で OS 側の結果確定を求めない。保留要求を残さない、device-bridge-contracts.md「ライフサイクル境界」節）。
-    // 権限ダイアログ表示中（`speechRecognizer == null` だが `speechRequest` は追跡中）は誤破棄しない
-    // （ダイアログ自体は Activity 再生成の対象外で表示され続ける契約）。
+    // 前面を離れた（`SpeechRecognitionLifecycle.onHostPaused`）: 前面の写しを下ろすだけで、聞き取りは止めない。権限ダイアログ表示中
+    // （`speechRecognizer == null` だが `speechRequest` は追跡中）も、構成変更中の聞き取りも、ここでは触らない。
+    // 背景遷移での中断は `stopped` が行う（クラス冒頭コメント参照）。
     static void paused(Activity activity) {
         SpeechRecognitionHelper helper = of(activity);
-        if (helper == null) {
-            return;
+        if (helper != null) {
+            helper.resumed = false;
         }
-        helper.resumed = false;
-        helper.interruptIfListening();
     }
 
-    private void interruptIfListening() {
+    // 見えなくなった（`SpeechRecognitionLifecycle.onHostStopped`）: 構成変更でなければ背景遷移なので、聞き取り中なら中断（5）する
+    // （`cancel()` で OS 側の結果確定を求めない。背景で聞き取らない、device-bridge-contracts.md「ライフサイクル境界」節）。
+    // 権限ダイアログ待ちは誤破棄しない（ダイアログは透過 Activity のため `onStop` を起こさない）。新しい Activity が既にあるときは触らない。
+    static void stopped(Activity activity) {
+        synchronized (SpeechRecognitionHelper.class) {
+            if (HELPERS.size() > 1) {
+                return;
+            }
+        }
+        if (!activity.isChangingConfigurations()) {
+            interruptIfListening();
+        }
+    }
+
+    private static void interruptIfListening() {
         synchronized (speechLock) {
             if (speechRecognizer != null) {
                 abortSpeech(SPEECH_RESULT_INTERRUPTED);
@@ -240,7 +255,7 @@ final class SpeechRecognitionHelper {
 
     // code の意味（本ファイルが SSOT、Rust 側 `speech_recognition::error_from_code` の
     // doc と対）: 0=成功（text 有効）／1=権限拒否／2=内部エラー／3=二重開始（busy）／
-    // 4=許可確認中にキャンセル／5=ライフサイクル中断（`onHostPaused`/`onHostDestroyed`/非前景での
+    // 4=許可確認中にキャンセル／5=ライフサイクル中断（背景遷移の `onHostStopped`・終了の `onHostDestroyed`・非前景での
     // 開始）／6=`isRecognitionAvailable == false`。
     private static native void nativeOnSpeechResult(long requestId, int code, String text);
 
@@ -278,15 +293,15 @@ final class SpeechRecognitionHelper {
     // `speechLock` の内側でのみ読み書きする状態（ライフサイクル・並行性の契約を単一
     // ロックへ集約する、device-bridge-contracts.md 参照）。
     private static final Object speechLock = new Object();
-    private SpeechRecognizer speechRecognizer;
-    private final Handler speechTimeoutHandler = new Handler(Looper.getMainLooper());
-    private Runnable speechTimeout;
+    private static SpeechRecognizer speechRecognizer;
+    private static final Handler speechTimeoutHandler = new Handler(Looper.getMainLooper());
+    private static Runnable speechTimeout;
     // `onReadyForSpeech` 到達済みか（`startSpeechRecognizer` で false に初期化し、
     // `onReadyForSpeech` で true にする）。「聞き始めていない段階の停止は Cancelled」
     // という `fandhe-cap-speech-recognition` の `contract` の契約を守るため、
     // `requestSpeechRecognitionStop` がこの前後で分岐する（device-bridge-contracts.md
     // 「キャンセル・正常終了・失敗の三値」節）。`speechLock` の内側でのみ読み書きする。
-    private boolean speechStarted;
+    private static boolean speechStarted;
     // 停止要求（自動期限タイマー・`requestSpeechRecognitionStop` のいずれか）を既に
     // 認識器へ送ったか（`startSpeechRecognizer` で false に初期化する）。`speechStarted`
     // は結果到着まで true のままのため、この別フラグが無いと自動停止タイマーの発火後に
@@ -295,7 +310,7 @@ final class SpeechRecognitionHelper {
     // 無条件に解除・再設定してしまう（PR #1030 レビュー指摘）。自動・手動どちらが先でも
     // 停止要求と保険タイマーの設定を一度きりにするための番人。`speechLock` の内側で
     // のみ読み書きする。
-    private boolean speechStopRequested;
+    private static boolean speechStopRequested;
     // 権限ダイアログ表示中に `requestSpeechPermission` コールバックが読む上限
     // （`requestSpeechRecognitionStart` が受け取った値をそのまま退避する）。
     private static volatile int speechRequestedMaxListenMs;
@@ -395,13 +410,58 @@ final class SpeechRecognitionHelper {
     private void startSpeechRecognizer(long requestId, int maxListenMs) {
         SpeechRecognizer recognizer;
         try {
-            recognizer = SpeechRecognizer.createSpeechRecognizer(activity);
+            recognizer = SpeechRecognizer.createSpeechRecognizer(activity.getApplicationContext());
         } catch (RuntimeException e) {
             speechRequest.take();
             nativeOnSpeechResult(requestId, SPEECH_RESULT_INTERNAL_ERROR, null);
             return;
         }
-        recognizer.setRecognitionListener(new RecognitionListener() {
+        recognizer.setRecognitionListener(newListener(requestId, maxListenMs));
+
+        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(
+                RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+        intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, activity.getPackageName());
+        try {
+            recognizer.startListening(intent);
+        } catch (RuntimeException e) {
+            try {
+                recognizer.destroy();
+            } catch (RuntimeException ignored) {
+                // 要求の解除と結果配送は続ける（`abortSpeech` と同じ方針）
+            }
+            speechRequest.take();
+            nativeOnSpeechResult(requestId, SPEECH_RESULT_INTERNAL_ERROR, null);
+            return;
+        }
+        speechRecognizer = recognizer;
+        speechStartPendingResume = false;
+        // `onReadyForSpeech` 未到達を明示する初期値（聞き取り上限タイマーは同
+        // コールバックで開始する。上記コメント参照）。
+        speechStarted = false;
+        // 新しい要求ごとに停止要求の送出有無をリセットする（`speechStopRequested`
+        // doc 参照）。
+        speechStopRequested = false;
+        // 準備待ちの保険タイマー（`SPEECH_READY_TIMEOUT_MS` doc 参照）。
+        // `onReadyForSpeech`/`onError` のどちらも届かないまま画面が Listening
+        // 固着するのを防ぐ（PR #1030 レビュー指摘）。`onReadyForSpeech` 到達時は
+        // 上の分岐で `cancelSpeechTimeout()` により解除される。
+        speechTimeout = () -> {
+            synchronized (speechLock) {
+                if (speechRequest.current() == requestId && !speechStarted) {
+                    if (finishSpeech(requestId)) {
+                        nativeOnSpeechResult(requestId, SPEECH_RESULT_INTERNAL_ERROR, null);
+                    }
+                }
+            }
+        };
+        speechTimeoutHandler.postDelayed(speechTimeout, SPEECH_READY_TIMEOUT_MS);
+    }
+
+    // 認識リスナーを作る。static にして旧 helper / Activity を参照させない（再生成をまたいで生きるため）。
+    private static RecognitionListener newListener(final long requestId, final int maxListenMs) {
+        return new RecognitionListener() {
             @Override
             public void onReadyForSpeech(Bundle params) {
                 synchronized (speechLock) {
@@ -482,47 +542,7 @@ final class SpeechRecognitionHelper {
 
             @Override
             public void onEvent(int eventType, Bundle params) {}
-        });
-
-        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        intent.putExtra(
-                RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
-        intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, activity.getPackageName());
-        try {
-            recognizer.startListening(intent);
-        } catch (RuntimeException e) {
-            try {
-                recognizer.destroy();
-            } catch (RuntimeException ignored) {
-                // 要求の解除と結果配送は続ける（`abortSpeech` と同じ方針）
-            }
-            speechRequest.take();
-            nativeOnSpeechResult(requestId, SPEECH_RESULT_INTERNAL_ERROR, null);
-            return;
-        }
-        speechRecognizer = recognizer;
-        speechStartPendingResume = false;
-        // `onReadyForSpeech` 未到達を明示する初期値（聞き取り上限タイマーは同
-        // コールバックで開始する。上記コメント参照）。
-        speechStarted = false;
-        // 新しい要求ごとに停止要求の送出有無をリセットする（`speechStopRequested`
-        // doc 参照）。
-        speechStopRequested = false;
-        // 準備待ちの保険タイマー（`SPEECH_READY_TIMEOUT_MS` doc 参照）。
-        // `onReadyForSpeech`/`onError` のどちらも届かないまま画面が Listening
-        // 固着するのを防ぐ（PR #1030 レビュー指摘）。`onReadyForSpeech` 到達時は
-        // 上の分岐で `cancelSpeechTimeout()` により解除される。
-        speechTimeout = () -> {
-            synchronized (speechLock) {
-                if (speechRequest.current() == requestId && !speechStarted) {
-                    if (finishSpeech(requestId)) {
-                        nativeOnSpeechResult(requestId, SPEECH_RESULT_INTERNAL_ERROR, null);
-                    }
-                }
-            }
         };
-        speechTimeoutHandler.postDelayed(speechTimeout, SPEECH_READY_TIMEOUT_MS);
     }
 
     // Rust 側（`fandhe-cap-speech-recognition` の driver の「停止」ボタンハンドラ）から `requestStop` 経由で
@@ -549,7 +569,7 @@ final class SpeechRecognitionHelper {
                     // `fandhe-cap-speech-recognition` の `contract` の「聞き始めていない段階の
                     // 停止は Cancelled」）。`stopListening()` を呼ぶと後続の
                     // `onError` が Cancelled ではなくエラーへ写ってしまうため、
-                    // `onPause`/`onDestroy` と同じ `cancel()`→`destroy()` で終える
+                    // `onStop`/`onDestroy` と同じ `cancel()`→`destroy()` で終える
                     // （PR #1030 レビュー指摘）。
                     abortSpeech(SPEECH_RESULT_CANCELLED);
                     return;
@@ -586,7 +606,7 @@ final class SpeechRecognitionHelper {
     // 内部エラーとして畳んで破棄する。呼び出し元が既に `speechTimeout` を使い切っている
     // 前提（直前に `cancelSpeechTimeout()` 済み、または `stopListening()` 直前の
     // タイマー発火自身からの呼び出し）で上書きする。
-    private void scheduleSpeechStopGrace(long requestId) {
+    private static void scheduleSpeechStopGrace(long requestId) {
         speechTimeout = () -> {
             synchronized (speechLock) {
                 if (finishSpeech(requestId)) {
@@ -597,13 +617,13 @@ final class SpeechRecognitionHelper {
         speechTimeoutHandler.postDelayed(speechTimeout, SPEECH_STOP_RESULT_GRACE_MS);
     }
 
-    // 聞き取りセッションを 1 つ決着させる（`onResults`/`onError`/`onPause`/`onDestroy`
+    // 聞き取りセッションを 1 つ決着させる（`onResults`/`onError`/`onStop`/`onDestroy`
     // のいずれの経路からも呼ぶ、`speechLock` の内側であることを呼び出し元が保証する）。
     // `speechRequest.complete(requestId)` が false（旧世代・二重完了）なら false を
     // 返し、呼び出し元は結果を届けない。結果を届ける前に `destroy`・タイマー解除・
     // フィールドの null 化を済ませる（device-bridge-contracts.md「並行性・世代」節
     // 「結果を届ける前に状態を確定させる」）。
-    private boolean finishSpeech(long requestId) {
+    private static boolean finishSpeech(long requestId) {
         if (!speechRequest.complete(requestId)) {
             return false;
         }
@@ -620,12 +640,12 @@ final class SpeechRecognitionHelper {
     }
 
     // 聞き取り中の認識器を結果確定なしで破棄し、現在の要求を `resultCode` で完了させる
-    // （「停止」の未開始分岐・`onPause`・`onDestroy` から、`speechLock` の内側で
+    // （「停止」の未開始分岐・`onStop`・`onDestroy` から、`speechLock` の内側で
     // `speechRecognizer != null` を確かめてから呼ぶ）。認識サービスの障害で `cancel()` /
     // `destroy()` が `RuntimeException` を送出しても、状態を解除して結果を必ず届ける
     // （ここで抜けると要求が永久に残り以後の開始が busy になる。PR #1030 レビュー指摘、
     // `finishSpeech` と同じ方針）。
-    private void abortSpeech(int resultCode) {
+    private static void abortSpeech(int resultCode) {
         long id = speechRequest.take();
         cancelSpeechTimeout();
         try {
@@ -647,7 +667,7 @@ final class SpeechRecognitionHelper {
     // 認識サービスの障害で `RuntimeException` が出ると UI スレッドの処理が未捕捉例外で
     // 終了するため、捕捉して認識器とタイマーを破棄し、要求を内部エラーとして完了させる
     // （PR #1030 codex 指摘）。false を返したら呼び出し元は保険タイマーを掛けずに抜ける。
-    private boolean stopListeningOrFail(long requestId) {
+    private static boolean stopListeningOrFail(long requestId) {
         try {
             speechRecognizer.stopListening();
             return true;
@@ -663,9 +683,9 @@ final class SpeechRecognitionHelper {
     // 解除する（`speechLock` の内側であることを呼び出し元が保証する）。`speechTimeout`
     // は `onReadyForSpeech` 到達後にのみ設定されるため、到達前の停止・エラー経路
     // （`requestSpeechRecognitionStop` の未開始分岐・`onError` 経由の `finishSpeech`・
-    // `onPause`/`onDestroy`）では null のままになる。`Handler.removeCallbacks(null)` を
+    // `onStop`/`onDestroy`）では null のままになる。`Handler.removeCallbacks(null)` を
     // 無条件に呼ばない（PR #1030 レビュー指摘）。
-    private void cancelSpeechTimeout() {
+    private static void cancelSpeechTimeout() {
         if (speechTimeout != null) {
             speechTimeoutHandler.removeCallbacks(speechTimeout);
             speechTimeout = null;

@@ -112,7 +112,7 @@ fn to_outcome(
 /// | 1 | 権限拒否（マイク / 音声認識） | `PermissionDenied("speech_recognition")` |
 /// | 3 | 二重開始（busy） | `Internal("speech_recognition busy")` |
 /// | 4 | 許可確認中に利用者が「停止」でキャンセル | `Ok(Cancelled)`（`to_outcome` が写す） |
-/// | 5 | 中断（iOS: バックグラウンド遷移で破棄、Issue #1025。Android: `onPause`/`onDestroy`/非前景での開始） | `Internal("speech_recognition interrupted")` |
+/// | 5 | 中断（iOS: バックグラウンド遷移で破棄、Issue #1025。Android: 構成変更でない `onStop`・`onDestroy`・非前景での開始） | `Internal("speech_recognition interrupted")` |
 /// | 6 | 認識器を作れない（`SFSpeechRecognizer` が nil・言語未対応。Android: `isRecognitionAvailable == false`） | `Unsupported("speech_recognition")` |
 /// | 7 | 認識器が一時的に使えない（`isAvailable == NO`） | `Disabled("speech_recognition")` |
 /// | 8 | 無音（`kAFAssistantErrorDomain` 1110 等） | `Ok(NoMatch)`（`to_outcome` が写す） |

@@ -9,7 +9,7 @@
 //!
 //! macOS/iOS の権限確認（`AVCaptureDevice.requestAccessForMediaType:`）・Android の
 //! `RECORD_AUDIO` ランタイム許可ダイアログ、および録音完了（利用者の「停止」操作、
-//! `MediaRecorder`/`AVAudioRecorder` の自動停止、`onPause`/`onDestroy` による中断）は
+//! `MediaRecorder`/`AVAudioRecorder` の自動停止、`onStop`/`onDestroy` による中断）は
 //! いずれも非同期に届く。Windows（Issue #955）は権限プロンプト自体は出ないが、
 //! `MediaCapture` の初期化・録音開始・停止がいずれも `IAsyncAction`/
 //! `IAsyncOperation` の非同期 API で、同一フレーム内で `start`→`stop` を
@@ -128,7 +128,7 @@ fn to_outcome(
 ///   キャンセル」節、Android: `MicRecordHelper.requestMicRecordStop` の権限確認中
 ///   分岐参照） | `Cancelled("mic_record")` |
 /// | 5 | ライフサイクル中断（iOS: バックグラウンド遷移により破棄、`.m` 側
-///   「バックグラウンド」節参照、Issue #956。Android: `onPause`・
+///   「バックグラウンド」節参照、Issue #956。Android: 構成変更でない `onStop`・
 ///   終了による `onDestroy` で破棄、`MicRecordHelper` 参照） | `Internal("mic_record
 ///   interrupted")` |
 /// | それ以外 | 内部エラー（エンコード失敗等） | `Internal("mic_record")` |

@@ -4,6 +4,8 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.media.MediaRecorder;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 
 import androidx.activity.ComponentActivity;
@@ -15,7 +17,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Map;
-import java.util.WeakHashMap;
+import java.util.HashMap;
 
 // マイク録音（Issue #957）の Android 実装ヘルパー（Issue #1354 で `MainActivity` から機能 crate へ移した）。
 // `MicRecordLifecycle` が Activity ごとに生成する（Rust の `fandhe-cap-mic-record/src/android.rs` が static メソッド
@@ -27,6 +29,13 @@ import java.util.WeakHashMap;
 // 前面かどうか（`resumed`）は `MicRecordLifecycle` の `onHostResumed` / `onHostPaused` が写す。どちらも `super.onResume()` /
 // `super.onPause()` の中で届き、従来の `MainActivity` が `super` の後で更新していたのとは前後だけが違う。許可ダイアログの応答との
 // 到着順（契約表 1）は、応答側が `resumed` を見て保留（`micStartPendingResume`）にし、次の `onHostResumed` で再開する形で保つ。
+//
+// 再生成（回転等の構成変更）: 録音器（`micRecorder`）・一時ファイル・開始時刻・要求 id・ロックは static で、新しい helper へそのまま
+// 引き継がれる（`MediaRecorder` のリスナーは static な状態だけを触り、旧 Activity を参照しない）。構成変更では録音を中断しない。
+// 背景遷移（構成変更でない停止）では `onHostStopped` が録音を中断（5）する（背景で録音しない、契約表 1）。中断を `onPause` でなく
+// `onStop` で行うのは、`isChangingConfigurations()` が `onStop` / `onDestroy` で確実に読めるため（`Activity.isChangingConfigurations`
+// の文書は `onStop` での利用を想定している。`onPause` 時点の値は文書で保証されていないので頼らない）。権限ダイアログは
+// 透過 Activity で `onPause` だけを起こし `onStop` は起こさないため、許可待ちを誤って中断しない。
 final class MicRecordHelper {
     private final Activity activity;
     // UI スレッドだけが読み書きする前面の写し（従来の `MainActivity.activityResumed`）。`attach` の時点では前面ではない。
@@ -36,31 +45,33 @@ final class MicRecordHelper {
     private final ActivityResultLauncher<String> requestMicPermission;
 
     // Activity ごとの helper。`MicRecordLifecycle`（`FeatureLifecycleProvider`）が生成時に付け、破棄時に外す。
-    private static final Map<Activity, MicRecordHelper> HELPERS = new WeakHashMap<>();
+    private static final Map<Activity, MicRecordHelper> HELPERS = new HashMap<>();
 
     static void attach(ComponentActivity activity) {
         // 再生成: 要求 id・上限・保留フラグ（いずれも static）は捨てない。権限ダイアログの結果は ActivityResultRegistry が同じキーの
         // 新しい許可ランチャーへ配送するため、新 helper の callback が引き継いで録音を始める（結果は同じ id で 1 度だけ届く）。
-        // 録音中だった場合は `onHostPaused` が先に中断（5）で確定済みで、追跡は空になっている。
+        // 録音中だった場合も録音器は static なので、そのまま引き継ぐ（回転で止めない）。
         MicRecordHelper helper = new MicRecordHelper(activity);
         synchronized (MicRecordHelper.class) {
             HELPERS.put(activity, helper);
         }
     }
 
-    // Activity 破棄時: 録音中なら破棄する（`onHostPaused` で既に破棄済みなら `micRecorder == null` で no-op）。`onPause` を経由せず
-    // 直接 `onDestroy` へ来るケース（Android の契約上は稀）に備えて同じ処理を置く。
-    // 終了による破棄（`isFinishing()`）では registry ごと消え、権限ダイアログの結果は二度と届かない。保留中の要求を中断（5）として
-    // 1 度だけ確定する。終了でない破棄（再生成・システム破棄）は結果が復元後の helper へ届くため何も捨てない。
+    // Activity 破棄時。構成変更（`isChangingConfigurations()`）では録音も保留中の要求も新しい helper へ引き継ぐため何もしない。
+    // 構成変更でない破棄では録音中なら中断（5）で確定する（`onHostStopped` を経由しない稀な経路への備え）。さらに終了による破棄
+    // （`isFinishing()`）では registry ごと消え、権限ダイアログの結果は二度と届かないため、保留中の要求を中断（5）として 1 度だけ確定する。
+    // 新しい Activity が先に `attach` 済み（旧の破棄が後から来る）なら、static な要求と録音器は新しい側のものなので触らない。
     // `complete` / `take` が first-wins なので、許可コールバックとの二重通知にならない。
     static void detach(Activity activity) {
-        MicRecordHelper helper;
+        boolean otherAlive;
         synchronized (MicRecordHelper.class) {
-            helper = HELPERS.remove(activity);
+            HELPERS.remove(activity);
+            otherAlive = !HELPERS.isEmpty();
         }
-        if (helper != null) {
-            helper.interruptIfRecording();
+        if (otherAlive || activity.isChangingConfigurations()) {
+            return;
         }
+        interruptIfRecording();
         if (activity.isFinishing()) {
             synchronized (micLock) {
                 micStartPendingResume = false;
@@ -77,35 +88,35 @@ final class MicRecordHelper {
     // 権限ダイアログの許可コールバック（main スレッド）とは前後どちらでもよい。コールバックが先なら開始済みの録音をここで止め、
     // こちらが先ならコールバックは追跡 id が無いことを見て何も始めない。判定と更新は `micLock` の内側で行う。
     static void abortPending() {
+        MediaRecorder recorder;
+        File tempFile;
         synchronized (micLock) {
             micStartPendingResume = false;
             micRecordRequest.take();
-            MicRecordHelper[] helpers;
-            synchronized (MicRecordHelper.class) {
-                helpers = HELPERS.values().toArray(new MicRecordHelper[0]);
-            }
-            for (MicRecordHelper helper : helpers) {
-                helper.discardRecorder();
-            }
+            recorder = micRecorder;
+            tempFile = micTempFile;
+            micRecorder = null;
+            micTempFile = null;
         }
+        if (recorder == null && tempFile == null) {
+            return;
+        }
+        // `stop()` は数十〜数百 ms ブロックしうるため、native スレッドでロックを握ったまま呼ばず main へ積む。
+        // 追跡 id とフィールドは先に外してあるので、積んだ処理が走るまでの間に届くリスナー通知は `complete` の照合で捨てられる。
+        MAIN_HANDLER.post(() -> {
+            if (recorder != null) {
+                try {
+                    recorder.stop();
+                } catch (RuntimeException e) {
+                    // 破棄が目的のため、停止の失敗は無視して解放へ進む。
+                }
+                recorder.release();
+            }
+            deleteQuietly(tempFile);
+        });
     }
 
-    // 結果を届けずに録音を破棄する（`micLock` の内側で呼ぶ）。`stop()` の失敗は握りつぶすが `release` と一時ファイル削除は必ず行う。
-    private void discardRecorder() {
-        MediaRecorder recorder = micRecorder;
-        File tempFile = micTempFile;
-        micRecorder = null;
-        micTempFile = null;
-        if (recorder != null) {
-            try {
-                recorder.stop();
-            } catch (RuntimeException e) {
-                // 破棄が目的のため、停止の失敗は無視して解放へ進む。
-            }
-            recorder.release();
-        }
-        deleteQuietly(tempFile);
-    }
+    private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
 
     // 前面へ戻った（`MicRecordLifecycle.onHostResumed`）: 許可結果が非前景中に届き `startMicRecorder` を保留していた要求を
     // 再開する（cursor Bugbot 指摘、PR #962。`micStartPendingResume` doc 参照）。
@@ -119,26 +130,38 @@ final class MicRecordHelper {
             if (micStartPendingResume) {
                 micStartPendingResume = false;
                 long id = micRecordRequest.current();
-                if (id != RequestTracker.NONE && helper.micRecorder == null) {
+                if (id != RequestTracker.NONE && micRecorder == null) {
                     helper.startMicRecorder(id, micRequestedMaxDurationMs);
                 }
             }
         }
     }
 
-    // 前面を離れた（`MicRecordLifecycle.onHostPaused`）: バックグラウンド遷移で録音中なら破棄する（保留要求を残さない、
-    // device-bridge-contracts.md「ライフサイクル境界」節）。権限ダイアログ表示中（`micRecorder == null` だが `micRecordRequest` は
-    // 追跡中）は誤破棄しない（ダイアログ自体は Activity 再生成の対象外で表示され続ける契約）。
+    // 前面を離れた（`MicRecordLifecycle.onHostPaused`）: 前面の写しを下ろすだけで、録音は止めない。権限ダイアログ表示中
+    // （`micRecorder == null` だが `micRecordRequest` は追跡中）も、構成変更中の録音も、ここでは触らない。背景遷移での中断は
+    // `stopped` が行う（クラス冒頭コメント参照）。
     static void paused(Activity activity) {
         MicRecordHelper helper = of(activity);
-        if (helper == null) {
-            return;
+        if (helper != null) {
+            helper.resumed = false;
         }
-        helper.resumed = false;
-        helper.interruptIfRecording();
     }
 
-    private void interruptIfRecording() {
+    // 見えなくなった（`MicRecordLifecycle.onHostStopped`）: 構成変更でなければ背景遷移なので、録音中なら中断（5）する
+    // （背景で録音しない、device-bridge-contracts.md「ライフサイクル境界」節）。権限ダイアログ待ちは誤破棄しない
+    // （ダイアログは透過 Activity のため `onStop` を起こさない）。新しい Activity が既にあるときは、録音器は新しい側のものなので触らない。
+    static void stopped(Activity activity) {
+        synchronized (MicRecordHelper.class) {
+            if (HELPERS.size() > 1) {
+                return;
+            }
+        }
+        if (!activity.isChangingConfigurations()) {
+            interruptIfRecording();
+        }
+    }
+
+    private static void interruptIfRecording() {
         synchronized (micLock) {
             if (micRecorder != null) {
                 finishMicRecord(micRecordRequest.current(), MIC_RESULT_INTERRUPTED);
@@ -157,7 +180,7 @@ final class MicRecordHelper {
                 synchronized (micLock) {
                     long id = micRecordRequest.current();
                     if (id == RequestTracker.NONE) {
-                        // 既に破棄済み（`onPause`/`onDestroy`/再生成、または二重開始で
+                        // 既に破棄済み（`onStop`/`onDestroy`/Rust 側 reset、または二重開始で
                         // 弾かれた後）。
                         return;
                     }
@@ -224,7 +247,7 @@ final class MicRecordHelper {
     // code の意味（本ファイルが SSOT、Rust 側 `mic_record::error_from_code` の doc と
     // 対）: 0=成功（bytes/mime/durationMs 有効）／1=権限拒否／2=内部エラー／
     // 3=二重開始（busy）／4=許可確認中にキャンセル／5=ライフサイクル中断
-    // （`onHostPaused`/`onHostDestroyed`/Activity 再生成で破棄）。
+    // （背景遷移の `onHostStopped`・終了の `onHostDestroyed` で破棄。構成変更では中断しない）。
     private static native void nativeOnMicRecordResult(
             long requestId, int code, byte[] bytes, String mime, long durationMs);
 
@@ -243,11 +266,11 @@ final class MicRecordHelper {
 
     // `micLock` の内側でのみ読み書きする状態（ライフサイクル・並行性の契約を単一
     // ロックへ集約する、device-bridge-contracts.md 参照）。ロックと、再生成をまたいで引き継ぐ
-    // `micRequestedMaxDurationMs` / `micStartPendingResume` は static（新 helper が同じ値で再開できるように）。
+    // `micRecorder` / `micTempFile` / `micStartedAt` / `micRequestedMaxDurationMs` / `micStartPendingResume` は static（新 helper が同じ値で再開できるように）。
     private static final Object micLock = new Object();
-    private MediaRecorder micRecorder;
-    private File micTempFile;
-    private long micStartedAt;
+    private static MediaRecorder micRecorder;
+    private static File micTempFile;
+    private static long micStartedAt;
     // 権限ダイアログ表示中に `requestMicPermission` コールバックが読む上限
     // （`requestMicRecordStart` が受け取った値をそのまま退避する）。
     private static volatile int micRequestedMaxDurationMs;
@@ -382,19 +405,19 @@ final class MicRecordHelper {
         });
     }
 
-    // 録音セッションを 1 つ決着させる（自動停止・明示停止・`onPause`/`onDestroy` の
+    // 録音セッションを 1 つ決着させる（自動停止・明示停止・`onStop`/`onDestroy` の
     // いずれの経路からも呼ぶ、`micLock` の内側であることを呼び出し元が保証する）。
     // `code` は「録音が正常に走っていた場合」の決着コード（`MIC_RESULT_SUCCESS`/
     // `MIC_RESULT_INTERRUPTED`）。`stop()` が失敗すれば `MIC_RESULT_INTERNAL_ERROR` へ
     // 昇格する。
-    private void finishMicRecord(long requestId, int code) {
+    private static void finishMicRecord(long requestId, int code) {
         finishMicRecord(requestId, code, false);
     }
 
     // `recorderAlreadyStopped` は `MEDIA_RECORDER_INFO_MAX_DURATION_REACHED` 経路専用
     // （その時点で `MediaRecorder` は内部で停止済みのため `stop()` を呼ばない。
     // 呼ぶと `IllegalStateException` になり成功結果を内部エラーへ落としてしまう）。
-    private void finishMicRecord(long requestId, int code, boolean recorderAlreadyStopped) {
+    private static void finishMicRecord(long requestId, int code, boolean recorderAlreadyStopped) {
         if (!micRecordRequest.complete(requestId)) {
             // 旧世代・二重完了（`take()` 済みの要求への遅延呼び出し）。
             return;
