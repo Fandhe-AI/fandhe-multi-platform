@@ -10,10 +10,16 @@ import androidx.activity.ComponentActivity;
 // `onHostCreated` は STARTED より前に呼ばれるため、結果ランチャーの登録（`register`）はここで行える。
 // 従来は `MainActivity` のフィールド初期化子で登録していた（同じ `onCreate` より前）。要求 id は static のため、再生成後の新 helper が
 // 同じキーで再登録されたランチャーの callback で保留中の結果を拾う。
+// launch 済み要求の所有（終了時に失敗へ確定する責務）は Bundle で旧 helper から新 helper へ渡す（#1361）。
 public final class FilePickerLifecycle extends FeatureLifecycleProvider {
     @Override
     protected void onHostCreated(ComponentActivity activity, Bundle savedInstanceState) {
-        FilePickerHelper.attach(activity);
+        FilePickerHelper.attach(activity, savedInstanceState);
+    }
+
+    @Override
+    protected void onHostSaveInstanceState(ComponentActivity activity, Bundle outState) {
+        FilePickerHelper.save(activity, outState);
     }
 
     @Override

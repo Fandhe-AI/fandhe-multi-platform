@@ -3,6 +3,7 @@ package com.fandhe.platform;
 import android.app.Activity;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.provider.OpenableColumns;
 
@@ -37,7 +38,7 @@ import java.util.WeakHashMap;
 // `fandhe_device::file_picker::read_picked_from` に一本化する（Java 側では読み取りループを書かない）。
 //
 // 「いま待っている要求 id」は static で、追跡（`RequestTracker`）の照合で単一飛行を守る: 追跡中は新しい要求を busy（code 3）で断り、
-// 追跡は結果の通知・`launch()` 失敗・終了による破棄（`detach`）で外れる。別のフラグ・ロックは持たない。画面回転等の Activity 再生成は同一プロセス内で新しい helper を作るが、
+// 追跡は結果の通知・`launch()` 失敗・「launch した helper の Activity」の終了による破棄（`detach`）で外れる。別のフラグ・ロックは持たない。画面回転等の Activity 再生成は同一プロセス内で新しい helper を作るが、
 // `ActivityResultRegistry` は再生成前から保留中だった選択結果を新 helper の callback へ実際に配送し得る。id を instance field に
 // すると新 helper では `NONE` に初期化され、実際に届く結果を「`NONE` なら捨てる」判定で誤って破棄し、コアが `Picking` のまま
 // 固着する（画面回転中に選択、という頻出シナリオ）。static なら再生成を跨いで生き残るため、新 helper の callback でも requestId が
@@ -51,7 +52,13 @@ final class FilePickerHelper {
 
     private static final RequestTracker filePickRequest = new RequestTracker();
 
+    // Bundle に入れる、launch 済み要求の id のキー（構成変更・システム破棄で旧 helper から新 helper へ所有を渡す）。
+    private static final String LAUNCHED_KEY = "fandhe:file_picker:launched";
+
     private final Activity activity;
+    // この helper が `pickDocument.launch` した要求の id。終了時に外してよいのは自分が launch した要求だけ（別の Activity の
+    // 終了で他の Activity の選択を失敗にしない、#1361）。UI スレッドでのみ読み書きする。
+    private long launchedId = RequestTracker.NONE;
     // Storage Access Framework の「開く」ダイアログ。Activity 再生成後も同一キーで再登録されるため、`ActivityResultRegistry` は
     // 旧 helper で保留中だった選択結果を新 helper のこの callback へ実際に配送し得る。`filePickRequest.take()` で読み取りと同時に
     // `NONE` へ戻すことで、(1) プロセス死後の再配送（新プロセスでは `NONE` のまま）と (2) 対応する要求が既に他の経路で消費済みの
@@ -62,25 +69,43 @@ final class FilePickerHelper {
     // Activity ごとの helper。`FilePickerLifecycle`（`FeatureLifecycleProvider`）が生成時に付け、破棄時に外す。
     private static final Map<Activity, FilePickerHelper> HELPERS = new WeakHashMap<>();
 
-    static void attach(ComponentActivity activity) {
+    static void attach(ComponentActivity activity, Bundle savedInstanceState) {
         FilePickerHelper helper = new FilePickerHelper(activity);
+        // 再生成: 旧 helper が launch 済みで、まだ追跡中の要求なら所有を引き継ぐ（Bundle は旧 Activity の続きにだけ渡る）。
+        // ponytail: プロセス死後に同じ値の id が新プロセスで追跡中だと一致し得る（callback の take() も同じ限界）。
+        // 直すなら Bundle にプロセス固有の印を足す。
+        if (savedInstanceState != null) {
+            long saved = savedInstanceState.getLong(LAUNCHED_KEY, RequestTracker.NONE);
+            if (saved != RequestTracker.NONE && saved == filePickRequest.current()) {
+                helper.launchedId = saved;
+            }
+        }
         synchronized (FilePickerHelper.class) {
             HELPERS.put(activity, helper);
         }
     }
 
-    // Activity 破棄時は表から外す。保留中の要求は static の id のまま残し、再生成後の新 helper が結果を拾う。
-    // ただし終了（`isFinishing`）による破棄では、選択画面の結果が二度と届かないため、追跡を外して失敗（code 2）で確定する
-    // （残すと次の要求がずっと busy になる）。構成変更・システム破棄では残す。
-    static void detach(Activity activity) {
-        synchronized (FilePickerHelper.class) {
-            HELPERS.remove(activity);
+    // `onHostSaveInstanceState` から呼ぶ。launch 済みでまだ追跡中の要求の id だけを Bundle へ渡す（新 helper が所有を引き継ぐ）。
+    static void save(Activity activity, Bundle outState) {
+        FilePickerHelper helper = of(activity);
+        if (helper != null && helper.launchedId != RequestTracker.NONE
+                && helper.launchedId == filePickRequest.current()) {
+            outState.putLong(LAUNCHED_KEY, helper.launchedId);
         }
-        if (activity.isFinishing()) {
-            long requestId = filePickRequest.take();
-            if (requestId != RequestTracker.NONE) {
-                nativeOnFilePickerResult(requestId, 2, null, -1);
-            }
+    }
+
+    // Activity 破棄時は表から外す。保留中の要求は static の id のまま残し、再生成後の新 helper が結果を拾う。
+    // 終了（`isFinishing`）による破棄では、選択画面の結果が二度と届かないため、「この helper が launch した要求」だけ追跡を外して
+    // 失敗（code 2）で確定する（残すと次の要求がずっと busy になる）。他の Activity が出した要求・未 launch の要求には触れない
+    // （後者は `requestFilePick` の積んだ処理が確定させる）。構成変更・システム破棄では残す。
+    static void detach(Activity activity) {
+        FilePickerHelper helper;
+        synchronized (FilePickerHelper.class) {
+            helper = HELPERS.remove(activity);
+        }
+        if (activity.isFinishing() && helper != null && helper.launchedId != RequestTracker.NONE
+                && filePickRequest.complete(helper.launchedId)) {
+            nativeOnFilePickerResult(helper.launchedId, 2, null, -1);
         }
     }
 
@@ -122,13 +147,14 @@ final class FilePickerHelper {
 
     private void requestFilePick(long requestId) {
         // 追跡中の要求（選択画面が開いている）があれば、上書きも再 launch もせず busy を返す。上書きすると、先の画面の結果が
-        // 新しい要求として届く（取り違え）。追跡は callback の `take()`・`launch()` 失敗・終了による破棄（`detach`）で必ず外れる。
+        // 新しい要求として届く（取り違え）。追跡は callback の `take()`・`launch()` 失敗・launch した Activity の終了（`detach`）・
+        // 未 launch のまま Activity が終わった場合の積んだ処理で必ず外れる。
         if (!filePickRequest.tryTrack(requestId)) {
             nativeOnFilePickerResult(requestId, 3, null, -1);
             return;
         }
         activity.runOnUiThread(() -> {
-            // 積んでから実行されるまでの間に、終了による破棄（`detach`）が追跡を外して失敗を通知していたら、選択画面を開かない
+            // 積んでから実行されるまでの間に、追跡が別の経路で外れて失敗が通知されていたら、選択画面を開かない
             // （開くと、その結果を次の要求が引き継いでしまう）。追跡の解除と launch はどちらも UI スレッドで行うため、この照合は競合しない。
             if (filePickRequest.current() != requestId) {
                 return;
@@ -144,8 +170,10 @@ final class FilePickerHelper {
                 return;
             }
             try {
+                launchedId = requestId;
                 pickDocument.launch(new String[] {"*/*"});
             } catch (RuntimeException e) {
+                launchedId = RequestTracker.NONE;
                 // ドキュメントプロバイダが端末に存在しない、または `launch()` 自体が例外を送出した場合
                 // （`onSaveInstanceState` 後の呼び出し等）。ピッカーは開かれておらず callback も来ないため、
                 // ここで直接 code 2 を通知する。自分の要求のときだけ外して通知する（別の経路が先に確定していれば二重にしない）。
