@@ -58,7 +58,7 @@ pub fn result_from_apple_code(code: i32, rgb: i32) -> Result<PickedColor, ColorP
         1 => Err(ColorPickerError::Cancelled),
         2 => Err(ColorPickerError::Internal("color_picker convert")),
         3 => Err(ColorPickerError::Internal("color_picker present")),
-        4 => Err(ColorPickerError::Internal("color picker busy")),
+        4 => Err(ColorPickerError::Internal("color_picker busy")),
         _ => Err(ColorPickerError::Internal("color_picker outcome")),
     }
 }
@@ -139,7 +139,7 @@ mod tests {
         ));
         assert_eq!(
             result_from_apple_code(4, 0),
-            Err(ColorPickerError::Internal("color picker busy"))
+            Err(ColorPickerError::Internal("color_picker busy"))
         );
         for code in [-1, 5, 99] {
             assert!(matches!(
