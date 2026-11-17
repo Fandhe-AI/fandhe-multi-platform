@@ -47,7 +47,7 @@ use js_sys::{Array, Function, Object, Reflect};
 use wasm_bindgen::prelude::*;
 use web_sys::AbortController;
 
-use crate::driver::bridge::{PUBLIC_OWNER, SCREEN_OWNER, SLOT};
+use crate::driver::bridge::{self, PUBLIC_OWNER, SCREEN_OWNER, SLOT};
 use crate::error::EyeDropperError;
 use crate::web_result::{error_from_name, result_from_resolved};
 
@@ -221,7 +221,7 @@ pub(crate) fn start_screen(
     on_picking();
 
     // 公開入口の進行中・未取得の要求は置き換えず、画面側を処理中の失敗で終える。
-    let Some(request_id) = SCREEN_OWNER.begin_excluding(&SLOT, &[&PUBLIC_OWNER]) else {
+    let Some(request_id) = bridge::begin_screen_request() else {
         return settle(
             mount_id,
             generation,
@@ -264,9 +264,8 @@ pub(crate) fn start_screen(
 /// 公開入口の開始（`driver::begin_eye_dropper` の Web 実装）。画面 effect と同じく、利用者の操作の中から同期で呼ぶ。
 /// 失敗は slot・印を空けて `Err` で返す（結果は届かない）。
 pub(crate) fn begin_public() -> Result<u64, EyeDropperError> {
-    let request_id = PUBLIC_OWNER
-        .begin_excluding(&SLOT, &[&PUBLIC_OWNER])
-        .ok_or(EyeDropperError::Internal("eye_dropper busy"))?;
+    let request_id =
+        bridge::begin_public_request().ok_or(EyeDropperError::Internal("eye_dropper busy"))?;
     let abandon = |e: EyeDropperError| {
         SLOT.clear(request_id);
         PUBLIC_OWNER.release(request_id);

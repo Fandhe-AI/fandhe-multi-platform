@@ -10,7 +10,8 @@
 //! `NSColorSampler` のハンドラ・ブラウザの `EyeDropper.open()` は非同期に届くため、`EyeDropper` トレイトを通さず
 //! `fandhe_runtime::request_slot::RequestSlot` で受ける。画面（macOS・Web の [`eye_dropper_pick_effect`]。Web の `open()`・中断の実体は `web.rs`）と
 //! 公開入口（[`begin_eye_dropper`] / [`poll_eye_dropper`] / [`discard_eye_dropper`]）が同じ slot を共有し、
-//! 持ち主の印（`SlotOwner`）で互いの進行中の要求を置き換えない。片方が進行中のあいだ、または公開入口の結果が未取得のあいだ、後から来た方は
+//! 持ち主の印（`SlotOwner`）で互いの進行中の要求を置き換えない。
+//! 片方が進行中のあいだ、または公開入口の結果が未取得のあいだ（画面側の開始のみ）、後から来た方は
 //! `Internal("eye_dropper busy")` で断る（macOS はサンプラーが 2 つ同時に開かないようにするためでもある）。
 //!
 //! # 画面が受け取らない結果
@@ -18,7 +19,12 @@
 //! 画面の状態が作り直された・画面が破棄された等で、画面側の持ち主の結果が届いたのに誰も poll しないことがある。
 //! 結果が届いていて進行中でない slot は、画面側の持ち主でも公開入口の [`begin_eye_dropper`] が置き換えられる
 //! （公開側の持ち主の未取得の結果だけは置き換えない）。画面が後で poll すると、既存の lost 経路で失敗になる
-//! （成功には化けない）。画面側の次の開始も同じく自分の古い結果を置き換える。進行中の要求は、サンプラーの
+//! （成功には化けない）。
+//!
+//! 生きている画面でも、結果が届いてから poll されるまでの窓（`POLL_INTERVAL` 程度）に公開入口を開始すると、
+//! その画面の選択は lost の失敗になる（成功にはならない）。
+//!
+//! 画面側の次の開始も同じく自分の古い結果を置き換える。進行中の要求は、サンプラーの
 //! 二重起動を防ぐため、どちらの入口も置き換えず busy で断る（OS の確定＝結果の到着だけを正にし、期限では解放しない）。
 //!
 //! # 他の OS
@@ -67,6 +73,16 @@ pub(crate) mod bridge {
     /// 公開側の poll・discard 本体（持ち主の照合・取得・解放）を直列にする。並行 poll で結果が二重に返らないため。
     pub(crate) static PUBLIC_POLL_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+    /// 画面側の開始（進行中の要求と、公開入口の未取得の結果は置き換えない）。本番とテストで同じ除外を使う。
+    pub(crate) fn begin_screen_request() -> Option<u64> {
+        SCREEN_OWNER.begin_excluding(&SLOT, &[&PUBLIC_OWNER])
+    }
+
+    /// 公開入口の開始（進行中の要求と、自分の未取得の結果は置き換えない。画面側の届いた結果は置き換える）。
+    pub(crate) fn begin_public_request() -> Option<u64> {
+        PUBLIC_OWNER.begin_excluding(&SLOT, &[&PUBLIC_OWNER])
+    }
+
     /// OS からの結果を置く（macOS の main queue から。Web は公開入口の結果だけ `web.rs` が `SLOT` へ
     /// 直接置き、画面 effect は slot を進行中の印にしか使わない）。`request_id` 不一致・
     /// 未登録・既に結果ありは捨てて `false`（古い世代・二重通知が成功へ化けない）。
@@ -107,9 +123,7 @@ fn drive_callback(state: &EyeDropperState, sender: &CompletionSender<EyeDropperS
     if let Some(generation) = take_request(state) {
         let _ = sender.send(Box::new(mark_picking));
         // 公開入口の進行中・未取得の要求は置き換えず、画面側を処理中の失敗で終える。
-        let Some(request_id) =
-            bridge::SCREEN_OWNER.begin_excluding(&bridge::SLOT, &[&bridge::PUBLIC_OWNER])
-        else {
+        let Some(request_id) = bridge::begin_screen_request() else {
             let outcome = to_outcome(Err(EyeDropperError::Internal("eye_dropper busy")));
             let _ = sender.send(Box::new(move |s: &mut EyeDropperState| {
                 finish_pick(s, generation, outcome);
@@ -230,8 +244,9 @@ pub fn eye_dropper_pick_effect(
 /// [`poll_eye_dropper`] で 1 度だけ取り出す。使い終えない・結果を使わない要求は [`discard_eye_dropper`] で捨てる。
 ///
 /// - 画面 effect の要求が進行中のとき、または自分の前の要求が進行中・結果未取得のときは
-///   `Internal("eye_dropper busy")` で断る。画面側の持ち主の結果が届いて未取得なだけなら置き換える
-///   （画面が後で poll すると lost の失敗になる）（画面 effect 側も、この入口の要求があれば処理中の失敗で終える）。
+///   `Internal("eye_dropper busy")` で断る。
+/// - 画面側の持ち主の結果が届いて未取得なだけなら置き換える。画面が後で poll すると lost の失敗になる。
+/// - 画面 effect 側も、この入口の要求があれば処理中の失敗で終える。
 /// - 依頼自体の失敗は `Err`（結果は届かない）。他の OS・`EyeDropper` を持たないブラウザは `Unsupported`。
 /// - Web はブラウザが利用者の操作（transient activation）の中の呼び出しだけを許すため、クリックなどの
 ///   ハンドラの中から同期で呼ぶこと。そうでなければ `NotAllowedError` で拒否され、失敗として poll に届く。
@@ -247,9 +262,8 @@ pub fn begin_eye_dropper() -> Result<u64, EyeDropperError> {
     }
     #[cfg(target_os = "macos")]
     {
-        let request_id = bridge::PUBLIC_OWNER
-            .begin_excluding(&bridge::SLOT, &[&bridge::PUBLIC_OWNER])
-            .ok_or(EyeDropperError::Internal("eye_dropper busy"))?;
+        let request_id =
+            bridge::begin_public_request().ok_or(EyeDropperError::Internal("eye_dropper busy"))?;
         if !crate::macos::present(request_id) {
             bridge::SLOT.clear(request_id);
             bridge::PUBLIC_OWNER.release(request_id);
@@ -382,11 +396,11 @@ mod tests {
         }
 
         fn begin_public() -> Option<u64> {
-            bridge::PUBLIC_OWNER.begin_excluding(&bridge::SLOT, &[&bridge::PUBLIC_OWNER])
+            bridge::begin_public_request()
         }
 
         fn begin_screen() -> Option<u64> {
-            bridge::SCREEN_OWNER.begin_excluding(&bridge::SLOT, &[&bridge::PUBLIC_OWNER])
+            bridge::begin_screen_request()
         }
 
         #[test]
@@ -457,6 +471,12 @@ mod tests {
             reset();
         }
 
+        struct NoopWaker;
+        impl fandhe_runtime::RepaintWaker for NoopWaker {
+            fn wake(&self) {}
+            fn wake_after(&self, _delay: std::time::Duration) {}
+        }
+
         #[test]
         fn public_begin_replaces_unpolled_screen_result_and_screen_poll_is_lost() {
             let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
@@ -466,11 +486,22 @@ mod tests {
             // 画面が受け取らない結果で公開入口が詰まらない。
             let public = begin_public().unwrap();
             assert_ne!(public, screen);
-            // 生きている画面が後で見ると、slot が別 id に替わっている（lost 経路。成功にはならない）。
-            assert!(!matches!(
-                bridge::SLOT.snapshot(),
-                Some((id, _)) if id == bridge::SCREEN_OWNER.current()
-            ));
+            // 生きている画面が後で poll すると、lost（失敗）になり、成功値は反映されない。
+            let (tx, rx) = std::sync::mpsc::channel();
+            let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
+            fandhe_runtime::request_slot::poll_and_finish_owned(
+                &bridge::SLOT,
+                &bridge::SCREEN_OWNER,
+                &sender,
+                |_| panic!("待機にはならない"),
+                |_s: &mut u8, _o| panic!("成功値は反映されない"),
+                |s: &mut u8| *s = 9,
+            );
+            let mut state = 0u8;
+            rx.try_recv().expect("on_lost が送られる")(&mut state);
+            assert_eq!(state, 9);
+            assert_eq!(bridge::SCREEN_OWNER.current(), 0);
+            assert!(rx.try_recv().is_err());
             reset();
         }
 
