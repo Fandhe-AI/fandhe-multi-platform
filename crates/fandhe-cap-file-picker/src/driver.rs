@@ -229,9 +229,10 @@ pub(crate) mod bridge {
         SCREEN_OWNER.begin_keeping_foreign(&SLOT)
     }
 
-    /// 公開入口の要求を登録する。進行中、または結果が未取得の要求（画面側の分を含む）があれば `None`（busy）。
+    /// 公開入口の要求を登録する。進行中の要求と自分の未取得の結果があれば `None`（busy）。画面側の届いた未取得の結果は置き換える
+    /// （画面の effect が回らず取り出されないままでも公開入口が詰まらないため。置き換えられた画面の poll は lost の失敗になる）。
     pub(crate) fn begin_public() -> Option<u64> {
-        PUBLIC_OWNER.begin_excluding(&SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
+        PUBLIC_OWNER.begin_excluding(&SLOT, &[&PUBLIC_OWNER])
     }
 
     /// 公開入口の提示依頼が同期的に失敗したときに、登録を取り消す。
@@ -284,6 +285,17 @@ pub(crate) mod bridge {
             return None;
         }
         Some((request_id, ready.map(|r| r.map_err(super::to_message))))
+    }
+
+    /// 画面の要求が公開入口に置き換えられ、結果を取り出せなくなったとき、その要求 id を返す（それ以外は `None`）。
+    /// 画面の持ち主の印が残っているのに、slot の現在の要求が別の id（空を含む）になっている状態で、
+    /// 画面が `Picking` のまま止まらないよう [`super::next_action`] が lost の失敗へ倒す根拠にする。
+    pub(crate) fn screen_lost() -> Option<u64> {
+        let mine = SCREEN_OWNER.current();
+        if mine == 0 || SLOT.snapshot().is_some_and(|(id, _)| id == mine) {
+            return None;
+        }
+        Some(mine)
     }
 
     /// OS からの結果を `Arc` で包んでから置く（任意スレッド）。`request_id` 不一致・未登録（プロセス死後の再配送等）・
@@ -351,13 +363,15 @@ pub(crate) enum Action {
         request_id: u64,
         outcome: MobileOutcome,
     },
+    /// 画面の要求が公開入口に置き換えられた（[`bridge::screen_lost`]）。成功にせず lost の失敗で終え、画面の持ち主の印を外す。
+    Lost { request_id: u64 },
 }
 
 /// `(state.phase, bridge::screen_snapshot())` から次に行う操作を決める純関数
 /// （[`Action`] doc 参照）。OS 呼び出し・`CompletionSender` へのアクセスを一切含まないため
 /// `cfg` 無しでホスト上の `cargo test` から検証できる（4 腕 + 該当なしの `Nothing`）。
 #[cfg(any(test, target_os = "ios", target_os = "android"))]
-pub(crate) fn next_action(phase: PickPhase, snapshot: MobileSnapshot) -> Action {
+pub(crate) fn next_action(phase: PickPhase, snapshot: MobileSnapshot, lost: Option<u64>) -> Action {
     match (phase, snapshot) {
         (PickPhase::Requested, None) => Action::StartPick,
         (PickPhase::Idle, Some(_)) => Action::RestoreRequested,
@@ -366,6 +380,9 @@ pub(crate) fn next_action(phase: PickPhase, snapshot: MobileSnapshot) -> Action 
             request_id,
             outcome,
         },
+        (PickPhase::Picking, None) => {
+            lost.map_or(Action::Nothing, |request_id| Action::Lost { request_id })
+        }
         _ => Action::Nothing,
     }
 }
@@ -381,7 +398,11 @@ pub(crate) fn drive_mobile_with<S: 'static>(
     sender: &CompletionSender<S>,
     hooks: PickHooks<S>,
 ) {
-    match next_action((hooks.phase)(state), bridge::screen_snapshot()) {
+    match next_action(
+        (hooks.phase)(state),
+        bridge::screen_snapshot(),
+        bridge::screen_lost(),
+    ) {
         Action::Nothing => {}
         Action::StartPick => {
             let _ = sender.send(Box::new(move |s: &mut S| (hooks.mark_picking)(s)));
@@ -407,6 +428,16 @@ pub(crate) fn drive_mobile_with<S: 'static>(
         }
         Action::RestorePicking => {
             let _ = sender.send(Box::new(move |s: &mut S| (hooks.mark_picking)(s)));
+        }
+        Action::Lost { request_id } => {
+            bridge::SCREEN_OWNER.release(request_id);
+            let message = to_message(FilePickerError::Internal("file_picker lost"));
+            let _ = sender.send(Box::new(move |s: &mut S| {
+                if (hooks.phase)(s) != PickPhase::Idle {
+                    let generation = (hooks.generation)(s);
+                    (hooks.finish)(s, generation, Err(message));
+                }
+            }));
         }
         Action::Finish {
             request_id,
@@ -499,10 +530,8 @@ pub fn platform_file_picker() -> Result<&'static dyn crate::contract::FilePicker
 /// ファイル選択を OS へ依頼し、結果を [`poll_file_pick`] で受け取るための要求 id を返す（iOS・Android）。
 ///
 /// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。選択条件の引数は無い（画面経路と同じく 1 ファイル・
-/// 種類の絞り込みなし）。1 プロセスに 1 要求で、画面 effect と slot を共有するため、進行中・結果が未取得の要求
-/// （画面側の分を含む）があるうちは `Internal`（busy）で断る。画面 effect 側も、この入口の進行中・未取得の要求があれば
-/// 置き換えず処理中の失敗で終える。画面側の未取得の結果・進行中の要求が残る間も busy で断られる（画面状態が破棄されて
-/// effect が回らないと解消しない。lan-discovery と同じ構造）。依頼自体の失敗は `Err`（結果は届かない）。
+/// 種類の絞り込みなし）。1 プロセスに 1 要求で、画面 effect と slot を共有する。進行中の要求は busy で断る。画面側の届いた未取得の結果は公開入口が置き換える（画面が描かれず取り出されないままでも詰まらない）。置き換えられた画面が後で poll すると lost の失敗になり、成功にはならない（結果の到着から poll までの窓に公開入口を始めた場合も同じ）。自分の未取得の結果があれば `Internal`（busy）で断る。画面 effect 側も、この入口の進行中・未取得の要求があれば
+/// 置き換えず処理中の失敗で終える。依頼自体の失敗は `Err`（結果は届かない）。
 ///
 /// デスクトップ（macOS・Windows）は同期で使える [`platform_file_picker`] の `pick()` を使うため、この入口は持たず
 /// `Unsupported` を返す。Linux 等も `Unsupported`。
@@ -756,14 +785,17 @@ mod next_action_tests {
 
     #[test]
     fn requested_without_pending_starts_pick() {
-        assert_eq!(next_action(PickPhase::Requested, None), Action::StartPick);
+        assert_eq!(
+            next_action(PickPhase::Requested, None, None),
+            Action::StartPick
+        );
     }
 
     #[test]
     fn idle_with_pending_restores_to_requested() {
         // Activity 再生成で画面状態だけが作り直された（要求は `bridge` に残っている）。
         assert_eq!(
-            next_action(PickPhase::Idle, Some((1, None))),
+            next_action(PickPhase::Idle, Some((1, None)), None),
             Action::RestoreRequested
         );
     }
@@ -772,7 +804,7 @@ mod next_action_tests {
     fn requested_with_pending_restores_to_picking() {
         // 復元途中、または再生成直後の 1 フレームにユーザーがタップした場合。
         assert_eq!(
-            next_action(PickPhase::Requested, Some((1, None))),
+            next_action(PickPhase::Requested, Some((1, None)), None),
             Action::RestorePicking
         );
     }
@@ -784,7 +816,7 @@ mod next_action_tests {
             bytes: vec![1, 2, 3],
         })));
         assert_eq!(
-            next_action(PickPhase::Picking, Some((7, Some(outcome.clone())))),
+            next_action(PickPhase::Picking, Some((7, Some(outcome.clone()))), None),
             Action::Finish {
                 request_id: 7,
                 outcome,
@@ -796,12 +828,27 @@ mod next_action_tests {
     fn other_combinations_do_nothing() {
         // 該当なし: Idle かつ要求なし、Picking かつ未着（＝ダイアログ表示中）、
         // Requested かつ結果あり（あり得ないが安全側で `Nothing`）は該当しない。
-        assert_eq!(next_action(PickPhase::Idle, None), Action::Nothing);
+        assert_eq!(next_action(PickPhase::Idle, None, None), Action::Nothing);
         assert_eq!(
-            next_action(PickPhase::Picking, Some((1, None))),
+            next_action(PickPhase::Picking, Some((1, None)), None),
             Action::Nothing
         );
-        assert_eq!(next_action(PickPhase::Picking, None), Action::Nothing);
+        assert_eq!(next_action(PickPhase::Picking, None, None), Action::Nothing);
+    }
+
+    #[test]
+    fn picking_replaced_by_public_is_lost() {
+        // 画面の要求が公開入口に置き換えられた（画面のスナップショットは `None`、持ち主の印だけ残る）。
+        assert_eq!(
+            next_action(PickPhase::Picking, None, Some(5)),
+            Action::Lost { request_id: 5 }
+        );
+        // `Picking` 以外では lost を見ない。
+        assert_eq!(next_action(PickPhase::Idle, None, Some(5)), Action::Nothing);
+        assert_eq!(
+            next_action(PickPhase::Requested, None, Some(5)),
+            Action::StartPick
+        );
     }
 }
 
@@ -859,6 +906,67 @@ mod bridge_tests {
         assert!(bridge::poll_public(public).is_none());
         // 取り出したあとは画面側が使える。
         assert!(bridge::begin_screen().is_some());
+        bridge::reset();
+    }
+
+    /// 画面の届いた未取得の結果は公開入口が置き換え、置き換えられた画面は lost の失敗へ倒れる（`Picking` のまま止まらない・成功にならない）。
+    #[test]
+    fn public_begin_replaces_unpolled_screen_result_and_screen_is_lost() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        bridge::SCREEN_OWNER.release(bridge::SCREEN_OWNER.current());
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::screen_lost().is_none());
+        assert!(bridge::deliver(screen, Ok(Some(picked("a.txt")))));
+        // 画面が取り出さない結果で公開入口が詰まらない。
+        let public = bridge::begin_public().expect("置き換えられる");
+        assert_ne!(public, screen);
+        // 古い画面の id への配送は捨てられる。
+        assert!(!bridge::deliver(screen, Ok(Some(picked("b.txt")))));
+        // 画面からは自分の要求が見えず、lost として観測される。
+        assert!(bridge::screen_snapshot().is_none());
+        assert_eq!(bridge::screen_lost(), Some(screen));
+        assert_eq!(
+            next_action(
+                PickPhase::Picking,
+                bridge::screen_snapshot(),
+                bridge::screen_lost()
+            ),
+            Action::Lost { request_id: screen }
+        );
+        // 印を外したあとは lost を繰り返さない。公開入口の結果は画面へ渡らない。
+        bridge::SCREEN_OWNER.release(screen);
+        assert!(bridge::screen_lost().is_none());
+        assert!(bridge::deliver(public, Ok(None)));
+        assert!(matches!(bridge::poll_public(public), Some(Ok(None))));
+        bridge::reset();
+    }
+
+    /// 画面の要求が進行中なら公開入口は busy で、画面の持ち主は変わらない。
+    #[test]
+    fn public_begin_is_busy_while_screen_request_is_in_flight() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        bridge::SCREEN_OWNER.release(bridge::SCREEN_OWNER.current());
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::begin_public().is_none());
+        assert_eq!(bridge::SCREEN_OWNER.current(), screen);
+        assert!(bridge::screen_lost().is_none());
+        bridge::SCREEN_OWNER.release(screen);
+        bridge::reset();
+    }
+
+    /// 公開入口の届いた未取得の結果は、公開入口も画面も置き換えない。
+    #[test]
+    fn public_begin_keeps_unpolled_public_result() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let public = bridge::begin_public().unwrap();
+        assert!(bridge::deliver(public, Ok(None)));
+        assert!(bridge::begin_public().is_none());
+        assert!(bridge::begin_screen().is_none());
+        assert!(matches!(bridge::poll_public(public), Some(Ok(None))));
+        assert!(bridge::poll_public(public).is_none());
         bridge::reset();
     }
 

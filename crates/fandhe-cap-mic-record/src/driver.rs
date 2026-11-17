@@ -223,6 +223,18 @@ pub(crate) mod bridge {
     /// 画面 effect が追う自分の分の要求（公開入口と slot を共有するため区別する）。
     pub(crate) static SCREEN_OWNER: SlotOwner = SlotOwner::new();
 
+    /// 画面側の開始（進行中の要求と、公開入口の未取得の結果は置き換えない）。本番とテストで同じ除外を使う。
+    pub(crate) fn begin_screen() -> Option<u64> {
+        SCREEN_OWNER.begin_keeping_foreign(&SLOT)
+    }
+
+    /// 公開入口の開始（進行中の要求と、自分の未取得の結果は置き換えない。画面側の届いた結果は置き換える）。
+    /// 画面の effect が回らず結果が取り出されないままでも、公開入口が busy のまま残らないため。
+    /// 置き換えられた画面が後で poll すると lost の失敗になる（`poll_and_finish_owned`）。
+    pub(crate) fn begin_public() -> Option<u64> {
+        PUBLIC_OWNER.begin_excluding(&SLOT, &[&PUBLIC_OWNER])
+    }
+
     /// 実際にネイティブ側の録音が開始した request_id（`0` は「まだ未開始」の
     /// 番兵、`RequestSlot::next_request_id` が `1` から採番するのと同じ流儀）。
     /// 権限確認待ちの間は経過時間を進めないための合図
@@ -353,7 +365,7 @@ fn drive_callback(state: &MicRecordState, sender: &CompletionSender<MicRecordSta
         let _ = sender.send(Box::new(mark_recording));
 
         // 公開入口の進行中・未取得の要求は置き換えず、画面側を処理中の失敗で終える。
-        let Some(request_id) = bridge::SCREEN_OWNER.begin_keeping_foreign(&bridge::SLOT) else {
+        let Some(request_id) = bridge::begin_screen() else {
             let generation = request.generation;
             let message = to_message(MicRecordError::Internal("mic_record busy"));
             let _ = sender.send(Box::new(move |s: &mut MicRecordState| {
@@ -536,13 +548,11 @@ fn clamp_max_duration(d: std::time::Duration) -> Result<std::time::Duration, Mic
 /// 録音を OS へ依頼し、結果を [`poll_mic_record`] で受け取るための要求 id を返す（macOS・iOS・Android・Windows）。
 ///
 /// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。`max_duration` は 1 ms 未満（0 を含む）なら `InvalidInput`、端数は ms へ切り捨て、
-/// 上限（30 秒）を超える分は上限へ丸める。1 プロセスに 1 要求で、画面 effect と slot を共有するため、進行中・結果が
-/// 未取得の要求（画面側の分を含む）があるうちは `Internal`（busy）で断る。画面 effect 側も、この入口の進行中・未取得の
+/// 上限（30 秒）を超える分は上限へ丸める。1 プロセスに 1 要求で、画面 effect と slot を共有する。進行中の要求は busy で断る。画面側の届いた未取得の結果は公開入口が置き換える（画面が描かれず取り出されないままでも詰まらない）。置き換えられた画面が後で poll すると lost の失敗になり、成功にはならない（結果の到着から poll までの窓に公開入口を始めた場合も同じ）。自分の未取得の結果があるうちは `Internal`（busy）で断る。画面 effect 側も、この入口の進行中・未取得の
 /// 要求があれば置き換えず処理中の失敗で終える。依頼自体の失敗は `Err`（結果は届かない）。権限の確認は OS が行い、拒否は結果に
 /// `PermissionDenied` で届く。それ以外の OS は `Unsupported`。
 ///
-/// 画面側の未取得の結果・進行中の要求が残る間も busy で断られる（画面状態が破棄されて effect が回らないと解消しない。
-/// lan-discovery と同じ構造）。取り出さない自分の要求（id を捨てた・結果を使わない等）は [`discard_mic_record`] で捨てて slot を空ける。
+/// 取り出さない自分の要求（id を捨てた・結果を使わない等）は [`discard_mic_record`] で捨てて slot を空ける。
 /// 前の要求が失われた（reset 等）あと、その id を poll せずに開始すると、旧 id の喪失は通知されない（旧 id の poll は `None`）。
 #[cfg(any(
     target_os = "macos",
@@ -552,12 +562,7 @@ fn clamp_max_duration(d: std::time::Duration) -> Result<std::time::Duration, Mic
 ))]
 pub fn begin_mic_record(max_duration: std::time::Duration) -> Result<u64, MicRecordError> {
     let max_duration = clamp_max_duration(max_duration)?;
-    let request_id = bridge::PUBLIC_OWNER
-        .begin_excluding(
-            &bridge::SLOT,
-            &[&bridge::SCREEN_OWNER, &bridge::PUBLIC_OWNER],
-        )
-        .ok_or(MicRecordError::Internal("mic_record busy"))?;
+    let request_id = bridge::begin_public().ok_or(MicRecordError::Internal("mic_record busy"))?;
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     let started = if present(request_id, max_duration) {
         Ok(())
@@ -923,45 +928,89 @@ mod tests {
     fn public_request_is_exclusive_and_polled_once() {
         let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         bridge::reset();
-        let public = bridge::PUBLIC_OWNER
-            .begin_excluding(
-                &bridge::SLOT,
-                &[&bridge::SCREEN_OWNER, &bridge::PUBLIC_OWNER],
-            )
-            .unwrap();
+        let public = bridge::begin_public().unwrap();
         // 進行中は公開入口の 2 件目も画面側も断る（BUSY）。
-        assert!(
-            bridge::PUBLIC_OWNER
-                .begin_excluding(
-                    &bridge::SLOT,
-                    &[&bridge::SCREEN_OWNER, &bridge::PUBLIC_OWNER]
-                )
-                .is_none()
-        );
-        assert!(
-            bridge::SCREEN_OWNER
-                .begin_keeping_foreign(&bridge::SLOT)
-                .is_none()
-        );
+        assert!(bridge::begin_public().is_none());
+        assert!(bridge::begin_screen().is_none());
         assert!(poll_mic_record(public).is_none());
         // 結果は 3 値のまま届く（キャンセルは Err(Cancelled)）。
         assert!(bridge::deliver(public, Err(error_from_code(4))));
         // 未取得の公開入口の結果を画面側が落とさない。
-        assert!(
-            bridge::SCREEN_OWNER
-                .begin_keeping_foreign(&bridge::SLOT)
-                .is_none()
-        );
+        assert!(bridge::begin_screen().is_none());
         assert!(matches!(
             poll_mic_record(public),
             Some(Err(MicRecordError::Cancelled(_)))
         ));
         assert!(poll_mic_record(public).is_none());
         // 取り出したあとは画面側が使える。
-        let screen = bridge::SCREEN_OWNER
-            .begin_keeping_foreign(&bridge::SLOT)
-            .unwrap();
+        let screen = bridge::begin_screen().unwrap();
         assert!(poll_mic_record(screen).is_none());
+        bridge::reset();
+    }
+
+    /// 起床を捨てるだけの waker（置き去り画面の poll を直接確かめるテスト用）。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
+    struct LostWaker;
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
+    impl fandhe_runtime::RepaintWaker for LostWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
+    /// 画面の届いた未取得の結果は公開入口が置き換え、置き換えられた画面が後で poll すると lost の失敗になる（成功値は反映されない）。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
+    #[test]
+    fn public_begin_replaces_unpolled_screen_result_and_screen_poll_is_lost() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::deliver(screen, Err(error_from_code(4))));
+        let public = bridge::begin_public().expect("画面の取り出されない結果で詰まらない");
+        assert_ne!(public, screen);
+        // 古い画面の id への配送は捨てられる。
+        assert!(!bridge::deliver(screen, Err(error_from_code(4))));
+        let (tx, rx) = std::sync::mpsc::channel();
+        let sender = fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(LostWaker));
+        fandhe_runtime::request_slot::poll_and_finish_owned(
+            &bridge::SLOT,
+            &bridge::SCREEN_OWNER,
+            &sender,
+            |_| panic!("待機にはならない"),
+            |_s: &mut u8, _o| panic!("成功値は反映されない"),
+            |s: &mut u8| *s = 9,
+        );
+        let mut state = 0u8;
+        rx.try_recv().expect("on_lost が送られる")(&mut state);
+        assert_eq!(state, 9);
+        assert_eq!(bridge::SCREEN_OWNER.current(), 0);
+        assert!(rx.try_recv().is_err());
+        bridge::reset();
+    }
+
+    /// 画面の要求が進行中なら公開入口は busy で、画面の持ち主は変わらない。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
+    #[test]
+    fn public_begin_is_busy_while_screen_request_is_in_flight() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::begin_public().is_none());
+        assert_eq!(bridge::SCREEN_OWNER.current(), screen);
+        bridge::reset();
+    }
+
+    /// 公開入口の届いた未取得の結果は、公開入口も画面も置き換えない。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
+    #[test]
+    fn public_begin_keeps_unpolled_public_result() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let public = bridge::begin_public().unwrap();
+        assert!(bridge::deliver(public, Err(error_from_code(4))));
+        assert!(bridge::begin_public().is_none());
+        assert!(bridge::begin_screen().is_none());
+        assert!(poll_mic_record(public).is_some());
+        assert!(poll_mic_record(public).is_none());
         bridge::reset();
     }
 
@@ -999,12 +1048,7 @@ mod tests {
     fn public_request_lost_by_reset_fails_once() {
         let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         bridge::reset();
-        let begin = || {
-            bridge::PUBLIC_OWNER.begin_excluding(
-                &bridge::SLOT,
-                &[&bridge::SCREEN_OWNER, &bridge::PUBLIC_OWNER],
-            )
-        };
+        let begin = || bridge::begin_public();
         let id = begin().unwrap();
         assert!(poll_mic_record(id).is_none());
         bridge::reset();
@@ -1023,20 +1067,11 @@ mod tests {
     fn discard_frees_slot_for_public_and_screen() {
         let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         bridge::reset();
-        let begin_public = || {
-            bridge::PUBLIC_OWNER.begin_excluding(
-                &bridge::SLOT,
-                &[&bridge::SCREEN_OWNER, &bridge::PUBLIC_OWNER],
-            )
-        };
+        let begin_public = || bridge::begin_public();
         let id = begin_public().unwrap();
         assert_eq!(bridge::discard_public(id + 1), None);
         assert_eq!(bridge::discard_public(0), None);
-        assert!(
-            bridge::SCREEN_OWNER
-                .begin_keeping_foreign(&bridge::SLOT)
-                .is_none()
-        );
+        assert!(bridge::begin_screen().is_none());
         // 進行中で捨てると true（呼び出し側が OS へ停止を依頼する）。
         assert_eq!(bridge::discard_public(id), Some(true));
         // 進行中に捨てた id へ後から結果を送っても捨てられる。
@@ -1049,9 +1084,7 @@ mod tests {
         assert_eq!(bridge::discard_public(id2), Some(false));
         assert!(!bridge::deliver(id2, Err(error_from_code(5))));
         // 画面の id は公開入口から捨てられない。捨てたあと画面も開始できる。
-        let screen = bridge::SCREEN_OWNER
-            .begin_keeping_foreign(&bridge::SLOT)
-            .unwrap();
+        let screen = bridge::begin_screen().unwrap();
         assert_eq!(bridge::discard_public(screen), None);
         bridge::SLOT.clear(screen);
         bridge::SCREEN_OWNER.release(screen);
@@ -1066,12 +1099,7 @@ mod tests {
         let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         for _ in 0..500 {
             bridge::reset();
-            let id = bridge::PUBLIC_OWNER
-                .begin_excluding(
-                    &bridge::SLOT,
-                    &[&bridge::SCREEN_OWNER, &bridge::PUBLIC_OWNER],
-                )
-                .unwrap();
+            let id = bridge::begin_public().unwrap();
             assert!(bridge::deliver(id, Err(error_from_code(4))));
             let barrier = std::sync::Barrier::new(2);
             let results: Vec<_> = std::thread::scope(|s| {
@@ -1102,19 +1130,9 @@ mod tests {
     fn poll_of_unknown_id_is_none() {
         let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         bridge::reset();
-        let old = bridge::PUBLIC_OWNER
-            .begin_excluding(
-                &bridge::SLOT,
-                &[&bridge::SCREEN_OWNER, &bridge::PUBLIC_OWNER],
-            )
-            .unwrap();
+        let old = bridge::begin_public().unwrap();
         bridge::reset();
-        let new = bridge::PUBLIC_OWNER
-            .begin_excluding(
-                &bridge::SLOT,
-                &[&bridge::SCREEN_OWNER, &bridge::PUBLIC_OWNER],
-            )
-            .unwrap();
+        let new = bridge::begin_public().unwrap();
         assert!(poll_mic_record(0).is_none());
         assert!(poll_mic_record(old).is_none());
         assert!(poll_mic_record(new + 1).is_none());

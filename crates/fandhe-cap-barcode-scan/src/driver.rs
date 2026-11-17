@@ -138,9 +138,10 @@ pub(crate) mod bridge {
         SCREEN_OWNER.begin_keeping_foreign(&SLOT)
     }
 
-    /// 公開入口の要求を登録する。進行中、または結果が未取得の要求（画面側の分を含む）があれば `None`（busy）。
+    /// 公開入口の要求を登録する。進行中の要求と自分の未取得の結果があれば `None`（busy）。画面側の届いた未取得の結果は置き換える
+    /// （画面の effect が回らず取り出されないままでも公開入口が詰まらないため。置き換えられた画面の poll は lost の失敗になる）。
     pub(crate) fn begin_public() -> Option<u64> {
-        PUBLIC_OWNER.begin_excluding(&SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
+        PUBLIC_OWNER.begin_excluding(&SLOT, &[&PUBLIC_OWNER])
     }
 
     /// 公開入口の提示依頼が同期的に失敗したときに、登録を取り消す。
@@ -204,8 +205,7 @@ pub(crate) mod bridge {
 
 /// 写真選択を開き、選ばれた画像を読み取り、結果を [`poll_barcode_scan`] で受け取るための要求 id を返す（iOS）。
 ///
-/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。画面 effect と slot を共有するため、進行中・結果が未取得の要求
-/// （画面側の分を含む）があれば `Internal("barcode_scan busy")` で断る。写真選択（PHPicker）が進行中のとき（[`discard_barcode_scan`] で捨てた後を含む）も、
+/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。画面 effect と slot を共有する。進行中の要求は busy で断る。画面側の届いた未取得の結果は公開入口が置き換える（画面が描かれず取り出されないままでも詰まらない）。置き換えられた画面が後で poll すると lost の失敗になり、成功にはならない（結果の到着から poll までの窓に公開入口を始めた場合も同じ）。自分の未取得の結果があれば `Internal("barcode_scan busy")` で断る。写真選択（PHPicker）が進行中のとき（[`discard_barcode_scan`] で捨てた後を含む）も、
 /// OS の観測で写真選択側が busy を返し、結果は失敗（`Internal`）で届く。依頼自体の失敗は `Err`（結果は届かない）。
 ///
 /// 結果の解放: 選んだ画像のバイト列は OS コールバックの中で検査・読み取り後に解放され、結果が握るのは読み取った中身（文字列）だけ。
@@ -414,7 +414,7 @@ mod ios_effect {
             sender,
             |_| {},
             move |s: &mut BarcodeScanState, outcome| {
-                // Idle へ戻っていれば反映せず結果だけ畳む。別世代は反映せず畳む。
+                // Idle へ戻っていれば反映せず slot に残す（`false`。残った結果は公開入口・画面の次の開始が置き換える）。別世代は反映せず畳む。
                 if s.phase == BarcodeScanPhase::Idle {
                     return false;
                 }
@@ -735,6 +735,64 @@ mod tests {
         let g = BRIDGE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         bridge::reset();
         g
+    }
+
+    /// 起床を捨てるだけの waker（置き去り画面の poll を直接確かめるテスト用）。
+    struct LostWaker;
+    impl fandhe_runtime::RepaintWaker for LostWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
+    /// 画面の届いた未取得の結果は公開入口が置き換え、置き換えられた画面が後で poll すると lost の失敗になる（成功値は反映されない）。
+    #[test]
+    fn public_begin_replaces_unpolled_screen_result_and_screen_poll_is_lost() {
+        let _g = lock();
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::deliver(screen, Ok(None)));
+        let public = bridge::begin_public().expect("画面の取り出されない結果で詰まらない");
+        assert_ne!(public, screen);
+        // 古い画面の id への配送は捨てられる。
+        assert!(!bridge::deliver(screen, Ok(None)));
+        let (tx, rx) = std::sync::mpsc::channel();
+        let sender = fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(LostWaker));
+        fandhe_runtime::request_slot::poll_and_finish_owned(
+            &bridge::SLOT,
+            &bridge::SCREEN_OWNER,
+            &sender,
+            |_| panic!("待機にはならない"),
+            |_s: &mut u8, _o| panic!("成功値は反映されない"),
+            |s: &mut u8| *s = 9,
+        );
+        let mut state = 0u8;
+        rx.try_recv().expect("on_lost が送られる")(&mut state);
+        assert_eq!(state, 9);
+        assert_eq!(bridge::SCREEN_OWNER.current(), 0);
+        assert!(rx.try_recv().is_err());
+        bridge::reset();
+    }
+
+    /// 画面の要求が進行中なら公開入口は busy で、画面の持ち主は変わらない。
+    #[test]
+    fn public_begin_is_busy_while_screen_request_is_in_flight() {
+        let _g = lock();
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::begin_public().is_none());
+        assert_eq!(bridge::SCREEN_OWNER.current(), screen);
+        bridge::reset();
+    }
+
+    /// 公開入口の届いた未取得の結果は、公開入口も画面も置き換えない。
+    #[test]
+    fn public_begin_keeps_unpolled_public_result() {
+        let _g = lock();
+        let public = bridge::begin_public().unwrap();
+        assert!(bridge::deliver(public, Ok(None)));
+        assert!(bridge::begin_public().is_none());
+        assert!(bridge::begin_screen().is_none());
+        assert!(bridge::poll_public(public).is_some());
+        assert!(bridge::poll_public(public).is_none());
+        bridge::reset();
     }
 
     /// 公開入口の要求は画面と排他で、進行中も結果の未取得も画面側が落とさない。結果は 1 度だけ取れる。
