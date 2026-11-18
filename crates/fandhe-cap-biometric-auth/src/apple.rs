@@ -9,7 +9,7 @@
 //! `.m` 側の reply コールバックから [`fandhe_rust_biometric_outcome`]（本モジュールが
 //! 公開する `extern "C"` 関数）が呼ばれ、`crate::driver::bridge` へ結果を push
 //! する（pull 型、`apple_share.rs::fandhe_rust_share_outcome` と同じ橋渡し方式）。
-//! `LAError` の生コード → 結果の写像は 本 crate の `driver.rs::outcome_from_reply`
+//! `LAError` の生コード → 結果の写像は本 crate の `driver.rs::outcome_from_reply`
 //! （iOS/macOS 共通の SSOT）に一本化する。
 //!
 //! 認証結果以外の情報（生体データ・識別子）をログへ出力しない（security.md A09）。

@@ -8,7 +8,7 @@
 //!
 //! 任意の画像ファイル・複数ページ・PDF・プリンタ列挙・進捗・紙に出たかの追跡は扱わない。
 //! 検証の SSOT は [`PrintRequest::new`]（これ以外では要求を作れない）。画面
-//! （`fandhe_core::screens::print_page`、端末依存ゼロ）へは 本 crate の `driver` の effect
+//! （`fandhe_core::screens::print_page`、端末依存ゼロ）へは本 crate の `driver` の effect
 //! ドライバ（`driver`）が写像する。
 //!
 //! # 結果の種類（[`PrintOutcome`]）

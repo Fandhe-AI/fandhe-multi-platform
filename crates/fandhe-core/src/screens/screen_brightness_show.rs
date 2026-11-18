@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod screen_brightness_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
-//! 置き場」節の制約どおり）。OS への要求・読み戻しは 機能 crate の effect ドライバ
+//! 置き場」節の制約どおり）。OS への要求・読み戻しは機能 crate の effect ドライバ
 //! （`fandhe-cap-screen-brightness` の `driver.rs`）が [`take_request`] で要求を取り、[`mark_applying`] →
 //! [`finish`] / [`apply_read`] で結果を注入する（`wake_lock_toggle` と同型）。
 //!

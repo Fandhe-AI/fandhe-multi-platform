@@ -4,9 +4,6 @@
 //! 返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)`
 //! として呼ばれる契約、`fandhe-cap-background-task` の `driver.rs` と同型）。
 //!
-//! 非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。
-//!
 //! # ボタン要求（別スレッド）
 //!
 //! OS 呼び出し（COM・予約一覧の読み書き）は UI スレッドをブロックしないよう別

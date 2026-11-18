@@ -5,7 +5,7 @@
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod ble_peripheral;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
-//! 置き場」節の制約どおり）。OS への依頼・事象の受け取りは 機能 crate の effect ドライバ
+//! 置き場」節の制約どおり）。OS への依頼・事象の受け取りは機能 crate の effect ドライバ
 //! （`fandhe-cap-ble-peripheral` の `driver.rs`）が [`take_action`] で要求を観測して行い、[`finish_start`] /
 //! [`finish_stop`] / [`apply_event`] / [`apply_reads`] で結果を注入する。本画面は二重押し防止・
 //! 世代の照合・結果の種類ごとの文言だけを持つ。全対象 OS 分（iOS の背景遷移・Android の `onStop` による中断を含む）の

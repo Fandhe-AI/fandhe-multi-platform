@@ -7,7 +7,7 @@
 //!
 //! `.m` 側のコールバックから [`fandhe_rust_ble_device`] / [`fandhe_rust_ble_finished`]
 //! （本モジュールが公開する `extern "C"` 関数）が呼ばれ、`device/bluetooth_le` の観測
-//! バッファへ push する。コードの写像は 本 crate の `driver` の純関数（SSOT）に
+//! バッファへ push する。コードの写像は本 crate の `driver` の純関数（SSOT）に
 //! 一本化する。周辺機器の名前・識別子をログへ出力しない（security.md A09）。
 
 use std::ffi::CStr;

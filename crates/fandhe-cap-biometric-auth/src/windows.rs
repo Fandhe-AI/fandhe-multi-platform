@@ -19,8 +19,8 @@
 //! `.get()` で同期待ちせず `SetCompleted` にハンドラを登録する
 //! （UI スレッドをブロックしない）。完了はスレッドプール側スレッドで届くため、結果は
 //! `crate::driver::bridge::deliver`（`Mutex` 保護）へ置くだけにし、画面への反映は
-//! `biometric_auth::drive_callback` の毎フレームポーリングに任せる
-//! （`fandhe-cap-share-sheet` の `driver.rs` の `.m` 側コールバックと同じ構造）。
+//! 本 crate の `driver.rs::drive_callback` の毎フレームポーリングに任せる
+//! （`fandhe-cap-share-sheet` の `apple.rs` の `.m` 側コールバックと同じ構造）。
 //!
 //! `IAsyncOperation` は完了ハンドラが呼ばれる前にドロップされないよう、
 //! プロセス全体の [`HELD`] へ保持する（次回 [`present`] で前回分を置き換える）。

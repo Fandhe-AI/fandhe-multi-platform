@@ -28,7 +28,7 @@ import androidx.core.content.ContextCompat;
 // NONE から始まり、旧同意結果が再配送されても捨てる。id は Rust 側で単調増加のため、
 // 旧結果が新しい要求を消費することはない。
 final class ScreenCaptureHelper {
-    // 結果コード。SSOT は Rust 側 本 crate の `driver.rs::error_from_code`。
+    // 結果コード。SSOT は Rust 側の本 crate の `driver.rs::error_from_code`。
     // RESULT_OK は ScreenCaptureService 内では「成功を希望」の意味にも使う。
     static final int RESULT_OK = 0;
     static final int RESULT_FAILED = 2;
