@@ -7,9 +7,9 @@
 （Issue #660）。
 
 1. Mac でダミー API を起動する: `node scripts/web/serve-brotli.mjs
-   crates/fandhe-egui-proxy/fixtures/http_fetch 8787`（127.0.0.1 固定）。iPhone から
+   crates/fandhe-gallery/fixtures/http_fetch 8787`（127.0.0.1 固定）。iPhone から
    直接 LAN 経由で取りに来る場合は `python3 -m http.server 8787 --bind 0.0.0.0
-   --directory crates/fandhe-egui-proxy/fixtures/http_fetch` を使う。信頼できる LAN
+   --directory crates/fandhe-gallery/fixtures/http_fetch` を使う。信頼できる LAN
    でのみ実行し、確認後は停止する
 2. Android: `adb reverse tcp:8787 tcp:8787` で端末の `127.0.0.1:8787` を Mac へ
    転送する（コード変更不要）。ビルドは `FANDHE_PROXY_APP=http_fetch`。確認後は

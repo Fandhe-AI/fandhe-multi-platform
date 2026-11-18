@@ -16,7 +16,7 @@ fandhe-multi-platform/
 ├── README.md                    # プロジェクト概要・セットアップ手順
 ├── AGENTS.md                    # レビュー観点集（ai-review（provider: codex）が PR の base コミットの本書を基準に読む）
 ├── skills-lock.json             # 導入スキルの記録（skills add の履歴）
-├── Cargo.toml                   # workspace ルート（10 クレート構成）
+├── Cargo.toml                   # workspace ルート
 ├── Makefile                     # よく使うコマンドの薄い入口（実体は scripts/ か cargo 1 行。.claude/rules/makefile.md、make skill）
 ├── lefthook.yml                 # Git hooks 設定（pre-commit・commit-msg）
 ├── Dockerfile                   # 開発用コンテナ定義（共通コア・Linux・wasm32）
@@ -25,14 +25,14 @@ fandhe-multi-platform/
 │
 ├── crates/
 │   ├── cargo-fandhe/            # 機能宣言（[package.metadata.fandhe]）の検証と統合規則。`cargo fandhe check`（#1160）・`cargo fandhe gen`（#1176、ネイティブ設定の生成）・`cargo fandhe verify-scope`（#1178、選ばなかった機能の混入検査）、forbid(unsafe_code)
-│   ├── fandhe/                  # 入口 crate。利用者が依存する 1 つの crate で、端末機能を feature（対応表の id）で選ぶ。契約だけを再公開し、画面の組み立ては `fandhe::app`（#1199、TASK-21.5）
+│   ├── fandhe/                  # 入口 crate。利用者が依存する 1 つの crate で、端末機能を feature（対応表の id）で選ぶ。契約だけを再公開し、画面の組み立ては `fandhe::app`（#1199、TASK-21.5）。各 OS の入口の中身（`src/entry/`、起動前の登録・終了処理・ソフトキーボード・iOS の入力欄）も持つ（#1200）
+│   ├── fandhe-macros/           # `#[fandhe::main]`（画面を作る関数 1 つから各 OS の入口を生成する proc-macro、#1200）
 │   ├── fandhe-cap-*/            # 端末機能 1 つにつき 1 crate（契約・OS 別実装・宣言。egui 非依存。`crates/fandhe-cap-*` を workspace の glob で拾う。移行手順は `docs/operations/capability-crate-migration.md`、TASK-21.3・21.4）
 │   ├── fandhe-core/             # 共通コア（UI DSL・状態管理・AI 型安全 DSL、forbid(unsafe_code)）
 │   │   ├── src/lib.rs           # 役割要約・モジュール地図（ui / state / token / screens）
 │   │   └── src/screens/         # AI が生成した画面モジュールの置き場（`ui/mod.rs` には手を入れない）
 │   ├── fandhe-device/           # 機能 crate が共有する OS に触れない型・検証・定数（consumer-app-structure.md §8。名前は #1215）
-│   ├── fandhe-egui-proxy/       # 各 OS の入口関数（rlib。端末機能の配線は機能 crate へすべて移し、`device/` は撤去した、#1355）。描画と起動は fandhe-render-egui、最終成果物は fandhe-gallery へ移した（#1164・#1165。一括切り替えは #1194 で撤去、残る入口は #1199・#1200 で撤去予定）
-│   ├── fandhe-gallery/          # 画面カタログ（非公開）。画面の登録と各 OS の最終成果物（デスクトップ・iOS の bin、Android・Web の cdylib）、TASK-21.2 / #1165
+│   ├── fandhe-gallery/          # 画面カタログ（非公開）。画面の登録・名前での画面選択・検証用アプリ（TV フォーカス・プロトタイプ・計測）と、各 OS の最終成果物（`#[fandhe::main]`、デスクトップ・iOS の bin、Android・Web の cdylib）、TASK-21.2 / #1165・#1200
 │   ├── fandhe-fonts/            # CJK フォント資産（Noto Sans JP 埋め込み）
 │   ├── fandhe-platform-android/ # Android 共通層（AndroidApp の保持・JNI 定型 `with_activity`・Intent の配送 `deliverIntents`・insets と入力を配る口 `HostInsets` / `HostInput`、egui 非依存、TASK-21.2 / #1166・#1325・#1327）
 │   ├── fandhe-platform-apple/   # Apple（iOS / macOS）共通層（build script helper・共有ヘッダ・is_main_thread・UIScene 化シム・URL と背景転送の完了を配る application delegate、TASK-21.2 / #1168・#1325）
