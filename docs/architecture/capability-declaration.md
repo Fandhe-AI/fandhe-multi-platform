@@ -274,9 +274,11 @@ macOS の `bundle-id` を書くと、本体の Info.plist を Xcode の変数で
 手で組むアプリ向けです（カタログは `build.rs` で埋め込む、#1194）。置き換えられない変数（`$(TeamIdentifierPrefix)` など）が
 本体に残るとエラーです。書かなければ従来どおり Xcode の変数のまま出します。拡張は常に Xcode の変数のままです。
 
-殻に要る値は、アプリの crate からも取ります。Android は `cdylib` を含む lib target が要り（無ければエラー）、iOS は bin target がちょうど 1 つと、数字とドットだけの version が要ります。
+殻に要る値は、アプリの crate からも取ります。Android は `cdylib` を含む lib target が要り、iOS は bin target がちょうど 1 つと、数字とドットだけの version が要ります。
 
-これらは全 OS の殻を出す前提の必須条件です。`cargo fandhe gen` は Android と iOS の両方を常に出すため、片方の OS だけを対象にする絞り込みは範囲外です（`cdylib`・bin・`ios.bundle-id` のどれが欠けても gen 全体がエラーになります）。
+`cdylib` の無いアプリ（iOS・デスクトップだけ）は Android を対象にしないため、Android の生成物を出さずに通ります（#1200）。
+飛ばしたときは成功の出力に続けて、理由と直し方を 1 行、stderr に出します（終了コードは 0 のまま。#1399）。
+bin と `ios.bundle-id` は iOS の殻の必須条件で、欠けると gen 全体がエラーになります。対象 OS を明示して絞る引数は範囲外です。
 
 Web は `cargo fandhe gen --os web` で Web App Manifest だけを出します（triple は `wasm32-unknown-unknown`）。bin や iOS 設定を持たない Web 専用のアプリでも、Android・iOS の殻の必須条件に阻まれないよう、Web に限って絞り込みを認めます。
 
@@ -295,7 +297,7 @@ manifest = "web/manifest.webmanifest"       # アプリの crate からの相対
 |------|------|
 | `android/AndroidManifest.xml` | manifest merger 用の overlay（権限と `usesPermissionFlags`・feature・コンポーネント・`<application>` 直下の meta-data、MainActivity の宣言＝`exported`・`launchMode=singleTask`・`configChanges`・機能の許可済み属性・`android.app.lib_name`・MAIN/LAUNCHER と機能の intent-filter） |
 | `android/res/xml/fandhe_data_extraction_rules.xml`・`fandhe_backup_rules.xml` | バックアップ除外があるときだけ。API 31 以降用（`cloud-backup`・`device-transfer`）と API 30 以前用（`full-backup-content`）。overlay の `<application>` が `dataExtractionRules`・`fullBackupContent` で指す |
-| `android/fandhe.gradle` | `apply from:` 用。常に出す。gen の `android/java` と機能 crate の `java`・`res`（バックアップ規則があれば gen の `android/res` も）を srcDirs に足し、gen の Manifest を全 variant の overlay として登録し（`androidComponents`）、`gradle` の依存（基盤を含む）を `implementation` で足す |
+| `android/fandhe.gradle` | `apply from:` 用。Android を出すとき（cdylib があるとき）は常に出す。gen の `android/java` と機能 crate の `java`・`res`（バックアップ規則があれば gen の `android/res` も）を srcDirs に足し、gen の Manifest を全 variant の overlay として登録し（`androidComponents`）、`gradle` の依存（基盤を含む）を `implementation` で足す |
 | `android/java/com/fandhe/platform/FandheLibrary.java` | `NAME` に cdylib 名（`[lib] name`）を持つ。殻は `System.loadLibrary(FandheLibrary.NAME)` と書き、ライブラリ名の正本を `[lib] name` 1 か所にする |
 | `ios/Info.plist` | 確定値の定型キー（上記）、アプリ全体の値、説明文、`info-plist`。機能が無くても出す |
 | `macos/Info.plist` | ビルド設定変数の定型 7 キー（`fandhe-app.macos.bundle-id` があれば確定値）、アプリ全体の値、説明文、`info-plist` |

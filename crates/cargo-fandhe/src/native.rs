@@ -64,7 +64,15 @@ pub(crate) const APP_GROUPS_KEY: &str = "com.apple.security.application-groups";
 pub struct Generated {
     pub gen_dir: PathBuf,
     pub files: BTreeMap<String, String>,
+    /// 成功時に添える通知（生成を飛ばした OS と理由）。失敗ではないため終了コードは変えない（Issue #1399）。
+    pub notes: Vec<String>,
 }
+
+/// cdylib の無いアプリで Android の生成を飛ばしたときの通知。iOS・デスクトップだけのアプリでは正しい状態なので
+/// 警告にはせず、Android を対象にするつもりで書き忘れた利用者が気付けるよう直し方を添える（Issue #1399）。
+pub const ANDROID_SKIPPED_NOTE: &str =
+    "Android: 生成しません（lib の crate-type に cdylib がありません。\
+Android を対象にするなら `[lib]` の `crate-type` に \"cdylib\" を足してください）";
 
 /// アプリ側の入力 `[package.metadata.fandhe-app]`。`metadata.fandhe` と別キーなのは、
 /// 機能宣言として解釈されて `id` 必須で失敗するのを避けるため。
@@ -1076,9 +1084,15 @@ pub fn generate(manifest: Option<&Path>) -> Result<Generated, Vec<String>> {
     let info = AppInfo::from_package(&pkg, dir.join("gen"));
     let r = |i: usize| sets[i].iter().collect::<Vec<_>>();
     let files = render(&r(0), &r(1), &r(2), &cfg, &info)?;
+    let notes = if info.cdylib.is_none() {
+        vec![ANDROID_SKIPPED_NOTE.to_string()]
+    } else {
+        Vec::new()
+    };
     Ok(Generated {
         gen_dir: dir.join("gen"),
         files,
+        notes,
     })
 }
 
@@ -1111,6 +1125,7 @@ pub fn generate_web(manifest: Option<&Path>) -> Result<Generated, Vec<String>> {
                 "cargo fandhe gen が生成したディレクトリ。次回の生成で置き換わる\n".to_string(),
             ),
         ]),
+        notes: Vec::new(),
     })
 }
 

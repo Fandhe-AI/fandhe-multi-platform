@@ -641,6 +641,8 @@ fn missing_usage_description_is_an_error() {
     let g = generate(Some(&m)).unwrap();
     assert!(g.files["ios/Info.plist"].contains("<string>写真を撮ります</string>"));
     assert!(g.files["android/AndroidManifest.xml"].contains("android.permission.CAMERA"));
+    // cdylib のあるアプリには Android を飛ばした通知を出さない（Issue #1399）。
+    assert!(g.notes.is_empty(), "{:?}", g.notes);
 }
 
 #[test]
@@ -1018,4 +1020,6 @@ fn app_without_cdylib_skips_android() {
         "{:?}",
         g.files.keys()
     );
+    // 飛ばしたことは通知で知らせる（Issue #1399）。
+    assert_eq!(g.notes, [cargo_fandhe::ANDROID_SKIPPED_NOTE]);
 }
