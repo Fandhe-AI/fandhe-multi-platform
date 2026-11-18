@@ -58,6 +58,11 @@ unsafe_op_in_unsafe_fn = "deny"
 # は直接使わない。既に workspace 依存グラフ内で解決済み（Cargo.lock 実査済み、1.4.2）の推移依存を
 # 直接依存へ昇格するのみで新規 crate の追加ではない。
 cc = "1"
+# Issue #1200: `fandhe-macros`（`#[fandhe::main]`）が使う。Cargo.lock に既にある版（wasm-bindgen・thiserror の
+# 推移依存）を直接依存へ昇格するのみで、新しい package は増やさない。
+proc-macro2 = "1"
+quote = "1"
+syn = "2"
 # Phase 11（Issue #859）: `fandhe-cap-clipboard`（`ArboardClipboard`）が使う
 # クリップボード抽象（macOS/Windows/Linux）。eframe → egui-winit が "clipboard" feature で
 # 非 optional に引いているため既に 3.6.1 が解決済みで（`cargo tree -i arboard` 実査済み、

@@ -12,10 +12,9 @@ publish = false
 proc-macro = true
 
 [dependencies]
-# Cargo.lock に既にある版（wasm-bindgen・thiserror の推移依存）を使い、新しい package は増やさない。
-proc-macro2 = "1"
-quote = "1"
-syn = { version = "2", features = ["full"] }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true, features = ["full"] }
 
 [lints]
 workspace = true
