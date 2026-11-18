@@ -4,7 +4,7 @@
 //! [`super::mount::mount_with_effect`] の effect として観測し、ブラウザから読んだ値を
 //! `finish_read` へ書き戻す。`fandhe-device` の `DeviceInfo` トレイトは経由しない
 //! （`fandhe-cap-device-info` の `contract.rs` の module doc どおり、Web は本クレートの担当）。
-//! `fandhe-egui-proxy` の wasm canvas 経路は対象外。
+//! egui の wasm canvas 経路（`fandhe-render-egui`）は対象外。
 //!
 //! # 読み取り方
 //!
@@ -33,7 +33,7 @@
 use fandhe_core::screens::device_info_show::{DeviceInfoReading, ReadFailure};
 use fandhe_device::device_info::clean_text;
 
-/// 全項目が取れなかったときの固定文言（egui-proxy 側と同じ）。
+/// 全項目が取れなかったときの固定文言（`fandhe-cap-device-info` の effect ドライバと同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const READ_FAILED: &str = "端末情報の読み取り";
 

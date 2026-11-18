@@ -3,7 +3,7 @@
 //! `fandhe_core::screens::calendar_add`（端末依存ゼロ）の要求を観測し、検査
 //! （`crate::contract::EventDraft::parse`）を通ったものだけを OS へ渡して、
 //! 結果を `CompletionSender` 経由で返す（`screens/registry.rs` の `effect` 区画から
-//! 呼ばれる契約、`fandhe-egui-proxy` の `device/biometric_auth.rs` と同型）。契約と守る範囲は
+//! 呼ばれる契約、`fandhe-cap-biometric-auth` の `driver.rs` と同型）。契約と守る範囲は
 //! `crate::contract` のモジュール doc を参照。
 //!
 //! - macOS / iOS: EventKit（iOS は EventKitUI の編集画面）はコールバック型のため

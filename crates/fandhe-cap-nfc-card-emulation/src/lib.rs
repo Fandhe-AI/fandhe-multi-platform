@@ -7,7 +7,7 @@
 //! Android の Java・res（`android/`）を 1 つに集める。iOS は Apple の entitlement 承認待ちで対象外。
 //!
 //! 依存方向は本 crate → `fandhe-core` / `fandhe-runtime` / `fandhe-platform-android` の一方向で、
-//! egui・`fandhe-egui-proxy`・`fandhe-device` には依存しない。呼び出し元は画面カタログ
+//! egui・`fandhe-device` には依存しない。呼び出し元は画面カタログ
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect "nfc_card_emulation_show"` 行）で、
 //! `ProxyApp::update` のフレーム末尾から毎フレーム [`nfc_card_emulation_show_effect`] が呼ばれる。
 //! 画面の状態機械は `fandhe-core` に残している（置き場の最終判断は #1165 系）。

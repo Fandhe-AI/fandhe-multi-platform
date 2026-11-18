@@ -36,7 +36,7 @@ pub use crate::file_picker::{MAX_FILE_BYTES, PickedFile, read_picked_from};
 pub const MAX_DROP_FILES: usize = 32;
 
 /// ドロップされた 1 件の受け取りに失敗した理由。文言にはパスもファイル名も
-/// 含めない（security.md A09。呼び出し元＝`fandhe-egui-proxy` の効果ドライバが
+/// 含めない（security.md A09。呼び出し元＝`fandhe-cap-drag-drop` の effect ドライバが
 /// 表示用の名前を別途 `Path::file_name` から取り出す）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum DropError {
@@ -68,7 +68,7 @@ pub enum DropError {
 /// 通常ファイルなら [`read_dropped_from`]（サイズ超過・その他失敗の写像を一本化した
 /// 共通部品）へ委譲する。
 ///
-/// 呼び出し元: `fandhe-egui-proxy` の `device/drag_drop.rs`（macOS/Windows。egui
+/// 呼び出し元: `fandhe-cap-drag-drop` の `driver.rs`（macOS/Windows。egui
 /// `RawInput::dropped_files` が渡すパスをそのまま渡す）と `device/ios_drag_drop.rs`
 /// （iOS、Issue #1015。`NSItemProvider` の `loadFileRepresentation...` completion が
 /// 渡す一時ファイルの絶対パスを渡す。この一時ファイルは completion が return すると
@@ -108,8 +108,8 @@ pub fn read_dropped(path: &Path) -> Result<PickedFile, DropError> {
 /// [`DropError::Unreadable`] へ写す（[`read_dropped`] と Android 経路の唯一の写像箇所、
 /// 実装計画 §3-4「fd 読み取り」）。
 ///
-/// 呼び出し元（後続 Android、Issue #1016）: `fandhe-egui-proxy` の
-/// `device/android.rs::nativeOnDragDropItem` 実体。SAF が返す fd は pipe のことがあり
+/// 呼び出し元（後続 Android、Issue #1016）: `fandhe-cap-drag-drop` の
+/// `android.rs` の `nativeOnDragDropItem` 実体。SAF が返す fd は pipe のことがあり
 /// `is_file()` 検査が使えないため、[`read_dropped`] の種別確認（`open_for_type_check`/
 /// `metadata().is_file()`）は経由せず、Java 側で既に「通常ファイル」と判定済みの fd を
 /// そのまま渡す（`ContentResolver#getType` が `Document.MIME_TYPE_DIR` かどうかで

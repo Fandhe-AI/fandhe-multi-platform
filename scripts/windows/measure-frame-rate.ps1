@@ -1,6 +1,6 @@
 ﻿# TASK-5.3（REQ-5 / M4、Issue #238 / #594）: Windows デスクトップ版のフレームレート計測。
 #
-# 位置づけ: `frame-metrics` feature（`crates/fandhe-egui-proxy/src/frame_metrics.rs`）が
+# 位置づけ: `frame-metrics` feature（`crates/fandhe-gallery/src/demo/frame_metrics.rs`）が
 # 出力する `FANDHE_FRAME_METRICS=<json>` を回収する。計測プロトコル（300 項目
 # VirtualList・warmup 120 フレーム破棄・600 フレーム採取・p95・16.6ms 超過率）は
 # PoC-4 準拠で iOS/Android/Linux と共通であり、本スクリプトは Windows 側の
@@ -57,8 +57,8 @@ param(
     [switch]$AllowNonStandardRefreshRate,
 
     # 計測ウィンドウを特定するためのタイトル。既定値は `frame-metrics` 有効ビルドが
-    # `eframe::run_native` へ渡す名前（`crates/fandhe-egui-proxy/src/frame_metrics.rs`）と
-    # 一致させている。通常ビルドの `fandhe-egui-proxy`（`src/main.rs`）とは別名である点に注意。
+    # `eframe::run_native` へ渡す名前（`crates/fandhe-gallery/src/demo/frame_metrics.rs`）と
+    # 一致させている。通常ビルドの `fandhe-gallery`（`src/main.rs`）とは別名である点に注意。
     # Process.MainWindowHandle は winit の内部ウィンドウ（クラス
     # "Winit Thread Event Target"、タイトル空、可視扱い）を返すため使えない
     # （下記 FindWindows のコメント参照）。

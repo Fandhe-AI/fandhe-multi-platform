@@ -4,7 +4,7 @@
 //! 扱う範囲は「固定のメモ 1 件を OS の検索へ登録すること」と「自アプリのドメインに属する項目の
 //! 全削除」だけ。OS の検索結果から開かれたときの受信は `url_scheme` の入口（`fandhe://spotlight/<id>`）
 //! を使い、この trait には含めない。対象は macOS / iOS（Core Spotlight）・Android（AppSearch、API 31+）。
-//! Windows・Web は `Unsupported` 固定。同期 API で、呼び出し側（`fandhe-egui-proxy` の effect
+//! Windows・Web は `Unsupported` 固定。同期 API で、呼び出し側（機能 crate の effect
 //! ドライバ）は UI を止めないようワーカースレッドから呼ぶ。
 //!
 //! # 契約

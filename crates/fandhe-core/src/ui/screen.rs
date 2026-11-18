@@ -378,7 +378,7 @@ impl<S> Screen<S> {
     /// [`crate::state::WriteFn`]）と代入互換の関数ポインタで、環境キャプチャクロージャを
     /// 型レベルで拒否する（REQ-13）。
     ///
-    /// **実描画・配線**: egui-proxy が実描画を担い（Issue #806）、チェック状態変更は
+    /// **実描画・配線**: `fandhe-render-egui` が実描画を担い（Issue #806）、チェック状態変更は
     /// `Event::WidgetValueChanged` → [`super::event::set_widget_value_at`] 経由で `set` へ
     /// 届く（Issue #805）。`render_headless` は `Node::Widget` の行を出力しない契約
     /// （`ui/render.rs` 参照）を維持する。
@@ -413,7 +413,7 @@ impl<S> Screen<S> {
     /// 拡張するのではなく、兄弟モジュールの [`super::RadioGroupWidget`] が別型として担う。
     /// 本ビルダーは `RadioButton::bound(..)` によるシグネチャ確定済みの契約を提供する。
     ///
-    /// **実描画・配線**: egui-proxy が実描画を担い（Issue #806）、選択変更は
+    /// **実描画・配線**: `fandhe-render-egui` が実描画を担い（Issue #806）、選択変更は
     /// `Event::WidgetValueChanged` → [`super::event::set_widget_value_at`] 経由で `set` へ
     /// 届く（Issue #805）。`render_headless` は `Node::Widget` の行を出力しない契約
     /// （`ui/render.rs` 参照）を維持する。
@@ -442,7 +442,7 @@ impl<S> Screen<S> {
     /// 型エイリアス（[`crate::state::ReadFn`] / [`crate::state::WriteFn`]）と代入互換の
     /// 関数ポインタで、環境キャプチャクロージャを型レベルで拒否する（REQ-13）。
     ///
-    /// **実描画・配線**: egui-proxy が実描画を担い（Issue #806）、トグル操作は
+    /// **実描画・配線**: `fandhe-render-egui` が実描画を担い（Issue #806）、トグル操作は
     /// `Event::WidgetValueChanged` → [`super::event::set_widget_value_at`] 経由で `set` へ
     /// 届く（Issue #805）。`render_headless` は `Node::Widget` の行を出力しない契約
     /// （`ui/render.rs` 参照）を維持する。
@@ -472,7 +472,7 @@ impl<S> Screen<S> {
     /// [`crate::state::WriteFn`]）と代入互換の関数ポインタで、環境キャプチャクロージャを
     /// 型レベルで拒否する（REQ-13）。
     ///
-    /// **実描画・配線**: egui-proxy が実描画を担い（Issue #806）、ドラッグ・キー操作による
+    /// **実描画・配線**: `fandhe-render-egui` が実描画を担い（Issue #806）、ドラッグ・キー操作による
     /// 値変更は `Event::WidgetValueChanged` → [`super::event::set_widget_value_at`] 経由で
     /// `set` へ届く（Issue #805）。`render_headless` は `Node::Widget` の行を出力しない契約
     /// （`ui/render.rs` 参照）を維持する。

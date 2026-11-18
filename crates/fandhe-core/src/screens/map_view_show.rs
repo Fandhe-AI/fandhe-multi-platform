@@ -85,7 +85,7 @@ pub enum MapPhase {
     Loading,
 }
 
-/// OS が判定した結果（写像は `fandhe-egui-proxy` 側の責務）。
+/// OS が判定した結果（写像は機能 crate 側の責務）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MapOutcome {
     /// 地図の画像が得られた。

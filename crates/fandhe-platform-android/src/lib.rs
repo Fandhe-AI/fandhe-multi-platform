@@ -1,7 +1,7 @@
 //! Android の共通層（TASK-21.2、Issue #1166）。
 //!
 //! 機能 crate が egui に依存しないよう、Android の機能実装が共通で要る 3 点だけを
-//! レンダラ非依存で切り出した crate。依存方向は `fandhe-egui-proxy`（レンダラ実装）→ 本 crate
+//! レンダラ非依存で切り出した crate。依存方向は `fandhe`・機能 crate → 本 crate
 //! の一方向で、egui / eframe / winit は参照しない。
 //!
 //! - [`set_android_app`] / [`android_app`]: `android_main` が受け取る [`AndroidApp`] の保持
@@ -32,7 +32,7 @@ pub use android_activity::AndroidApp;
 /// 新しい [`AndroidApp`] で再度呼ばれるため。[`set_android_app`] が呼ばれるたびに差し替え、
 /// 破棄済み `Activity` を指す古い値を残さない。
 ///
-/// 計測専用ビルド（`fandhe-egui-proxy` の `frame-metrics`）は別の `android_main` を使い
+/// 計測専用ビルド（`fandhe-gallery` の `frame-metrics`）は別の `android_main` を使い
 /// [`set_android_app`] を呼ばないので、[`android_app`] は常に `None` を返す。
 static ANDROID_APP: Mutex<Option<AndroidApp>> = Mutex::new(None);
 
@@ -146,7 +146,7 @@ pub fn read_bounded_string(
 ///
 /// `AndroidApp::content_rect()` は GameActivity 経路（android-activity 0.6.1）で insets を反映せず
 /// 常に画面全体を返すため（Issue #579 の実機確認）、Java 側リスナー → JNI で受ける。呼び出し元は
-/// `fandhe-egui-proxy`（描画の余白）と safe-area-insets の機能（#1327 で旧 `MainActivity` 経路から移した）。
+/// `fandhe` の入口（描画の余白、`src/entry/android.rs`）と safe-area-insets の機能（#1327 で旧 `MainActivity` 経路から移した）。
 /// 4 本を個別に読み書きするため組としての原子性は無い。UI スレッドの書き込み中に描画スレッドが読むと
 /// 新旧混在になり得るが、ずれは最大 1 フレームで次の読み出しで自己修正される（見た目のみ）。
 static INSET_LEFT: AtomicI32 = AtomicI32::new(0);

@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。実際のスキャンは本モジュール外
-//! （`fandhe-egui-proxy` の effect ドライバ、`device/bluetooth_le.rs`）が
+//! （`fandhe-cap-bluetooth-le` の effect ドライバ（`driver.rs`）が
 //! [`take_request`] で要求を観測し、[`finish_scan`] で結果を注入する。
 //! 接続・読み書き・ペアリングは扱わない。
 //!

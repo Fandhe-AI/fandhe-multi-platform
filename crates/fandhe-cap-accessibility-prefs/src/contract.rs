@@ -1,5 +1,5 @@
 //! アクセシビリティ設定（視差軽減・コントラスト増加）の契約（Issue #1308、親 #1132）。
-//! 2 つの OS 設定を画面へ反映するための橋渡しで、`fandhe-egui-proxy` の
+//! 2 つの OS 設定を画面へ反映するための橋渡しで、
 //! `fandhe-cap-accessibility-prefs/src/driver.rs` が間隔つきで [`AccessibilityPrefsSource::read`] を呼ぶ
 //! （pull 型。OS の変化通知は購読しない）。Web は `fandhe-web-dom` が `matchMedia` を読む。
 //!
@@ -29,7 +29,7 @@ use std::time::Duration;
 
 use crate::error::AccessibilityPrefsError;
 
-/// 画面側が OS を読み直す間隔。`fandhe-egui-proxy` と `fandhe-web-dom` が共有する唯一の値。
+/// 画面側が OS を読み直す間隔。本 crate の `driver` と `fandhe-web-dom` が共有する唯一の値。
 pub const READ_INTERVAL: Duration = Duration::from_secs(1);
 
 /// ある時点のアクセシビリティ設定。`None` は取得できない（不明）。

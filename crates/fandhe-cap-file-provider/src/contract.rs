@@ -3,7 +3,7 @@
 //! 扱う範囲は「アプリ専用フォルダの書類を、一覧する・見本を置く・消す」ところまで。
 //! フォルダを OS のファイル画面（Android の Files アプリ等）へ見せる provider 本体は OS 側
 //! （Android は `DocumentsProvider`）が担い、本モジュールはフォルダを引数に取る
-//! 共通実装 [`DirFileProvider`] と契約を持つ。呼び出し元は `fandhe-egui-proxy` の
+//! 共通実装 [`DirFileProvider`] と契約を持つ。呼び出し元は本 crate の
 //! `driver`（画面向け effect ドライバ）。対象 OS は Android だけで、
 //! iOS・macOS・Windows は保留、Web は対象外。
 //!

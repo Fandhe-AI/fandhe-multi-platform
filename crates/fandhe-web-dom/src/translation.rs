@@ -6,7 +6,7 @@
 //! `TextTranslator` trait（`Send + Sync`）は `JsValue` を持てないため通らず、契約
 //! （`fandhe_cap_translation` の写像表）だけを共有する。`Translator` は web-sys に型が無いので
 //! `js_sys::Reflect` で呼ぶ。Language Detector API は使わない（元言語は ja 固定）。
-//! `fandhe-egui-proxy` の wasm canvas 経路は対象外（`Unsupported`）。
+//! egui の wasm canvas 経路（`fandhe-render-egui`）は対象外（`Unsupported`）。
 //!
 //! # 結果の種類
 //!
@@ -26,13 +26,13 @@
 //! 守る: 1 マウント内の要求と完了の順序（世代照合）、失敗・期限切れ・非対応を成功へ畳まないこと、
 //! `Translator`（`destroy()`）・タイマー・リスナーの解放。
 //! 守らない: ブラウザごとの訳文の差、所要時間、期限後もブラウザ側の処理が走り切ること、
-//! 複数タブ・複数マウント間の一致、egui-proxy の wasm canvas 経路。原文・訳文・例外の `message` は
+//! 複数タブ・複数マウント間の一致、egui の wasm canvas 経路（`fandhe-render-egui`）。原文・訳文・例外の `message` は
 //! 画面にも console にも出さない（security.md A09）。
 
 use fandhe_cap_translation::{check_result, TranslationError, EMPTY};
 use fandhe_core::screens::translation::TranslateFailure;
 
-/// 失敗の固定文言（`fandhe-egui-proxy` の `FAILED_MESSAGE` と同じ）。
+/// 失敗の固定文言（`fandhe-cap-translation` の `driver.rs` の `FAILED_MESSAGE` と同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const FAILED: &str = "翻訳できませんでした";
 
@@ -436,9 +436,9 @@ mod tests {
         assert!(!is_late(0.0, f64::NAN));
     }
 
-    /// egui-proxy 側の固定文言と一致させる（画面の表示が OS 間で揃う）。
+    /// `fandhe-cap-translation` の effect ドライバの固定文言と一致させる（画面の表示が OS 間で揃う）。
     #[test]
-    fn failed_message_matches_egui_proxy() {
+    fn failed_message_matches_driver() {
         assert_eq!(FAILED, "翻訳できませんでした");
     }
 }

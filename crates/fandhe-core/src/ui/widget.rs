@@ -83,7 +83,7 @@ pub struct Measurement {
 /// 常に `vec![...]` の直接構築であり、`fandhe-web-dom` / `fandhe-swiftui-bridge` 側も
 /// テスト内でのバリアント構築のみ）ため、バリアント追加は既存契約を壊さない
 /// （`ui/widget.rs` モジュール doc 参照）。`Circle` の実描画への変換は
-/// `fandhe-egui-proxy::paint_command` / `fandhe-web-dom::dom_tree` が担う
+/// `fandhe-render-egui::paint_command` / `fandhe-web-dom::dom_tree` が担う
 /// （`fandhe-swiftui-bridge` は対象外、Issue #828）。
 #[derive(Debug, Clone, PartialEq)]
 pub enum PaintCommand {
@@ -133,7 +133,7 @@ pub enum PaintCommand {
     ///
     /// `Rect` / `StyledRect` は暗黙に外側の `origin`/`size` を境界とするが、円は
     /// その矩形境界と一致しない（内接円では表現が破綻する用途がある）ため、
-    /// 中心座標・半径を自前で持つ契約とする。egui-proxy は
+    /// 中心座標・半径を自前で持つ契約とする。`fandhe-render-egui` は
     /// `paint_command::circle_shape` / `paint_command::paint_circle` へ、web-dom は
     /// `dom_tree::circle_to_dom_node`（`border-radius: 50%` の `div`）へ変換する
     /// （`fandhe-swiftui-bridge` は対象外、上記モジュール doc 参照）。
@@ -148,7 +148,7 @@ pub enum PaintCommand {
     /// キャンバス全面から 4 辺を引いた矩形の塗り（セーフエリアの内側、Issue #444）。
     ///
     /// 各値はキャンバス矩形の対応する辺からの距離（論理ピクセル相当）で、位置を持たない
-    /// ため平行移動の対象外。egui-proxy は `paint_command::inset_rect` で矩形を求める
+    /// ため平行移動の対象外。`fandhe-render-egui` は `paint_command::inset_rect` で矩形を求める
     /// （`fandhe-web-dom` は `dom_tree::inset_rect_to_dom_node`、`fandhe-swiftui-bridge` は対象外）。
     InsetRect {
         /// 左辺からの距離。
@@ -476,7 +476,7 @@ pub trait Widget<S>: std::fmt::Debug + Send + Sync {
     /// 描画してしまう設計的な罠を再導入する）。
     ///
     /// なお [`Widget::children`] は本メソッドを経ない共有参照走査からも呼べる
-    /// （子ノード列は `state` から都度導出する契約のため）。egui-proxy は
+    /// （子ノード列は `state` から都度導出する契約のため）。`fandhe-render-egui` は
     /// `clone_box` した上で本メソッドを呼んで sync 済みのクローンを描画に使う
     /// （Issue #739）。
     fn sync_from_state(&mut self, state: &S);
@@ -497,7 +497,7 @@ pub trait Widget<S>: std::fmt::Debug + Send + Sync {
 
     /// このウィジェットのアクセシブルネーム（REQ-9 / TASK-9.1-S2 接続点）。
     ///
-    /// プラットフォームレイヤ（`fandhe-egui-proxy::accessibility::widget_ax_node`）が
+    /// プラットフォームレイヤ（`fandhe-render-egui::accessibility::widget_ax_node`）が
     /// `accesskit::Node::set_label` へそのまま渡す値であり、画面上に既に表示されている
     /// ラベル文字列のみを返す契約とする（新規に機微情報を露出しない、OWASP A03 対策・
     /// `.claude/rules/security.md` 準拠）。
@@ -551,13 +551,13 @@ pub trait Widget<S>: std::fmt::Debug + Send + Sync {
         Vec::new()
     }
 
-    /// プラットフォームレイヤ（`fandhe-egui-proxy::render_node` 等）が具象型へ
+    /// プラットフォームレイヤ（`fandhe-render-egui::render_node` 等）が具象型へ
     /// downcast するための穴（Issue #739）。`Node::Widget(Box<dyn Widget<S>>)` の
     /// 共有参照からしか辿れない現行契約を崩さずに、`DialogWidget` のような固有
     /// フィールド（title / body / dismiss_label 等）へアクセスするために使う。
     ///
     /// 既定実装は `None`。`Self: 'static` を満たす具象型のみ `Some(self)` を返す
-    /// ようオーバーライドできる（対象は egui-proxy が実描画する型に限る想定）。
+    /// ようオーバーライドできる（対象は `fandhe-render-egui` が実描画する型に限る想定）。
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         None
     }

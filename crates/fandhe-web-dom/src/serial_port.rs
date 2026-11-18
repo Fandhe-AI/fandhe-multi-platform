@@ -65,7 +65,7 @@
 use fandhe_cap_serial_port::{LineAssembler, SerialPortFailure, BAUD_RATE, ROUND_TRIP_TIMEOUT};
 use fandhe_core::screens::serial_port_show::PortFailure;
 
-/// 失敗時の固定文言（egui-proxy 側と同じ）。例外の `message` は使わない。
+/// 失敗時の固定文言（`fandhe-cap-serial-port` の effect ドライバと同じ）。例外の `message` は使わない。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const FAILED_TEXT: &str = "シリアルポートの操作";
 
@@ -126,7 +126,7 @@ pub(crate) fn failure_from_io_error(name: Option<&str>) -> SerialPortFailure {
     }
 }
 
-/// 契約の失敗種別を画面の失敗種別へ（egui-proxy の `to_failure` と同じ写像）。
+/// 契約の失敗種別を画面の失敗種別へ（`fandhe-cap-serial-port` の `driver.rs` の `to_failure` と同じ写像）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn to_port_failure(f: SerialPortFailure) -> PortFailure {
     match f {

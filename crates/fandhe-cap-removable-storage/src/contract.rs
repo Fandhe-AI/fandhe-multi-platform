@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #175、Issue #858）: 外部ストレージ（ボリューム）の着脱を OS の通知で
-//! 受け取り、今のボリューム一覧を OS から読み直す契約。`fandhe-egui-proxy` の
+//! 受け取り、今のボリューム一覧を OS から読み直す契約。本 crate の
 //! `driver.rs`（effect ドライバ）が [`RemovableStorage::start`] で購読を開始し、
 //! 各 OS 実装（macOS・Windows: #858、Android: #859）が本トレイトを実装する。iOS と Web は対応表で
 //! 対象外（`UnsupportedRemovableStorage`）。

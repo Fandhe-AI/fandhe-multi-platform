@@ -4,7 +4,7 @@
 //! effect として駆動する。`take_command` で要求を観測し、DOM に差し込まない `<audio>`
 //! （`HTMLMediaElement`）へ `fandhe_device::media_playback::demo_wav` の WAV を `blob:` URL で渡して鳴らし、
 //! 結果を `apply_update` で書き戻す。`MediaPlayback` trait（`Send + Sync`）は `JsValue` を持てないため通らない。
-//! `fandhe-egui-proxy` の wasm canvas 経路は対象外（従来どおり `Unsupported`）。
+//! egui の wasm canvas 経路（`fandhe-render-egui`）は対象外（従来どおり `Unsupported`）。
 //!
 //! # 結果の種類
 //!
@@ -25,15 +25,15 @@
 //! 守る: 1 マウント内の操作順と世代照合、失敗・ブロック・期限切れを成功へ畳まないこと、object URL・
 //! リスナー・タイマーの解放、中断後に勝手に再開しないこと。
 //! 守らない: 位置表示のポーリング間隔ぶんの遅れ、複数タブ・複数マウント間の一致、他タブの音声との混ざり、
-//! egui-proxy の wasm canvas 経路。OS のメディア操作への連携は `now_playing` が担う。例外の `message` は画面にも console にも出さない（security.md A09）。
+//! egui の wasm canvas 経路（`fandhe-render-egui`）。OS のメディア操作への連携は `now_playing` が担う。例外の `message` は画面にも console にも出さない（security.md A09）。
 
 use fandhe_cap_media_playback::{secs_to_ms, START_DEADLINE};
 use fandhe_core::screens::audio_play::{AudioFailure, AudioPhase, AudioUpdate};
 
-/// 再生失敗の固定文言（`fandhe-egui-proxy` のドライバと同じ）。
+/// 再生失敗の固定文言（`fandhe-cap-media-playback` の effect ドライバと同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const FAILED_PLAY: &str = "音声の再生";
-/// デコード失敗の固定文言（`fandhe-egui-proxy` のドライバと同じ）。
+/// デコード失敗の固定文言（`fandhe-cap-media-playback` の effect ドライバと同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const FAILED_DECODE: &str = "音声を読み込めません";
 

@@ -5,7 +5,7 @@
 //! `finish_compose` へ書き戻す。`fandhe-device` の `ComposeMailSms` トレイトは経由せず、
 //! 検証と URL 組み立ては `ComposeRequest`（macOS・Windows と共用）に一本化する。
 //! `fandhe-device` module doc の「非対応（Web ほか）→ `Unsupported`」は
-//! `fandhe-egui-proxy` の wasm canvas 経路の話で、本モジュールとは別経路。
+//! egui の wasm canvas 経路（`fandhe-render-egui`）の話で、本モジュールとは別経路。
 //!
 //! # 結果の写像
 //!

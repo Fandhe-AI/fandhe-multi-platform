@@ -1,4 +1,4 @@
-//! ローカル保存の抽象（Phase 8 / Issue #746）。`fandhe-egui-proxy` 側の画面が
+//! ローカル保存の抽象（Phase 8 / Issue #746）。画面（`fandhe-cap-local-storage-kv` の effect ドライバ経由）が
 //! key-value 形式でファイルを読み書きするための境界。
 //!
 //! `FsStorage` は `DataDir` 配下に閉じたファイル I/O のみを行い、`key` はパス区切りや
@@ -32,7 +32,7 @@ static TMP_NONCE: AtomicU64 = AtomicU64::new(0);
 const TMP_SUBDIR: &str = ".fandhe-tmp";
 
 /// 端末保存領域への読み書き契約。実装はスレッド間で共有されうる
-/// （呼び出し元は `fandhe-egui-proxy` の描画スレッドと将来の worker スレッド、#745 参照）。
+/// （呼び出し元は `fandhe-cap-local-storage-kv` の effect ドライバ（描画スレッド）と将来の worker スレッド、#745 参照）。
 pub trait Storage: Send + Sync {
     /// `key` に対応する値を読む。未存在は `Ok(None)`（エラーにしない契約）。
     fn read(&self, key: &str) -> Result<Option<Vec<u8>>, StorageError>;

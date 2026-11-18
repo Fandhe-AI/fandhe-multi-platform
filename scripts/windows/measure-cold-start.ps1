@@ -1,6 +1,6 @@
 ﻿# TASK-5.1（REQ-5 / M4、Issue #236 / #594）: Windows デスクトップ版のコールドスタート計測。
 #
-# 位置づけ: `cold-start-probe` feature（`crates/fandhe-egui-proxy/src/cold_start.rs`）が
+# 位置づけ: `cold-start-probe` feature（`crates/fandhe-gallery/src/demo/cold_start.rs`）が
 # 出力する `COLD_START_MS=<value>;` を N 回分回収し、中央値を採る。計測定義（t0 =
 # `fn main` 冒頭、t1 = 初回 `eframe::App::update` 完了）は iOS/Android/macOS と共通で、
 # 本スクリプトは Windows 側の実行・集計だけを担う。

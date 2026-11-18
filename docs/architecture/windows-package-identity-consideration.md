@@ -1,7 +1,7 @@
 # Windows パッケージ ID 導入の検討記録（ADR）
 
 - **状態: 方針決定済み（2026-11-10、§7）**。実装は未着手です。本書を入れても導入したことにはなりません
-- 対象: 端末機能の Windows 実装（`crates/fandhe-egui-proxy/src/device/windows_*.rs`）と対応表の Windows セル
+- 対象: 端末機能の Windows 実装（機能 crate の `crates/fandhe-cap-*/src/windows.rs`）と対応表の Windows セル
 - 関連 Issue: #3（ストア提出パイプライン。Windows `.msix` を含む）、#335（対応表の `no` の振り分け）
 - 本書で変えないもの: コード、マニフェスト、CI、対応表 JSON（`docs/device/capabilities/*.json`）
 - 実機確認: **本書の内容は Windows 実機で 1 つも試していません**。公式文書と対応表の読み取りだけで書いています。

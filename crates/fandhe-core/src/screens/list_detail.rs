@@ -17,7 +17,7 @@
 //! `screens/` は「AI が生成した画面モジュールの置き場」（CLAUDE.md、Issue #653）で
 //! `fandhe-core` は `publish = false`（crates.io 未公開）のため外部利用者は存在せず、
 //! 本クレート内の呼び出し側（`crates/fandhe-core/tests/list_detail.rs`・
-//! `crates/fandhe-egui-proxy/tests/screen_stack_render.rs`）は `products` を参照する。
+//! `crates/fandhe-render-egui/tests/screen_stack_render.rs`）は `products` を参照する。
 //! `docs/ai/SCHEMA.md` パターン 8 の `rust,ignore` コード例（`items` のまま）は
 //! コンパイル対象外の最小形説明であり、拡張後の実装は本ファイルを参照する旨を記載している。
 

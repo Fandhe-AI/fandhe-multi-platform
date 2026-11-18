@@ -3,7 +3,7 @@
 //! `fandhe_core::screens::network_status_show`（端末依存ゼロ）の画面を
 //! [`super::mount::mount_with_effect`] の effect として駆動する。値の取得は
 //! `navigator.onLine` と（Chromium の一部のみ）`navigator.connection.type`。
-//! `fandhe-egui-proxy` の wasm canvas 経路は対象外。共有するのは
+//! egui の wasm canvas 経路（`fandhe-render-egui`）は対象外。共有するのは
 //! `fandhe_cap_network_status::READ_INTERVAL` だけで、core の `Reading` へ直接写す。
 //!
 //! # 方式
@@ -22,7 +22,7 @@
 
 use fandhe_core::screens::network_status_show::{KindView, Reading};
 
-/// タイマー登録失敗時の固定文言（egui-proxy 側と同じ）。
+/// タイマー登録失敗時の固定文言（`fandhe-cap-network-status` の effect ドライバと同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const FAILED_LABEL: &str = "接続状態の取得";
 

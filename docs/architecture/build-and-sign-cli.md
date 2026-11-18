@@ -70,7 +70,7 @@ options:
   = 署名する。値 `1` のみ許容し、明示 opt-in で署名フェーズをスキップする。非 macOS 構造検証モードでは
   CLI 側が自動で `1` を export する）。
   - 環境変数名・既定値は `scripts/ios/build-simulator-app.sh`（TASK-11.1-S2/S3 / #221・#222）の
-    呼び出し契約に合わせている。同スクリプトが実処理を担う対象パッケージは `fandhe-egui-proxy` に
+    呼び出し契約に合わせている。同スクリプトが実処理を担う対象パッケージは `fandhe-gallery` に
     固定されており、`FANDHE_IOS_PACKAGES` のようなパッケージ選択用の環境変数は提供しない
     （`scripts/ios/build-cross-targets.sh` の `FANDHE_IOS_TARGETS`/`FANDHE_IOS_PACKAGES` は
     `fandhe-core`/`fandhe-swiftui-bridge` ライブラリ向けの別スクリプトの契約であり、本 CLI の
@@ -131,7 +131,7 @@ PoC-3 は macOS 単体 `.app` の生成も行っていますが、本 CLI の `i
 本タスク系列のスコープ外です。
 
 > **注記**: 本 CLI は `swiftc`/`xcrun` を使わず、`cargo build --target aarch64-apple-ios-sim` の成果物
-> （`fandhe-egui-proxy` パッケージの `fandhe-gallery-desktop` バイナリ）を直接バンドルする。
+> （`fandhe-gallery` パッケージの `fandhe-gallery-desktop` バイナリ）を直接バンドルする。
 > 上表の PoC-3 側「swiftc ビルド」は PoC-3 の手順であり、本 CLI は cargo build のみで完結する。
 > `check_environment` の必須コマンドもこれに合わせ `cargo`/`rustup`/`python3`/`codesign` とする。
 

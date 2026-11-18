@@ -3,9 +3,9 @@
 //! `fandhe_core::screens::audio_play`（端末依存ゼロ）が `Playing` / `Paused` の間だけ、Media Session API
 //! （`navigator.mediaSession`）へ曲名と再生状態を渡し、ブラウザ・OS のメディア操作（メディアキー・通知・
 //! コントロールセンター）から来た再生・一時停止を画面へ返す。`media_playback::audio_play_effect` の最後から
-//! [`sync`] が毎フレーム呼ばれる（`fandhe-egui-proxy` の `device/now_playing.rs` の Web 版。同じ手順）。
+//! [`sync`] が毎フレーム呼ばれる（`fandhe-cap-now-playing-controls` の `driver.rs` の Web 版。同じ手順）。
 //! `NowPlaying` trait（`Send + Sync`）は `JsValue` / `Closure` を持てないため通らない。
-//! `fandhe-egui-proxy` の wasm canvas 経路は対象外（従来どおり `Unsupported`）。契約の SSOT は
+//! egui の wasm canvas 経路（`fandhe-render-egui`）は対象外（従来どおり `Unsupported`）。契約の SSOT は
 //! `fandhe_device::now_playing`。
 //!
 //! # Reflect を使う理由
@@ -33,7 +33,7 @@
 //! handler・Closure の解放。例外の `message` は画面にも console にも出さない（security.md A09）。
 //! 守らない: 複数タブ・複数マウント（`mediaSession` はページ全体で 1 つのため最後の持ち主が勝つ）、
 //! Chrome が短いメディア（素材は 5 秒）に通知を出さない場合があること、位置表示（`setPositionState`）、
-//! `Loading` に入る前の既定動作、egui-proxy の wasm canvas 経路。
+//! `Loading` に入る前の既定動作、egui の wasm canvas 経路（`fandhe-render-egui`）。
 
 use fandhe_cap_now_playing_controls::OsMediaCommand;
 use fandhe_core::screens::audio_play::OsCommand;

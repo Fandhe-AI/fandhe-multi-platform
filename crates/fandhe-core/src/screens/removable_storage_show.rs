@@ -7,7 +7,7 @@
 //! （`screens/mod.rs` の `pub mod removable_storage_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
-//! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-egui-proxy` の
+//! 「新規画面ファイルの置き場」節）。OS 呼び出しは
 //! `crates/fandhe-cap-removable-storage/src/driver.rs` が [`take_init`] / [`take_start`] / [`take_refresh`] で要求を観測し、
 //! [`apply_init`] / [`apply_list`] / [`finish_start`] / [`apply_snapshot`] / [`mark_failed`] で結果を
 //! 注入する。device の型はドライバが本画面の鏡像の型へ写す。

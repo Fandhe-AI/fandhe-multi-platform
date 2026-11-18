@@ -4,7 +4,7 @@
 //! registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod compose_mail_sms;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
-//! 置き場」節の制約どおり）。入力の検査と OS 呼び出しは `fandhe-egui-proxy` の effect ドライバ
+//! 置き場」節の制約どおり）。入力の検査と OS 呼び出しは 機能 crate の effect ドライバ
 //! （`fandhe-cap-compose-mail-sms` の `driver`）が [`take_request`] で要求を観測して行い、[`finish_compose`] で
 //! 結果を注入する。本画面は二重押し防止と文言だけを持つ。
 //!

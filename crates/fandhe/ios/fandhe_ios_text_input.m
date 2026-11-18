@@ -7,7 +7,7 @@
 // 本ファイルは、ゼロサイズの `UITextField`（UIKit が `UITextInput` 全体を実装済み）を
 // 代わりに first responder にすることでこれを回避する（SDL などが使う既知の手法）。
 //
-// C ABI 契約（`crates/fandhe-egui-proxy/src/ios_text_input.rs` 側の呼び出し元と対）:
+// C ABI 契約（`crates/fandhe/src/entry/ios_text_input.rs` 側の呼び出し元と対）:
 //   - すべて UIKit のメインスレッド（UI イベントディスパッチ元）から呼ばれる。
 //     Rust 側はこれらのコールバックの中で重い処理をしない契約とする。
 //   - `fandhe_ios_text_input_changed(text_utf8, compose_start, compose_end)`:

@@ -61,7 +61,7 @@ pub struct Image {
 
 /// `Storage` 実装がファイルを読み書きする起点ディレクトリ。
 ///
-/// プラットフォームレイヤ（`fandhe-egui-proxy` 等）が構築して `storage::FsStorage::new` へ
+/// 機能 crate の effect ドライバ（`fandhe-cap-local-storage-kv` 等）が構築して `storage::FsStorage::new` へ
 /// 渡す契約で、本クレート自身は Android / iOS のサンドボックスパスを知らない
 /// （依存方向の一方向性を保つため、プラットフォーム固有 API はここに置かない）。
 #[derive(Debug, Clone)]

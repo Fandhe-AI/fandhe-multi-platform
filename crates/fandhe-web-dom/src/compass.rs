@@ -1,7 +1,7 @@
 //! 型サンプル「方位（コンパス）」の Web 経路（親 #1154、Issue #1407）。
 //!
 //! `fandhe_core::screens::compass_show`（端末依存ゼロ）の画面を [`super::mount::mount_with_effect`]
-//! の effect として駆動する。`fandhe-egui-proxy` の wasm canvas 経路は対象外
+//! の effect として駆動する。egui の wasm canvas 経路（`fandhe-render-egui`）は対象外
 //! （`UnsupportedCompass` のまま）。`fandhe-cap-compass-heading` から `READ_INTERVAL`・
 //! `normalize_heading`・`WaitTracker` を共用し、`Compass` trait（`Send + Sync`）は
 //! JS の Closure を持てないため通さず、core の `apply_reading` / `apply_failure` へ直接流す。

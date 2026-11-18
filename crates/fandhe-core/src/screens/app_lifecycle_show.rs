@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod app_lifecycle_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
-//! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-egui-proxy` の
+//! 「新規画面ファイルの置き場」節）。OS 呼び出しは
 //! `crates/fandhe-cap-app-lifecycle/src/driver.rs` が [`take_init`] / [`take_start`] で要求を観測し、[`apply_init`] /
 //! [`finish_start`] / [`apply_snapshot`] / [`mark_failed`] / [`mark_left`] で結果を注入する。
 //! device の型はドライバが本画面の鏡像の型へ写す。

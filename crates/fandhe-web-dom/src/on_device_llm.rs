@@ -4,7 +4,7 @@
 //! effect として駆動する。`take_request` で要求を観測し、Prompt API（`LanguageModel`）へ固定プロンプトを
 //! 1 回渡して応答の全文を画面へ返す。`OnDeviceLlm` trait（`Send + Sync`）は `JsValue` を持てないため
 //! 通らず、契約（`fandhe_cap_on_device_llm` の写像表）だけを共有する。`LanguageModel` は web-sys に
-//! 型が無いので `js_sys::Reflect` で呼ぶ。`fandhe-egui-proxy` の wasm canvas 経路は対象外（`Unsupported`）。
+//! 型が無いので `js_sys::Reflect` で呼ぶ。egui の wasm canvas 経路（`fandhe-render-egui`）は対象外（`Unsupported`）。
 //!
 //! # 結果の種類
 //!
@@ -24,14 +24,14 @@
 //! 守る: 1 マウント内の要求と完了の順序（世代照合）、失敗・期限切れ・非対応を成功へ畳まないこと、
 //! セッション（`destroy()`）・タイマー・リスナーの解放。
 //! 守らない: ブラウザごとのモデル差、応答の非決定性、複数タブ・複数マウント間の一致、
-//! egui-proxy の wasm canvas 経路。プロンプト・応答・例外の `message` は画面にも console にも出さない
+//! egui の wasm canvas 経路（`fandhe-render-egui`）。プロンプト・応答・例外の `message` は画面にも console にも出さない
 //! （security.md A09）。
 
 use fandhe_cap_on_device_llm::OnDeviceLlmError;
 use fandhe_cap_on_device_llm::{check_response, EMPTY};
 use fandhe_core::screens::on_device_llm::LlmFailure;
 
-/// 失敗の固定文言（`fandhe-egui-proxy` の `to_failure` と同じ）。
+/// 失敗の固定文言（`fandhe-cap-on-device-llm` の `driver.rs` の `to_failure` と同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const FAILED: &str = "応答を得られませんでした";
 

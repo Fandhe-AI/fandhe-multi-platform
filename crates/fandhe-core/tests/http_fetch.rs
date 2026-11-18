@@ -2,7 +2,7 @@
 //! `click_button` を通して、状態機械（`Idle → Requested → Loading → Loaded/Failed`）と
 //! 画面の組み替えが `current_screen(&state)` の実際の描画・イベント配線で成立することを
 //! 検証する。端末 I/O（effect ドライバのスレッド起動）は本テストのスコープ外
-//! （`crates/fandhe-egui-proxy` 側の結合テスト、Issue #748 コメント参照）。
+//! （`fandhe-cap-http-get` の `driver.rs` のテスト、Issue #748 コメント参照）。
 
 use fandhe_core::screens::http_fetch::{
     FetchPhase, HttpFetchState, current_screen, finish_fetch, mark_loading, start_fetch,

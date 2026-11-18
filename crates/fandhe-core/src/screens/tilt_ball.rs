@@ -4,7 +4,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。物理更新（[`step`]）は純関数で
-//! テスト可能にし、傾きセンサ値の取得・供給は `fandhe-egui-proxy::device::tilt`
+//! テスト可能にし、傾きセンサ値の取得・供給は `fandhe_cap_tilt_motion::driver`
 //! （Mac は `DummyMotion` へスライダーが書き込む、実機は #831/#832 が push する）が
 //! 毎フレーム [`step`] を呼び出す effect ドライバとして担う。
 //!
@@ -16,7 +16,7 @@
 //!
 //! `tilt_x` / `tilt_y`（`TiltBallState` の公開フィールド）はデスクトップでは
 //! スライダーの入力値、実機では観測したセンサ値の表示器として同じフィールドを兼ねる
-//! （`fandhe-egui-proxy::device::tilt` が完了クロージャで書き戻す契約）。
+//! （`fandhe_cap_tilt_motion::driver` が完了クロージャで書き戻す契約）。
 
 use crate::ui::CanvasWidget;
 use crate::{Measurement, Node, PaintCommand, Screen, WidgetId};
@@ -148,7 +148,7 @@ pub fn step(state: &mut TiltBallState, tilt: (f32, f32), dt: f32) {
 }
 
 /// 玉がほぼ静止しているか（速度成分が両方とも [`REST_EPSILON`] 未満）を判定する。
-/// `fandhe-egui-proxy::device::tilt` が「傾き 0 かつ静止中はフレームを回し続けない」
+/// `fandhe_cap_tilt_motion::driver` が「傾き 0 かつ静止中はフレームを回し続けない」
 /// 判定に使う。
 pub fn is_at_rest(state: &TiltBallState) -> bool {
     state.velocity.0.abs() < REST_EPSILON && state.velocity.1.abs() < REST_EPSILON

@@ -8,7 +8,7 @@
 //! BLE の周辺機器は `bluetooth_le` の範囲で、本機能の結果に含めない。
 //!
 //! 一覧は同期の 1 回読み（[`BluetoothClassic::paired`]、`usb_device` と同型）、検索は
-//! `fandhe-egui-proxy` の 本 crate の `driver` が pull 型（`lan_discovery` と同型）で
+//! 本 crate の `driver` が pull 型（`lan_discovery` と同型）で
 //! 駆動する。各 OS が集めた生の結果は [`normalize_devices`] で契約の形に整える。
 //!
 //! # 契約

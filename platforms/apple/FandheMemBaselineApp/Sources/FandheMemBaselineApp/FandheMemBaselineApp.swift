@@ -6,7 +6,7 @@ import SwiftUI
 /// ネイティブ SDK コンポーネント（List・TextField 等）を一切使わない。
 ///
 /// 差し引き対象は `FandheMemNativeApp`（SwiftUI 比較アプリ）**のみ**とする。
-/// `FandheIosApp`（`fandhe-egui-proxy`、winit/UIApplicationMain 経由で SwiftUI には
+/// `FandheIosApp`（`fandhe-gallery`、winit/UIApplicationMain 経由で SwiftUI には
 /// 依存しない）の増分計測に本ベースラインを使うと、`FandheIosApp` が実際には負って
 /// いない SwiftUI フレームワークのコストまで誤って除去してしまい、REQ-5 の相対・
 /// 絶対チェックの pass/fail を歪める（PR #497）。`FandheIosApp` 側の差し引きには同じランタイム系統の

@@ -96,7 +96,7 @@
 //!
 //! **スコープ外事項**（`.claude/rules/out-of-scope-tracking.md` 準拠。PR 本文に記録する）:
 //! (a) S40（#135）マージ後の型統合（`scroll_view::ScrollView` との突き合わせ）、
-//! (b) プラットフォームレイヤへの実配線（`fandhe-egui-proxy` の `egui::ScrollArea` 統合）、
+//! (b) プラットフォームレイヤへの実配線（`fandhe-render-egui` の `egui::ScrollArea` 統合）、
 //! (c) `WidgetCatalog` 登録・結合テスト網羅拡充（S42 / #137）、
 //! (d) 横スクロール・慣性スクロール・複数子コンテンツ、
 //! (e) 描画クリッピング（`PaintCommand` 拡張は 3 バックエンド契約に波及するため見送り）、

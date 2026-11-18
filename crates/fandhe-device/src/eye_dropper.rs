@@ -132,7 +132,7 @@ pub fn error_from_dom_exception_name(name: &str) -> PickColorError {
     }
 }
 
-/// スポイトの契約。同期 API（コールバック型 OS は `fandhe-egui-proxy` の pull 型 bridge を使い
+/// スポイトの契約。同期 API（コールバック型 OS は `fandhe-cap-eye-dropper` の `driver.rs` の pull 型 bridge を使い
 /// このトレイトを通らない。`ContactPicker` と同じ分担）。
 pub trait EyeDropper: Send + Sync {
     /// スポイトを 1 回開き、選ばれた色を返す。取り消しは `Err(Cancelled)`。

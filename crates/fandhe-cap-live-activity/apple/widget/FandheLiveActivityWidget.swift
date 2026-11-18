@@ -1,5 +1,5 @@
 // ライブアクティビティの表示側（Issue #295、親 #88 の b-ios）。Widget Extension として iOS アプリの
-// `PlugIns/` に同梱される。開始・更新・終了はアプリ側の薄層（`crates/fandhe-egui-proxy/ios/
+// `PlugIns/` に同梱される。開始・更新・終了はアプリ側の薄層（`crates/fandhe-cap-live-activity/ios/
 // fandhe_ios_live_activity.swift`）が行い、本拡張は OS が渡す値をロック画面と Dynamic Island に出すだけ。
 // 属性型は `fandhe_live_activity_attributes.swift`（project.yml が取り込む共有ファイル）。
 import ActivityKit

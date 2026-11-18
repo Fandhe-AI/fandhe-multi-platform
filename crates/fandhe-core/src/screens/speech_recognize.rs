@@ -2,17 +2,17 @@
 //! 「話す」ボタン → 聞き取り中（経過秒数を表示）→「停止」ボタンまたは
 //! [`MAX_LISTEN_MS`] 到達で自動停止 → 認識結果の文字列・「聞き取れませんでした」・
 //! 「キャンセルしました」・失敗理由・Unsupported を表示する 1 画面。
-//! `FANDHE_PROXY_APP=speech_recognize` で選ばれ、`crates/fandhe-egui-proxy/src/
+//! `FANDHE_PROXY_APP=speech_recognize` で選ばれ、`crates/fandhe-gallery/src/
 //! screens/registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の
 //! `pub mod speech_recognize;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。実際の聞き取り開始・停止・権限確認は
-//! 本モジュール外（`fandhe-egui-proxy` の effect ドライバ、`device/
-//! speech_recognition.rs`）が [`take_start_request`]/[`take_stop_request`] で要求を
+//! 本モジュール外（`fandhe-cap-speech-recognition` の
+//! `driver.rs`）が [`take_start_request`]/[`take_stop_request`] で要求を
 //! 観測し [`finish_listen`] で結果を注入する（`mic_record.rs`「端末依存はゼロ」節と
-//! 同じ構造。macOS/Windows は認識開始・完了が非同期に届くため、`fandhe-egui-proxy`
-//! 側は `SpeechRecognizer` トレイトを通さず本状態機械へ直接書き戻す契約になる、
+//! 同じ構造。macOS/Windows は認識開始・完了が非同期に届くため、`fandhe-cap-speech-recognition`
+//! の effect ドライバは `SpeechRecognizer` トレイトを通さず本状態機械へ直接書き戻す契約になる、
 //! `fandhe-cap-speech-recognition` の `contract` の doc 参照）。
 //!
 //! # 経過秒数は画面側の時刻で表示する（OS からの継続 push は受けない）

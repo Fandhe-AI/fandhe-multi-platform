@@ -44,7 +44,7 @@ pub enum NoteStorageError {
 }
 
 /// 端末保存領域への読み書き契約。`fandhe_device::storage::Storage` と同じ形にし、
-/// `fandhe-egui-proxy` 側がその実装を newtype で橋渡しする（本クレートは
+/// `fandhe-cap-local-storage-kv` の `driver.rs` がその実装を newtype で橋渡しする（本クレートは
 /// `fandhe-device` を参照しない）。
 pub trait NoteStorage: Send + Sync {
     /// `key` に対応する値を読む。未存在は `Ok(None)`。

@@ -34,7 +34,7 @@ L66〜78）の受け入れ基準「アクセシビリティ・SEO が重要な�
   `Button` / `List` の 4 バリアント）・`state::{StateStore, Event}` によるイベント→状態更新の
   配線・`Screen::visit_expanded` による `List` 込みの深さ優先走査基盤・`render_headless` による
   テキスト表現マッピングを提供する（依存クレートゼロ・`#![forbid(unsafe_code)]`）。
-  `crates/fandhe-egui-proxy` は v1 既定バックエンド（egui）の現行実装であり（[consumer-app-structure.md](consumer-app-structure.md)）、
+  `crates/fandhe-render-egui` は v1 既定バックエンド（egui）の現行実装であり（[consumer-app-structure.md](consumer-app-structure.md)）、
   `src/web.rs` が `<canvas id="fandhe-proxy-canvas">` へ `eframe::WebRunner`（WebGL2/`glow`
   バックエンド）をアタッチしている。DOM 出力レンダラはこれとは別の新設クレートとして設計する
   （§2 参照）。
@@ -56,7 +56,7 @@ L66〜78）の受け入れ基準「アクセシビリティ・SEO が重要な�
 
 - DOM 出力レンダラは新設クレート **`fandhe-web-dom`** とする。プラットフォーム最適化レイヤ
   側の配置とし、依存方向は「`fandhe-web-dom` → `fandhe-core`」の一方向（coding-rust.md
-  「共通コアからプラットフォーム固有クレートへ依存しない」に準拠。`fandhe-egui-proxy` /
+  「共通コアからプラットフォーム固有クレートへ依存しない」に準拠。`fandhe-render-egui` /
   `fandhe-swiftui-bridge` と同型の関係）。
 - `wasm32-unknown-unknown` ターゲット限定のクレートとし、`#![forbid(unsafe_code)]` を付ける
   （`fandhe-core` と同じ安全性方針。DOM 操作は `web-sys` の安全な API のみで完結し、`unsafe` を
@@ -67,7 +67,7 @@ L66〜78）の受け入れ基準「アクセシビリティ・SEO が重要な�
   `HtmlElement` / `Node`（DOM の `Node`。`fandhe_core::Node<S>` とは別物であり、コード中では
   `web_sys::Node` と完全修飾して区別する）/ `Text` 等）は S2 実装時に必要最小限を追加する
   （coding-rust.md「feature フラグは加法的」・security.md「A06 脆弱な依存」の最小 feature 方針）。
-- DOM 出力は `fandhe-egui-proxy` に混ぜず別クレートに置く（egui への依存を DOM 出力側へ持ち込まないため。
+- DOM 出力は `fandhe-render-egui` に混ぜず別クレートに置く（egui への依存を DOM 出力側へ持ち込まないため。
   構造全体は [consumer-app-structure.md](consumer-app-structure.md)）。
 
 ### 2.2 Node → HTML マッピング表
@@ -138,7 +138,7 @@ DOM イベント（input/click）
 画面登録時に指定する列挙型を新設する案を採用し、S3（Issue #81）で実装した。
 
 ```rust
-/// 画面の出力方式。`fandhe-egui-proxy`（独自レンダラ）と
+/// 画面の出力方式。`fandhe-render-egui`（独自レンダラ）と
 /// `fandhe-web-dom`（DOM 出力）のいずれで描画するかを画面単位に指定する。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RenderMode {

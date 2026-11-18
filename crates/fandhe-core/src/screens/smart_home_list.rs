@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod smart_home_list;` と対）。機器の操作・状態は扱わない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
-//! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-egui-proxy` の
+//! 「新規画面ファイルの置き場」節）。OS 呼び出しは
 //! `fandhe-cap-smart-home` の `driver.rs` が [`take_request`] で要求を観測し [`finish_list`] で結果を注入する
 //! （`music_library_list.rs` と同型の状態機械）。
 //!

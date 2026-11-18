@@ -6,13 +6,13 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。実際の保存・読み出し・削除は
-//! 本モジュール外（`fandhe-egui-proxy` の effect ドライバ、
-//! `device/secure_credential.rs`）が [`take_request`] で要求を観測し
+//! 本モジュール外（`fandhe-cap-secure-credential` の
+//! `driver.rs`）が [`take_request`] で要求を観測し
 //! [`finish_store`] / [`finish_load`] / [`finish_delete`] で結果を注入する。
 //!
 //! # 入力欄のマスク表示は本画面の範囲外（設計判断）
 //!
-//! `Node::TextField` にはマスク属性が無く、追加するとレンダラ横断（egui-proxy・
+//! `Node::TextField` にはマスク属性が無く、追加するとレンダラ横断（`fandhe-render-egui`・
 //! web-dom・swiftui-bridge 等 10 ファイル超）の変更になる（実装計画 §3.1）。
 //! 代替として、値入力は通常の `text_field` のまま、**保存成功時に入力欄を空にする**
 //! （[`finish_store`]）。読み出した値は状態側で `•` にマスクして表示し
@@ -36,7 +36,7 @@ const DELETE_BUTTON_ID: WidgetId = WidgetId::from_raw(3);
 const REVEAL_BUTTON_ID: WidgetId = WidgetId::from_raw(4);
 
 /// effect ドライバが `Unsupported` 相当の失敗を伝えるときに使う固定文言。
-/// `fandhe-egui-proxy` 側の effect ドライバ（`device/secure_credential.rs`）と
+/// `fandhe-cap-secure-credential` の effect ドライバ（`driver.rs`）と
 /// 文字列で共有する（core は device に依存できないため型を共有できない、
 /// `finish_*` の `Err` 判定に使う SSOT）。
 pub const UNAVAILABLE_MARKER: &str = "この環境では資格情報の保存を使えません";
@@ -109,7 +109,7 @@ pub struct CredentialVaultState {
     /// 未処理の要求。effect ドライバが [`take_request`] で観測する。
     pending: Option<VaultRequest>,
     /// `pending` の要求が既に別スレッドへ起動済みかどうか。effect ドライバ
-    /// （`fandhe-egui-proxy` 側、`device/secure_credential.rs::drive`）は毎フレーム
+    /// （`fandhe-cap-secure-credential` の `driver.rs`）は毎フレーム
     /// 呼ばれるため、`pending` だけでは応答待ち中に同じ要求を毎フレーム再起動して
     /// しまう（cursor-bot High 指摘）。`take_request` は `dispatched` が立っている間
     /// `None` を返し、[`mark_dispatched`] で起動直後に立てる

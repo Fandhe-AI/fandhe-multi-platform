@@ -56,8 +56,8 @@ const ACCEPT: &str = "video/*";
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const CAPTURE: &str = "environment";
 
-/// 契約上の失敗を画面の失敗種別へ写す。`fandhe-egui-proxy` に同じ表があるが、
-/// 本クレートは egui-proxy に依存できない（依存方向）ため複製する。
+/// 契約上の失敗を画面の失敗種別へ写す。`fandhe-cap-video-capture` にも同じ表があり、
+/// 本クレートは複製を持つ。
 fn to_core_failure(f: VideoCaptureFailure) -> CoreFailure {
     match f {
         VideoCaptureFailure::Unsupported => CoreFailure::Unsupported,

@@ -4,7 +4,7 @@
 //! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは
-//! `fandhe-egui-proxy` の `crates/fandhe-cap-system-sound/src/driver.rs` が [`take_request`] で要求を観測し
+//! `crates/fandhe-cap-system-sound/src/driver.rs` が [`take_request`] で要求を観測し
 //! [`finish_beep`] で結果を注入する（`haptics_tap` と同型の状態機械）。状態・定数・文言は
 //! 全 OS 分をここで定義し、OS 別の実体（macOS / Windows / Android）は画面を触らない。
 //!

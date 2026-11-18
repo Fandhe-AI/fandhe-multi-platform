@@ -18,7 +18,7 @@ members = [
     # 画面の登録と各 OS の最終成果物（デスクトップ・iOS の実行体、Android・Web の cdylib）を持つ。
     "crates/fandhe-gallery",
     # TASK-10.1（REQ-10 / M3、Issue #218）: CJK 対応フォント（Noto Sans JP）の
-    # 同梱資産クレート。`fandhe-egui-proxy` の native 分岐からのみ参照される
+    # 同梱資産クレート。`fandhe-render-egui` の native 分岐と `fandhe-cap-local-fonts` から参照される
     # （wasm32 では埋め込まない、下記コメント・crates/fandhe-fonts/src/lib.rs 参照）。
     "crates/fandhe-fonts",
     # TASK-21.2（Issue #1162）: 起床と完了通知のレンダラ非依存クレート（egui に依存しない）。
@@ -54,7 +54,7 @@ unsafe_op_in_unsafe_fn = "deny"
 # 依存クレートは coding-rust.md の規約に従い workspace で一元管理する。
 [workspace.dependencies]
 # Phase 8（Issue #751）: iOS / macOS 向け ObjC 実装のコンパイルに使う。呼び出しは
-# `fandhe-platform-apple`（feature `build`、Issue #1168）に集約しており、`fandhe-egui-proxy/build.rs`
+# `fandhe-platform-apple`（feature `build`、Issue #1168）に集約しており、各 crate の `build.rs`
 # は直接使わない。既に workspace 依存グラフ内で解決済み（Cargo.lock 実査済み、1.4.2）の推移依存を
 # 直接依存へ昇格するのみで新規 crate の追加ではない。
 cc = "1"
@@ -81,8 +81,8 @@ arboard = "3.6"
 # API が Windows で COM 初期化失敗等をキャンセルへ握り潰す既知の制約を避けるため、
 # `crates/fandhe-device/Cargo.toml` の target 分岐・`file_picker.rs` 参照）。
 rfd = { version = "0.17", default-features = false }
-# TASK-4.4-S2 由来 / Phase 11（Issue #875）: `fandhe-egui-proxy` の wasm32 分岐
-# （`web.rs`）が既に直接依存として引いている（0.3、`cargo tree` 実査済み）ため、
+# TASK-4.4-S2 由来 / Phase 11（Issue #875）: `fandhe` の wasm32 分岐
+# （`src/entry/web.rs`）が直接依存として引いている（0.3、`cargo tree` 実査済み）ため、
 # 直接依存への昇格・`fandhe-web-dom` からの追加参照で新規パッケージは増えない。
 # `fandhe-web-dom::file_picker` が読み取った `ArrayBuffer` のサイズ確認
 # （`ArrayBuffer::byte_length`）に使う。
@@ -120,7 +120,7 @@ trybuild = "1"
 # `cfg(not(target_arch = "wasm32"))` に閉じる。
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 
-# Phase 8（Issue #750）: Android 実装（`fandhe-egui-proxy` の `device::android` モジュール）が
+# Phase 8（Issue #750）: Android 実装（機能 crate の `android.rs`）が
 # `AndroidApp::vm_as_ptr` / `activity_as_ptr` を経由して Java 側（`MainActivity`）を呼び出す
 # ための JNI バインディング。`android-activity 0.6.1`（`Cargo.lock` 実査済み）の直接依存として
 # 既に解決されている 0.22.4 と同一インスタンスへ揃うため、本行を追加しても新規パッケージは
@@ -131,7 +131,7 @@ jni = "0.22"
 # 解決済みの推移依存を直接依存へ昇格するだけで、新規パッケージは増えない。
 android-activity = "0.6"
 
-# TASK-1.2（REQ-1 / M2）: fandhe-egui-proxy（実描画検証専用プロキシ、本実装レンダラではない）
+# TASK-1.2（REQ-1 / M2）: fandhe-render-egui（egui による実描画と起動）
 # が利用する egui/eframe 系一式。
 # CI ランナーの rustc は 1.88.0 固定（ルートの rust-toolchain.toml 参照）のため、
 # MSRV 1.92 を要求する 0.34 系（egui/eframe/egui_kittest とも 0.34.0〜0.34.3 は
@@ -143,7 +143,7 @@ android-activity = "0.6"
 #
 # TASK-6.2-S2（REQ-6 / M3）: TASK-6.1 監査（docs/architecture/feature-audit.md）の
 # 申し送りに従い、default-features を明示的に絞り込む。egui 0.33 系の default は
-# "default_fonts" のみで、fandhe-egui-proxy の font.rs（CJK フォント読込失敗時の
+# "default_fonts" のみで、fandhe-render-egui の font.rs（CJK フォント読込失敗時の
 # 既定フォントへのフォールバック、REQ-10 引き継ぎ中）が依存するため維持する。
 # 一方 `arboard`・`webbrowser`・`icu_*`（icu_properties/icu_normalizer 経由）は
 # egui 側ではなく eframe が egui-winit へ非 optional で固定指定する feature
@@ -171,7 +171,7 @@ egui_kittest = "0.33"
 # resolver = "2" の feature 統合で単一インスタンスに解決させる
 # （crates.io の epaint 0.33.0 依存メタデータで確認済み）。
 ab_glyph = "0.2.32"
-# TASK-9.1-S2（REQ-9 / M3、Issue #215）: `fandhe-egui-proxy::accessibility` が
+# TASK-9.1-S2（REQ-9 / M3、Issue #215）: `fandhe-render-egui::accessibility` が
 # `AccessibilityRole → accesskit::Role` 変換・AX ノード構築に使うコア型一式。
 # egui 0.33 系が推移的に使う accesskit は 0.21.1（Cargo.lock 解決済み）であり、
 # 同一メジャー・マイナー（"0.21"）を指定することで同一インスタンスに解決させる
@@ -185,7 +185,7 @@ accesskit = "0.21"
 # その "wgpu" feature 自体は `dep:wgpu` / `dep:egui-wgpu` のみを有効化し、
 # Metal 等のバックエンド機能は含まない（eframe 側の "default" feature 経由でのみ
 # 有効化される設計で、iOS 分岐は glow 系を含む "default" を有効化したくない）。
-# そこで fandhe-egui-proxy から wgpu を直接（同一バージョン）依存に加え、
+# そこで fandhe-render-egui から wgpu を直接（同一バージョン）依存に加え、
 # resolver = "2" の feature 統合により Metal バックエンドのみを最小追加する。
 wgpu = { version = "27", default-features = false, features = ["metal"] }
 # CI 失敗の是正（2026-08-24）: `wgpu-hal` 27 系（wgpu 27.0.1 の推移依存）が "vulkan" / "dx12"
@@ -198,12 +198,12 @@ wgpu = { version = "27", default-features = false, features = ["metal"] }
 # となり全 PR の CI が失敗した。ワークスペースは `resolver = "2"` のため MSRV 対応リゾルバ
 # （`incompatible-rust-versions = "fallback"`）は働かず、旧来どおり最新版を選ぶ。
 # rustc の pin は trybuild の `.stderr` 差分対策として意図的なもの（PR #306）で上げられない
-# ため、`fandhe-egui-proxy` から同一メジャーの `ordered-float` へ直接依存し、上限を
+# ため、`fandhe-render-egui` から同一メジャーの `ordered-float` へ直接依存し、上限を
 # 5.5 未満（5.0.0〜5.4.0 は `rust-version = "1.63"`）に明示して単一インスタンスへ
 # 解決させる（wgpu の "metal" / "vulkan" 補完と同じ、直接依存による推移依存の制御パターン）。
 # `default-features = false` で本クレートは feature を一切加算しない（wgpu-hal 側の指定
 # `default-features = false` と同じで、依存グラフへの影響はバージョン上限のみ）。
-# ランナーの rustc を 1.90 以上へ上げた時点で本エントリと `fandhe-egui-proxy` 側の参照は
+# ランナーの rustc を 1.90 以上へ上げた時点で本エントリと `fandhe-render-egui` 側の参照は
 # 削除してよい（キャレット既定 coding-rust.md への例外。上限固定は MSRV 互換のため）。
 ordered-float = { version = ">=5.0, <5.5", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png"] }
@@ -242,11 +242,11 @@ winit = { version = "0.30", default-features = false }
 # （Android 専用 optional target 依存、既定 off）までは有効化しない
 # （`accesskit_winit-0.29.2/Cargo.toml` の `[target.'cfg(target_os = "android")'.dependencies]`
 # 参照）。そのため本クレートから同一バージョンへ直接依存し、resolver = "2" の feature
-# 統合で `accesskit_android` feature のみを Android target 分岐（fandhe-egui-proxy
+# 統合で `accesskit_android` feature のみを Android target 分岐（fandhe-render-egui
 # Cargo.toml 参照）から加算する（wgpu の "vulkan" / "metal" 補完・PR #313 と同一パターン）。
 accesskit_winit = { version = "0.29", default-features = false }
 
-# Phase 11（Issue #898）: `fandhe-egui-proxy::device::windows_share` が Windows の共有シート
+# Phase 11（Issue #898）: `fandhe-cap-share-sheet` の `windows.rs` が Windows の共有シート
 # （WinRT `DataTransferManager` を `IDataTransferManagerInterop` 経由でウィンドウ束縛して呼ぶ）
 # のために使う。`cargo tree --target x86_64-pc-windows-msvc -p fandhe-egui-proxy -e normal`
 # 実査済み: 通常依存には現れないが、Cargo.lock には wgpu 経由の 0.58.0・
@@ -276,7 +276,7 @@ windows-core = { version = "0.61", default-features = false }
 # （上記 `windows` と同じ「推移依存の直接依存への昇格」パターン、新規パッケージなし）。
 raw-window-handle = { version = "0.6", default-features = false }
 
-# Issue #630 / #632: `fandhe-egui-proxy` のテストバイナリ `desktop_render` は
+# Issue #630 / #632: `fandhe-render-egui` のテストバイナリ `desktop_render`（#1200 で移した）は
 # eframe / egui / wgpu / accesskit / wayland 系の大量の rlib を静的リンクするため、
 # dev/test 既定の `debug = 2`（フル debuginfo）ではリンク入力サイズがメモリ集約的になり、
 # CI runner 上で GNU ld が OOM で SIGKILL される flaky 失敗が確認されている

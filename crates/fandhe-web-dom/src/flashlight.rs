@@ -5,7 +5,7 @@
 //! [`super::mount::mount_with_effect`] の effect として駆動する。`take_request` で要求を観測し、
 //! `getUserMedia`（背面カメラ）→ トラックの `getCapabilities().torch` 確認 →
 //! `applyConstraints({ advanced: [{ torch: true }] })` で点灯する。`fandhe-device` の trait は通らない
-//! （他の Web モジュールと同じ。`fandhe-egui-proxy` の wasm canvas 経路は対象外）。
+//! （他の Web モジュールと同じ。egui の wasm canvas 経路（`fandhe-render-egui`）は対象外）。
 //!
 //! # Reflect を使う理由
 //!

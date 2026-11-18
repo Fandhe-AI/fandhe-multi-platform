@@ -53,7 +53,7 @@
 //! `<input type="file">` の生成・イベント登録・解放（[`ACTIVE`]/[`release`]）は画面の
 //! 型に依存しない。画面状態 `S` へのアクセスだけを [`WebPickHooks<S>`]（関数ポインタの
 //! 束）へ切り出し、[`drive`] がジェネリックに処理する
-//! （`fandhe-egui-proxy` の `device/file_pick.rs::PickHooks<S>` と同じ設計、
+//! （`fandhe-cap-file-picker` の `driver.rs::PickHooks<S>` と同じ設計、
 //! 契約表「使う部品」節参照）。`read` の戻り値もバイト列の解釈（要約に潰すか、
 //! `Vec<u8>` として解析へ渡すか）を持たない [`Picked`]（`File` の名前と
 //! `ArrayBuffer` のみ）にとどめ、変換は各画面の `finish` フックへ委ねる。
@@ -93,7 +93,7 @@ const UNAVAILABLE: &str = "このブラウザではファイル選択を使え�
 /// 読み取り失敗（`array_buffer()` の reject・型変換失敗）時の案内。
 const READ_FAILED: &str = "ファイルを読み取れませんでした";
 
-/// サイズ超過時の案内（`fandhe-egui-proxy` 側 `device/file_pick.rs::to_message` と
+/// サイズ超過時の案内（`fandhe-cap-file-picker` の `driver.rs::to_message` と
 /// 同文言。上限の SSOT は [`MAX_FILE_BYTES`] のみ）。
 fn to_size_message() -> String {
     format!(
@@ -187,7 +187,7 @@ pub(crate) async fn read(file: File) -> Result<Picked, String> {
 }
 
 /// `file_pick`/`tsv_import` が画面状態 `S` へのアクセスを渡す関数ポインタの束
-/// （`fandhe-egui-proxy` の `device/file_pick.rs::PickHooks<S>` と同じ設計、
+/// （`fandhe-cap-file-picker` の `driver.rs::PickHooks<S>` と同じ設計、
 /// モジュール doc参照）。すべて `fn` ポインタ（クロージャ環境キャプチャ不可）のため
 /// `Copy`（`derive` は `S: Copy` を要求してしまうため手実装）。
 pub(crate) struct WebPickHooks<S, R> {

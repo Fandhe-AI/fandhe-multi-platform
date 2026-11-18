@@ -25,7 +25,7 @@
 //!   可視範囲算出（TASK-5.5-S2 / REQ-5、Issue #85）。設計文書
 //!   `docs/architecture/list-virtualization-architecture.md` §3.2〜3.3 の契約を実装し、
 //!   `Node::VirtualList` / `Screen::visit_windowed` の性能経路の基盤となる。
-//!   `fandhe-egui-proxy::render_screen` への実配線は `render_virtual_list`（Issue #487）
+//!   `fandhe-render-egui::render_screen` への実配線は `render_virtual_list`（Issue #487）
 //!   が担う
 //! - [`virtual_list::grid_item_range`][]: Grid 軸専用の可視行範囲 → 項目 index 範囲
 //!   変換（Issue #557 で TV 側・非 TV 側の実装を集約）
@@ -35,10 +35,10 @@
 //!   キャッシュの呼び出し配線（Issue #490）を経て、`render_screen<S>` が `S: 'static` を
 //!   要求しないため egui 側の永続領域（`'static` 前提）へ `ListRecycler<S>` を直接
 //!   保持できない制約（`render_virtual_list` の doc 参照）は、呼び出し側
-//!   （`fandhe-egui-proxy` の `VirtualListRecyclers<S>`）がフレームをまたいで保持する
+//!   （`fandhe-render-egui` の `VirtualListRecyclers<S>`）がフレームをまたいで保持する
 //!   設計で解消している（`crates/fandhe-render-egui/src/recyclers.rs` 参照）
 //! - [`scroll::total_content_extent`][] / [`scroll::clamp_scroll_offset`][]: リストの
-//!   スクロール幾何ヘルパー（TASK-5.5-S5 / REQ-5、Issue #88）。`fandhe-egui-proxy::
+//!   スクロール幾何ヘルパー（TASK-5.5-S5 / REQ-5、Issue #88）。`fandhe-render-egui::
 //!   render_screen` への実配線（Issue #487）は `render_virtual_list` が
 //!   `ScrollArea::show_viewport` の viewport から両関数を呼ぶ形で担う
 //! - [`widget::Widget`] / [`widget::InteractionState`] / [`widget::StateStyles`] 等:

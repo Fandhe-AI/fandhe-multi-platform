@@ -9,7 +9,7 @@ WebGPU→WebGL2 の自動フォールバックは実装しない」（L75、条�
 - **`docs/spec/` との関係**: `docs/spec/` は読み取り専用サブモジュールのため、本書は本リポジトリ側
   （`docs/architecture/`）の新規ドキュメントとして作成しています（`state-access-api-tradeoff.md` /
   `responsibility-boundary.md` と同じ置き場・体裁）。spec 自体の変更はこのリポジトリでは行いません。
-- **対象クレート**: `crates/fandhe-egui-proxy`（egui バックエンドの現行実装、`consumer-app-structure.md`。
+- **対象クレート**: `crates/fandhe-render-egui`（egui バックエンドの現行実装、`consumer-app-structure.md`。
   wasm32 分岐のバックエンド選択方針は第 2 バックエンドでも踏襲する前提）。
 
 ## 2. 決定
@@ -17,12 +17,12 @@ WebGPU→WebGL2 の自動フォールバックは実装しない」（L75、条�
 Web（wasm32-unknown-unknown）ターゲットの描画バックエンドは **`glow`（WebGL2）に固定**します。
 
 - WebGPU（`eframe`/`wgpu` の `"wgpu"` feature）は wasm32 分岐へ追加しません
-  （`crates/fandhe-egui-proxy/Cargo.toml` の `cfg(target_arch = "wasm32")` 依存は `"glow"` のみ）。
+  （`crates/fandhe-render-egui/Cargo.toml` の `cfg(target_arch = "wasm32")` 依存は `"glow"` のみ）。
 - WebGPU→WebGL2 の自動フォールバックは実装しません。
 - `eframe::WebOptions::default()` の既定値 `WebGlContextOption::BestFirst`
   （WebGL2 失敗時に WebGL1 へ暗黙フォールバックする）も採用せず、
   `WebGlContextOption::WebGl2` を明示的に指定して WebGL1 への暗黙フォールバックも無効化します
-  （`crates/fandhe-egui-proxy/src/web.rs` の `WebOptions` 構築箇所）。
+  （`crates/fandhe-render-egui/src/launch.rs` の `start_web` の `WebOptions` 構築箇所）。
 
 結果として、WebGL2 コンテキストの生成に失敗する環境（WebGL2 非対応ブラウザ等）では、
 黙って劣化した描画（WebGL1）を出さず、`eframe::WebRunner::start()` がエラーを返し

@@ -46,7 +46,7 @@ use std::time::Duration;
 
 use fandhe_device::camera_preview_stream::ScaledFrame;
 
-/// 画面側が OS を読み直す間隔。`fandhe-egui-proxy` と `fandhe-web-dom` が共有する唯一の値。
+/// 画面側が OS を読み直す間隔。本 crate の `driver` と `fandhe-web-dom` が共有する唯一の値。
 pub const READ_INTERVAL: Duration = Duration::from_millis(100);
 
 /// 位置の各成分の絶対値の上限（m）。これを超える値は無効サンプルとして捨てる。

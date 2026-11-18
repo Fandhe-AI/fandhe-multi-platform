@@ -1,5 +1,5 @@
 //! 複数ディスプレイ・外部ディスプレイの一覧の契約（Issue #1341、親 #1134）。接続中の画面を
-//! 画面ごとの物理解像度・倍率・主画面か・名前で返す橋渡しで、`fandhe-egui-proxy` の
+//! 画面ごとの物理解像度・倍率・主画面か・名前で返す橋渡しで、
 //! `fandhe-cap-multi-display/src/driver.rs` が間隔つきで [`MultiDisplay::read`] を呼ぶ（pull 型。OS の変化
 //! 通知は購読しない）。Web は `fandhe-web-dom` 側が同じ [`validate`] を通す。
 //!
@@ -31,7 +31,7 @@ use std::time::Duration;
 
 use crate::error::MultiDisplayError;
 
-/// 画面側が OS を読み直す間隔。`fandhe-egui-proxy` と `fandhe-web-dom` が共有する唯一の値。
+/// 画面側が OS を読み直す間隔。本 crate の `driver` と `fandhe-web-dom` が共有する唯一の値。
 pub const READ_INTERVAL: Duration = Duration::from_secs(1);
 
 /// 画面 1 枚の情報。

@@ -3,7 +3,7 @@
 //!
 //! `ui::theme_demo`（`demo_resolver` / `themed_sample_lines` /
 //! `themed_catalog_lines`）を用い、iOS / Android それぞれでライト → ダーク
-//! テーマ切替を実演する。実描画バックエンド（`fandhe-egui-proxy` 等）・
+//! テーマ切替を実演する。実描画バックエンド（`fandhe-render-egui` 等）・
 //! `fandhe-prototype` アプリへの配線は個別ウィジェットの実描画対応が揃う後続
 //! スコープであり、ここではヘッドレスなテキスト表現の変化により「テーマが
 //! サンプル画面・ウィジェットカタログへ実際に適用され、解決値が変わる」ことを

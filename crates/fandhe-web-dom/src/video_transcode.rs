@@ -6,7 +6,7 @@
 //! 符号化し、`VideoDecoder` で復号し直して `check_decoded` で検証する。縮小は符号化器に任せる
 //! （仕様の MUST scale）。`VideoTranscode` trait（`Send + Sync`）は `JsValue` を持てないため通らない。
 //! WebCodecs は web-sys の不安定 API なので `js_sys::Reflect` で呼ぶ（音声版 [`super::media_transcode`] と同じ）。
-//! mux は作らないため、出力はコンテナなしの符号化チャンクになる。`fandhe-egui-proxy` の wasm canvas 経路は
+//! mux は作らないため、出力はコンテナなしの符号化チャンクになる。egui の wasm canvas 経路（`fandhe-render-egui`）は
 //! 対象外（従来どおり `Unsupported`）。
 //!
 //! # 結果の種類
@@ -37,7 +37,7 @@
 //! 守る: 1 マウント内の要求と完了の順序（世代照合）、失敗・期限切れ・非対応を成功へ畳まないこと、
 //! codec・`VideoFrame`・タイマー・リスナーの解放。
 //! 守らない: ブラウザごとのコーデックの有無・ビットレート、複数タブ・複数マウント間の一致、
-//! egui-proxy の wasm canvas 経路。例外の `message` と出力のバイト列は画面にも console にも出さない
+//! egui の wasm canvas 経路（`fandhe-render-egui`）。例外の `message` と出力のバイト列は画面にも console にも出さない
 //! （security.md A09）。
 
 use fandhe_cap_video_transcode::VideoTranscodeError;
@@ -57,7 +57,7 @@ const CODEC_CANDIDATES: [(&str, &str); 3] = [
     ("vp8", "vp8"),
 ];
 
-/// `check_decoded` のエラーを失敗種別へ写す（`fandhe-egui-proxy` の `to_failure` と同じ写像）。
+/// `check_decoded` のエラーを失敗種別へ写す（`fandhe-cap-video-transcode` の `driver.rs` の `to_failure` と同じ写像）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 fn to_failure(e: VideoTranscodeError) -> VideoTranscodeFailure {
     use fandhe_cap_video_transcode::{EMPTY, MISMATCH, NOT_SMALLER, UNREADABLE};

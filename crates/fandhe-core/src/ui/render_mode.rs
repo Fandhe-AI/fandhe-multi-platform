@@ -3,7 +3,7 @@
 //! `docs/architecture/dom-output-architecture.md` §2.5 が設計した「`Screen<S>` を保持する側
 //! （アプリ・プロトタイプ層）が画面登録時に指定する列挙型」を実装したもの。
 //! 同書 §4 が「S3 着手時に確定する」とした `RenderMode` の配置先は、依存ゼロの純データ enum
-//! であり `fandhe-egui-proxy` / `fandhe-web-dom` のどちらにも依存させたくないという
+//! であり `fandhe-render-egui` / `fandhe-web-dom` のどちらにも依存させたくないという
 //! 制約から本クレート（`fandhe-core::ui`）に確定した。
 //!
 //! [`ModeSwitcher`] は同書 §2.5 の 3 規約（共存方式・排他起動・停止→起動の順序）のうち
@@ -29,7 +29,7 @@ pub enum RenderMode {
 /// 1 つのレンダラの起動・停止をレンダラ非依存に抽象化するトレイト。
 ///
 /// `fandhe-web-dom`（DOM 側の activate = マウント/イベントリスナー登録、
-/// deactivate = アンマウント/リスナー解除）・`fandhe-egui-proxy` 呼び出し側
+/// deactivate = アンマウント/リスナー解除）・`fandhe-render-egui` 呼び出し側
 /// （canvas 側の activate = `eframe::WebRunner` 起動、deactivate = 停止）が
 /// それぞれ実装する想定（設計書 §3.3）。[`ModeSwitcher`] はこのトレイトを介して
 /// 実際のレンダラ実装を知らないまま排他制御のみを担う。
@@ -92,7 +92,7 @@ where
     /// canvas 側レンダラへの可変参照を返す。
     ///
     /// 設計書 §3.3 が想定する「状態ディスパッチ後の再描画」を canvas レンダラ側で
-    /// 駆動する呼び出し元（`fandhe-egui-proxy` 呼び出し側）向けの脱出口。
+    /// 駆動する呼び出し元（`fandhe-render-egui` 呼び出し側）向けの脱出口。
     /// [`ModeSwitcher`] 自体は起動・停止の排他制御のみを担い、起動後の再描画契機までは
     /// 関知しないため、この参照を介して個々のレンダラへ直接アクセスする経路を用意する。
     pub fn canvas_mut(&mut self) -> &mut C {

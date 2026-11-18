@@ -29,7 +29,7 @@ pub const ALWAYS_ON_TOP_ON_BUTTON_ID: WidgetId = WidgetId::from_raw(3);
 pub const ALWAYS_ON_TOP_OFF_BUTTON_ID: WidgetId = WidgetId::from_raw(4);
 
 /// 既定の内側サイズ（幅, 高さ）。起動時のウィンドウサイズと「既定サイズに戻す」の目標の SSOT。
-/// `fandhe-egui-proxy` の `main.rs`・effect ドライバ、`fandhe-web-dom` が参照する
+/// `fandhe` の入口（`src/entry/mod.rs`）・`fandhe-cap-window-management` の effect ドライバ、`fandhe-web-dom` が参照する
 /// （`fandhe-core` は `fandhe-device` に依存できないため、契約側ではなくここに置く）。
 pub const DEFAULT_INNER_SIZE: [f32; 2] = [480.0, 360.0];
 /// 操作の確定を待つ期限（秒）。全 OS 共通の契約で、proxy と web-dom が参照する。

@@ -28,7 +28,7 @@
 # com.fandhe.iosapp、CODE_SIGN_STYLE: Automatic）を Xcode の
 # `-allowProvisioningUpdates` でビルドさせ、Personal Team 向けのプロファイルを
 # 自動生成させたうえで、生成された .mobileprovision を実配布対象の Rust/winit 製
-# FandheIosApp（fandhe-egui-proxy、こちらは Xcode ターゲット化されていない手組みバンドル）
+# FandheIosApp（fandhe-gallery、こちらは Xcode ターゲット化されていない手組みバンドル）
 # へ流用する。
 #
 # platforms/apple/project.yml には iOS ホストターゲット FandheIosApp（bundle id
@@ -69,7 +69,7 @@
 #                                  Image）マウントに時間がかかるため、実測で 15 秒では
 #                                  不足することを確認済み（Issue #567 実機検証）。
 #   FANDHE_ITEMS_URL              既定: 空。指定時は `http_fetch` 型サンプルの取得先を
-#                                  ビルド時に焼き込み（`fandhe-egui-proxy` の
+#                                  ビルド時に焼き込み（`fandhe-cap-http-get` の
 #                                  `option_env!("FANDHE_ITEMS_URL")`）、`.app` の
 #                                  Info.plist に LAN 限定の ATS 例外
 #                                  （NSAllowsLocalNetworking）と

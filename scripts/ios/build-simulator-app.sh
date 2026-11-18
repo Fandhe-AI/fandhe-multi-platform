@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # TASK-11.1-S2/S3（REQ-11 / M3、Issue #221・#222、親: TASK-11.1 系列 / #219）:
-# `fandhe-egui-proxy`（iOS エントリ実装済み、TASK-1.3-S2 / src/ios.rs）を
+# `fandhe-gallery`（iOS の bin。入口は `#[fandhe::main]`、TASK-1.3-S2）を
 # iOS シミュレータターゲットへビルドし、シミュレータ版アプリバンドル（.app）へ
 # ad-hoc 署名を施した上で `Payload/` 構造の .ipa（zip）を組み立てる。
 #

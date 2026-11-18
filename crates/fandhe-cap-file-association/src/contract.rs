@@ -4,7 +4,7 @@
 //! 扱う範囲は「OS が渡した 1 件のファイルを検査して読み、名前・サイズ・先頭
 //! [`HEAD_BYTES`] バイトだけを保持して画面が読めるようにする」ところまで。中身の解釈・
 //! 描画はしない。関連付ける種類は `.txt`（`text/plain`）1 つだけで、既定アプリを奪わない
-//! 順位で登録する（Apple は `LSHandlerRank=Alternate`）。呼び出し元は `fandhe-egui-proxy` の
+//! 順位で登録する（Apple は `LSHandlerRank=Alternate`）。呼び出し元は
 //! `crates/fandhe-cap-file-association/src/driver.rs`（画面向け effect ドライバ）と各 OS 実装（macOS は
 //! `crates/fandhe-cap-file-association/src/apple.rs`）。`url_scheme` の [`UrlInbox`](crate::url_scheme::UrlInbox)
 //! と同じ継続配信型で、`RequestSlot` 型ではない。
@@ -24,8 +24,8 @@
 //! - **コールドスタート**: 受け口は static に置き、UI の有無に関係なく書き込む
 //!
 //! 関連付けの種類を変えるときは、定数 [`EXTENSION`]・[`MIME`] のほか Info.plist
-//! （bundle スクリプトと iOS）・Android manifest の intent-filter・egui-proxy の
-//! レジストリ登録の 4 か所を直す。
+//! （bundle スクリプトと iOS）・Android manifest の intent-filter・Windows の
+//! レジストリ登録（本 crate の `windows.rs`）の 4 か所を直す。
 //!
 //! # 守る範囲と守らない範囲（`AGENTS.md`「端末機能の並行性は守備範囲で判定する」）
 //!

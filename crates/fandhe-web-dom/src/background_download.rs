@@ -162,7 +162,7 @@ pub(crate) fn should_drop_failed_start(live: bool, current: Option<&str>, my_id:
     live && current == Some(my_id)
 }
 
-/// `DeviceError` を画面へ渡す文言へ変換する（`fandhe-egui-proxy` の同名関数と同じ文言）。
+/// `DeviceError` を画面へ渡す文言へ変換する（`fandhe-cap-background-download` の `driver.rs` の同名関数と同じ文言）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn to_message(e: DeviceError) -> String {
     match e {
@@ -172,7 +172,7 @@ pub(crate) fn to_message(e: DeviceError) -> String {
 }
 
 /// 状態の読み出し結果を画面の表示値へ写す。非対応は未観測（`Unknown`）、読み出しの失敗は
-/// `Idle` と区別する（`fandhe-egui-proxy` の `to_view` と同じ規則）。
+/// `Idle` と区別する（`fandhe-cap-background-download` の `driver.rs` の `to_view` と同じ規則）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn to_view(status: Result<DownloadStatus, DeviceError>) -> DownloadView {
     match status {

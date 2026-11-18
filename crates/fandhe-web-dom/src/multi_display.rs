@@ -5,7 +5,7 @@
 //! （`window.getScreenDetails()`）の画面一覧を `finish_request` / `apply_read` へ書き戻す。
 //! `fandhe-device` の `MultiDisplay` トレイトは経由しない（`fandhe-device/src/multi_display.rs`
 //! の module doc どおり、Web は本クレートの担当）。契約の `validate` と `READ_INTERVAL` は共有する。
-//! `fandhe-egui-proxy` の wasm canvas 経路は対象外。
+//! egui の wasm canvas 経路（`fandhe-render-egui`）は対象外。
 //!
 //! # 読み取り方
 //!
@@ -50,7 +50,7 @@ use fandhe_cap_multi_display::MultiDisplayError;
 use fandhe_cap_multi_display::{validate, ScreenInfo};
 use fandhe_core::screens::multi_display_show::{ReadFailure, ScreenRow};
 
-/// 読み取りに失敗したときの固定文言（egui-proxy と同じ。例外の `message` は出さない）。
+/// 読み取りに失敗したときの固定文言（`fandhe-cap-multi-display` の effect ドライバと同じ。例外の `message` は出さない）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const READ_FAILED: &str = "画面一覧の取得";
 
@@ -83,7 +83,7 @@ pub(crate) fn screen_from_raw(
     }
 }
 
-/// 契約の結果を画面の入力へ写す（egui-proxy と同じ写像）。失敗は固定文言へ畳む。
+/// 契約の結果を画面の入力へ写す（`fandhe-cap-multi-display` の effect ドライバと同じ写像）。失敗は固定文言へ畳む。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn to_result(
     r: Result<Vec<ScreenInfo>, MultiDisplayError>,

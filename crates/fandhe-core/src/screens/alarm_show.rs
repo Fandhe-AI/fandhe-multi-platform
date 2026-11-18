@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。OS 呼び出しと現在時刻の取得は本
-//! モジュール外（`fandhe-egui-proxy` の `device/alarm.rs`）が [`take_request`] で
+//! モジュール外（`fandhe-cap-alarm` の `driver.rs`）が [`take_request`] で
 //! 要求を観測し、[`finish_action`] で結果を注入する（`background_task.rs` と同型の
 //! 状態機械）。`SystemTime` は wasm32 で panic するため本モジュールでは使わない。
 //!
@@ -73,7 +73,7 @@ pub enum Phase {
 }
 
 /// 予約状態の表示用写像（`fandhe_device::alarm::AlarmState` と対応する。
-/// `fandhe-core` は `fandhe-device` に依存しないため、写像は `fandhe-egui-proxy`
+/// `fandhe-core` は `fandhe-device` に依存しないため、写像は機能 crate
 /// 側の責務にする）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ScheduleView {

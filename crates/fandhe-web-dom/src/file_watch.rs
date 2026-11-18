@@ -6,7 +6,7 @@
 //! 許可ダイアログなし）の専用フォルダ `file-watch` へ渡して、結果を `finish_start` / `apply_scan` /
 //! `mark_failed` / `finish_op` で書き戻す。`fandhe-device` の `FileWatch` trait は通らず、
 //! 共有するのは走査結果の整形・差分・サンプル名の規則（`fandhe_cap_file_watch` の純関数）だけ。
-//! `fandhe-egui-proxy` の wasm canvas 経路は対象外。任意フォルダの監視は #1408。
+//! egui の wasm canvas 経路（`fandhe-render-egui`）は対象外。任意フォルダの監視は #1408。
 //!
 //! # 方式（ネイティブ 4 OS と同じ）
 //!
@@ -51,7 +51,7 @@ use fandhe_cap_file_watch::{
 };
 use fandhe_core::screens::file_watch_show::RecordKind;
 
-/// 開始失敗の固定文言（`fandhe-egui-proxy` のドライバと同じ）。
+/// 開始失敗の固定文言（`fandhe-cap-file-watch` の effect ドライバと同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const START_FAILED: &str = "監視の開始";
 /// 操作失敗の固定文言（同上）。

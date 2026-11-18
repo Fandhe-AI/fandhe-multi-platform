@@ -7,7 +7,7 @@
 //! 送信は扱わない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 呼び出しは
-//! `fandhe-egui-proxy` の `device/serial_port.rs`（ネイティブ）と `fandhe-web-dom`（Web）が
+//! `fandhe-cap-serial-port` の `driver.rs`（ネイティブ）と `fandhe-web-dom`（Web）が
 //! [`take_request`] で要求を観測し、[`finish_list`] / [`finish_round_trip`] で結果を注入する。
 //! 状態・定数・文言は全 OS 分をここで確定し、後続の OS 実装（#671・#672）は画面に触らない。
 //!

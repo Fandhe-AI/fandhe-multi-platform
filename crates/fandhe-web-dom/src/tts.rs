@@ -111,7 +111,7 @@ fn error_message(code: web_sys::SpeechSynthesisErrorCode) -> String {
 
 /// `mount_with_effect` へ渡す effect。`tts_speak` 画面の発話・停止要求を処理する。
 ///
-/// 停止 → 発話の順で見る（`fandhe-egui-proxy` 側 effect ドライバと同じ順序。
+/// 停止 → 発話の順で見る（`fandhe-cap-tts` の effect ドライバと同じ順序。
 /// 同一フレームで両方が立つことは `tts_speak` の状態遷移上ないが、順序を固定して
 /// おくことで将来の変更に対しても意味が変わらないようにする）。
 pub fn tts_speak_effect(state: &TtsSpeakState, applier: &Applier<TtsSpeakState>) {

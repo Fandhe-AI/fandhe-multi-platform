@@ -7,7 +7,7 @@
 //! （`screens/mod.rs` の `pub mod tsv_import;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。実際のダイアログ表示・
-//! バイト列の取得は本モジュール外（`fandhe-egui-proxy` の
+//! バイト列の取得は本モジュール外（
 //! `fandhe-cap-file-picker` の `tsv_import.rs`）が [`take_request`] で要求を観測し [`finish_import`] で
 //! 結果を注入する。橋渡しの実体（`bridge`・effect ドライバ）は `screens::file_pick` と
 //! 共有する（`fandhe-cap-file-picker` の `driver.rs` の `PickHooks` 参照）。`FANDHE_PROXY_APP` で起動する

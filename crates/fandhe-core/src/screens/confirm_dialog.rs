@@ -12,10 +12,10 @@
 //! `Widget::children` 経由の子ノード降下（[`DialogWidget::with_content`]）が加わったため
 //! （`ui/widget.rs` / `ui/node.rs::expand_children` / `ui/event.rs::resolve_node_at`）、
 //! 「一覧区画は常に描画したまま、その後ろに `Node::Widget(DialogWidget)` を重ねる」
-//! 構成が組めるようになった。egui-proxy は開状態の `DialogWidget` を前面パネル + スクリムで
+//! 構成が組めるようになった。`fandhe-render-egui` は開状態の `DialogWidget` を前面パネル + スクリムで
 //! 描画し、パネル外タップを `dismiss_label` と同名のパネル内 `Button`
 //! （[`DISMISS_LABEL`] = 「キャンセル」 = [`CANCEL_ID`]）へ `Event::ButtonClickedAt` として
-//! dispatch する（egui-proxy 側の実装は別 Issue コメント参照）。これにより従来の
+//! dispatch する（`fandhe-render-egui` 側の実装は別 Issue コメント参照）。これにより従来の
 //! 「一覧区画 ⇔ 確認区画」を排他的に切り替える `nav` 方式（PR #737）とは異なり、背後の
 //! 一覧が常に存在するため「外側」領域が実在し、外側タップで閉じる UI を実現できる。
 //!
@@ -43,7 +43,7 @@ const CONFIRM_ID: WidgetId = WidgetId::from_raw(2);
 const DIALOG_ID: WidgetId = WidgetId::from_raw(3);
 
 /// dismiss（パネル外タップ・`DialogWidget` の閉じるボタン相当）のブリッジラベル。
-/// パネル内「キャンセル」ボタンのラベルと確実に一致させ、egui-proxy がパネル外タップを
+/// パネル内「キャンセル」ボタンのラベルと確実に一致させ、`fandhe-render-egui` がパネル外タップを
 /// この同名ボタンの path へ変換して dispatch できるようにする（モジュール doc 参照）。
 const DISMISS_LABEL: &str = "キャンセル";
 
@@ -74,7 +74,7 @@ impl Default for ConfirmDialogState {
 
 /// 一覧行の「削除」ボタンのハンドラ。`index` が範囲外なら何もしない
 /// （panic を API 契約にしない、coding-rust.md のエラーハンドリング方針）。
-/// 確認パネルが実際に表示中（[`is_confirming`]）の場合のみ無視する。egui-proxy の
+/// 確認パネルが実際に表示中（[`is_confirming`]）の場合のみ無視する。`fandhe-render-egui` の
 /// backdrop（前面パネル + スクリム描画）は視覚的に背景操作を遮るのみで、
 /// `StateStore::dispatch` 経由の一覧ボタン操作（path 解決した `ButtonClickedAt`）は
 /// ハンドラに直接届くため防げない。「モーダル表示中は背景操作を無効化する」契約を
@@ -269,7 +269,7 @@ mod tests {
     /// `pending` がクリアされ、再描画で確認ボタンが消えることを確認する。
     ///
     /// `Event::ButtonClicked { label: "キャンセル" }` は非展開走査
-    /// （`click_button`）ではパネル内ボタンへ到達できないため、egui-proxy が行うのと
+    /// （`click_button`）ではパネル内ボタンへ到達できないため、`fandhe-render-egui` が行うのと
     /// 同じ変換（path 解決 → `ButtonClickedAt`）をテスト側でも行う
     /// （`ui::event::resolve_node_at` 相当、`path = [dialog_index, 0]` は
     /// `expand_confirm` の先頭要素＝「キャンセル」ボタン）。
@@ -324,7 +324,7 @@ mod tests {
 
         // `DialogWidget::apply_pointer` はレガシー `Event::ButtonClicked { label }` を
         // 返すが、動的生成子（`with_content`）内のボタンは非展開走査（`click_button`）
-        // では解決できないため、egui-proxy が行うのと同じ変換（path 解決込みの
+        // では解決できないため、`fandhe-render-egui` が行うのと同じ変換（path 解決込みの
         // `ButtonClickedAt`）へ組み替えて `StateStore::dispatch` する
         // （`ui::event::resolve_node_at` 相当、モジュール冒頭のコメント参照）。
         let crate::state::Event::ButtonClicked { label } = event else {

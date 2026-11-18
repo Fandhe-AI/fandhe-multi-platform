@@ -4,7 +4,7 @@
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod eye_dropper_pick;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。橋渡し層が `DeviceError` を
-//! [`EyeDropperOutcome`] へ畳んで渡す。macOS は egui-proxy、Web は `fandhe-web-dom`（#763）が
+//! [`EyeDropperOutcome`] へ畳んで渡す。macOS は機能 crate（`fandhe-cap-eye-dropper`）の effect ドライバ、Web は `fandhe-web-dom`（#763）が
 //! 同じ型・同じ文言定数を使う。
 //!
 //! # 成功・取り消し・非対応・失敗を混同しない

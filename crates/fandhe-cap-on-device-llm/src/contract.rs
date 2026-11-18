@@ -5,7 +5,7 @@
 //! では理由つきの失敗を出す」ことだけ。ストリーミング・会話履歴・利用者が入力するプロンプト・
 //! 構造化出力・モデルのダウンロード開始・取り消し・温度の調整は扱わない。対象は macOS / iOS
 //! （FoundationModels）と Web（Prompt API）。Android は保留、Windows は申請待ちで
-//! `Unsupported` 固定。一発呼び出し型の同期 API で、呼び出し側（`fandhe-egui-proxy` の effect
+//! `Unsupported` 固定。一発呼び出し型の同期 API で、呼び出し側（機能 crate の effect
 //! ドライバ）は UI を止めないようワーカースレッドから呼ぶ。Web は同じ契約を `fandhe-web-dom`
 //! の非同期 effect で実装する。
 //!

@@ -6,7 +6,7 @@
 //! （`screens/mod.rs` の `pub mod health_steps_read;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
-//! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-egui-proxy` の
+//! 「新規画面ファイルの置き場」節）。OS 呼び出しは
 //! `fandhe-cap-health-data` の `driver.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を注入する。
 //!
 //! 全対象 OS（iOS・Android）の文言・状態をここで定義済みで、後続の OS 実装は本画面を触らない。

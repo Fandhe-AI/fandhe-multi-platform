@@ -42,7 +42,7 @@ S2〜S5 は本文書の型シグネチャ・境界条件・テスト観点を前
    ノードを挿入順に走査し、`List` に遭遇するたびに `expand(state)` を呼んで
    **子ノード全件を毎回 `Vec` として新規生成**し、深さ優先で再帰的に訪問する。
    ネストした `List` にも対応するが、可視範囲という概念自体が存在しない。
-3. **`fandhe-egui-proxy::render_screen`**（`crates/fandhe-render-egui/src/render.rs`
+3. **`fandhe-render-egui::render_screen`**（`crates/fandhe-render-egui/src/render.rs`
    L64-109）: `visit_expanded` の結果を **毎フレーム全ノードぶん** egui ウィジェットへ
    マッピングする（`Node::Text` → `ui.label`、`Node::TextField` → `ui.text_edit_singleline`
    等）。`ScrollArea` 等のビューポート概念には未対応。
@@ -71,10 +71,10 @@ S2〜S5 は本文書の型シグネチャ・境界条件・テスト観点を前
 | 責務 | 配置レイヤ | 理由 |
 |------|-----------|------|
 | 可視範囲算出（`compute_visible_range`） | `fandhe-core`（依存ゼロ・`#![forbid(unsafe_code)]` の純粋関数） | スクロール位置・ビューポート寸法・項目数という数値のみを入力にとる算術であり、egui 等の描画基盤に依存する理由がない。SwiftUI ブリッジ・DOM レンダラ（`fandhe-web` 等）でも同一契約を再利用するため、コア側の純粋関数として契約を固定する |
-| スクロールオフセット・ビューポート実寸の取得 | プラットフォームレイヤ（`fandhe-egui-proxy` では `egui::ScrollArea`） | スクロール位置はネイティブ UI ツールキットの状態であり、コアが `&S` から取得できるものではない |
+| スクロールオフセット・ビューポート実寸の取得 | 描画層（`fandhe-render-egui` では `egui::ScrollArea`） | スクロール位置はネイティブ UI ツールキットの状態であり、コアが `&S` から取得できるものではない |
 | 実際のウィジェット生成・描画 | プラットフォームレイヤ | `render_screen` が担う既存責務を維持し、コアは「どの範囲を描くべきか」のみを返す |
 
-依存方向はプロキシ（`fandhe-egui-proxy`）→ コア（`fandhe-core`）の一方向を維持し、
+依存方向は描画層（`fandhe-render-egui`）→ コア（`fandhe-core`）の一方向を維持し、
 コア側に egui 型は一切登場させない。
 
 ### 3.2 可視範囲算出アルゴリズム
@@ -175,12 +175,12 @@ f: impl FnMut(&Node<S>))`）。`VirtualList` に遭遇した場合のみ `range`
 性能経路は `visit_windowed` に限定する設計判断）。`item` の型表記は
 `crate::state::ReadIndexedFn<S, T> = fn(&S, usize) -> T`（SSOT 型エイリアス）を使う。
 S3（`ListRecycler`、#86）・S5（`total_content_extent` / `clamp_scroll_offset`、#88）との
-統合、および `fandhe-egui-proxy::render_screen` の `egui::ScrollArea::show_viewport`
+統合、および `fandhe-render-egui::render_screen` の `egui::ScrollArea::show_viewport`
 実配線は §3.5 で述べる。
 
 ### 3.4 プラットフォーム統合方針
 
-`fandhe-egui-proxy` 側は `egui::ScrollArea`（`show_rows` あるいは `show_viewport`
+`fandhe-render-egui` 側は `egui::ScrollArea`（`show_rows` あるいは `show_viewport`
 相当の API）からビューポートの実寸・現在のスクロールオフセットを取得し、コアの
 `compute_visible_range` が返した範囲のみを `Screen::visit_windowed` 経由で描画する。
 
@@ -226,7 +226,7 @@ S3（`ListRecycler`、#86）・S5（`total_content_extent` / `clamp_scroll_offse
     viewport_extent, 0)]` へ防御的にクランプする。負値・`NaN`・無限大・
     「viewport がコンテンツ全高より大きい」（§3.2）のいずれも安全側の値へ丸める。
   - **統合側の責務**: `Node::VirtualList` / `compute_visible_range` / `Screen::visit_windowed`
-    がウィンドウ幅の算出とツリー走査を担い、`fandhe-egui-proxy::render_screen` が
+    がウィンドウ幅の算出とツリー走査を担い、`fandhe-render-egui::render_screen` が
     `egui::ScrollArea::show_viewport` の配線とウィンドウ移動時の widget id 安定化
     （`push_id(index)`、S3 §3.5 方針）を担う。`scroll.rs` の純粋関数はこれらから
     幾何演算のみを切り出して呼び出される。

@@ -3,7 +3,7 @@
 //! `fandhe_core::screens::display_refresh_hdr_show`（端末依存ゼロ）を [`super::mount::mount_with_effect`]
 //! の effect として観測し、ボタンを押すたびに `matchMedia` を読んで `finish_read` へ書き戻す。
 //! `DisplayRefreshHdr` トレイトは経由しない（`device_info` と同じ構成）。
-//! `fandhe-egui-proxy` の wasm canvas 経路（`Unsupported` のまま）とは別経路。
+//! egui の wasm canvas 経路（`fandhe-render-egui`）（`Unsupported` のまま）とは別経路。
 //!
 //! # 読み方
 //!
@@ -34,7 +34,7 @@ use fandhe_core::screens::display_refresh_hdr_show::{DisplayReading, ReadFailure
 
 use crate::accessibility_prefs::pref_from;
 
-/// 失敗時の固定文言（例外の内容は含めない）。egui-proxy 側と揃える。
+/// 失敗時の固定文言（例外の内容は含めない）。`fandhe-cap-display-refresh-hdr` の effect ドライバと揃える。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const READ_FAILED: &str = "画面の表示能力の読み取り";
 

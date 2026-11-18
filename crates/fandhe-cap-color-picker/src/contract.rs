@@ -1,7 +1,7 @@
 //! システムの色選択ダイアログの契約（Phase 11 の拡充ループ、親 #184、Issue #941）。
 //!
 //! 固定の初期色 [`INITIAL_RGB`] から OS 標準の色選択 UI で 1 色を選ばせ、sRGB の `#rrggbb` で返す。
-//! 呼び出し元は `fandhe-egui-proxy` の effect ドライバ（`driver.rs`。macOS・Windows・iOS）と、
+//! 呼び出し元は本 crate の effect ドライバ（`driver.rs`。macOS・Windows・iOS）と、
 //! Web 子（#943）の `fandhe-web-dom`。画面から色を拾う eye-dropper とは別機能。
 //! 色の型は [`fandhe_device::eye_dropper::PickedColor`] を使い、エラー識別子だけ `color_picker` へ付け替える。
 //!
@@ -93,7 +93,7 @@ pub fn color_from_input_value(s: &str) -> Result<PickedColor, ColorPickerError> 
 }
 
 /// 色選択ダイアログの契約。同期モーダルな OS（Windows）が実装する。コールバック型 OS
-/// （macOS・iOS）は `fandhe-egui-proxy` の pull 型 bridge を使いこのトレイトを通らない。
+/// （macOS・iOS）は本 crate の `driver.rs` の pull 型 bridge を使いこのトレイトを通らない。
 pub trait ColorPicker: Send + Sync {
     /// ダイアログを 1 回開き、選ばれた色を返す。取り消しは `Err(Cancelled)`。
     fn pick(&self) -> Result<PickedColor, ColorPickerError>;

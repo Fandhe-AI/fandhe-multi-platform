@@ -1,6 +1,6 @@
 // TASK-5.2（REQ-5 / REQ-6 実施後、Issue #237）メモリ増分実機計測専用の Gradle プロジェクト。
 //
-// 位置づけ: 配布用アプリ（platforms/android、NativeActivity + fandhe-egui-proxy）と
+// 位置づけ: 配布用アプリ（platforms/android、NativeActivity + fandhe-gallery）と
 // **意図的に分離**した検証専用プロジェクト。ここで作る 2 アプリ（baseline / native-sample）は
 // ストア配布経路（scripts/android/build-aab.sh・release 署名）には一切接続されない
 // （security.md A05 対策。配布用の platforms/android/settings.gradle.kts へは

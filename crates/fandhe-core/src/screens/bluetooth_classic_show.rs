@@ -7,7 +7,7 @@
 //! 扱わない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 呼び出しは
-//! `fandhe-egui-proxy` の `device/bluetooth_classic.rs` が [`take_paired_request`] /
+//! `fandhe-cap-bluetooth-classic` の `driver.rs` が [`take_paired_request`] /
 //! [`take_discover_request`] で要求を観測し、[`finish_paired`] / [`finish_discover`] で結果を注入する。
 //! 状態・定数・文言は全 OS 分をここで確定し、後続の OS 実装は画面に触らない。
 //!

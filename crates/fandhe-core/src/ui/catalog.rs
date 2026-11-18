@@ -16,7 +16,7 @@
 //!
 //! **スコープ外**（PR 本文に明記・ユーザーへ報告）:
 //! - `Widget<S>` トレイト実装後のカタログ接続（`AccessibilityRole` 等の追加）
-//! - 実描画（`fandhe-egui-proxy`）でのギャラリーアプリ配線
+//! - 実描画（`fandhe-render-egui`）でのギャラリーアプリ配線
 //! - 個別 18 種ウィジェットのエントリ登録（S7〜S60 の各工程）
 
 use super::button::Button;
@@ -186,7 +186,7 @@ impl WidgetCatalog {
     /// カテゴリの 5 件目のエントリ。`checkbox` / `label` と同じ理由でドラッグ・キー操作に
     /// よる値変更配線は Issue #124 のスコープとして引き続き未接続とする。なお本段落の
     /// 「未接続」はカタログの preview 経路に限った話で、`Screen::checkbox` /
-    /// `Screen::slider` 等が組む本番経路は egui-proxy で実描画され値変更も
+    /// `Screen::slider` 等が組む本番経路は `fandhe-render-egui` で実描画され値変更も
     /// `Event::WidgetValueChanged` で配線済み（Issue #805 / #806））。`progress_bar`
     /// / `spinner` エントリは `ProgressBar<S>` / `Spinner<S>`（TASK-8.3-S33 /
     /// Issue #128）を `Screen::progress_bar` / `Screen::spinner` 経由で登録する、

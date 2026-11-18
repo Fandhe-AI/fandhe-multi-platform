@@ -1,5 +1,5 @@
 //! 方位（コンパス）の契約（Issue #1404、親 #1154）。端末の向きを磁北基準の度で
-//! 画面に出すための橋渡しで、`fandhe-egui-proxy` の 本 crate の `driver` が購読の開始・停止と
+//! 画面に出すための橋渡しで、本 crate の `driver` が購読の開始・停止と
 //! 間隔つきの [`Compass::read`] を行う（pull 型。OS 側が最新値を持ち、画面側が読む）。
 //!
 //! # 契約
@@ -25,7 +25,7 @@
 
 use std::time::Duration;
 
-/// 画面側が OS を読み直す間隔。`fandhe-egui-proxy` と `fandhe-web-dom` が共有する唯一の値。
+/// 画面側が OS を読み直す間隔。本 crate の `driver` と `fandhe-web-dom` が共有する唯一の値。
 pub const READ_INTERVAL: Duration = Duration::from_millis(100);
 
 // 値が届かない時間の追跡（`WaitTracker`）と期限（`NO_READING_TIMEOUT_MS`）は ar・environment-sensors も使う OS に触れない部品なので

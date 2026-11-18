@@ -4,7 +4,7 @@
 //! registry.rs` の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod open_system_settings_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
-//! 置き場」節の制約どおり）。OS 呼び出しは `fandhe-egui-proxy` の effect ドライバ
+//! 置き場」節の制約どおり）。OS 呼び出しは 機能 crate の effect ドライバ
 //! （`crates/fandhe-cap-open-system-settings/src/driver.rs`）が [`take_request`] で要求を観測して行い、[`finish_open`] で
 //! 結果を注入する。本画面は二重押し防止と文言だけを持ち、全対象 OS（Windows・iOS・Android）の
 //! 文言をここで決める（後続の OS 実装は画面を触らない）。

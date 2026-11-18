@@ -5,7 +5,7 @@
 //! `fandhe-core` は `accesskit` へ依存しない設計（依存方向規約、
 //! `.claude/rules/coding-rust.md`）であり、`AccessibilityRole::doc` が定める
 //! 「プラットフォームレイヤ側で `accesskit::Role` へ変換する」契約を、本モジュールが
-//! `fandhe-egui-proxy`（プラットフォーム最適化レイヤ）側で実装する。
+//! 描画層（本 crate）側で実装する。
 //!
 //! 本モジュールはターゲット非依存の純粋関数のみで構成する（egui の "accesskit"
 //! feature・`accesskit_macos` 等のプラットフォームアダプタには一切依存しない）。

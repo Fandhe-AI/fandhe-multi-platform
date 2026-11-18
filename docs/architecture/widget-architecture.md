@@ -219,7 +219,7 @@ pub enum PaintCommand {
 /// `accesskit` に直接依存しない（依存方向規約、coding-rust.md）ため、
 /// 独自の列挙として定義し、プラットフォームレイヤ側で `accesskit::Role` へ変換する。
 ///
-/// 変換実装は `fandhe-egui-proxy::accessibility`（`to_accesskit_role` /
+/// 変換実装は `fandhe-render-egui::accessibility`（`to_accesskit_role` /
 /// `widget_ax_node`、TASK-9.1-S2）が担う。ターゲット非依存の純粋関数として提供し、
 /// egui/eframe の "accesskit" feature 有効化状況とは独立に全ターゲットで
 /// コンパイル・テスト可能とする（同 feature に依存する `ctx.accesskit_node_builder`
@@ -328,7 +328,7 @@ stateDiagram-v2
   有界性設計と同じ考え方を踏襲する。
 
 **呼び出し元**: mount/update/layout/paint はプラットフォームレイヤの描画走査
-（`fandhe-egui-proxy::render_screen` 相当）が毎フレーム駆動する。event は
+（`fandhe-render-egui::render_screen` 相当）が毎フレーム駆動する。event は
 プラットフォームレイヤの入力ハンドリングが `StateStore::dispatch` を経由して駆動する。
 
 **既存 `RendererLifecycle`（`render_mode.rs`）との区別**: `RendererLifecycle` は

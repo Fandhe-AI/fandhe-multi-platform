@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod volume_control_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
-//! 置き場」節の制約どおり）。OS への要求と読み戻しは `fandhe-egui-proxy` の effect ドライバ
+//! 置き場」節の制約どおり）。OS への要求と読み戻しは 機能 crate の effect ドライバ
 //! （`fandhe-cap-volume-control` の `driver.rs`）が [`take_step`] / [`wants_read`] で観測し、[`begin`] →
 //! [`finish_step`] / [`apply_read`] / [`expire`] で結果を注入する。
 //!
@@ -118,7 +118,7 @@ pub enum StepResult {
     NotChangeable(Reading),
 }
 
-/// 失敗の種別（`fandhe-egui-proxy` が `DeviceError` から写す。OS の詳細は載せない）。
+/// 失敗の種別（機能 crate の effect ドライバが `DeviceError` から写す。OS の詳細は載せない）。
 #[derive(Debug, Clone, PartialEq)]
 pub enum VolumeFailure {
     /// この環境では使えない。

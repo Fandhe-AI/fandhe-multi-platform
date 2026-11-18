@@ -5,7 +5,7 @@
 //! 長辺 [`MAX_SIDE`] px 以内の RGBA に描き、総ページ数と一緒に返す」ことだけ。利用者が持ち込む
 //! ファイル・ページ送り・注釈・検索・選択は扱わない。対象は macOS / iOS（CoreGraphics
 //! `CGPDFDocument`）、Windows（`Windows.Data.Pdf`）、Android（`PdfRenderer`）。Web は対象外。
-//! 一発呼び出し型の同期 API で、呼び出し側（`fandhe-egui-proxy` の effect ドライバ）は
+//! 一発呼び出し型の同期 API で、呼び出し側（本 crate の effect ドライバ（`driver.rs`））は
 //! UI を止めないようワーカースレッドから呼ぶ。
 //!
 //! # 契約

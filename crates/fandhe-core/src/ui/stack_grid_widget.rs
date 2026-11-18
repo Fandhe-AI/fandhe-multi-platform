@@ -75,7 +75,7 @@
 //!
 //! **スコープ外事項**（`.claude/rules/out-of-scope-tracking.md` 準拠。PR 本文に記録する）:
 //! (a) S43（#138）マージ後の型統合、
-//! (b) プラットフォームレイヤ（`fandhe-egui-proxy` / `fandhe-web-dom` /
+//! (b) プラットフォームレイヤ（`fandhe-render-egui` / `fandhe-web-dom` /
 //!     `fandhe-swiftui-bridge`）への実配線、
 //! (c) `WidgetCatalog` 登録・結合テスト網羅拡充（S45 / #140）、
 //! (d) アラインメント・伸縮比（flex-grow 相当）・セル結合（span）・RTL 対応、

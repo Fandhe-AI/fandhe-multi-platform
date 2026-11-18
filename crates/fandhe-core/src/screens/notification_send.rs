@@ -7,7 +7,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。実際の OS 呼び出し・入力検証は
-//! 本モジュール外（`fandhe-egui-proxy` の effect ドライバ、`device/notification.rs`）が
+//! 本モジュール外（`fandhe-cap-notification` の effect ドライバ（`driver.rs`）が
 //! [`take_request`] で要求を観測し [`finish_notify`] で結果を注入する
 //! （`share_text.rs` と同型の状態機械）。
 //!
@@ -56,7 +56,7 @@ pub enum NotificationPhase {
 }
 
 /// 通知結果（画面表示用。`fandhe_device::notification::NotifyOutcome` と 3 腕対応する。
-/// `fandhe-core` は `fandhe-device` に依存しないため、写像は `fandhe-egui-proxy`
+/// `fandhe-core` は `fandhe-device` に依存しないため、写像は機能 crate
 /// 側の責務にする、モジュール doc 参照）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NotifyOutcome {

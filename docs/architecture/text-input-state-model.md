@@ -79,7 +79,7 @@ S1 が確定した契約（要約、詳細は `ime-architecture.md` 参照）:
   `PointerReleased` / `FocusGained` / `FocusLost`）
 - `crates/fandhe-core/src/state/store.rs`: `Event::TextFieldChanged { label, value }`。
   widget 層は `&mut S` に触れず `StateStore::dispatch` へブリッジする単一ソース設計。
-- winit 0.30（`Cargo.toml` workspace 依存、`fandhe-egui-proxy` 経由で使用）:
+- winit 0.30（`Cargo.toml` workspace 依存、`fandhe-render-egui` 経由で使用）:
   S1 が確定した `WindowEvent::Ime(Ime::{Enabled, Preedit(String, Option<(usize, usize)>), Commit(String), Disabled})`
   が本モデルへの主要な入力ソース（winit は byte offset、コア契約は char offset、変換は
   プラットフォーム層が担う。§4.6 出典は `ime-architecture.md` 参照）。

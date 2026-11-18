@@ -5,11 +5,11 @@
 //! 本クレートはその是正として、Noto Sans JP Regular を `include_bytes!` でバイナリ埋め込み
 //! し、システムフォントの有無に依存しない配布物を実現する。
 //!
-//! 依存方向は「最適化レイヤ（`fandhe-egui-proxy` 等）→ 本クレート」の一方向
+//! 依存方向は「描画層（`fandhe-render-egui` 等）→ 本クレート」の一方向
 //! （coding-rust.md 準拠）。`fandhe-core` には依存しない・される関係もない
 //! （フォント資産はレンダラ側の関心事であり、共通コアの肥大化を避ける設計判断）。
 //!
-//! wasm32 ターゲットでは本クレートを依存に含めない（`fandhe-egui-proxy` 側で
+//! wasm32 ターゲットでは本クレートを依存に含めない（`fandhe-render-egui` 側で
 //! `cfg(not(target_arch = "wasm32"))` によりゲートしている）。埋め込みは配信サイズを
 //! 即座に数 MB 増やし REQ-4（3MB 基準）と衝突するため、Web は `fonts/` からの fetch
 //! 方式を維持し、コピー元を本クレート同梱の資産（`assets/NotoSansJP-Regular.otf`）へ

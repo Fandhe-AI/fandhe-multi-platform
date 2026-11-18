@@ -6,7 +6,7 @@
 //! 利用者の入力・現在地は扱わない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は
-//! 本モジュール外（`fandhe-egui-proxy` の `device/geocoding_search.rs`）が [`take_request`] で
+//! 本モジュール外（`fandhe-cap-geocoding-search` の `driver.rs`）が [`take_request`] で
 //! 要求を観測し、[`mark_running`]・[`finish_geocode`] で状態を進める。全対象 OS（macOS / iOS /
 //! Android）で同じ UI・文言を使うため、OS 別の子 issue はこのファイルを触らない。
 //!

@@ -25,7 +25,7 @@
 //! 守る: 1 マウント内の要求と完了の順序（`finish_scan` の世代照合）、失敗を成功へ畳まないこと、
 //! `ImageBitmap` の `close()` と `<input>` の解放（`file_picker::release_mount`）。
 //! 守らない: ブラウザごとの検出結果・順序の違い、処理時間（期限なし）、実行中の検出の取り消し、
-//! 複数タブ、`fandhe-egui-proxy` の wasm canvas 経路。
+//! 複数タブ、egui の wasm canvas 経路（`fandhe-render-egui`）。
 //! Safari・Firefox・Windows/Linux の Chrome は `BarcodeDetector` が無いか形式が空のため非対応表示。
 
 use fandhe_cap_barcode_scan::normalize_payloads;
@@ -33,7 +33,7 @@ use fandhe_core::screens::barcode_scan::ScanFailure;
 use fandhe_device::file_picker::PickError;
 use fandhe_device::photo_picker::{dimensions_within_limits, image_dimensions, PickedPhoto};
 
-/// 読み取り失敗の固定文言（`fandhe-egui-proxy` と同文言）。
+/// 読み取り失敗の固定文言（`fandhe-cap-barcode-scan` の effect ドライバと同文言）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const READ_FAILED: &str = "コードを読み取れませんでした";
 

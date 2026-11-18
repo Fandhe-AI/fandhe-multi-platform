@@ -33,7 +33,7 @@ pub const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 // ponytail: 8MB 上限の body を全行描画しない保険。件数が要件になったら VirtualList 化。
 pub const MAX_ITEMS: usize = 100;
 
-/// `http.get(url)` の応答（JSON 配列）を `Vec<String>` へ変換する（`fandhe-egui-proxy` と
+/// `http.get(url)` の応答（JSON 配列）を `Vec<String>` へ変換する（本 crate の `driver.rs` と
 /// `fandhe-web-dom` の両方が呼ぶ共有ロジック、Issue #985）。エラーメッセージに応答本文・
 /// URL 全体は含めない（security.md A09 ログ方針）。`serde_json` のエラー文字列は入力値
 /// （応答本文の一部）を含み得るため `err.to_string()` をそのまま返さず、固定の解析失敗

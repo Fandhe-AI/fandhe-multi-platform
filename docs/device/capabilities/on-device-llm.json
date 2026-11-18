@@ -45,7 +45,7 @@
       "status": "done",
       "api": "Prompt API（`LanguageModel.availability()` / `create()` / `prompt()` / `destroy()`、Chrome 148+ でフラグなし。web-sys に型が無いため `js_sys::Reflect` で呼ぶ）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Prompt_API",
-      "note": "実装済み（#347）。範囲は固定プロンプトを 1 回渡して応答の全文を表示することのみ（ストリーミング・会話履歴・利用者が入力するプロンプト・モデルのダウンロード開始・取り消しは範囲外）。`availability()` が `available` 以外のときは `create()` を呼ばず失敗として出し、ダウンロードは始めない。期限は 60 秒（`performance.now()` 起点）、`pagehide` で中断し自動では再開しない。すべての経路で `destroy()` する。応答の長さの上限は API に無いため画面側で 400 文字に切る。Chromium デスクトップのみで端末要件あり。守る範囲: 1 マウント内の要求と完了の順序、失敗を成功値へ畳まないこと、セッション・タイマー・リスナーの解放。守らない範囲: ブラウザごとのモデル差、応答の非決定性、複数タブ、egui-proxy の wasm canvas 経路。実ブラウザの確認は #338 で行う。",
+      "note": "実装済み（#347）。範囲は固定プロンプトを 1 回渡して応答の全文を表示することのみ（ストリーミング・会話履歴・利用者が入力するプロンプト・モデルのダウンロード開始・取り消しは範囲外）。`availability()` が `available` 以外のときは `create()` を呼ばず失敗として出し、ダウンロードは始めない。期限は 60 秒（`performance.now()` 起点）、`pagehide` で中断し自動では再開しない。すべての経路で `destroy()` する。応答の長さの上限は API に無いため画面側で 400 文字に切る。Chromium デスクトップのみで端末要件あり。守る範囲: 1 マウント内の要求と完了の順序、失敗を成功値へ畳まないこと、セッション・タイマー・リスナーの解放。守らない範囲: ブラウザごとのモデル差、応答の非決定性、複数タブ、egui の wasm canvas 経路（`fandhe-render-egui`）。実ブラウザの確認は #338 で行う。",
       "safari": "Safari・Firefox は非対応（MDN の standards position は negative）。実ブラウザでの確認は #338",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実ブラウザ確認待ち（#338）",

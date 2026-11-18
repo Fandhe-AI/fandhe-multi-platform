@@ -10,7 +10,7 @@ CSS サイズ明示が Safari 対策として必須であることを、リポ�
 - `docs/spec/` は読み取り専用サブモジュールのため、本書は本リポジトリ側
   （`docs/architecture/`）の新規ドキュメントとして作成しています。
 - 前提: PoC-5（`docs/spec/03-poc/web-wasm/README.md` 発見事項1）、TASK-1.2（PR #306。
-  `crates/fandhe-egui-proxy` の `web::start`。`fandhe-gallery` の `start` が呼ぶ）。
+  `crates/fandhe` の `src/entry/web.rs`。`#[fandhe::main]` が生成する `start` が呼ぶ）。
 
 ## 2. 背景（PoC-5 発見事項・バグの機序）
 
@@ -59,7 +59,7 @@ PoC-5 は対策として
 1. **ホストページ側（HTML）**: `crates/fandhe-gallery/web/index.html` の
    `#fandhe-proxy-canvas` へ `style="width:...px;height:...px"` を明示する（本来の対策
    そのもの、PoC-5 で確認済みの形式と一致）。
-2. **Rust ブートストラップ側（構造的ガード）**: `crates/fandhe-egui-proxy/src/web.rs` の
+2. **Rust ブートストラップ側（構造的ガード）**: `crates/fandhe/src/entry/web.rs` の
    `ensure_canvas_css_size` 関数。`WebRunner.start()` を呼ぶ前に必ず通し、インラインスタイルの
    `width`/`height` が未設定であれば canvas の `width()`/`height()` 数値属性から
    `"{n}px"` を組み立てて補完し、`console.warn` で規約違反を警告する。
@@ -78,7 +78,8 @@ CLAUDE.md の日本語運用・レビュー体制の外で規約が守られな�
 
 ## 4. 適用範囲
 
-- 本規約は `crates/fandhe-egui-proxy`（egui バックエンドの現行実装、`consumer-app-structure.md`）の Web エントリに
+- 本規約は egui バックエンドの現行実装（`crates/fandhe-render-egui` と `crates/fandhe` の `src/entry/web.rs`、
+  `consumer-app-structure.md`）の Web エントリに
   現在適用されている。
 - 今後の Web 実装（TASK-4.4 の DOM 出力導線、TASK-8.x のウィジェット層の Web 埋め込み等）で
   新規に canvas を DOM へ追加する場合も、本規約（インライン style 明示 + 構造的ガードの

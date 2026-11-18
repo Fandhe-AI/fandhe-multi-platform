@@ -14,7 +14,7 @@
 #       (a) PLATFORM_FILES に列挙したファイル全体
 #       (b) PLATFORM_MARKER_DIRS 配下の *.rs 中、
 #           `// fandhe-prototype:begin` 〜 `// fandhe-prototype:end` のマーカー区間
-#   - 母集団外: fandhe-core・fandhe-egui-proxy の既存コード（マーカー区間外）・
+#   - 母集団外: fandhe-core・fandhe-gallery・fandhe-render-egui の既存コード（マーカー区間外）・
 #     Cargo.toml / HTML / スクリプト・tests/ 配下（結合テスト）
 #
 # 行数の数え方:

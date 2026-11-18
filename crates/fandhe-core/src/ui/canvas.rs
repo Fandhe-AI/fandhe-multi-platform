@@ -2,16 +2,16 @@
 //! （Issue #830 の型サンプル `tilt_ball` が最初の利用者）。
 //!
 //! `PaintCommand`（`Circle`/`StyledRect` 等）を実描画へ届ける経路が本クレート内に
-//! 存在しなかった（`fandhe-egui-proxy::paint_command` の変換関数はあるが
+//! 存在しなかった（`fandhe-render-egui::paint_command` の変換関数はあるが
 //! `Node::Widget` からの実配線が無い、Issue #828 の同モジュール doc 参照）ため、
 //! 本ウィジェットが橋渡しを担う。`ui/progress.rs`（`ProgressBar<S>`）と同じ構造上の
 //! 判断（`Widget<S>` を実装する自己完結の最小型、状態の SSOT はアプリ状態 `S`）を踏襲する。
 //!
-//! egui-proxy 側は `Checkbox`/`Slider` 等（Issue #806）と同じ `clone_box` →
+//! `fandhe-render-egui` 側は `Checkbox`/`Slider` 等（Issue #806）と同じ `clone_box` →
 //! `sync_from_state` → `as_any().downcast_ref` の経路で `CanvasWidget<S>` を見つけ、
 //! [`Widget::paint`] が返す `PaintCommand` 列を `paint_command::paint_circle` 等へ渡す
-//! （`fandhe-egui-proxy::lib.rs` の `Node::Widget` 分岐参照。`Widget::paint()` を
-//! 実際に呼ぶのは egui-proxy のみで、`render_headless` / `fandhe-web-dom` /
+//! （`fandhe-render-egui` の `render.rs` の `Node::Widget` 分岐参照。`Widget::paint()` を
+//! 実際に呼ぶのは `fandhe-render-egui` のみで、`render_headless` / `fandhe-web-dom` /
 //! `fandhe-swiftui-bridge` は `Node::Widget` を状態非依存のプレースホルダとして扱う
 //! 既存契約を維持する、`widget.rs` の「未配線の契約」参照）。
 //!

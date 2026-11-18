@@ -110,9 +110,9 @@
   ケース（独自レンダラ方式の macOS/iOS/Android/デスクトップ Linux/Windows）を主眼とし、
   Web は §4.5 でマッピングを追加定義する。
 
-### 3.3 `fandhe-egui-proxy`（参考実装、独自レンダラではない）
+### 3.3 `fandhe-render-egui`（参考実装、独自レンダラではない）
 
-- `crates/fandhe-egui-proxy` は eframe 0.33 / winit 0.30 経由で `fandhe-core` の宣言的 UI を
+- `crates/fandhe-render-egui` は eframe 0.33 / winit 0.30 経由で `fandhe-core` の宣言的 UI を
   検証するプロキシであり、egui 自体が持つ IME 処理（`egui::Event::Ime` 相当）に委ねている。
   本設計の契約（§4）はこのプロキシを対象読者に含めない（egui が独自に IME を処理するため）。
   ただし winit 0.30 系のバージョン整合（`docs/architecture/swiftui-bridge-architecture.md`
@@ -447,7 +447,7 @@ preedit（`setComposingText` の反映）の実現には GameActivity 方式へ�
 一切発火せず、`android-activity` の `InputEvent::TextEvent`（GameTextInput 経由の
 コンポジション更新）も未処理である**（macOS/Windows/Linux のように
 winit が `Ime::*` へ変換してくれる前提が Android では成立しない）。また既存
-`fandhe-egui-proxy`（TASK-1.5-S2）が採用する **NativeActivity flavor は組み込みの IME 対応を
+`fandhe-egui-proxy`（TASK-1.5-S2、#1200 で撤去）が当時採用していた **NativeActivity flavor は組み込みの IME 対応を
 持たず、CJK コンポジション入力が原理的に成立しない**ため、本設計は
 **GameActivity + `GameTextInput` 方式への移行を前提**とし、winit を経由せず
 `android-activity` の `AndroidApp`（`TextInputState`）を直接操作する新クレート
@@ -686,7 +686,7 @@ Issue #4）、Linux: `Disabled`/`Enabled` が同期発火。いずれも正当�
 
 ## 6. トレードオフ・代替案
 
-- **egui 既存 IME サポートの流用案（不採用）**: `fandhe-egui-proxy` は egui 自体の IME 処理
+- **egui 既存 IME サポートの流用案（不採用）**: `fandhe-egui-proxy`（当時。現在は `fandhe-render-egui`）は egui 自体の IME 処理
   （`egui::Event::Ime` 相当）に委ねている（egui バックエンドではこれを使う）が、独自レンダラ方式の
   プラットフォーム（macOS/iOS/Android/デスクトップ）には適用できない。egui の IME 処理は
   egui 内部の `TextEdit` ウィジェットに閉じており、`fandhe-core` の `Widget<S>` 抽象と

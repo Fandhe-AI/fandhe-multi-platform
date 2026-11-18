@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod display_refresh_hdr_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
-//! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-egui-proxy` の
+//! 「新規画面ファイルの置き場」節）。OS 呼び出しは
 //! `crates/fandhe-cap-display-refresh-hdr/src/driver.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を
 //! 注入する（`device_info_show.rs` と同型の状態機械）。
 //!

@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod drag_drop;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。実際のホバー/ドロップの
-//! 検知・読み取りは本モジュール外（`fandhe-egui-proxy` の `device/drag_drop.rs`）が
+//! 検知・読み取りは本モジュール外（`fandhe-cap-drag-drop` の `driver.rs`）が
 //! egui `RawInput::hovered_files`/`dropped_files` を観測し、[`begin_hover`]/
 //! [`cancel_hover`]/[`finish_drop`] を呼んで結果を注入する。
 //!

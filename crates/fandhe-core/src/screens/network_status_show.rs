@@ -4,7 +4,7 @@
 //! `pub mod network_status_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。
-//! OS 値の取得は `fandhe-egui-proxy` の `device/network_status.rs`（Web は `fandhe-web-dom` の
+//! OS 値の取得は `fandhe-cap-network-status` の `driver.rs`（Web は `fandhe-web-dom` の
 //! `network_status.rs`）が一定間隔で行い、
 //! [`apply_read`] で結果を注入する。`fandhe_device::network_status` の型は
 //! 依存方向の都合でここに写し取る。

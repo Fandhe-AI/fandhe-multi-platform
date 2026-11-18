@@ -26,7 +26,7 @@
 //!
 //! # 完了の届け方
 //!
-//! [`LiveActivity::submit`] の `Ok(())` は受理で、結果は同じ `request_id` で 1 回だけ egui-proxy の
+//! [`LiveActivity::submit`] の `Ok(())` は受理で、結果は同じ `request_id` で 1 回だけ本 crate の `driver.rs` の
 //! `bridge::deliver` へ届く。`request_id` が合わない完了は Rust 側と OS 側の両方で捨てる。
 //! 期限は持たない（経過時間を足すときは単調時計 `Instant` で測る）。
 //!

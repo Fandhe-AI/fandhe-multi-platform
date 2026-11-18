@@ -5,7 +5,7 @@
 //! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod camera_preview_stream_show;` と対）。
 //!
-//! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは `fandhe-egui-proxy` の
+//! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは
 //! `fandhe-cap-camera-preview-stream` の `driver.rs` が [`take_start`] / [`take_zoom`] で要求を観測し、`apply_*` /
 //! [`finish_zoom`] で結果を注入する。**起動時には映像を始めない**（ボタン起点）。全対象 OS（iOS・Android・
 //! Web）の状態・文言をここで確定済みで、後続 OS の実装（#813〜#815）は本画面を触らない。

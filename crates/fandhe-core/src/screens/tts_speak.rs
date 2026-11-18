@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。実際の発話は本モジュール外
-//! （`fandhe-egui-proxy` の effect ドライバ、`fandhe-cap-tts` の `driver.rs`）が
+//! （機能 crate の effect ドライバ、`fandhe-cap-tts` の `driver.rs`）が
 //! [`take_speak_request`] / [`take_stop_request`] で要求を観測し
 //! [`finish_speak`] / [`finish_stop`] で結果を注入する。
 //!
@@ -186,7 +186,7 @@ pub fn take_speak_request(state: &TtsSpeakState) -> Option<(u64, String)> {
 }
 
 /// `speak_text` の要求を発送済みにする（`CompletionSender::send` 経由でのみ呼ばれる契約、
-/// `fandhe-egui-proxy` 側の effect ドライバ参照）。
+/// 機能 crate の effect ドライバ参照）。
 pub fn mark_speak_dispatched(state: &mut TtsSpeakState) {
     state.speak_dispatched = true;
 }
@@ -511,7 +511,7 @@ mod tests {
 
     #[test]
     fn take_speak_request_returns_none_once_dispatched() {
-        // OS 呼び出しが別スレッドへ移った（egui-proxy 側 UI スレッド解放）ことで
+        // OS 呼び出しが別スレッドへ移った（描画側の UI スレッド解放）ことで
         // 完了まで複数フレームにまたがるようになったため、`speak_dispatched` が
         // 立った後は同じ要求を再度 `take_speak_request` で取り出せない
         // （＝二重発話しない）ことの固定（codex-review P1 指摘）。

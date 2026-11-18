@@ -3,7 +3,7 @@
 // `crates/fandhe-core/src/ui/sample.rs` の `sample_screen()`（見出しテキスト・
 // テキスト入力・ボタン 2 種・リストの計 6 要素）を、Android 側の宣言的 UI フレームワークで
 // あり PoC-4 が対応関係として用いた「宣言的 UI」の系譜にある Jetpack Compose で
-// 再現した比較アプリ。fandhe（NativeActivity + fandhe-egui-proxy）のアイドル時メモリ増分を、
+// 再現した比較アプリ。fandhe（NativeActivity + fandhe-gallery）のアイドル時メモリ増分を、
 // 同一機能のネイティブ SDK 実装と比較するための基準として使う。
 //
 // **検証専用**。配布経路（platforms/android・release 署名）とは分離済み（settings.gradle.kts

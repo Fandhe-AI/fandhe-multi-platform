@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod spell_check;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は
-//! 本モジュール外（`fandhe-egui-proxy` の `device/spell_check.rs`）が [`take_request`] で要求を
+//! 本モジュール外（`fandhe-cap-spell-check` の `driver.rs`）が [`take_request`] で要求を
 //! 観測し、[`mark_running`]・[`finish_check`] で状態を進める。全対象 OS（macOS / iOS / Android /
 //! Windows）で同じ UI・文言を使うため、OS 別の子 issue はこのファイルを触らない。
 //!

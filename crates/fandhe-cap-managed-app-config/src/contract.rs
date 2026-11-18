@@ -1,5 +1,5 @@
 //! Phase 11 の拡充ループ（親 #185、Issue #944）: MDM が配った管理アプリ設定のうち、固定の 3 キー
-//! （[`KEY_BOOL`]・[`KEY_INTEGER`]・[`KEY_TEXT`]）だけを 1 回読む契約。`fandhe-egui-proxy` の
+//! （[`KEY_BOOL`]・[`KEY_INTEGER`]・[`KEY_TEXT`]）だけを 1 回読む契約。本 crate の
 //! `driver.rs` が「管理設定を読む」ボタン押下ごとにワーカースレッドから
 //! [`ManagedAppConfig::read`] を 1 回呼び、各 OS 実装（macOS: `CFPreferences`、iOS: #945、
 //! Android: #946）が本トレイトを実装する。

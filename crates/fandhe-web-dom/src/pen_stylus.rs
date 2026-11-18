@@ -1,7 +1,7 @@
 //! 型サンプル「ペン・筆圧で描く」の Web 経路（親 #95、Issue #358）。
 //!
 //! `fandhe_core::screens::pen_draw`（端末依存ゼロ）の画面を [`super::mount::mount_with_effect`]
-//! の effect として駆動する。`fandhe-egui-proxy` の wasm canvas 経路は対象外
+//! の effect として駆動する。egui の wasm canvas 経路（`fandhe-render-egui`）は対象外
 //! （`UnsupportedPenStylus` のまま）。`fandhe_cap_pen_stylus::PenStylus` trait（`Send + Sync`）は
 //! JS の Closure を持てないため通さず、`PenSample::new` / `altitude_from_tilt_deg` で値を検証して
 //! core の `apply_sample` / `end_stroke` / `apply_failure` へ直接流す。

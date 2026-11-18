@@ -18,7 +18,7 @@ use crate::token::ColorValue;
 use crate::ui::CanvasWidget;
 use crate::{Measurement, Node, PaintCommand, Screen, WidgetId};
 
-/// キャンバス。`fandhe-egui-proxy` がポインタ位置を読むときの識別子でもあるため `pub`。
+/// キャンバス。`fandhe-cap-pen-stylus` の effect ドライバがポインタ位置を読むときの識別子でもあるため `pub`。
 pub const CANVAS_ID: WidgetId = WidgetId::from_raw(1);
 /// クリアボタン。
 pub const CLEAR_BUTTON_ID: WidgetId = WidgetId::from_raw(2);

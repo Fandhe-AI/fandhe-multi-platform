@@ -229,7 +229,7 @@ pub enum WebAuthFailure {
     Internal,
 }
 
-/// OS の Web 認証セッション。実装は OS 層（`fandhe-egui-proxy`）。
+/// OS の Web 認証セッション。実装は本 crate の OS 別モジュール。
 pub trait WebAuthSession: Send + Sync {
     /// この OS のリダイレクト方式。
     fn redirect_kind(&self) -> RedirectKind;

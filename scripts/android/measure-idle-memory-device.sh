@@ -25,7 +25,7 @@
 # assembleDebug を都度実行する）。
 #
 # fandhe（platforms/android/app）は GameActivity（MainActivity.java）+
-# fandhe-egui-proxy の cdylib（libfandhe_gallery.so）を起動する薄いラッパーであり
+# fandhe-gallery の cdylib（libfandhe_gallery.so）を起動する薄いラッパーであり
 # （TASK-9.3-S1 / #242、README 参照）、gradle :app:assembleDebug だけでは jniLibs（.so）は
 # 生成されず、verify-android-launch.sh と同様に本スクリプトが cargo ndk で先に
 # ビルドして target/android/jniLibs へ配置する（Bugbot 指摘対応、Issue #237）。

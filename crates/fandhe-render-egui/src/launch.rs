@@ -1,6 +1,6 @@
 //! アプリの起動口。eframe の `run_native`・`WebRunner` とバックエンドの選択をここに閉じる。
 //!
-//! 利用者のコード（`fandhe-egui-proxy` の各 OS の入口を含む）は [`EguiApp`] を実装した値を
+//! 利用者のコード（`fandhe` の各 OS の入口を含む）は [`EguiApp`] を実装した値を
 //! `build` クロージャで返すだけで、eframe の型（`eframe::App`・`CreationContext`・
 //! `NativeOptions`・`Frame`・`eframe::Result`）には触れない。`impl eframe::App` は本モジュールの
 //! 非公開アダプタ 1 つだけに書く（受け入れ条件: 公開 API に eframe の型を出さない、#1164）。

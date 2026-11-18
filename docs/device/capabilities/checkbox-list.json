@@ -10,7 +10,7 @@
       "status": "done",
       "detail": "できている（実機未確認）",
       "implStatus": "実装済み（実機未確認）",
-      "note": "`Node::List` の各行に `Checkbox` を 1 つ置く（辞書 5 件のオン・オフ）。egui-proxy が実描画を担い、行の変更は `Event::WidgetValueChanged` → `set_widget_value_at` 経由で core 側の setter へ届く（配線自体は既存、Issue 旧#805/旧#806/旧#807）。一括操作（すべて選択・すべて解除）と集約テキストを追加。行数は固定 5 で、`Checkbox::bound` が index を持たない `fn` ポインタしか受け取らないため index 付き Checkbox（可変行数）は未提供（スコープ外）。スクロールは `Node::List` に従う（自前のスクロールなし、全画面 `ScrollArea` 化は未着手）。iOS 実機での目視は未確認",
+      "note": "`Node::List` の各行に `Checkbox` を 1 つ置く（辞書 5 件のオン・オフ）。`fandhe-render-egui` が実描画を担い、行の変更は `Event::WidgetValueChanged` → `set_widget_value_at` 経由で core 側の setter へ届く（配線自体は既存、Issue 旧#805/旧#806/旧#807）。一括操作（すべて選択・すべて解除）と集約テキストを追加。行数は固定 5 で、`Checkbox::bound` が index を持たない `fn` ポインタしか受け取らないため index 付き Checkbox（可変行数）は未提供（スコープ外）。スクロールは `Node::List` に従う（自前のスクロールなし、全画面 `ScrollArea` 化は未着手）。iOS 実機での目視は未確認",
       "impl": "crates/fandhe-core/src/screens/checkbox_list.rs + crates/fandhe-gallery/src/screens/registry.rs、Issue 旧#1037"
     },
     "android": {

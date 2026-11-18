@@ -1,5 +1,5 @@
 //! ジャイロ・磁気・線形加速度の生値の契約（親 #180、Issue #898）。端末の生センサー値を画面に出すための
-//! 橋渡しで、`fandhe-egui-proxy` の 本 crate の `driver` が種類ごとに購読の開始・停止と
+//! 橋渡しで、本 crate の `driver` が種類ごとに購読の開始・停止と
 //! 間隔つきの [`MotionRawSensors::read`] を行う（pull 型。OS 側が最新値を持ち、画面側が読む）。
 //! `environment_sensors` と同型で、種類（[`RawKind`]）を引数に持つ。`motion`（傾き）とは別の機能。
 //!

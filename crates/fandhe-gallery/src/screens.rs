@@ -27,8 +27,8 @@
 /// `init "名前" => 画面ビルダー, 状態ファクトリ,`（Issue #747）の区画は状態を
 /// `Default::default()` ではなく明示的な状態ファクトリ（`fn() -> S`）から構築したい
 /// 画面向け。端末保存領域からの読み込みなど構築時に副作用を伴う初期化を、`fandhe-core`
-/// 側の画面コードに `fandhe-device` を参照させずに配線できる（`fandhe-egui-proxy` 側の
-/// `device.rs` がファクトリを提供する）。
+/// 側の画面コードに `fandhe-device` を参照させずに配線できる（機能 crate の `driver.rs` が
+/// ファクトリを提供する。例: `fandhe-cap-local-storage-kv` の `storage_note_state`）。
 ///
 /// `effect "名前" => パス::current_screen , パス::driver ,`（Issue #748/#749）の区画は
 /// `nav` の後に併記できる。`current_screen: fn(&S) -> Screen<S>` は `nav` 区画と同じ

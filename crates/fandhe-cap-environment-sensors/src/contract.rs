@@ -1,5 +1,5 @@
 //! 気圧・照度・近接センサーの契約（Issue #609、親 #123）。端末の環境センサーの値を画面に出すための
-//! 橋渡しで、`fandhe-egui-proxy` の 本 crate の `driver` が種類ごとに購読の開始・停止と
+//! 橋渡しで、本 crate の `driver` が種類ごとに購読の開始・停止と
 //! 間隔つきの [`EnvironmentSensors::read`] を行う（pull 型。OS 側が最新値を持ち、画面側が読む）。
 //! 方位（`compass`）と同型で、種類（[`SensorKind`]）を引数に持つ。
 //!

@@ -11,8 +11,8 @@
 //! 変換（`to_outcome`）は facade 側に残す（`RequestSlot` は変換済みの値を
 //! 格納するだけ）。
 //!
-//! レンダラ非依存のため `fandhe-runtime` に置く（Issue #1166）。`fandhe-egui-proxy` の
-//! 機能実装と、今後の機能 crate（`fandhe-platform-*` を使う側）が共通で使う。
+//! レンダラ非依存のため `fandhe-runtime` に置く（Issue #1166）。各機能 crate の
+//! `driver.rs`（`fandhe-platform-*` を使う側を含む）が共通で使う。
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};

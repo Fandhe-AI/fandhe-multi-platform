@@ -6,7 +6,7 @@
 //!
 //! 状態機械: `Idle` → （撮影ボタン）→ `Requested` → （effect ドライバが撮影開始を
 //! 検知）→ `Capturing` → （完了）→ `Captured(Thumbnail)` / `Failed(CaptureFailure)`。
-//! `Requested → Capturing` の二段階遷移は、`egui-proxy` 側の effect ドライバが関数
+//! `Requested → Capturing` の二段階遷移は、機能 crate（`fandhe-cap-camera-capture`）の effect ドライバが関数
 //! ポインタ（状態を持てない）で駆動されるため、「起動要求が来た」ことを状態側で
 //! 検知できるようにする契約（HTTP 取得画面 `#748` と同型、`docs/ai/SCHEMA.md`
 //! パターン 9 参照）。`Capturing` 以外で届いた完了は無視し、二重発火・古い完了による
@@ -21,7 +21,7 @@
 //! 撮影結果のサムネイルは実画素で表示する。`thumbnail_from_rgba` が長辺
 //! [`THUMB_MAX_SIDE`] ピクセルに収まるようブロック平均で縮小し、検証済みの
 //! [`RgbaPixels`] として状態に保持、`current_screen` が `Screen::rgba_image`
-//! （`Node::RgbaImage`）で描画させる（Issue #5。egui-proxy は GPU テクスチャ、
+//! （`Node::RgbaImage`）で描画させる（Issue #5。`fandhe-render-egui` は GPU テクスチャ、
 //! web-dom は `<img src="data:image/png;base64,…">` として出す）。状態には生の RGBA
 //! （最大 64 MiB、`fandhe-device` の `MAX_IMAGE_BYTES` 参照）を持たず、縮小後の
 //! 最大 160x160x4 = 100 KiB に抑える（UI 状態・ヘッドレス出力の肥大を避ける設計判断）。

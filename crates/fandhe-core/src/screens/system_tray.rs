@@ -102,7 +102,7 @@ pub enum TrayPhase {
 }
 
 /// [`fandhe_cap_system_tray::ShowOutcome`] と 1 対 1 対応するコア側の 2 値
-/// （`fandhe-core` は `fandhe-device` に依存しないため、写像は `fandhe-egui-proxy`
+/// （`fandhe-core` は `fandhe-device` に依存しないため、写像は機能 crate
 /// 側の責務、モジュール doc 参照）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShowResult {

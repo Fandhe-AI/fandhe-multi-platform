@@ -1,7 +1,7 @@
 //! 画面間ナビゲーション・状態共有の統合テスト（S5 #52）。
 //!
 //! `fandhe-core` の公開 API（`StateStore::dispatch` / `fandhe_prototype::current_screen`）
-//! のみを使い、プラットフォームレイヤ（`fandhe-egui-proxy` 等）が担う「毎フレーム
+//! のみを使い、描画層（`fandhe-render-egui` 等）が担う「毎フレーム
 //! `current_screen` を引き直して描画する」ループを模して、一覧・詳細・設定の
 //! 3 画面を横断する遷移シナリオを検証する。単一 `AppState` を経由した状態共有
 //! （`items` の選択添字・メモ本文・設定値が画面をまたいで保持されること）の
@@ -12,7 +12,7 @@ use fandhe_prototype::{AppState, Route, current_screen};
 
 /// `dispatch` → `current_screen` 引き直しの 1 往復を行うヘルパー。
 ///
-/// プラットフォームレイヤの実配線（`fandhe-egui-proxy::render_screen` 相当）を
+/// プラットフォームレイヤの実配線（`fandhe-render-egui::render_screen` 相当）を
 /// 統合テストの粒度で再現する。
 fn dispatch(store: &mut StateStore<AppState>, event: Event) -> bool {
     let screen = current_screen(store.state());

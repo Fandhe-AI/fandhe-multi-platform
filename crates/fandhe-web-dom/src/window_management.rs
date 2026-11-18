@@ -4,8 +4,8 @@
 //! [`super::mount::mount_with_effect`] の effect として駆動する。`take_request` で要求を観測し
 //! `window.moveTo` / `window.resizeTo` へ渡し、`finish` で結果を返す。`fandhe-device` の trait 実装は
 //! 作らず、型と [`fandhe_cap_window_management::reached`] だけを共有する（他の Web モジュールと同じ。
-//! `fandhe-egui-proxy` の wasm canvas 経路は対象外）。契約の SSOT は
-//! `fandhe_cap_window_management`、駆動の手本は `fandhe-egui-proxy` の同名 effect ドライバ。
+//! egui の wasm canvas 経路（`fandhe-render-egui`）は対象外）。契約の SSOT は
+//! `fandhe_cap_window_management`、駆動の手本は `fandhe-cap-window-management` の effect ドライバ。
 //!
 //! # 方式
 //!
@@ -196,7 +196,7 @@ pub(crate) fn observed_from(s: &WindowSnapshot) -> WindowObserved {
 }
 
 /// 画面の操作を依頼する [`WindowOp`] へ変換する。失敗は依頼を出さない理由。
-/// 判定順は 非対応 → 全画面 → 作業領域（`fandhe-egui-proxy` と同じ）。
+/// 判定順は 非対応 → 全画面 → 作業領域（`fandhe-cap-window-management` の effect ドライバと同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn plan(
     action: WindowAction,

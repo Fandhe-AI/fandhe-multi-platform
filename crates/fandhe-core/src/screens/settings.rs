@@ -4,7 +4,7 @@
 //! から呼び出される（`screens/mod.rs` の `pub mod settings;` と対）。
 //!
 //! `Screen::toggle_switch` / `slider` / `radio_button`（`ui/screen.rs`）が組み立てる
-//! `Node::Widget` は egui-proxy（#806）で実描画され、値変更は
+//! `Node::Widget` は `fandhe-render-egui`（#806）で実描画され、値変更は
 //! `Event::WidgetValueChanged` → `ui::set_widget_value_at`（#805）経由で状態へ反映される
 //! （Issue #807）。`render_headless` はヘッドレス契約により `Node::Widget` の行を
 //! 出力しない（`ui/render.rs` 参照）ため、下部の集約テキスト（`summary`）で
