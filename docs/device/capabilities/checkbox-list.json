@@ -1,5 +1,6 @@
 {
   "id": "checkbox-list",
+  "crate": null,
   "name": "チェックボックス一覧（Checkbox × List）",
   "group": "myIme 設定画面が要する機能",
   "order": 13,

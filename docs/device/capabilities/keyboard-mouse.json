@@ -1,5 +1,6 @@
 {
   "id": "keyboard-mouse",
+  "crate": null,
   "name": "物理キーボード・マウス入力",
   "group": "既存機能の棚卸し",
   "order": 10,
@@ -8,7 +9,6 @@
       "status": "done",
       "detail": "できている（一部・未確認）",
       "api": "UIKit（`UIKeyCommand` / `pressesBegan`。本リポジトリは winit → egui 経由） / UIKit（`UIPointerInteraction`。本リポジトリは winit → egui 経由）",
-      "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/uikit/uikeycommand",
         "https://developer.apple.com/documentation/uikit/uipointerinteraction"
@@ -25,7 +25,6 @@
       "detail": "できている（一部・実機）",
       "verified": true,
       "api": "`KeyEvent`（本リポジトリは `android-activity` → winit → egui 経由） / `MotionEvent`（本リポジトリは winit → egui 経由）",
-      "perm": "なし",
       "url": [
         "https://developer.android.com/reference/android/view/KeyEvent",
         "https://developer.android.com/reference/android/view/MotionEvent"
@@ -41,7 +40,6 @@
       "status": "done",
       "detail": "できている（一部・未確認）",
       "api": "AppKit（`NSEvent`。本リポジトリは winit → egui 経由）",
-      "perm": "なし",
       "url": "https://developer.apple.com/documentation/appkit/nsevent",
       "note": "実装済み（部分）。矢印キー・Enter・クリック・ホバーは egui の入力経路で届く。修飾キー付きショートカット・ポインタ形状のカスタマイズは未配線",
       "sourceName": [
@@ -53,7 +51,6 @@
       "status": "done",
       "detail": "できている（一部・未確認）",
       "api": "Win32（`WM_KEYDOWN` / `WM_MOUSEMOVE`。本リポジトリは winit → egui 経由）",
-      "perm": "なし",
       "url": "https://learn.microsoft.com/en-us/windows/win32/inputdev/user-input",
       "note": "実装済み（部分）。macOS と同じ egui 入力経路。修飾キー付きショートカット・ポインタ形状のカスタマイズは未配線",
       "sourceName": [
@@ -65,7 +62,6 @@
       "status": "done",
       "detail": "できている（一部・未確認）",
       "api": "`KeyboardEvent` / `PointerEvent`",
-      "perm": "なし",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent",
       "safari": "対応",
       "note": "実装済み（部分）。winit → egui の入力経路で矢印キー・クリック・ホバーが届く。修飾キー付きショートカット・ポインタ形状のカスタマイズは未配線",

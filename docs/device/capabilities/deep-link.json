@@ -8,7 +8,6 @@
     "ios": {
       "status": "possible",
       "api": "Universal Links（`NSUserActivity` の `activityType` が `NSUserActivityTypeBrowsingWeb`、URL は `webpageURL`。受信は scene 形態で `scene:willConnectToSession:options:` の `connectionOptions.userActivities` と `scene:continueUserActivity:`、シーン無しで `application:continueUserActivity:restorationHandler:`）",
-      "perm": "Associated Domains capability（`com.apple.developer.associated-domains` に `applinks:<domain>`）。capability 表では有料の Apple Developer Program と Enterprise だけに印があり、無料の Apple Developer では付けられない。制限付き entitlement のため provisioning profile が必須",
       "url": [
         "https://developer.apple.com/documentation/xcode/supporting-universal-links-in-your-app",
         "https://developer.apple.com/documentation/xcode/supporting-associated-domains",
@@ -21,7 +20,6 @@
     "android": {
       "status": "done",
       "api": "App Links（`<intent-filter android:autoVerify=\"true\">` + `ACTION_VIEW` / `BROWSABLE` / `DEFAULT` + `<data android:scheme=\"https\" android:host>`）。受信は `DeepLinkLifecycle`（非公開 provider。共通層の `deliverIntents` が起動時の `getIntent()` と `onNewIntent` を配る）、JNI で Rust へ",
-      "perm": "なし（intent-filter のみ）。検証用ドメインに `assetlinks.json` を置く",
       "url": [
         "https://developer.android.com/training/app-links/verify-android-applinks",
         "https://developer.android.com/training/app-links/configure-assetlinks",
@@ -37,7 +35,6 @@
     "macos": {
       "status": "possible",
       "api": "Universal Links（`NSApplicationDelegate` の `application:continueUserActivity:restorationHandler:`、macOS 10.10+。`NSUserActivity` の `webpageURL`）",
-      "perm": "Associated Domains capability（`com.apple.developer.associated-domains`、macOS 10.15+）。capability 表では有料の Apple Developer Program と Enterprise だけに印。provisioning profile を .app に埋め込む",
       "url": [
         "https://developer.apple.com/documentation/xcode/supporting-universal-links-in-your-app",
         "https://developer.apple.com/documentation/appkit/nsapplicationdelegate/application(_:continue:restorationhandler:)",
@@ -50,7 +47,6 @@
     "windows": {
       "status": "no",
       "api": "App URI handlers（package manifest の `windows.appUriHandler` + `windows-app-web-link` JSON）",
-      "perm": "package identity（MSIX または sparse package）",
       "url": "https://learn.microsoft.com/en-us/windows/apps/develop/launch/web-to-app-linking",
       "note": "公式に「Packaging required」と明記。独自 scheme の起動は url-scheme（レジストリ）で代替可",
       "detail": "できない（`windows.appUriHandler` は packaged app 必須。前提の素の exe には identity が無く、レジストリ登録では https リンクのドメイン別検証付き横取りができない）"

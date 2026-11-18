@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "`UIApplication.openSettingsURLString`（自アプリの設定、iOS 8+）と `UIApplication.openNotificationSettingsURLString`（自アプリの通知設定、iOS 16+）から URL を作り、`open(_:options:completionHandler:)`（iOS 10+）で開く。結果は completion の `success`（main thread で非同期に 1 回）",
-      "perm": "不要（usage description・`LSApplicationQueriesSchemes` の追加なし。`canOpenURL` は呼ばない）。deployment target 17.0 のため両方の URL が全域で使える",
       "url": [
         "https://developer.apple.com/documentation/uikit/uiapplication/opensettingsurlstring",
         "https://developer.apple.com/documentation/uikit/uiapplication/opennotificationsettingsurlstring",
@@ -23,7 +22,6 @@
     "android": {
       "status": "done",
       "api": "`Settings.ACTION_APPLICATION_DETAILS_SETTINGS`（data に `package:<自パッケージ>`、API 9+）と `Settings.ACTION_APP_NOTIFICATION_SETTINGS`（extra `Settings.EXTRA_APP_PACKAGE`、API 26+）の Intent を `Activity.startActivity` で開く。`ActivityNotFoundException` を「開けなかった」に写す",
-      "perm": "不要（uses-permission・`<queries>` の追加なし）。`startActivity` は package visibility を要さない（公式）。`resolveActivity` で事前に確かめない",
       "url": [
         "https://developer.android.com/reference/android/provider/Settings#ACTION_APPLICATION_DETAILS_SETTINGS",
         "https://developer.android.com/reference/android/provider/Settings#ACTION_APP_NOTIFICATION_SETTINGS",
@@ -37,7 +35,6 @@
     "macos": {
       "status": "no",
       "api": "公開の入口は `SMAppService.openSystemSettingsLoginItems()`（ログイン項目、macOS 13+、launch-at-login で使用済み）と、`EndpointSecurity/ESClient.h` が書くフルディスクアクセスの `x-apple.systempreferences:` URL だけ",
-      "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/servicemanagement/smappservice/opensystemsettingsloginitems()",
         "https://developer.apple.com/forums/thread/714724"
@@ -47,7 +44,6 @@
     "windows": {
       "status": "done",
       "api": "`ms-settings:notifications`（通知）を `ShellExecuteW`（verb `open`）で開く。戻り値 `> 32` を「OS が受け付けた」、`SE_ERR_NOASSOC`（31）を「開けなかった」、それ以外を失敗に写す（compose-mail-sms の `open_url` と同じ表）",
-      "perm": "不要（package identity 不要。`Win32_UI_Shell` は有効済みで、`windows` クレートの feature は増やさない）",
       "url": [
         "https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings",
         "https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew"
@@ -60,7 +56,6 @@
     "web": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "-",
       "url": "",
       "note": "ブラウザから OS やブラウザの設定画面を開く標準 API はない。"
     }

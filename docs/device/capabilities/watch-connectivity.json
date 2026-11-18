@@ -7,7 +7,6 @@
     "ios": {
       "status": "possible",
       "api": "WatchConnectivity（`WCSession`）",
-      "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/watchconnectivity/wcsession",
         "https://developer.apple.com/documentation/watchconnectivity",
@@ -27,7 +26,6 @@
     "android": {
       "status": "possible",
       "api": "Wearable Data Layer API（`com.google.android.gms:play-services-wearable`）",
-      "perm": "なし",
       "url": [
         "https://developer.android.com/training/wearables/data/data-layer",
         "https://developer.android.com/training/wearables/data/overview",

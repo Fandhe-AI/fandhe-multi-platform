@@ -9,7 +9,6 @@
     "ios": {
       "status": "possible",
       "api": "GameKit（`GKLocalPlayer` / `GKLeaderboard` / `GKAchievement`）",
-      "perm": "Game Center capability（`com.apple.developer.game-center` entitlement。有料の Apple Developer Program のみで、無料の Apple Developer では付けられない）",
       "url": [
         "https://developer.apple.com/documentation/gamekit/initializing-and-configuring-game-center",
         "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.game-center",
@@ -22,7 +21,6 @@
     "android": {
       "status": "possible",
       "api": "Google Play Games Services v2（`com.google.android.gms:play-services-games-v2`。サインイン・ランキング・実績）",
-      "perm": "アプリで宣言する権限はページに記載なし。Play Console でのゲーム登録、OAuth 2.0 クライアント（パッケージ名と署名証明書の SHA-1）、manifest へのプロジェクト ID、テスターの登録が要る",
       "url": [
         "https://developer.android.com/games/pgs/overview",
         "https://developer.android.com/games/pgs/android/android-start",
@@ -34,7 +32,6 @@
     "macos": {
       "status": "possible",
       "api": "GameKit（iOS と同じフレームワーク。`authenticateHandler` は macOS 10.9 以上）",
-      "perm": "Game Center capability（`com.apple.developer.game-center` entitlement。有料の Apple Developer Program のみ）と App Sandbox の Incoming / Outgoing Connections",
       "url": [
         "https://developer.apple.com/documentation/gamekit/initializing-and-configuring-game-center",
         "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.game-center",
@@ -46,14 +43,12 @@
     "windows": {
       "status": "no",
       "api": "OS 標準のランキング・実績 API なし（Xbox services は GDK と Partner Center の別系統）",
-      "perm": "",
       "url": "https://learn.microsoft.com/en-us/gaming/game-publishing/concepts/xbox-services",
       "note": "Xbox services（サインイン・実績・ランキング）は OS の API ではなく、Xbox の開発者プログラムへの登録と Partner Center でのゲーム構成が前提。実績の構成はゲームのコンセプト承認の後にしかできない"
     },
     "web": {
       "status": "no",
       "api": "ブラウザ標準のランキング・実績 API なし",
-      "perm": "",
       "url": "",
       "safari": "対応なし",
       "note": ""

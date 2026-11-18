@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "MediaPlayer `MPMediaQuery.songsQuery` + `MPMediaLibrary.requestAuthorization:`（iOS 9.3+）。MusicKit は Swift 専用で、App Service の登録が要るため使わない",
-      "perm": "`NSAppleMusicUsageDescription`（必須）。entitlement は不要",
       "url": [
         "https://developer.apple.com/documentation/mediaplayer/mpmediaquery",
         "https://developer.apple.com/documentation/mediaplayer/mpmedialibrary"
@@ -22,7 +21,6 @@
     "android": {
       "status": "done",
       "api": "`ContentResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI)` の `TITLE` / `ARTIST`（`IS_MUSIC != 0`、並び順の指定なし）",
-      "perm": "`READ_MEDIA_AUDIO`（API 33+）/ `READ_EXTERNAL_STORAGE`（`maxSdkVersion=32`）を実行時に要求する",
       "url": "https://developer.android.com/reference/android/provider/MediaStore",
       "note": "実装済み（#485）。「曲の一覧を読む」で曲のタイトルとアーティストを OS の返す順に先頭 20 件だけ表示する。0 曲は成功として別に出し、非対応・拒否・失敗・Activity 破棄による中断・期限切れ（30 秒、許可ダイアログへの応答を含む）は失敗として出す。アーティストが `<unknown>` のときは未設定として扱う。守らない範囲: 並び順、読み取り後の変化、期限後も OS 側の処理が走り切ること。",
       "detail": "できている（Android 実機確認待ち）",
@@ -32,7 +30,6 @@
     "macos": {
       "status": "done",
       "api": "iTunesLibrary `ITLibrary`（macOS 10.13+）。`MPMediaQuery` は macOS で使えず、MusicKit の `MusicLibraryRequest` は macOS 14+ かつ Swift 専用のため使わない",
-      "perm": "`NSAppleMusicUsageDescription`（無いと OS がプロセスを終了させる）。コード署名が必須（ad-hoc 署名で通るかは #480 で確認）。App Sandbox のときだけ `com.apple.security.assets.music.read-only`（本リポジトリは sandbox なしで不要）",
       "url": "https://developer.apple.com/documentation/ituneslibrary/itlibrary",
       "note": "実装済み（#482）。「曲の一覧を読む」で曲のタイトルとアーティストを OS の返す順に先頭 20 件だけ表示する。0 曲は成功として別に出し、非対応・拒否・期限切れ（30 秒）・失敗は区別して失敗として出す。ad-hoc 署名で `ITLibrary` が nil になれば「この端末では使えません」と出る（拒否と署名不足は区別しない）。その場合は後で `deferred` に戻す。守らない範囲: iCloud ミュージック・Apple Music 由来の曲が載るか、読み取り後の変化。",
       "detail": "できている（Mac 目視待ち）",
@@ -42,7 +39,6 @@
     "windows": {
       "status": "done",
       "api": "Win32 `SHGetKnownFolderPath(FOLDERID_Music)` + `std::fs` によるファイルの列挙 + `SHGetPropertyStoreFromParsingName` の `PKEY_Title` / `PKEY_Music_Artist`",
-      "perm": "不要（package identity 不要）。WinRT の `KnownFolders.MusicLibrary` は capability `musicLibrary` が要り、unpackaged の exe では宣言できないので使わない",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid",
         "https://learn.microsoft.com/en-us/windows/win32/properties/props-system-music-artist"
@@ -55,7 +51,6 @@
     "web": {
       "status": "no",
       "api": "なし",
-      "perm": "なし",
       "url": "",
       "safari": "同左（API なし）",
       "note": "ブラウザに端末の音楽ライブラリを読む API は無い。"

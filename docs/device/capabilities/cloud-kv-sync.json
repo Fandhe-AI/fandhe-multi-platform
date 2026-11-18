@@ -8,7 +8,6 @@
     "ios": {
       "status": "possible",
       "api": "Foundation（`NSUbiquitousKeyValueStore` の `default`。他端末からの変更は `didChangeExternallyNotification` で届き、`NSUbiquitousKeyValueStoreChangeReasonKey` に理由（サーバー変更・初回同期・容量超過・アカウント変更）、`NSUbiquitousKeyValueStoreChangedKeysKey` に変わったキーが入る）",
-      "perm": "iCloud capability の Key-value storage（制限付き entitlement `com.apple.developer.ubiquity-kvstore-identifier`）。capability 表では有料の Apple Developer Program と Enterprise だけに印があり、無料の Apple Developer では付けられない。provisioning profile が必須",
       "url": [
         "https://developer.apple.com/documentation/foundation/nsubiquitouskeyvaluestore",
         "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.ubiquity-kvstore-identifier",
@@ -24,7 +23,6 @@
     "android": {
       "status": "no",
       "api": "Auto Backup（`BackupAgent`）/ Block Store（Google Play services）",
-      "perm": "Auto Backup はマニフェスト設定のみ",
       "url": "https://developer.android.com/identity/data/autobackup",
       "note": "Auto Backup は一方向のバックアップ・復元で、復元はアプリ再インストールや端末セットアップ時のみ。公式は端末ごとに別のバックアップセットを持つとしており、端末間の継続同期にならない（上限 25 MB）。Block Store は GMS 依存のため前提外。",
       "detail": "できない（OS 標準でキー値を端末間同期する公開機構が無い。Block Store は GMS 依存、Auto Backup は同期ではない）"
@@ -32,7 +30,6 @@
     "macos": {
       "status": "possible",
       "api": "Foundation（macOS 10.7+。`NSUbiquitousKeyValueStore` の `default`。他端末からの変更は `didChangeExternallyNotification` で届き、`NSUbiquitousKeyValueStoreChangeReasonKey` に理由（サーバー変更・初回同期・容量超過・アカウント変更）、`NSUbiquitousKeyValueStoreChangedKeysKey` に変わったキーが入る）",
-      "perm": "iCloud capability の Key-value storage（制限付き entitlement `com.apple.developer.ubiquity-kvstore-identifier`）。macOS の capability 表では有料の Apple Developer Program と Developer ID だけに印があり、無料の Apple Developer では付けられない。制限付き entitlement は provisioning profile の許可が要り、.app の `Contents/embedded.provisionprofile` に埋め込む（素の実行体には置けない）",
       "url": [
         "https://developer.apple.com/documentation/foundation/nsubiquitouskeyvaluestore",
         "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.ubiquity-kvstore-identifier",
@@ -45,7 +42,6 @@
     "windows": {
       "status": "no",
       "api": "`Windows.Storage.ApplicationData.RoamingSettings`",
-      "perm": "package identity",
       "url": "https://learn.microsoft.com/en-us/windows/apps/design/app-settings/store-and-retrieve-app-data",
       "note": "Microsoft Learn は roaming データ・設定を Windows 11 で非サポートとし、ApplicationData API は packaged app 向けで unpackaged app は使えないとしている。後継として挙げられている Azure App Service は自前サーバー系で前提外。",
       "detail": "できない（OS 標準のキー値同期が無い。roaming は廃止・identity 前提）"
@@ -53,7 +49,6 @@
     "web": {
       "status": "no",
       "api": "該当する標準ブラウザ API なし（`localStorage` は端末内のみ）",
-      "perm": "なし",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API",
       "safari": "該当 API なし",
       "note": "Web Storage は同一ブラウザ内のみ。ブラウザの同期機能（Chrome Sync 等）はアプリから使える API ではない。CloudKit JS 等は Apple 提供のサービスをウェブ API で呼ぶ形で、OS・ブラウザの端末機能ではないため判定に使わない。",

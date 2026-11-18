@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "HealthKit（`HKHealthStore` をプロセスで 1 つ保持。可否は `isHealthDataAvailable()`、許可は `requestAuthorization(toShare:read:completion:)`（書き込みの型は空、読み取りは `stepCount` のみ）、今日 0 時から現在までの歩数の合計は `HKStatisticsQuery` の `.cumulativeSum` → `sumQuantity()`。期限切れは `stop(_:)` で取り消す。書き込み・履歴・背景配信はしない）",
-      "perm": "HealthKit capability（`com.apple.developer.healthkit` entitlement）を、プロファイル生成専用のホストターゲット `FandheIosApp`（`platforms/apple/project.yml`）の `CODE_SIGN_ENTITLEMENTS` の entitlements ファイルに足す。実機署名はプロファイルから entitlements を抜き出して Rust/winit のバンドルへ付ける既存手順のまま。Apple Developer Program なしの無料の Apple Developer（Personal Team）でも付けられる（公式の対応表）。Info.plist の `NSHealthShareUsageDescription`（読み取り。無いと許可の要求でクラッシュする）。書き込みをしないので `NSHealthUpdateUsageDescription` は足さない。必須の端末機能ではないので `UIRequiredDeviceCapabilities` に `healthkit` を足さない。臨床記録用の `com.apple.developer.healthkit.access` と背景配信用の `com.apple.developer.healthkit.background-delivery` は使わない",
       "url": [
         "https://developer.apple.com/documentation/xcode/configuring-healthkit-access",
         "https://developer.apple.com/documentation/healthkit/setting-up-healthkit",
@@ -30,7 +29,6 @@
     "android": {
       "status": "done",
       "api": "Android 14（API 34）以上のフレームワーク API `android.health.connect.HealthConnectManager`（可否は `HealthConnectManager.getHealthConnectSdkStatus` 相当、歩数の合計は `aggregate()` の `StepsRecord`）。API 33 以下は `Unsupported`。Jetpack の `androidx.health.connect:connect-client` は使わない（1.1.0 は minCompileSdk=36 で compileSdk 35 と合わない）",
-      "perm": "`android.permission.health.READ_STEPS`（実行時の許可は Health Connect の許可画面）、権限の理由を出す Activity（`HealthPermissionsRationaleActivity` と、`VIEW_PERMISSION_USAGE` + `HEALTH_PERMISSIONS` の activity-alias。alias は `START_VIEW_PERMISSION_USAGE` を要求しシステムだけが起動できる）。API 34 以上は OS 組み込みのため `<queries>` は足さない。依存の追加なし。`READ_HEALTH_DATA_IN_BACKGROUND`・`READ_HEALTH_DATA_HISTORY` は足さない。公開には Play Console のヘルスアプリ申告が要る",
       "url": [
         "https://developer.android.com/health-and-fitness/health-connect/get-started",
         "https://developer.android.com/health-and-fitness/guides/health-connect/develop/get-started",

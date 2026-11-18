@@ -1,6 +1,6 @@
 /**
- * Issue #948 の自己検査。checkImplPaths / checkAndroidPermissions が
- * 「実在しない impl パス」「宣言のない Android 権限」を検出して非ゼロ終了相当
+ * Issue #948 の自己検査。checkImplPaths が「実在しない impl パス」と、
+ * joinDeclarations / permText が対応表と crate 宣言の結合を検出して非ゼロ終了相当
  * （エラー配列が空でない）になることを確認する。fixture は一時ディレクトリに作り、
  * リポジトリには置かない。
  */
@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkImplPaths, checkAndroidPermissions, declaredAndroidPermissions, extractImplPaths, badUrls } from "./build-capabilities.mjs";
+import { checkImplPaths, extractImplPaths, badUrls, joinDeclarations, permText } from "./build-capabilities.mjs";
 
 test("extractImplPaths: 対象拡張子のパスのみ抽出し、関数名・拡張子の取りこぼしをしない", () => {
   const text =
@@ -42,36 +42,43 @@ test("checkImplPaths: 実在しないパスを機能 id / OS / パスの形式�
   }
 });
 
-test("checkAndroidPermissions: done かつ perm 記載があるのに宣言に無ければ検出する", () => {
-  const declared = new Set(["android.permission.INTERNET"]);
-  const features = [
-    { id: "http-get", platforms: { android: { status: "done", perm: "android.permission.INTERNET" } } },
-    { id: "camera", platforms: { android: { status: "done", perm: "android.permission.CAMERA" } } },
-    // possible（未達成）は対象外
-    { id: "future", platforms: { android: { status: "possible", perm: "android.permission.NFC" } } },
-    // perm が「なし」等で完全修飾名を含まない場合は対象外
-    { id: "clipboard", platforms: { android: { status: "done", perm: "なし" } } },
-  ];
-  assert.deepEqual(checkAndroidPermissions(features, declared), ["camera / android / android.permission.CAMERA"]);
+const cell = (status) => ({ status });
+const feat = (id, status, extra = {}) => ({ id, platforms: { android: cell(status) }, ...extra });
+
+test("joinDeclarations: 正常系（同名・別名・基盤）は違反なし", () => {
+  const decls = new Map([["a", {}], ["file-picker", {}]]);
+  const fs = [feat("a", "done"), feat("file-picker", "done"), feat("tsv", "done", { crate: "file-picker" }), feat("base", "done", { crate: null }), feat("plan", "possible")];
+  assert.deepEqual(joinDeclarations(fs, decls), []);
 });
 
-test("declaredAndroidPermissions: crate の宣言から集め、TOML のコメントは除く", () => {
-  const root = mkdtempSync(join(tmpdir(), "cap-decl-"));
-  try {
-    mkdirSync(join(root, "fandhe-cap-a"));
-    writeFileSync(
-      join(root, "fandhe-cap-a", "Cargo.toml"),
-      [
-        "[package.metadata.fandhe.android]",
-        '# permissions = [{ name = "android.permission.CAMERA" }]',
-        'permissions = [{ name = "android.permission.INTERNET", max-sdk = 32 }]',
-      ].join("\n"),
-    );
-    mkdirSync(join(root, "no-manifest"));
-    assert.deepEqual([...declaredAndroidPermissions(root)], ["android.permission.INTERNET"]);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
+test("joinDeclarations: crate に対応表が無い・存在しない crate・基盤の null 欠落・perm 再流入・自己参照を拒否する", () => {
+  const decls = new Map([["a", {}], ["orphan", {}]]);
+  const fs = [
+    feat("a", "done", { platforms: { android: { status: "done", perm: "x" } } }),
+    feat("b", "done", { crate: "nope" }),
+    feat("c", "done"),
+    feat("d", "done", { crate: 1 }),
+    feat("a2", "possible", { crate: "a2" }),
+  ];
+  const errs = joinDeclarations(fs, decls).join("\n");
+  assert.match(errs, /crate orphan に対応する/);
+  assert.match(errs, /a\.json: platforms\.android\.perm/);
+  assert.match(errs, /b\.json: crate nope が存在しない/);
+  assert.match(errs, /c\.json: done のセルがあるのに/);
+  assert.match(errs, /d\.json: crate は/);
+  assert.match(errs, /a2\.json: crate が自身の id と同じ/);
+});
+
+test("permText: 非 done は —、OS ごとに宣言から並べ、空は なし", () => {
+  const d = {
+    ios: { "usage-descriptions": ["NSCameraUsageDescription"], entitlements: { "com.apple.developer.healthkit": true }, extensions: [{ "app-groups": ["widget"], "usage-descriptions": ["NSCameraUsageDescription"] }] },
+    android: { permissions: [{ name: "android.permission.CAMERA" }, { name: "android.permission.READ", "max-sdk": 32 }, { name: "android.permission.SCAN", flags: ["neverForLocation"] }] },
+  };
+  assert.equal(permText("android", "possible", d), "—");
+  assert.equal(permText("android", "done", d), "android.permission.CAMERA、android.permission.READ（maxSdkVersion 32）、android.permission.SCAN（neverForLocation）");
+  assert.equal(permText("ios", "done", d), "NSCameraUsageDescription、com.apple.developer.healthkit、App Group: widget");
+  assert.equal(permText("web", "done", d), "なし");
+  assert.equal(permText("macos", "done", undefined), "なし");
 });
 
 test("badUrls: https 以外の url（大文字 scheme・非文字列を含む）だけを返す", () => {

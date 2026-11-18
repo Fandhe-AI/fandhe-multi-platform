@@ -12,7 +12,6 @@
       "implStatus": "iOS 実機確認待ち（#649）",
       "impl": "crates/fandhe-cap-screen-orientation/ios/fandhe_ios_screen_orientation.m + crates/fandhe-cap-screen-orientation/src/ios.rs、Issue #656",
       "api": "`UIViewController.supportedInterfaceOrientations`（winit の VC へ差し込み）+ `setNeedsUpdateOfSupportedInterfaceOrientations` + `UIWindowScene.requestGeometryUpdate`（iOS 16+）。取得は `UIWindowScene.effectiveGeometry.interfaceOrientation`（`interfaceOrientation` は iOS 26 で非推奨）",
-      "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/uikit/uiviewcontroller/supportedinterfaceorientations",
         "https://developer.apple.com/documentation/uikit/uiviewcontroller/setneedsupdateofsupportedinterfaceorientations()",
@@ -24,7 +23,6 @@
     "android": {
       "status": "done",
       "api": "`Activity.setRequestedOrientation`（`SENSOR_PORTRAIT` / `SENSOR_LANDSCAPE` / `UNSPECIFIED`）、取得は `Display.getRotation` + `Configuration.orientation`",
-      "perm": "不要",
       "url": [
         "https://developer.android.com/reference/android/app/Activity#setRequestedOrientation(int)",
         "https://developer.android.com/reference/android/view/Display#getRotation()",
@@ -42,7 +40,6 @@
     "windows": {
       "status": "possible",
       "api": "`SetDisplayAutoRotationPreferences` / `GetDisplayAutoRotationPreferences`（Windows 8+、プロセス単位）",
-      "perm": "不要",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setdisplayautorotationpreferences",
         "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getdisplayautorotationpreferences",
@@ -54,7 +51,6 @@
     "web": {
       "status": "done",
       "api": "Screen Orientation API（`screen.orientation.type` / `angle`、`lock()`）",
-      "perm": "なし。`lock()` は全画面の文書だけ（W3C の pre-lock condition）。hidden の文書では `SecurityError`",
       "url": [
         "https://developer.mozilla.org/en-US/docs/Web/API/Screen_Orientation_API",
         "https://developer.mozilla.org/en-US/docs/Web/API/ScreenOrientation/lock",

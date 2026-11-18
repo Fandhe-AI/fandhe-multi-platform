@@ -9,7 +9,6 @@
     "ios": {
       "status": "possible",
       "api": "Intents `INFocusStatusCenter`（`focusStatus.isFocused`。iOS 15+。アプリ内に変更通知は無く、変更は Intents Extension の `INShareFocusStatusIntent` で受ける）",
-      "perm": "`NSFocusStatusUsageDescription` と `requestAuthorizationWithCompletionHandler:` による許可、Communication Notifications capability（`com.apple.developer.usernotifications.communication`。provisioning profile が要り、有料の Apple Developer Program のみ。無料登録では不可）",
       "url": [
         "https://developer.apple.com/documentation/intents/infocusstatuscenter",
         "https://developer.apple.com/documentation/bundleresources/information-property-list/nsfocusstatususagedescription",
@@ -21,7 +20,6 @@
     "android": {
       "status": "done",
       "api": "`NotificationManager.getCurrentInterruptionFilter()`（API 23+）を 1 秒間隔で読み直す。`ACTION_INTERRUPTION_FILTER_CHANGED` は購読しない",
-      "perm": "不要（読み取りのみ。`ACCESS_NOTIFICATION_POLICY` は変更系だけが要る）。許可なしでの動作は #435 で確認",
       "url": "https://developer.android.com/reference/android/app/NotificationManager",
       "note": "PRIORITY / NONE / ALARMS をオンとみなす。UNKNOWN・失敗で「オフ」と出さない。守らない範囲: フィルタ種類の区別・反映遅れ最大 1 秒 + 1 フレーム",
       "detail": "できている（Android 実機確認待ち）",
@@ -31,7 +29,6 @@
     "macos": {
       "status": "possible",
       "api": "Intents `INFocusStatusCenter`（macOS 12.0+。実行体の最低版 11.0 から `@available` で分岐する）",
-      "perm": "iOS と同じ（許可と Communication Notifications capability。有料の Apple Developer Program のみ）",
       "url": [
         "https://developer.apple.com/documentation/intents/infocusstatuscenter"
       ],
@@ -41,7 +38,6 @@
     "windows": {
       "status": "done",
       "api": "`FocusSessionManager.IsSupported()` と `GetDefault().IsFocusActive()` を 1 秒間隔で読み直す（`IsFocusActiveChanged` は購読しない）。文書上は device family 10.0.23504.0・UniversalApiContract v15 以降で、古い OS は実行時に Unsupported",
-      "perm": "読み取りに制限の記載なし（Limited Access Feature は `TryStartFocusSession` / `DeactivateFocus` のみ）。unpackaged exe での動作は #435 で確認",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.ui.shell.focussessionmanager",
       "note": "「応答不可」だけのオンは見ない。失敗・非対応で「オフ」と出さない",
       "detail": "できている（Windows 実機確認待ち）",
@@ -51,7 +47,6 @@
     "web": {
       "status": "no",
       "api": "ブラウザに該当 API なし",
-      "perm": "-",
       "url": "",
       "safari": "非対応",
       "note": "公開 API はない"

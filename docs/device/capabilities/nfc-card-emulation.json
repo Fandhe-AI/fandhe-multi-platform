@@ -9,7 +9,6 @@
     "ios": {
       "status": "no",
       "api": "CoreNFC `CardSession`（iOS 17.4+。EEA 外での開発・テストは iOS 18.2+）",
-      "perm": "HCE の entitlement（Apple の承認制）",
       "url": [
         "https://developer.apple.com/documentation/corenfc/cardsession",
         "https://developer.apple.com/support/hce-transactions-in-apps/"
@@ -19,7 +18,6 @@
     "android": {
       "status": "done",
       "api": "`HostApduService`（HCE、API 19+）の `processCommandApdu` / `onDeactivated`。AID は `res/xml` の `<host-apdu-service>`（`<aid-group android:category=\"other\">` と `<aid-filter>`）で静的に登録する",
-      "perm": "`android.permission.NFC`（protection level は normal。HCE のサービスとして登録するのに要る（公式）。nfc で #1045 に宣言済み）。Manifest に `<service>`（exported=true、intent-filter は `android.nfc.cardemulation.action.HOST_APDU_SERVICE`、meta-data `android.nfc.cardemulation.host_apdu_service`）を置き、`android:permission` に `BIND_NFC_SERVICE`（bind できるのはシステムだけになる）を書く。`uses-feature android.hardware.nfc.hce`（required=false。宣言済み）。`<service>` と AID の XML（`F0` 始まりの偶数桁、category は other）は宣言済み（Issue #1129）",
       "url": [
         "https://developer.android.com/develop/connectivity/nfc/hce",
         "https://developer.android.com/reference/android/nfc/cardemulation/HostApduService",
@@ -34,21 +32,18 @@
     "macos": {
       "status": "n-a",
       "api": "なし",
-      "perm": "なし",
       "url": "",
       "note": "Mac に NFC がなく、概念が無い。"
     },
     "windows": {
       "status": "no",
       "api": "なし（`Windows.Devices.SmartCards.SmartCardEmulator` は Windows Mobile Extension SDK の API）",
-      "perm": "なし",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.smartcards.smartcardemulator",
       "note": "HCE の API（`SmartCardEmulator`）は device family が Windows Mobile Extension SDK で、デスクトップ版 Windows で使える公開 API は確認できなかった。"
     },
     "web": {
       "status": "no",
       "api": "なし",
-      "perm": "なし",
       "url": "",
       "safari": "同左（API なし）",
       "note": "Web NFC は読み書きのみで、カードの模擬には使えない。"

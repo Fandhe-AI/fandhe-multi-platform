@@ -1,5 +1,6 @@
 {
   "id": "gpu-backend",
+  "crate": null,
   "name": "GPU 描画バックエンド",
   "group": "既存機能の棚卸し",
   "order": 9,
@@ -9,7 +10,6 @@
       "detail": "できている（実機）",
       "verified": true,
       "api": "Metal（本リポジトリは `wgpu` 経由で選択）",
-      "perm": "不要",
       "url": "https://developer.apple.com/documentation/metal",
       "note": "実装済み。`Backends::METAL` に固定",
       "sourceName": [
@@ -24,7 +24,6 @@
       "detail": "できている（実機）",
       "verified": true,
       "api": "Vulkan（本リポジトリは `wgpu` 経由で選択）",
-      "perm": "なし",
       "url": "https://developer.android.com/ndk/guides/graphics",
       "note": "実装済み。`crates/fandhe-egui-proxy/src/android.rs` が `wgpu::Backends::VULKAN` に固定し、`Cargo.toml` の `cfg(target_os = \"android\")` 分岐で `wgpu` の `vulkan` feature を有効化（TASK-1.5-S2）",
       "sourceName": [
@@ -38,7 +37,6 @@
       "status": "done",
       "detail": "できている（未確認）",
       "api": "OpenGL（本リポジトリは eframe の `glow` feature 経由）",
-      "perm": "なし",
       "url": "https://developer.apple.com/documentation/metal",
       "note": "実装済み。デスクトップ分岐（`cfg(not(any(wasm32, ios, android)))`）は `eframe` の `glow` を使う。iOS / Android は `wgpu` 経由で Metal / Vulkan を選ぶが、macOS デスクトップは Metal ではなく OpenGL 経路。Apple は macOS の OpenGL を非推奨としており、Metal への移行は将来課題",
       "sourceName": [
@@ -50,7 +48,6 @@
       "status": "done",
       "detail": "できている（未確認）",
       "api": "OpenGL（本リポジトリは eframe の `glow` feature 経由）。OS 標準は Direct3D 12",
-      "perm": "なし",
       "url": "https://learn.microsoft.com/en-us/windows/win32/direct3d12/direct3d-12-graphics",
       "note": "実装済み。macOS / Linux と同じデスクトップ分岐で `glow` を使う。`wgpu` の `dx12` バックエンドは選択していない",
       "sourceName": [
@@ -62,7 +59,6 @@
       "status": "done",
       "detail": "できている（未確認）",
       "api": "WebGL2（`WebGLRenderingContext`）。WebGPU は `navigator.gpu`",
-      "perm": "なし",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext",
       "safari": "WebGL2 は対応。WebGPU は Safari 26 以降で対応（それ以前は非対応）",
       "note": "実装済み。`crates/fandhe-egui-proxy/src/web.rs` が `eframe::WebGlContextOption::WebGl2` に固定する。WebGPU は非公開環境でのフォールバックが panic することを PoC-5 で確認済みのため採用していない（`docs/architecture/web-rendering-policy.md`）",

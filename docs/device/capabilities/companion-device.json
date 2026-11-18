@@ -9,7 +9,6 @@
     "ios": {
       "status": "possible",
       "api": "AccessorySetupKit（`ASAccessorySession` の `showPickerForDisplayItems:completionHandler:`。iOS 18 以上、Objective-C のヘッダあり）",
-      "perm": "Info.plist の `NSAccessorySetupKitSupports`（`Bluetooth`）と、探す条件の `NSAccessorySetupBluetoothServices` / `NSAccessorySetupBluetoothCompanyIdentifiers` / `NSAccessorySetupBluetoothNames`。Bluetooth の許可ダイアログは出ない（公式）。entitlement の要否は公式に記載なし",
       "url": [
         "https://developer.apple.com/documentation/accessorysetupkit",
         "https://developer.apple.com/documentation/accessorysetupkit/discovering-and-configuring-accessories",
@@ -21,7 +20,6 @@
     "android": {
       "status": "done",
       "api": "`CompanionDeviceManager.associate(AssociationRequest, Executor, Callback)`（API 33 以上）+ `BluetoothLeDeviceFilter`",
-      "perm": "uses-permission は不要（位置情報の権限も不要）。Manifest に `uses-feature android.software.companion_device_setup`（`required=false`）。端末の位置情報サービスがオンであること（公式）",
       "url": [
         "https://developer.android.com/develop/connectivity/bluetooth/companion-device-pairing",
         "https://developer.android.com/sdk/api_diff/33/changes/android.companion.CompanionDeviceManager"
@@ -34,21 +32,18 @@
     "macos": {
       "status": "no",
       "api": "なし",
-      "perm": "なし",
       "url": "",
       "note": "AccessorySetupKit は iOS / iPadOS のみ（Apple 公式表記で確認）。"
     },
     "windows": {
       "status": "no",
       "api": "なし",
-      "perm": "なし",
       "url": "",
       "note": "同等の API は報告で確認できなかった（要確認）。"
     },
     "web": {
       "status": "no",
       "api": "なし",
-      "perm": "なし",
       "url": "",
       "safari": "同左（API なし）",
       "note": "ブラウザに付属機器のペアリング API は無い（Web Bluetooth の `requestDevice` は bluetooth-le の範囲）。"

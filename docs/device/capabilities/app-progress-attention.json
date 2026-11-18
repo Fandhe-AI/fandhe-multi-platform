@@ -9,21 +9,18 @@
     "ios": {
       "status": "n-a",
       "api": "-",
-      "perm": "-",
       "url": "",
       "note": "iOS にアプリアイコンの進捗表示・バウンスはない。"
     },
     "android": {
       "status": "n-a",
       "api": "-",
-      "perm": "-",
       "url": "",
       "note": "ホーム画面アイコンの進捗・注意喚起の概念はない（通知の進捗表示は notification 側）。"
     },
     "macos": {
       "status": "done",
       "api": "AppKit `NSDockTile.contentView` + `display`（アイコンと進捗バーを自分で描く）、`NSApplication.requestUserAttention(.criticalRequest)`（Dock のアイコンが跳ね続ける）",
-      "perm": "なし",
       "url": [
         "https://developer.apple.com/documentation/appkit/nsdocktile/contentview",
         "https://developer.apple.com/documentation/appkit/nsdocktile/display()",
@@ -38,7 +35,6 @@
     "windows": {
       "status": "done",
       "api": "Win32 `ITaskbarList3::SetProgressValue` / `SetProgressState(TBPF_NOPROGRESS)`、`FlashWindowEx`（`FLASHW_ALL | FLASHW_TIMERNOFG`）",
-      "perm": "なし",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-itaskbarlist3",
         "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-itaskbarlist3-setprogressvalue",
@@ -54,7 +50,6 @@
     "web": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "-",
       "url": "",
       "note": "タブやウィンドウのタスクバー進捗・点滅の標準 API はない（`navigator.setAppBadge` は app-badge で扱う）。"
     }

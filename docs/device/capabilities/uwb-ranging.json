@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "NearbyInteraction `NISession` + `NINearbyPeerConfiguration`（iOS 14+、能力判定は `NISession.deviceCapabilities` iOS 16+）。discovery token は MultipeerConnectivity で交換",
-      "perm": "`NSNearbyInteractionUsageDescription`（初回の測距開始で許可ダイアログ）。token 交換に `NSBonjourServices`（`_fandhe-uwb._tcp` / `_fandhe-uwb._udp`）と `NSLocalNetworkUsageDescription`。entitlement は不要",
       "url": [
         "https://developer.apple.com/documentation/nearbyinteraction/nisession",
         "https://developer.apple.com/documentation/nearbyinteraction/nisession/devicecapabilities",
@@ -24,7 +23,6 @@
     "android": {
       "status": "possible",
       "api": "`androidx.core.uwb:uwb`（Android 12+、GMS 依存）/ `android.ranging.RangingManager`（Android 16）",
-      "perm": "`android.permission.RANGING`（android.ranging）。Jetpack 経路の権限は未確認",
       "url": [
         "https://developer.android.com/develop/connectivity/uwb",
         "https://developer.android.com/develop/connectivity/ranging"
@@ -35,7 +33,6 @@
     "macos": {
       "status": "no",
       "api": "なし（`NISession` はネイティブ macOS で提供されない。対応は iOS・iPadOS・Mac Catalyst・watchOS。Mac Catalyst でも距離の測定は非対応）",
-      "perm": "なし",
       "url": [
         "https://developer.apple.com/documentation/nearbyinteraction",
         "https://developer.apple.com/documentation/nearbyinteraction/nisession"
@@ -45,14 +42,12 @@
     "windows": {
       "status": "no",
       "api": "なし",
-      "perm": "なし",
       "url": "",
       "note": "公開 API は確認できなかった（要確認）。"
     },
     "web": {
       "status": "no",
       "api": "なし",
-      "perm": "なし",
       "url": "",
       "safari": "同左（API なし）",
       "note": "ブラウザに UWB の API は無い。"

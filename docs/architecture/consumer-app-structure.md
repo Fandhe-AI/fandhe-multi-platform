@@ -80,7 +80,7 @@ graph TD
 
 - 正本は各機能 crate の `[package.metadata.fandhe]` です。`cargo metadata` で解決した依存だけが生成に入ります。
   選ばなかった機能の権限が最終成果物に出ないことが、最小権限の根拠です
-- 対応表（`docs/device/capabilities/`）は計画情報だけを持ちます。移行は #1195 で行い、それまでは現行どおりです
+- 対応表（`docs/device/capabilities/`）は計画情報だけを持ちます。権限は書かず、`build-capabilities.mjs` が crate の宣言と id で結合して一覧の権限欄を出します（別名の crate は `crate` キー、crate を持たない基盤の機能は `"crate": null`。食い違えば検証が拒否します。#1195）
 - 生成先は `gen/` で、gitignore します。利用者が手を入れる逃げ道は、TOML の追記と `--eject` の 2 つだけにします（#1202）
 - 権限の説明文は既定値を持たず、利用者が書きます。有効な機能の説明文が無ければエラーにします。
   既定の文言のまま審査に出る事故を避けるためです

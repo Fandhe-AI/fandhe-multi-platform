@@ -9,7 +9,6 @@
     "ios": {
       "status": "possible",
       "api": "`UIApplication.protectedDataWillBecomeUnavailableNotification` / `protectedDataDidBecomeAvailableNotification`、`isProtectedDataAvailable`（いずれもデータ保護の可否で、端末ロックの近似）",
-      "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/uikit/uiapplication/protecteddatawillbecomeunavailablenotification",
         "https://developer.apple.com/documentation/uikit/uiapplication/protecteddatadidbecomeavailablenotification",
@@ -22,7 +21,6 @@
     "android": {
       "status": "done",
       "api": "`Intent.ACTION_SCREEN_OFF` / `ACTION_SCREEN_ON` / `ACTION_USER_PRESENT` を `Context.registerReceiver` で動的に受ける。今の状態は `PowerManager.isInteractive` / `KeyguardManager.isKeyguardLocked` で読む",
-      "perm": "不要（新しい uses-permission なし）",
       "url": [
         "https://developer.android.com/reference/android/content/Intent#ACTION_SCREEN_OFF",
         "https://developer.android.com/reference/android/content/Intent#ACTION_USER_PRESENT",
@@ -38,7 +36,6 @@
     "macos": {
       "status": "done",
       "api": "`NSWorkspace.shared.notificationCenter` の `willSleepNotification` / `didWakeNotification`（システムのスリープ・復帰）と `screensDidSleepNotification` / `screensDidWakeNotification`（画面のスリープ・復帰、macOS 10.6+）。画面ロックを知らせる公開 API は無い",
-      "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/appkit/nsworkspace/willsleepnotification",
         "https://developer.apple.com/documentation/appkit/nsworkspace/didwakenotification",
@@ -53,7 +50,6 @@
     "windows": {
       "status": "done",
       "api": "Win32 `WTSRegisterSessionNotification`（`WM_WTSSESSION_CHANGE` の `WTS_SESSION_LOCK` / `UNLOCK`）、`RegisterSuspendResumeNotification`（`WM_POWERBROADCAST` の `PBT_APMSUSPEND` / `PBT_APMRESUMEAUTOMATIC`）。今のロック状態は `WTSQuerySessionInformationW`（`WTSSessionInfoEx` の `SessionFlags`）で読む",
-      "perm": "不要",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/nf-wtsapi32-wtsregistersessionnotification",
         "https://learn.microsoft.com/en-us/windows/win32/termserv/wm-wtssession-change",
@@ -69,7 +65,6 @@
     "web": {
       "status": "done",
       "api": "Idle Detection API。`IdleDetector.requestPermission()` を押下の中で呼ぶ → `new IdleDetector()` → `change` 購読 → `start({ threshold: 60000, signal })`。出来事は `change` ごとに `screenState` を読み、同じ購読で前に読んだ値から `locked` / `unlocked` へ変わったときだけロック・解除とする（`userState` だけの変化は数えない）。今のロック状態は `screenState`。pagehide で abort して止める。スリープ・復帰・画面の消灯・点灯の通知は無い",
-      "perm": "`idle-detection`（user-idle の Web と同じ許可。origin 単位で、許可済みなら再び尋ねない）+ Permissions Policy `idle-detection`（既定 `'self'`）。secure context 必須",
       "url": [
         "https://developer.mozilla.org/en-US/docs/Web/API/IdleDetector/screenState",
         "https://wicg.github.io/idle-detection/",

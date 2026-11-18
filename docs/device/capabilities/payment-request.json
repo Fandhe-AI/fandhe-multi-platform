@@ -9,7 +9,6 @@
     "ios": {
       "status": "possible",
       "api": "PassKit `PKPaymentAuthorizationController`（Apple Pay の決済シートを出す）",
-      "perm": "Merchant ID の entitlement `com.apple.developer.in-app-payments`",
       "url": [
         "https://developer.apple.com/documentation/passkit/pkpaymentauthorizationcontroller",
         "https://developer.apple.com/documentation/passkit/setting-up-apple-pay",
@@ -21,7 +20,6 @@
     "android": {
       "status": "done",
       "api": "Google Pay API（`play-services-wallet` の `PaymentsClient`、GMS 依存）。環境は TEST 固定",
-      "perm": "実行時の権限なし。manifest に `com.google.android.gms.wallet.api.enabled` の meta-data を追加済み（`play-services-wallet` 20.0.0 の AAR の manifest には含まれない）。GMS が無い・使えない端末では `Unsupported` を返す（`GoogleApiAvailability.isGooglePlayServicesAvailable` が SUCCESS のときだけ使い、更新ダイアログは出さない）。依存は `scripts/android/versions.env` の `PLAY_SERVICES_WALLET_VERSION`（20.0.0。AAR の minSdk 23 で、いまの minSdk 24 のまま使える）",
       "url": [
         "https://developers.google.com/pay/api/android/guides/setup",
         "https://developers.google.com/pay/api/android/guides/test-and-deploy/integration-checklist"
@@ -34,7 +32,6 @@
     "macos": {
       "status": "possible",
       "api": "PassKit `PKPaymentAuthorizationController`（Mac の Apple Pay。提供の実態は要確認）",
-      "perm": "Merchant ID の entitlement（要確認）",
       "url": [
         "https://developer.apple.com/documentation/passkit/pkpaymentauthorizationcontroller",
         "https://developer.apple.com/documentation/passkit/setting-up-apple-pay",
@@ -46,14 +43,12 @@
     "windows": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "なし",
       "url": "",
       "note": "OS 標準の決済シートに相当する公開 API は報告で確認できていない"
     },
     "web": {
       "status": "done",
       "api": "Payment Request API（`new PaymentRequest(...)`）。支払い方法は Google Pay（`https://google.com/pay`、`environment: \"TEST\"`）",
-      "perm": "なし（secure context 必須）",
       "url": [
         "https://developer.mozilla.org/en-US/docs/Web/API/Payment_Request_API",
         "https://developers.google.com/pay/api/web/guides/paymentrequest/tutorial"

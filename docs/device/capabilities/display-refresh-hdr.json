@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "最大 Hz は `UIScreen.maximumFramesPerSecond`（10.3+）、HDR は `UIScreen.potentialEDRHeadroom`（16.0+）が 1.0 を超えるか、広色域は `UITraitCollection.displayGamut`（`.P3` / `.SRGB` / `.unspecified`）",
-      "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/uikit/uiscreen/maximumframespersecond",
         "https://developer.apple.com/documentation/uikit/uiscreen/potentialedrheadroom",
@@ -24,7 +23,6 @@
     "android": {
       "status": "done",
       "api": "今の Hz は `Display.getRefreshRate()`、最大 Hz は `Display.getSupportedModes()`（API 23+）の `Mode.getRefreshRate()` の最大、HDR は `Display.isHdr()`（API 26+）・API 24・25 は `Display.getHdrCapabilities().getSupportedHdrTypes()` が空でないか、広色域は `Configuration.isScreenWideColorGamut()`（API 26+）",
-      "perm": "不要",
       "url": [
         "https://developer.android.com/reference/android/view/Display",
         "https://developer.android.com/reference/android/view/Display.HdrCapabilities",
@@ -38,7 +36,6 @@
     "macos": {
       "status": "done",
       "api": "最大 Hz は `NSScreen.maximumFramesPerSecond`（12.0+）、今の Hz は `CGDisplayModeGetRefreshRate(CGDisplayCopyDisplayMode(id))`、HDR は `NSScreen.maximumPotentialExtendedDynamicRangeColorComponentValue`（10.15+）が 1.0 を超えるか、広色域は `NSScreen.canRepresentDisplayGamut:`（`NSDisplayGamutP3`、10.12+）",
-      "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/appkit/nsscreen/maximumframespersecond",
         "https://developer.apple.com/documentation/coregraphics/cgdisplaymode/refreshrate",
@@ -53,7 +50,6 @@
     "windows": {
       "status": "done",
       "api": "今の Hz は `EnumDisplaySettingsW(ENUM_CURRENT_SETTINGS)` の `dmDisplayFrequency`、最大 Hz は同関数でのモード列挙の最大（今の解像度のモードに限る）、HDR は `IDXGIOutput6::GetDesc1` の `ColorSpace` が `DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020` か",
-      "perm": "不要",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/direct3darticles/high-dynamic-range",
         "https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_6/ns-dxgi1_6-dxgi_output_desc1",
@@ -67,7 +63,6 @@
     "web": {
       "status": "done",
       "api": "HDR は `matchMedia(\"(dynamic-range: high)\")`（否定側は `standard`）、広色域は `matchMedia(\"(color-gamut: p3)\")`（否定側は `srgb`）。リフレッシュレートは標準 API が無い",
-      "perm": "不要",
       "url": [
         "https://developer.mozilla.org/en-US/docs/Web/CSS/@media/dynamic-range",
         "https://developer.mozilla.org/en-US/docs/Web/CSS/@media/color-gamut"

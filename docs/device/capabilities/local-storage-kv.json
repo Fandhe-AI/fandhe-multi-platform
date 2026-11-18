@@ -10,7 +10,6 @@
       "detail": "できている（実機）",
       "verified": true,
       "api": "Foundation（`FileManager`）",
-      "perm": "不要（アプリサンドボックス内）",
       "url": "https://developer.apple.com/documentation/foundation/filemanager",
       "note": "実装済み・実機確認済み",
       "sourceName": [
@@ -23,7 +22,6 @@
       "status": "done",
       "detail": "できている（未確認）",
       "api": "`Context.getFilesDir()`",
-      "perm": "なし",
       "url": "https://developer.android.com/training/data-storage/app-specific",
       "note": "実装済み（旧#747、`fandhe-device` の `DataDir`）。scoped storage 前提の推奨 API",
       "sourceName": [
@@ -47,7 +45,6 @@
       "status": "done",
       "detail": "できている（実ブラウザ確認待ち）",
       "api": "`localStorage`（Web Storage API）",
-      "perm": "なし",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage",
       "safari": "対応",
       "note": "実装済み（Issue 旧#987）。`fandhe_core::screens::storage_note::NoteStorage` を `localStorage` で実装。キーは `fandhe.storage.` 接頭辞（`biometric_auth.rs` と同じ `fandhe.` 系名前空間）。容量超過・使用不可（プライベートモード等）は失敗として表示し、成功へ畳まない。実ブラウザでの確認は未了",

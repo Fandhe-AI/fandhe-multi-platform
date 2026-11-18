@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "VisionKit `VNDocumentCameraViewController`（書類の自動検出・補正の撮影 UI）+ `VNDocumentCameraScan`（`pageCount`・`imageOfPageAtIndex:`）",
-      "perm": "`NSCameraUsageDescription`（camera-capture で宣言済み。新しい権限キーは足さず、文言に機能名を足すだけ）",
       "url": [
         "https://developer.apple.com/documentation/visionkit/vndocumentcameraviewcontroller",
         "https://developer.apple.com/documentation/visionkit/vndocumentcameraviewcontrollerdelegate",
@@ -23,7 +22,6 @@
     "android": {
       "status": "done",
       "api": "ML Kit Document Scanner（`com.google.android.gms:play-services-mlkit-document-scanner`、GMS 依存）",
-      "perm": "カメラ権限は不要（撮影 UI は Google Play services 側）。GMS が無い・使えない端末では `Unsupported` を返す（`GoogleApiAvailability.isGooglePlayServicesAvailable` が SUCCESS のときだけ使い、更新ダイアログは出さない）。依存は `scripts/android/versions.env` の `PLAY_SERVICES_MLKIT_DOCUMENT_SCANNER_VERSION`（16.0.0。AAR の minSdk 23 で、いまの minSdk 24 のまま使える）",
       "url": [
         "https://developers.google.com/ml-kit/vision/doc-scanner/android",
         "https://dl.google.com/android/maven2/com/google/android/gms/play-services-mlkit-document-scanner/16.0.0/play-services-mlkit-document-scanner-16.0.0.pom"
@@ -36,21 +34,18 @@
     "macos": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "なし",
       "url": "https://developer.apple.com/documentation/visionkit/vndocumentcameraviewcontroller",
       "note": "`VNDocumentCameraViewController` は SDK のヘッダーで `API_UNAVAILABLE(macos)`。公式文書の対応環境は iOS・iPadOS・Mac Catalyst・visionOS で、AppKit の実行体からは使えない（本アプリは Mac Catalyst ではない）"
     },
     "windows": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "なし",
       "url": "",
       "note": "標準のスキャン UI に相当する公開 API はない（報告より）"
     },
     "web": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "なし",
       "url": "",
       "note": "標準 API なし。カメラ映像と自前処理は OS の端末機能ではないので判定に使わない"
     }

@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "ImageCaptureCore `ICDeviceBrowser`（カメラ・ローカル。`browsedDeviceTypeMask` は iOS 15.2+）で USB 接続のカメラ機器を探し、`ICCameraDevice` のセッションを開いて `mediaFiles` から作成日時が最新の画像 1 枚を `requestDownloadWithOptions` で一時ディレクトリへ取り込み、ImageIO で長辺 2048 画素以下の JPEG にする（`ICScannerDevice` は範囲外）",
-      "perm": "iOS 14 以降は `requestContentsAuthorization` の実行時ダイアログ。`NSCameraUsageDescription` は既存キーの文言に用途を足しただけ（新しいキーは足さない）",
       "url": [
         "https://developer.apple.com/documentation/imagecapturecore/icdevicebrowser/requestcontentsauthorization(completion:)",
         "https://developer.apple.com/documentation/imagecapturecore/icdevicebrowser/browseddevicetypemask",
@@ -23,7 +22,6 @@
     "android": {
       "status": "done",
       "api": "`UsbManager.getDeviceList` で Still Image クラス（`UsbConstants.USB_CLASS_STILL_IMAGE`）の機器を探す → `hasPermission` / `requestPermission` → `openDevice` → `MtpDevice.open`（API 12）→ `getObjectHandles(storage, 0, 0)` と `getObjectInfo` の作成日時で最新の画像 1 枚 → `getObject` → `BitmapFactory` で長辺 2048 画素以下の JPEG にする",
-      "perm": "機器ごとの USB 接続許可（`UsbManager.requestPermission` の実行時ダイアログ）。マニフェストの権限は無い",
       "url": [
         "https://developer.android.com/reference/android/mtp/MtpDevice",
         "https://developer.android.com/develop/connectivity/usb/host"
@@ -36,7 +34,6 @@
     "macos": {
       "status": "done",
       "api": "ImageCaptureCore `ICDeviceBrowser`（カメラ・ローカル）で USB 接続のカメラ機器を探し、`ICCameraDevice` のセッションを開いて `mediaFiles` から作成日時が最新の画像 1 枚を `requestDownloadWithOptions` で一時ディレクトリへ取り込み、ImageIO で長辺 2048 画素以下の JPEG にする（`ICScannerDevice` は範囲外）",
-      "perm": "不要（App Sandbox 無効・Hardened Runtime 無しの実行体）。Hardened Runtime を有効にするなら Photos Library entitlement、sandbox 化するなら macOS 14 以降 `com.apple.security.device.usb`",
       "url": [
         "https://developer.apple.com/documentation/imagecapturecore",
         "https://developer.apple.com/documentation/imagecapturecore/icdevicebrowser",
@@ -51,7 +48,6 @@
     "windows": {
       "status": "done",
       "api": "`DeviceInformation.FindAllAsyncAqsFilter(ImageScanner.GetDeviceSelector())` → 先頭の 1 台を `ImageScanner.FromIdAsync` → Flatbed → Feeder・JPEG → PNG の順で選び、`ScanPreviewToStreamAsync` でメモリのストリームへ 1 枚。WIA ドライバーのスキャナーのみ",
-      "perm": "宣言不要（パッケージ無しの exe。メモリのストリームへ取り込み、Pictures Library へ保存しない）",
       "url": [
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.scanners.imagescanner",
         "https://learn.microsoft.com/en-us/uwp/api/windows.devices.scanners.imagescanner.scanpreviewtostreamasync",
@@ -66,7 +62,6 @@
     "web": {
       "status": "no",
       "api": "公開 API を確認できず",
-      "perm": "-",
       "url": "",
       "note": "接続したスキャナーを扱う標準 API はない（WebUSB は機器ごとの独自実装になる）"
     }

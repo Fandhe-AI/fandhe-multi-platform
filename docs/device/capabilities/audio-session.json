@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "`AVAudioSession` の `setCategory(_:mode:policy:options:)` / `setActive(_:options:)`（`.notifyOthersOnDeactivation`）、読み戻しは `category` / `mode` / `categoryOptions` / `isOtherAudioPlaying` / `secondaryAudioShouldBeSilencedHint`。通知は `interruptionNotification`（began / ended、ended の `.shouldResume`、`InterruptionReason`）・`routeChangeNotification`（`RouteChangeReason`）・`mediaServicesWereResetNotification`",
-      "perm": "不要（録音を伴う category は使わない）",
       "url": [
         "https://developer.apple.com/documentation/avfaudio/avaudiosession",
         "https://developer.apple.com/documentation/avfaudio/avaudiosession/setactive(_:options:)",
@@ -26,7 +25,6 @@
     "android": {
       "status": "done",
       "api": "`AudioManager.requestAudioFocus(AudioFocusRequest)` / `abandonAudioFocusRequest`（API 26+）、`AudioFocusRequest.Builder`（`setAudioAttributes`・`setOnAudioFocusChangeListener(listener, handler)`）、`OnAudioFocusChangeListener`（GAIN / LOSS / LOSS_TRANSIENT / LOSS_TRANSIENT_CAN_DUCK）、`ACTION_AUDIO_BECOMING_NOISY`（動的登録）。読み戻しは `getMode` / `isMusicActive`",
-      "perm": "不要（新しい uses-permission なし）",
       "url": [
         "https://developer.android.com/media/optimize/audio-focus",
         "https://developer.android.com/reference/android/media/AudioManager#requestAudioFocus(android.media.AudioFocusRequest)",
@@ -42,14 +40,12 @@
     "macos": {
       "status": "n-a",
       "api": "-",
-      "perm": "-",
       "url": "https://developer.apple.com/documentation/avfaudio/avaudiosession",
       "note": "`AVAudioSession` の対応 OS は iOS・iPadOS・Mac Catalyst・tvOS・visionOS・watchOS で、macOS は含まれない（公式の Availability）。macOS に他アプリとの割り込みを調停するセッション管理は無い。"
     },
     "windows": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "-",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/audiopolicy/nn-audiopolicy-iaudiosessionevents",
         "https://learn.microsoft.com/en-us/windows/win32/coreaudio/stream-attenuation",
@@ -60,7 +56,6 @@
     "web": {
       "status": "no",
       "api": "Audio Session API（`navigator.audioSession.type`: auto / playback / transient / transient-solo / ambient / play-and-record、`state`: inactive / active / interrupted、`statechange` イベント）",
-      "perm": "不要",
       "url": [
         "https://w3c.github.io/audio-session/",
         "https://developer.mozilla.org/en-US/docs/Web/API/AudioSession",

@@ -226,7 +226,7 @@ params = { text = "share_text", url = "share_url" }
 | `NSMenuItem.default` | 現行どおり literal。利用者が差し替える手段は未決。生成も literal のまま出す | 未決 |
 | `CFBundle*` 等の定型キー | 生成側のテンプレートの責務。iOS 本体は確定値（実行体名・bundle id・版・`MinimumOSVersion`・`UIDeviceFamily`・`UILaunchScreen`）、macOS 本体は `bundle-id` があれば確定値、無ければ拡張と同じくビルド設定変数 7 キーを出す | 決着（#1176・#1259・#1194） |
 | Windows の `webcam` | 形式に欄がない。カメラの Windows 実装はダミー | #1208 |
-| 対応表 JSON の macOS カメラの `perm` 文 | 計画情報で設定の実体ではない | #1195 |
+| 対応表 JSON の `perm` 文 | 対応表から外し、権限欄は crate の宣言から生成する（`crate` キーで id を結合） | 決着（#1195） |
 
 `declarations.rs` に残す項目（framework のリンク・Xcode の拡張ターゲット・Swift の `import`）は、Xcode ターゲットを生成する #1212 で撤去します。
 

@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "AVFAudio の `AVAudioFile`（`initForWriting:settings:commonFormat:interleaved:error:`、AAC-LC の m4a）",
-      "perm": "不要（一時ファイルは `NSTemporaryDirectory`＝アプリのサンドボックス内。usage description は要らない）",
       "url": "https://developer.apple.com/documentation/avfaudio/avaudiofile",
       "note": "実装済み（#313、macOS と共用の実装）。範囲は実行時に作った 5 秒・モノラル・48 kHz・PCM 16bit の音声を AAC-LC（m4a）へ 1 回変換することのみ（動画・利用者のファイル・進捗・取り消し・形式の選択・保存は範囲外）。成功は出力を読み直し、0 バイトでない・m4a として解析できる・符号形式が mp4a・長さが入力 ±200 ms の中、をすべて満たすときだけ。失敗は期限切れ・出力が空・解析できない・長さの不一致・非対応を分けて表示する。取り消しと権限は存在しない。一時ファイルは成功・失敗の全経路で消す。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、一時ファイルとコーデックの解放。守らない範囲: OS ごとの所要時間とビットレートの違い、期限後も書き込みが走り切ること、複数プロセス間。deploymentTarget が 17.0 のため OS が古くて非対応になることはない。背景遷移では中断せず、suspend をはさんで期限を過ぎたときは復帰時に期限切れの失敗で確定し、遅れて届いた結果は世代照合で捨てて成功にしない。iOS 実機の確認は #310 で行う。",
       "detail": "できている（iOS 実機確認待ち）",
@@ -19,7 +18,6 @@
     "android": {
       "status": "done",
       "api": "`android.media.MediaCodec`（AAC-LC エンコーダ）+ `MediaMuxer`（MPEG-4。API 18、minSdk 24 で使える）。Media3 Transformer は不採用（Gradle の新規依存を避け、今回の音声のみの範囲で足りるため）",
-      "perm": "不要。`uses-permission` は追加しない（一時ファイルはアプリの `getCacheDir()`）",
       "url": "https://developer.android.com/reference/android/media/MediaCodec",
       "note": "実装済み（#314）。範囲は実行時に作った 5 秒・モノラル・48 kHz・PCM 16bit の音声を AAC-LC（m4a）へ 1 回変換することのみ（動画・利用者のファイル・進捗・取り消し・形式の選択・保存は範囲外）。成功は出力を読み直し、0 バイトでない・m4a として解析できる・符号形式が mp4a・長さが入力 ±200 ms の中、をすべて満たすときだけ（Java は成功を判定しない）。失敗は期限切れ・出力が空・解析できない・長さの不一致を分けて表示する。期限は単調時計で確かめ、過ぎたら OS 側で中断する。取り消しと権限は存在しない。一時ファイル・コーデック・muxer は成功・失敗・期限切れの全経路で解放する。Activity を作り直したときは保留中の要求を Rust 側で破棄し、古い結果が新しい要求を消費しない。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: 端末ごとの所要時間とビットレートの違い、複数プロセス間。Android 実機の目視は #310 で行う。",
       "detail": "できている（Android 実機確認待ち）",
@@ -29,7 +27,6 @@
     "macos": {
       "status": "done",
       "api": "AVFAudio の `AVAudioFile`（`initForWriting:settings:commonFormat:interleaved:error:`、AAC-LC の m4a）",
-      "perm": "不要（App Sandbox 無効の素の実行体。一時ファイルは `NSTemporaryDirectory`）",
       "url": "https://developer.apple.com/documentation/avfaudio/avaudiofile",
       "note": "実装済み（#311）。範囲は実行時に作った 5 秒・モノラル・48 kHz・PCM 16bit の音声を AAC-LC（m4a）へ 1 回変換することのみ（動画・利用者のファイル・進捗・取り消し・形式の選択・保存は範囲外）。成功は出力を読み直し、0 バイトでない・m4a として解析できる・符号形式が mp4a・長さが入力 ±200 ms の中、をすべて満たすときだけ。失敗は期限切れ・出力が空・解析できない・長さの不一致・非対応を分けて表示する。取り消しと権限は存在しない。一時ファイルは成功・失敗の全経路で消す。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、一時ファイルとコーデックの解放。守らない範囲: OS ごとの所要時間とビットレートの違い、期限後も書き込みが走り切ること、複数プロセス間。Mac 実機の目視は #310 で行う。",
       "detail": "できている（Mac 目視待ち）",
@@ -39,7 +36,6 @@
     "windows": {
       "status": "done",
       "api": "`Windows.Media.Transcoding.MediaTranscoder`（`PrepareStreamTranscodeAsync` → `TranscodeAsync`、`MediaEncodingProfile::CreateM4a`。入力は一時 WAV を `FileRandomAccessStream` で開く）",
-      "perm": "不要（文書に package identity の要件記載なし。unpackaged の exe で動くかは #310 で確認）",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.media.transcoding.mediatranscoder",
       "note": "実装済み（#312）。範囲は実行時に作った 5 秒・モノラル・48 kHz・PCM 16bit の音声を AAC-LC（m4a）へ 1 回変換することのみ（動画・利用者のファイル・進捗・取り消し・形式の選択・保存は範囲外）。成功は出力を読み直し、0 バイトでない・m4a として解析できる・符号形式が mp4a・長さが入力 ±200 ms の中、をすべて満たすときだけ。失敗は期限切れ・出力が空・解析できない・長さの不一致・非対応を分けて表示する。取り消しと権限は存在しない。入力の一時 WAV と各ストリームは成功・失敗・期限切れの全経路で閉じて消す。Media Feature Pack のない N エディションと Windows 10 1709 未満は非対応（Unsupported）。守る範囲: 1 プロセス内の要求と完了の順序、失敗を成功値へ畳まないこと、一時ファイルとストリームの解放。守らない範囲: OS ごとの所要時間とビットレートの違い、複数プロセス間。Windows 実機の確認は #310 で行う。",
       "detail": "できている（Windows 実機確認待ち）",
@@ -49,7 +45,6 @@
     "web": {
       "status": "done",
       "api": "WebCodecs の `AudioEncoder` / `AudioDecoder`（`isConfigSupported` で `mp4a.40.2` → `opus` の順に選ぶ。`js_sys::Reflect` 経由）",
-      "perm": "不要。secure context 必須",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API",
       "safari": "MDN の互換表では Safari 26（iOS 26）から `AudioEncoder` に対応。実ブラウザでの確認は #310 で行う",
       "note": "実装済み（#315）。範囲は実行時に作った 5 秒・モノラル・48 kHz・PCM 16bit の音声を 1 回変換することのみ（動画・利用者のファイル・進捗・取り消し・形式の選択・保存は範囲外。mux は作らないため出力はコンテナなしの AAC か Opus）。出力のバイト数は符号化チャンクの合計、長さは復号し直したフレーム数 ÷ サンプルレート。成功は出力が 0 バイトでない・復号し直せる・長さが入力 ±200 ms の中、をすべて満たすときだけ。失敗は非対応・期限切れ・出力が空・復号できない・長さの不一致を分けて表示する（例外の message は出さない）。期限は単調時計（`performance.now()`）で測り、過ぎたら codec を閉じて失敗で確定する。`pagehide` で中断し（失敗とは別）、戻っても自動では再開しない。codec・AudioData・タイマー・リスナーは全経路で解放する。守る範囲: 1 マウント内の要求と完了の順序、失敗を成功値へ畳まないこと、資源の解放。守らない範囲: ブラウザごとのコーデックの有無・ビットレート、複数タブ・複数マウント間、egui-proxy の wasm canvas 経路（非対応のまま）。Firefox for Android は `AudioEncoder` がないため「この端末では使えません」になる。",

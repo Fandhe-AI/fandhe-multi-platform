@@ -9,7 +9,6 @@
     "ios": {
       "status": "possible",
       "api": "NetworkExtension `NEHotspotConfigurationManager.apply(_:completionHandler:)`（`NEHotspotConfiguration(ssid:passphrase:isWEP:)`）",
-      "perm": "Hotspot Configuration capability（entitlement `com.apple.developer.networking.HotspotConfiguration`）。対応表では有料の Apple Developer Program（ADP・ADEP）のみで、無料の Apple Developer（Personal Team）の列は空欄。いまの iOS アプリに entitlements ファイルは無い",
       "url": [
         "https://developer.apple.com/documentation/networkextension/nehotspotconfigurationmanager",
         "https://developer.apple.com/documentation/networkextension/nehotspotconfigurationmanager/apply(_:completionhandler:)",
@@ -22,7 +21,6 @@
     "android": {
       "status": "done",
       "api": "`WifiNetworkSpecifier`（API 29+。`setSsid` に `setWpa2Passphrase` を足すか、パスワードが空なら暗号なし）を付けた `ConnectivityManager.requestNetwork(request, callback, handler)`（main looper で受ける）。結果は `NetworkCallback.onAvailable` / `onUnavailable`。`WifiNetworkSuggestion`（`WifiManager.addNetworkSuggestions`）は接続の結果を返さないため使わない",
-      "perm": "`android.permission.CHANGE_NETWORK_STATE`（normal。インストール時に付与され、実行時の許可ダイアログは無い。#1065 で宣言済み）。位置情報・`NEARBY_WIFI_DEVICES` は要らない（接続先の承認は OS のダイアログが行う）",
       "url": [
         "https://developer.android.com/develop/connectivity/wifi/wifi-bootstrap",
         "https://developer.android.com/reference/android/net/wifi/WifiNetworkSpecifier.Builder",
@@ -40,7 +38,6 @@
     "macos": {
       "status": "done",
       "api": "CoreWLAN `CWWiFiClient` の `interface` で `scanForNetworksWithName:error:`（指定 SSID への directed scan）→ 一致した `CWNetwork` へ `associateToNetwork:password:error:`。どちらもブロッキング",
-      "perm": "位置情報の許可（wifi-info と同じ `NSLocationUsageDescription`。宣言済みで文言に型サンプル名を足すだけ）。App Sandbox 無効の素の実行体のため entitlement は不要。CoreWLAN は wifi-info でリンク済み",
       "url": [
         "https://developer.apple.com/documentation/corewlan/cwinterface/associate(to:password:)",
         "https://developer.apple.com/documentation/corewlan/cwinterface/scanfornetworks(withname:)",
@@ -54,7 +51,6 @@
     "windows": {
       "status": "done",
       "api": "Win32 wlanapi。`WlanOpenHandle`・`WlanEnumInterfaces` → `WlanRegisterNotification`（ACM の通知だけ）→ `WlanConnect`（`wlan_connection_mode_temporary_profile`、プロファイル XML を渡す）→ `wlan_notification_acm_connection_complete` の `WLAN_CONNECTION_NOTIFICATION_DATA.wlanReasonCode` で結果を受ける",
-      "perm": "宣言・同意は不要の見込み（Windows 11 24H2 の位置情報同意で `ERROR_ACCESS_DENIED` になる関数の一覧に `WlanConnect` は無い）。`windows` クレートの feature `Win32_NetworkManagement_WiFi` は wifi-info で導入済みで、`Win32_NetworkManagement_Ndis` を #792 で追加。MSM の通知は `wiFiControl` が要るため登録しない",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/nf-wlanapi-wlanconnect",
         "https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/ns-wlanapi-wlan_connection_parameters",
@@ -71,7 +67,6 @@
     "web": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "-",
       "url": "",
       "note": "ブラウザから OS の Wi-Fi 接続を操作する API はない。"
     }

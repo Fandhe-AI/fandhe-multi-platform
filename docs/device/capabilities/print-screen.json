@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "UIKit `UIPrintInteractionController.printingItem`（`UIImage`、iPad は `presentFromRect:inView:`）",
-      "perm": "なし",
       "url": [
         "https://developer.apple.com/documentation/uikit/uiprintinteractioncontroller",
         "https://developer.apple.com/documentation/uikit/uiprintinteractioncontroller/printingitem"
@@ -22,7 +21,6 @@
     "android": {
       "status": "done",
       "api": "`PrintManager`（API 19+）+ `PrintedPdfDocument` の 1 ページへ `Canvas.drawBitmap`（`androidx.print` の `PrintHelper` は使わない）",
-      "perm": "なし",
       "url": [
         "https://developer.android.com/training/printing",
         "https://developer.android.com/training/printing/custom-docs",
@@ -36,7 +34,6 @@
     "macos": {
       "status": "done",
       "api": "AppKit `NSPrintPanel`（`runModalWithPrintInfo:`）+ `NSPrintOperation`（対象 view は `NSImageView`、パネルなしの `runOperation`）",
-      "perm": "なし",
       "url": [
         "https://developer.apple.com/documentation/appkit/nsprintoperation",
         "https://developer.apple.com/documentation/appkit/nsprintoperation/init(view:)"
@@ -49,7 +46,6 @@
     "windows": {
       "status": "done",
       "api": "`PrintDlgExW`（`PD_RETURNDC`）+ GDI（`StartDocW` / `StretchDIBits` / `EndDoc`）",
-      "perm": "なし（Win32 desktop API。package identity 不要）",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/commdlg/nf-commdlg-printdlgexw",
         "https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-stretchdibits"
@@ -62,7 +58,6 @@
     "web": {
       "status": "done",
       "api": "`window.print()`。マウント中の画面 DOM の複製を `body` 直下の印刷用ブロックに入れ、`@media print` でそのブロックだけを出す。`print-color-adjust: exact`（`web-sys` 経由）",
-      "perm": "不要",
       "url": [
         "https://developer.mozilla.org/en-US/docs/Web/API/Window/print",
         "https://developer.mozilla.org/en-US/docs/Web/CSS/print-color-adjust"
@@ -74,5 +69,6 @@
       "impl": "crates/fandhe-web-dom/src/print_page.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/print_screen_page.rs + crates/fandhe-cap-print/src/contract.rs、Issue #1013"
     }
   },
-  "note": "画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。`print`（固定の文章）から切り出した行で、OS の印刷ダイアログ・結果の三値・橋渡しは `print` と共用し、違いは印刷する対象（文章 → 今の画面の描画）だけ。範囲: 型サンプル画面の「この画面を印刷する」を押した直後の描画領域を 1 枚の画像（Web は DOM の複製）として、縦横比を保って印刷可能領域に収め、1 ページで OS の印刷ダイアログへ渡す。複数ページ・任意の画面の指定・プレビュー・プリンタ選択・解像度の指定・紙に出たかの追跡は扱わない。結果は `print` の三値（`Submitted`: ジョブを渡した。紙に出たことは意味しない / `Cancelled`: 利用者が閉じた。失敗ではない / `Unconfirmed`: 結果を OS が返さない。Web は常にこれ）。画面を取り込めない（期限内に読み戻しが届かない・寸法不正）失敗はダイアログを出す前に確定し、取り消しと混ぜない。守る: 1 プロセス内の要求と完了の順序、嘘の成功の禁止、Bitmap・DC・印刷用ブロックの解放、画素をログへ出さないこと。守らない: 紙に出たか・ジョブ投入後のプリンタ側の失敗、印刷の色・解像度の正確さ、OS ごとの余白の差、画面を保護中（capture-protection）に読み戻しが黒くなるか、egui の描画領域の外（ステータスバー・ウィンドウ枠）、Web の `print-color-adjust` が無視される場合・`<canvas>` の中身・ブラウザごとの改ページ、複数タブ・複数プロセス、背景にいる間の取り込み（期限切れで失敗になる）"
+  "note": "画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。`print`（固定の文章）から切り出した行で、OS の印刷ダイアログ・結果の三値・橋渡しは `print` と共用し、違いは印刷する対象（文章 → 今の画面の描画）だけ。範囲: 型サンプル画面の「この画面を印刷する」を押した直後の描画領域を 1 枚の画像（Web は DOM の複製）として、縦横比を保って印刷可能領域に収め、1 ページで OS の印刷ダイアログへ渡す。複数ページ・任意の画面の指定・プレビュー・プリンタ選択・解像度の指定・紙に出たかの追跡は扱わない。結果は `print` の三値（`Submitted`: ジョブを渡した。紙に出たことは意味しない / `Cancelled`: 利用者が閉じた。失敗ではない / `Unconfirmed`: 結果を OS が返さない。Web は常にこれ）。画面を取り込めない（期限内に読み戻しが届かない・寸法不正）失敗はダイアログを出す前に確定し、取り消しと混ぜない。守る: 1 プロセス内の要求と完了の順序、嘘の成功の禁止、Bitmap・DC・印刷用ブロックの解放、画素をログへ出さないこと。守らない: 紙に出たか・ジョブ投入後のプリンタ側の失敗、印刷の色・解像度の正確さ、OS ごとの余白の差、画面を保護中（capture-protection）に読み戻しが黒くなるか、egui の描画領域の外（ステータスバー・ウィンドウ枠）、Web の `print-color-adjust` が無視される場合・`<canvas>` の中身・ブラウザごとの改ページ、複数タブ・複数プロセス、背景にいる間の取り込み（期限切れで失敗になる）",
+  "crate": "print"
 }

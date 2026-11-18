@@ -9,14 +9,12 @@
     "ios": {
       "status": "no",
       "api": "UIKit `UIDocumentPickerViewController`（外部ドライブ内のファイルを選ぶ）。着脱通知は公開 API なし",
-      "perm": "不要",
       "url": "https://developer.apple.com/documentation/uikit/uidocumentpickerviewcontroller",
       "note": "着脱を検知・列挙する公開 API が無い。外部ストレージのファイルはファイル選択（file-picker）経由でのみ読める。（一般知識、要確認）"
     },
     "android": {
       "status": "done",
       "api": "`StorageManager.getStorageVolumes()`（API 24）と `StorageVolume` の `getDescription` / `getState` / `isRemovable` / `isPrimary`（API 24）、通知は `StorageManager.registerStorageVolumeCallback`（API 30）の `StorageVolumeCallback.onStateChanged`",
-      "perm": "不要（新しい uses-permission なし。BroadcastReceiver も使わない）",
       "url": [
         "https://developer.android.com/reference/android/os/storage/StorageManager",
         "https://developer.android.com/reference/android/os/storage/StorageManager.StorageVolumeCallback",
@@ -30,7 +28,6 @@
     "macos": {
       "status": "done",
       "api": "`NSWorkspace.shared.notificationCenter` の `didMountNotification` / `willUnmountNotification` / `didUnmountNotification`、一覧は `FileManager.mountedVolumeURLs(includingResourceValuesForKeys:options:)`（`.skipHiddenVolumes`）と `URLResourceKey` の `volumeLocalizedNameKey` / `volumeIsRemovableKey` / `volumeIsEjectableKey` / `volumeIsInternalKey` / `volumeIsLocalKey`",
-      "perm": "不要（本体アプリは sandbox なし）",
       "url": [
         "https://developer.apple.com/documentation/appkit/nsworkspace/didmountnotification",
         "https://developer.apple.com/documentation/appkit/nsworkspace/willunmountnotification",
@@ -46,7 +43,6 @@
     "windows": {
       "status": "done",
       "api": "Win32 `WM_DEVICECHANGE` の `DBT_DEVICEARRIVAL` / `DBT_DEVICEREMOVECOMPLETE`（`DEV_BROADCAST_VOLUME`、`dbch_devicetype` が `DBT_DEVTYP_VOLUME`）を不可視のトップレベルウィンドウで受ける。一覧は `GetLogicalDrives` / `GetDriveTypeW` / `GetVolumeInformationW`。空のカードリーダーでディスク挿入のダイアログを出さないよう `SetThreadErrorMode(SEM_FAILCRITICALERRORS)` を使う",
-      "perm": "不要（パッケージの `removableStorage` capability は UWP で `KnownFolders.RemovableDevices` の中身を読むためのもので、本機能の Win32 API には要らない）",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/devio/wm-devicechange",
         "https://learn.microsoft.com/en-us/windows/win32/devio/dbt-devicearrival",
@@ -62,7 +58,6 @@
     "web": {
       "status": "no",
       "api": "File System Access API（`showDirectoryPicker`）。着脱の検知は不可",
-      "perm": "ユーザーのフォルダ選択",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/showDirectoryPicker",
       "safari": "非対応（showDirectoryPicker）",
       "note": "ボリュームの着脱を知らせる API が無い。選んだフォルダの読み書き（file-picker / file-watch の範囲）だけができる。"

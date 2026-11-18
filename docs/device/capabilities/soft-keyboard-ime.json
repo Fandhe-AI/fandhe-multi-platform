@@ -1,5 +1,6 @@
 {
   "id": "soft-keyboard-ime",
+  "crate": null,
   "name": "ソフトキーボード文字入力（IME）",
   "group": "既存機能の棚卸し",
   "order": 5,
@@ -9,7 +10,6 @@
       "detail": "できている（実機）",
       "verified": true,
       "api": "UIKit（`UITextInput`/`UIResponder`）",
-      "perm": "不要",
       "url": "https://developer.apple.com/documentation/uikit/uitextinput",
       "note": "実装済み・実機確認済み",
       "sourceName": [
@@ -24,7 +24,6 @@
       "detail": "できている（実機）",
       "verified": true,
       "api": "`GameTextInput`（`android-activity` 経由。`InputConnection`）",
-      "perm": "なし",
       "url": "https://developer.android.com/games/agdk/game-text-input",
       "note": "実装済み（旧#794/旧#797/旧#799）。GameActivity 前提の API で、本構成にネイティブに乗る",
       "sourceName": [

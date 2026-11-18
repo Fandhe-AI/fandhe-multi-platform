@@ -12,7 +12,6 @@
       "implStatus": "iOS 実機確認待ち（#936）",
       "impl": "crates/fandhe-cap-color-picker/ios/fandhe_ios_color_picker.m + crates/fandhe-cap-color-picker/src/ios.rs + crates/fandhe-cap-color-picker/src/driver.rs + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-cap-color-picker/src/contract.rs、Issue #942",
       "api": "UIKit `UIColorPickerViewController`（iOS 14+、`supportsAlpha = NO`）。選択は `colorPickerViewController(_:didSelectColor:continuously:)`、閉じたことは `colorPickerViewControllerDidFinish(_:)` と `presentationControllerDidDismiss(_:)`（スワイプで閉じた場合）",
-      "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/uikit/uicolorpickerviewcontroller",
         "https://developer.apple.com/documentation/uikit/uicolorpickerviewcontrollerdelegate",
@@ -23,7 +22,6 @@
     "android": {
       "status": "no",
       "api": "OS 標準の色ピッカーなし",
-      "perm": "-",
       "url": "",
       "note": "OS 標準の色選択ダイアログは無い（Material の色選択は自前実装・サードパーティ）"
     },
@@ -33,7 +31,6 @@
       "implStatus": "Mac 目視待ち（#936）",
       "impl": "crates/fandhe-cap-color-picker/macos/fandhe_macos_color_picker.m + crates/fandhe-cap-color-picker/src/macos.rs + crates/fandhe-cap-color-picker/src/driver.rs + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-cap-color-picker/src/contract.rs、Issue #941",
       "api": "AppKit `NSColorPanel.shared`（`NSColorPanelColorDidChangeNotification`）、閉じたことは `NSWindowWillCloseNotification`（object = パネル）",
-      "perm": "不要",
       "url": [
         "https://developer.apple.com/documentation/appkit/nscolorpanel",
         "https://developer.apple.com/documentation/appkit/nscolorpanel/colordidchangenotification",
@@ -48,7 +45,6 @@
       "implStatus": "Windows 実機確認待ち（#936）",
       "impl": "crates/fandhe-cap-color-picker/src/windows.rs + crates/fandhe-cap-color-picker/src/driver.rs + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-cap-color-picker/src/contract.rs、Issue #941",
       "api": "Win32 共通ダイアログ `ChooseColorW`（OK で非 0、取り消し・エラーは 0 で `CommDlgExtendedError` が 0 なら取り消し）。色は `COLORREF`（`0x00bbggrr`）",
-      "perm": "不要",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/dlgbox/color-dialog-box",
         "https://learn.microsoft.com/en-us/windows/win32/api/commdlg/ns-commdlg-choosecolorw",
@@ -62,7 +58,6 @@
       "implStatus": "実ブラウザ確認待ち（#936）",
       "impl": "crates/fandhe-web-dom/src/color_picker.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-core/src/screens/color_picker_pick.rs + crates/fandhe-cap-color-picker/src/contract.rs、Issue #943",
       "api": "`<input type=\"color\">`（ブラウザ標準のカラーピッカー）。`showPicker()`（無ければ `click()`）で開き、`change` で確定",
-      "perm": "不要",
       "url": [
         "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/color",
         "https://developer.mozilla.org/en-US/docs/Web/API/HTMLInputElement/cancel_event",

@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "MediaPlayer（`MPNowPlayingInfoCenter` / `MPRemoteCommandCenter`）",
-      "perm": "なし（前景で再生している間だけ出す。背景再生と `UIBackgroundModes` の audio は使わない）",
       "url": "https://developer.apple.com/documentation/mediaplayer/mpnowplayinginfocenter",
       "note": "実装済み（#382）。範囲は `audio_play` 画面で再生・一時停止している間だけ、曲名と再生中／一時停止中を iOS の「再生中」表示（コントロールセンター）へ渡し、OS 側の再生・一時停止を画面へ返すこと（次の曲・前の曲・シーク・アートワーク・ロック画面・背景再生は範囲外で、効かない操作は無効にして出さない）。アプリが背景にある間に届いた操作は画面へ渡さず拒否する（Inactive は前景扱いで、コントロールセンターを開いた間の操作は受け付ける）。OS からの操作を受けた直後に次フレームを起こす。Apple は表示の確定が返らないため「表示中」とは言わない。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、登録の解放と remote command の enabled の復元（main thread からの取り下げ）。守らない範囲: main 以外から呼ばれた取り下げの完了待ち、ポーリング間隔ぶんの反映の遅れ、背景に回った間にコントロールセンターへ残る一時停止中の表示、PiP との `AVAudioSession` の取り合い（PiP の `mixWithOthers` と同時に使うと「再生中」に出ない可能性）、複数プロセス。既定の `soloAmbient` のまま「再生中」に出るかは #378 の実機で確かめる",
       "detail": "できている（iOS 実機確認待ち）",
@@ -19,7 +18,6 @@
     "android": {
       "status": "done",
       "api": "`android.media.session.MediaSession` + `Notification.MediaStyle`（Media3 は不採用）",
-      "perm": "なし（foreground service は使わない。POST_NOTIFICATIONS は宣言済みで、media session の通知は実行時の許可の対象外）",
       "url": [
         "https://developer.android.com/media/implement/surfaces/mobile",
         "https://developer.android.com/develop/ui/views/notifications/notification-permission"
@@ -32,7 +30,6 @@
     "macos": {
       "status": "done",
       "api": "MediaPlayer（`MPNowPlayingInfoCenter` / `MPRemoteCommandCenter`、macOS 10.12.2+）",
-      "perm": "なし",
       "url": "https://developer.apple.com/documentation/mediaplayer/mpnowplayinginfocenter",
       "note": "実装済み（#381）。範囲は `audio_play` 画面で再生・一時停止している間だけ、曲名と再生中／一時停止中を OS の「再生中」表示（コントロールセンター）へ渡し、メディアキー・OS 側の再生・一時停止を画面へ返すこと（次の曲・前の曲・シーク・アートワークは範囲外で、効かない操作は無効にして出さない）。macOS では audio session から再生状態を判定できないため、`playbackState` を毎回設定する（SDK ヘッダの注記）。結果は OS へ渡した／この環境では使えない／渡せなかったを分けて表示し、Apple は表示の確定が返らないため「表示中」とは言わない。OS からの一時停止は失敗ではなく一時停止中への遷移。停止・失敗で取り下げ、取り下げ後に届いた古い操作では再開しない。守る範囲: 1 プロセス内の順序、嘘の成功の禁止、登録の解放。守らない範囲: ポーリング間隔（約 250ms）ぶんの反映の遅れ、窓を最小化している間の遅れ、PiP との `AVAudioSession` の取り合い、複数プロセス。バンドルを持たない実行体で出る名前は #378 で確かめる",
       "detail": "できている（Mac 目視待ち）",
@@ -42,7 +39,6 @@
     "windows": {
       "status": "done",
       "api": "`SystemMediaTransportControls`（`ISystemMediaTransportControlsInterop::GetForWindow` で Win32 の窓から取得。`ButtonPressed`・`IsPlayEnabled` / `IsPauseEnabled`・`DisplayUpdater` の Type=Music と Title・`PlaybackStatus` を使う）",
-      "perm": "なし（package identity なし・unpackaged のまま。出る名前は #378 で確かめる）",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/systemmediatransportcontrolsinterop/nf-systemmediatransportcontrolsinterop-isystemmediatransportcontrolsinterop-getforwindow",
         "https://learn.microsoft.com/en-us/windows/apps/develop/media-playback/system-media-transport-controls"
@@ -55,7 +51,6 @@
     "web": {
       "status": "done",
       "api": "Media Session API（`navigator.mediaSession`）",
-      "perm": "なし",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Media_Session_API",
       "safari": "Safari 15 から対応（iOS も 15）。Chrome 73・Chrome Android 57・Firefox 82。Firefox Android は API はあるが OS の操作 UI が無い（MDN の互換データ）",
       "note": "実装済み（#384）。範囲は `audio_play` 画面で再生・一時停止している間だけ、曲名と再生中／一時停止中を Media Session（`navigator.mediaSession`）へ渡し、ブラウザ・OS のメディアキーや通知からの再生・一時停止を画面へ返すこと（前後の曲・シーク・位置表示・アートワークは範囲外で、`play` / `pause` の 2 つだけ登録する）。web-sys の `MediaSession` は unstable API のため Reflect で呼ぶ。結果は OS へ渡した／この環境では使えない／渡せなかったを分け、Firefox Android のように操作 UI が無い環境でも「渡しました」までしか言わない。OS からの一時停止は失敗ではなく一時停止中への遷移。停止・失敗・背景遷移で曲名を取り下げるが、handler は取り下げでは null に戻さない（戻すとブラウザの既定動作が `<audio>` を直接動かし、画面は停止なのに鳴る食い違いが出るため）。受付は armed で止め、取り下げ後に届いた古い操作では再開しない。handler はマウント破棄で外す。守る範囲: 1 マウント内の操作順、嘘の成功の禁止、登録の解放。守らない範囲: 複数タブ・複数マウント、Chrome が短いメディア（素材は 5 秒）に通知を出さない場合があること、`Loading` に入る前の既定動作、egui-proxy の wasm canvas 経路。実ブラウザの確認は #378",

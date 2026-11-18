@@ -9,14 +9,12 @@
     "ios": {
       "status": "n-a",
       "api": "該当概念なし",
-      "perm": "なし",
       "url": "",
       "note": "iOS にログイン時の自動起動の概念はない"
     },
     "android": {
       "status": "no",
       "api": "該当 API なし（`BOOT_COMPLETED` は端末起動後の通知で、ログインではない）",
-      "perm": "なし",
       "url": [
         "https://developer.android.com/guide/components/activities/background-starts",
         "https://developer.android.com/privacy-and-security/direct-boot"
@@ -26,7 +24,6 @@
     "macos": {
       "status": "done",
       "api": "`SMAppService.mainApp`（`register` / `unregister` / `status`、`openSystemSettingsLoginItems`、macOS 13+）",
-      "perm": "なし（利用者がシステム設定のログイン項目で許可・無効化できる。アプリのコード署名が必要）",
       "url": [
         "https://developer.apple.com/documentation/servicemanagement/smappservice/mainapp",
         "https://developer.apple.com/documentation/servicemanagement/smappservice/status-swift.enum"
@@ -39,7 +36,6 @@
     "windows": {
       "status": "done",
       "api": "Run キー（`HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`）。利用者による無効化は `...\\Explorer\\StartupApproved\\Run` を読むだけ（非公開形式）",
-      "perm": "なし（HKCU のため管理者権限不要。package identity 不要の見込み）",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys",
         "https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.startuptask"
@@ -52,7 +48,6 @@
     "web": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "なし",
       "url": "",
       "note": "ブラウザからログイン時に起動する公開 API はない"
     }

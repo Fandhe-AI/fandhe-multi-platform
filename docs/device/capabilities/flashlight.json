@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "`AVCaptureDevice` の `setTorchModeOnWithLevel:error:` / `torchMode = Off`（`lockForConfiguration` の内側）。読み戻しは `isTorchActive`",
-      "perm": "なし（カメラの許可ダイアログは出さない想定で Info.plist の追加も無い。要否は実機で確認する、#456）",
       "url": "https://developer.apple.com/documentation/avfoundation/avcapturedevice/torchmode-swift.property",
       "note": "`hasTorch` が無い機種（一部の iPad・シミュレータ）は非対応として出す。アプリを背景へ回すと自分から消灯し、戻っても点け直さない。背景中の点灯要求は拒否する。守る範囲: 1 プロセス内の main 直列の順序、背景中の点灯拒否、lock 後の確実な unlock、嘘の成功を出さないこと。守らない範囲: 外部からの点け消しへの追従は 1 秒 + 1 フレーム遅れること、熱による減光、プロセス終了時の後片付け（OS に任せる）",
       "detail": "できている（iOS 実機確認待ち）",
@@ -19,7 +18,6 @@
     "android": {
       "status": "done",
       "api": "`CameraManager.setTorchMode` と `registerTorchCallback`（main Looper）",
-      "perm": "なし（`CAMERA` の実行時許可は不要）",
       "url": "https://developer.android.com/reference/android/hardware/camera2/CameraManager",
       "note": "フラッシュ搭載カメラが無ければ非対応。最初のコールバック前は分からない状態になる。`onStop` で自分が点けた分を消し、戻っても点け直さない。背景中の点灯要求は拒否する。守らない範囲: 外部からの点け消しへの追従は 1 秒 + 1 フレーム遅れる、他アプリのカメラ使用中は分からない状態として出す、熱による減光、プロセス終了時の後片付けは OS に任せる。",
       "detail": "できている（Android 実機確認待ち）",
@@ -29,14 +27,12 @@
     "macos": {
       "status": "n-a",
       "api": "なし",
-      "perm": "なし",
       "url": "",
       "note": "Mac にライト（トーチ）の概念が無い。"
     },
     "windows": {
       "status": "done",
       "api": "`Windows.Devices.Lights.Lamp`（`GetDefaultAsync` / `IsEnabled` / `SetIsEnabled` / `Close`）",
-      "perm": "不要（capability の記載なし（Lamp class と Camera-independent Flashlight の文書）。unpackaged で動くかは実機で確認）",
       "url": "https://learn.microsoft.com/en-us/uwp/api/windows.devices.lights.lamp",
       "note": "実装済み。点灯のときだけワーカーで `GetDefaultAsync` を呼んで `Lamp` を保持し、消灯で `Close` して手放す。null（非搭載）は `Unsupported`。消灯に失敗したら保持を続け、`IsEnabled` の実値を出す。最小化したら自分から消灯し、戻っても点け直さない。守らない範囲: `AvailabilityChanged` の購読、最初の点灯要求までは搭載の有無が分からず「消灯しています」と出ること、終了時の後片付け（OS に任せる）、`GetDefaultAsync` の期限。参考: https://learn.microsoft.com/en-us/windows/uwp/audio-video-camera/camera-independent-flashlight 。既知の天井: パッケージ無しの素の exe から届くかは実機未確認で、届かないと判明したらこの `done` を取り下げる。Windows 実機での確認は #456",
       "detail": "できている（Windows 実機確認待ち）",
@@ -46,7 +42,6 @@
     "web": {
       "status": "done",
       "api": "`getUserMedia`（`facingMode: environment`）→ `getCapabilities().torch` を確かめる → `applyConstraints({ advanced: [{ torch: true }] })`。`getSettings().torch` を 1 秒ごとに読み戻す。消灯は `track.stop()`",
-      "perm": "カメラの許可（`getUserMedia`）。secure context 必須",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackConstraints#torch",
       "safari": "MDN の互換データに `torch` の項目が無い。実行時に `getCapabilities` で判定し、無ければ「使えません」と出す。Safari・Firefox は非対応の見込み（要確認）",
       "note": "実装済み（#462）。背景（hidden / `pagehide`）と破棄で消灯し、点け直さない。守る範囲: トラックを漏らさない、非対応・拒否・secure context の外を成功と見せない。守らない範囲: 外からの消灯への追従は 1 秒 + 1 フレーム、複数タブ、ページ終了時の後片付け（ブラウザが解放）。実ブラウザの確認は #456",

@@ -9,21 +9,18 @@
     "ios": {
       "status": "n-a",
       "api": "該当概念なし",
-      "perm": "-",
       "url": "",
       "note": "OS 共通の「最近使った項目」は無い"
     },
     "android": {
       "status": "n-a",
       "api": "該当概念なし",
-      "perm": "-",
       "url": "",
       "note": "OS 共通の「最近使った項目」へ登録する API は無い（SAF の最近一覧はシステム側が管理）"
     },
     "macos": {
       "status": "done",
       "api": "`NSDocumentController.shared.noteNewRecentDocumentURL(_:)` で登録し、`recentDocumentURLs` で読み戻す。main thread で呼ぶ",
-      "perm": "なし（素の実行体・パッケージ ID 不要。新しい entitlement・Info.plist キー・capability なし）",
       "url": [
         "https://developer.apple.com/documentation/appkit/nsdocumentcontroller/notenewrecentdocumenturl(_:)",
         "https://developer.apple.com/documentation/appkit/nsdocumentcontroller/recentdocumenturls",
@@ -37,7 +34,6 @@
     "windows": {
       "status": "done",
       "api": "`SHAddToRecentDocs(SHARD_PATHW, パス)` で登録し、`IApplicationDocumentLists::GetList(ADLT_RECENT)` で読み戻す。`pv` に NULL を渡さない（全アプリの利用履歴を消す）。`MostRecentlyUsedList` はアプリ内の一覧で OS の最近使った項目ではないため不採用",
-      "perm": "なし（素の実行体・パッケージ ID 不要。新しい entitlement・Info.plist キー・capability なし）",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shaddtorecentdocs",
         "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-iapplicationdocumentlists",
@@ -53,7 +49,6 @@
     "web": {
       "status": "no",
       "api": "公開 API を確認できず",
-      "perm": "-",
       "url": "",
       "note": "「最近使った項目」へ登録する標準 API はない"
     }

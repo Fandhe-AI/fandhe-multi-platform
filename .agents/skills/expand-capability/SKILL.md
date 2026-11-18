@@ -145,7 +145,7 @@ Windows がプロセス間転送・レジストリ等で 2h を明らかに超�
 
 親 issue に含めるもの:
 
-- 対象 JSON の現状（各 OS の `status` / `api` / 権限・注意）を転記する
+- 対象 JSON の現状（各 OS の `status` / `api` / 注意）を転記する。権限は JSON に書かない（crate の宣言から生成する）
 - 実装方針は `_meta.json` の `notes.implementationSteps`（5 段）を参照させ、
   **何段目を新たに踏むか**を書く（描画プリミティブ追加が不要なら明記する）
 - 同じ `bundle` の実装済み機能を**下敷きとして明示**する（例: `one-shot` なら `clipboard` の
@@ -390,7 +390,7 @@ for k, v in d['platforms'].items():
 git diff "$(git merge-base origin/main "${head}")" "${head}" -- docs/device/capabilities/<id>.json
 ```
 
-SSOT の検査（スキーマ・実装パス・Android 権限）は、CI の必須チェック「capabilities 対応表の検査」が PR の head で
+SSOT の検査（スキーマ・実装パス・crate の宣言との id の結合。別名の crate は `crate` キーで指し、crate を持たない基盤の機能は `"crate": null`）は、CI の必須チェック「capabilities 対応表の検査」が PR の head で
 `node scripts/device/build-capabilities.mjs --check` を実行しています。生成物はコミットしません。
 
 ### Step 6: キャプチャを保存する

@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "UIKit `UIPrintInteractionController`（`UISimpleTextPrintFormatter`、iPad は `presentFromRect:inView:`）",
-      "perm": "なし",
       "url": "https://developer.apple.com/documentation/uikit/uiprintinteractioncontroller",
       "note": "実装済み（#327）。固定の短い文章を 1 ページ。結果は `Submitted`（ジョブを渡した。紙に出たことは意味しない）・`Cancelled`・失敗（error あり / 提示不可）で、`isPrintingAvailable == NO` は非対応。`Unconfirmed` には到達しない。守る範囲: 入力の検査、取り消しを失敗に畳まないこと、嘘の成功の禁止、結果を 1 回だけ届けること。守らない範囲: 紙に出たか・ジョブ投入後のプリンタ側の失敗、背景遷移中のシートの扱い（OS に任せる）、OS ごとの書体・余白の差。deploymentTarget 17.0 で API は全域で使え、権限・usage description は不要。実機確認は #324",
       "detail": "できている（iOS 実機確認待ち）",
@@ -19,7 +18,6 @@
     "android": {
       "status": "done",
       "api": "`android.print.PrintManager`（API 19+、minSdk 24 で使える）+ `PrintDocumentAdapter`（`PrintedPdfDocument` で 1 ページを描く）",
-      "perm": "不要。`uses-permission` も `<queries>` も追加しない（一時ファイルも作らない）",
       "url": "https://developer.android.com/training/printing",
       "note": "実装済み（#328）。範囲は固定の短い文章を 1 ページ印刷ダイアログへ渡すことのみ。結果は `Submitted`（ジョブを渡した。PDF 保存を含み、紙に出たことは意味しない）・`Cancelled`（取り消しを失敗にしない）・`Unconfirmed`（`onFinish` から 2 秒（単調時計）経っても CREATED）・失敗（FAILED・書き出し失敗・`print()` の例外・非前景・`PrintManager` 取得不可）。利用者が操作するダイアログなので固定の期限は掛けない。ジョブ名は固定で、見出し・本文・例外はログにも OS のキューにも出さない。Activity を作り直したときは保留中の要求を破棄し、旧要求の結果が新しい要求を消費しない。守る範囲: 入力の検査、1 プロセス内の要求順序、取り消しを失敗に畳まないこと、嘘の成功の禁止、資源の解放。守らない範囲: 紙に出たか・2 秒を超えてからの状態変化・プリンタ側の失敗、印刷フレームワークの無い端末（失敗として表示される）。Android 実機の目視は #324",
       "detail": "できている（Android 実機確認待ち）",
@@ -29,7 +27,6 @@
     "macos": {
       "status": "done",
       "api": "AppKit `NSPrintPanel`（`runModalWithPrintInfo:`）+ `NSPrintOperation`（パネルなしの `runOperation`）",
-      "perm": "なし",
       "url": "https://developer.apple.com/documentation/appkit/nsprintoperation",
       "note": "固定の短い文章を 1 ページ。パネルで取り消しを先に確定し、パネルなしの `runOperation` で実行する 2 段構成（1 回の操作だと NO が取り消しか失敗か区別できないため）。結果は `Submitted`（ジョブを渡した。PDF 保存を含み、紙に出たことは意味しない）・`Cancelled`・失敗（`runOperation` が NO）で、macOS は `Unconfirmed` に到達しない。守る範囲: 入力の検査、取り消しを失敗に畳まないこと、嘘の成功の禁止。守らない範囲: 紙に出たか・ジョブ投入後のプリンタ側の失敗、OS ごとの書体・余白の差。UI スレッドで同期に呼ぶ。Mac 目視は #324",
       "detail": "できている（Mac 目視待ち）",
@@ -39,7 +36,6 @@
     "windows": {
       "status": "done",
       "api": "`PrintDlgExW`（`PD_RETURNDC`）+ GDI（`StartDocW` / `DrawTextW` / `EndDoc`）",
-      "perm": "なし（Win32 desktop API。package identity 不要）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/commdlg/nf-commdlg-printdlgexw",
       "note": "固定の短い文章を 1 ページ。結果は、`PD_RESULT_PRINT` でジョブを投入したら `Submitted`（PDF 出力を含み、紙に出たことは意味しない）、`PD_RESULT_CANCEL` / `PD_RESULT_APPLY` と `StartDocW` の `ERROR_CANCELLED`（Microsoft Print to PDF の保存先の取り消し）は `Cancelled`、それ以外の失敗は失敗。`Unconfirmed` には到達しない。守る範囲: 入力の検査、取り消しを失敗に畳まないこと、嘘の成功の禁止、DC・グローバルハンドル・フォントの解放。守らない範囲: 紙に出たか・ジョブ投入後のプリンタ側の失敗、OS ごとの書体・余白の差、2 ページ目以降。UI スレッドで同期に呼ぶ。Windows 実機確認は #324",
       "detail": "できている（Windows 実機確認待ち）",
@@ -49,7 +45,6 @@
     "web": {
       "status": "done",
       "api": "`window.print()`。`body` 直下の印刷用ブロックと、ブロック内の `@media print` でそのブロックだけを出す（`web-sys` 経由）",
-      "perm": "不要",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/print",
       "safari": "MDN では全主要ブラウザが対応。実ブラウザでの確認は #324",
       "note": "実装済み（#329）。固定の見出し 1 行と本文数行だけを印刷する。結果は `window.print()` が例外なく戻れば常に `Unconfirmed`（印刷したか・取り消したかをブラウザが返さない）で、`Submitted` / `Cancelled` には到達しない。`window` が無ければ非対応。例外とブロック作成の失敗は固定文言の失敗（例外の message は出さない）。モバイルブラウザは `print()` がすぐ戻るので、ブロックは次の要求か画面の破棄まで残す。守る範囲: 1 マウント内の要求と完了の順序、嘘の成功の禁止、ブロックの解放。守らない範囲: sandbox（`allow-modals` なし）やブラウザ設定で黙って無視される場合、紙に出たか、ブラウザごとの余白・書体・ヘッダーの差、複数タブ、egui-proxy の wasm canvas 経路（非対応のまま）",

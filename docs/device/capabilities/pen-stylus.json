@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "UIKit `UITouch`（`type` / `force` / `maximumPossibleForce` / `altitudeAngle`）を観測専用の `UIGestureRecognizer` で読む",
-      "perm": "不要（Info.plist・entitlement の追加なし）",
       "url": "https://developer.apple.com/documentation/uikit/uitouch/altitudeangle",
       "note": "実装済み（#356）。位置は egui のポインタから、種類・筆圧・傾きは winit の base view に付けた観測専用 recognizer から取る（winit は種類と altitudeAngle を捨てる）。筆圧と傾きはペンのときだけ出し、指・ポインタは None（固定値を筆圧にしない）。離す・キャンセル・非アクティブ化・背景遷移で接触なしに戻す。守る範囲: 1 プロセス内の順序・嘘の値を出さないこと・離したら消すこと。守らない範囲: 1 フレーム内の複数点、主ポインタ 1 本以外、推定筆圧の後からの更新、方位角・ホバー、複数プロセス。シミュレータでは Apple Pencil を再現できない。実機確認（iPad と Apple Pencil）は #354",
       "detail": "できている（iOS 実機確認待ち）",
@@ -19,7 +18,6 @@
     "android": {
       "status": "done",
       "api": "`MotionEvent` を共通層 `HostInput` が包んだ `Window.Callback.dispatchTouchEvent` で観測（消費しない）。`getToolType`・`getPressure`・`AXIS_TILT`（`getMotionRange` で報告の有無を判定）",
-      "perm": "不要（`uses-permission` は追加しない）",
       "url": "https://developer.android.com/develop/ui/compose/touch-input/stylus-input",
       "note": "実装済み（#357）。位置は egui のポインタから、種類・筆圧・傾きは `PenStylusHelper` が `HostInput`（#1327）経由で `dispatchTouchEvent` を観測した値から取る（winit は tool type と tilt を捨てる）。筆圧と傾きはペンのときだけ出し、指・マウスは None。傾きを報告しない機器は None（0 を垂直にしない）。離す・キャンセル・`onPause`・`onDestroy` で接触なしに戻す。守る範囲: 1 プロセス内の順序・嘘の値を出さないこと・離したら消すこと。守らない範囲: 主ポインタ 1 本以外、ホバー・消しゴムの区別、履歴サンプル、静止したままの筆圧変化、複数プロセス。未確認: エミュレータでペンを再現できるか。実機確認（スタイラス端末）は #354",
       "detail": "できている（Android 実機確認待ち）",
@@ -29,7 +27,6 @@
     "macos": {
       "status": "done",
       "api": "AppKit `NSEvent` の local monitor（マウスイベントの `subtype == NSEventSubtypeTabletPoint` 時の `pressure` / `tilt`、`NSEventTypeTabletProximity`）",
-      "perm": "不要（entitlement 不要。local monitor は自アプリのイベントだけを見る）",
       "url": "https://developer.apple.com/documentation/appkit/nsevent/pressure",
       "note": "実装済み（#355）。位置は egui のポインタから、ペンか否か・筆圧・傾きは local monitor から取る（winit は筆圧を届けない）。マウス・トラックパッドは種類=マウスで筆圧・傾きなし（固定値を筆圧にしない）。離す・近接の離脱・アプリの非アクティブ化で接触なしに戻す。守る範囲: 1 プロセス内の順序・嘘の値を出さないこと・離したら消すこと。守らない範囲: 1 フレーム内の複数点、主ポインタ 1 本以外、ホバー・消しゴムの区別、静止したままの筆圧変化（次のフレームまで反映しない）、複数プロセス。未確認: `tilt`（-1..1）の ×90° 換算の妥当性、winit 経由のイベントが local monitor に届く順序。Mac 目視（ペンタブレット）は #354",
       "detail": "できている（Mac 目視待ち）",
@@ -39,7 +36,6 @@
     "windows": {
       "status": "done",
       "api": "`WM_POINTERDOWN`/`WM_POINTERUPDATE` をメインウィンドウの `SetWindowSubclass` で観測（消費しない）。`GetPointerType`・`GetPointerPenInfo`（`pressure`・`tiltX`・`tiltY` とマスク）",
-      "perm": "不要（package identity も不要）",
       "url": "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getpointerpeninfo",
       "note": "実装済み（#359）。位置は egui のポインタから、種類・筆圧・傾きは観測した `WM_POINTER*` から取る（winit は種類と傾きを捨てる）。筆圧と傾きはペンのときだけ出し、マスクが立たない値と片軸だけの傾きは None（0 を垂直にしない）。マウスは `WM_LBUTTON*` から Mouse として扱い、指は Touch で筆圧なし。離す・捕捉喪失・ホバー・非アクティブ化・ウィンドウ破棄で接触なしに戻す。守る範囲: 1 プロセス内の順序・嘘の値を出さないこと・離したら消すこと。守らない範囲: 主ポインタ 1 本以外、ホバー・消しゴムの区別、履歴サンプル、静止したままの筆圧変化、複数ウィンドウ。未確認: ペン対応端末での実測。MSVC ビルドと実機確認は #354",
       "detail": "できている（Windows 実機確認待ち）",
@@ -49,7 +45,6 @@
     "web": {
       "status": "done",
       "api": "Pointer Events（`PointerEvent.pressure` / `tiltX` / `pointerType`）",
-      "perm": "不要（Permissions-Policy・許可ダイアログなし）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent/pressure",
       "safari": "Safari 対応（MDN は Baseline、詳細は互換表で要確認）",
       "note": "実装済み（#358）。root 要素の Pointer Events（down / move / up / cancel / lostpointercapture）を requestAnimationFrame 1 本でまとめて画面へ反映する。筆圧と傾き（tiltX / tiltY から高度角）は pointerType がペンのときだけ出し、マウス・指は None（マウスが返す固定の 0.5 を筆圧にしない）。離す・キャンセル・キャプチャ喪失・blur・pagehide・非表示で接触なしに戻す。PointerEvent が無ければ非対応として出す。守る範囲: 1 マウント内の順序・嘘の値を出さないこと・離したら消すこと・リスナーと rAF の解放。守らない範囲: 主ポインタ 1 本以外、coalesced / predicted events、筆圧を報告しないペンが返す 0.5、傾きを報告しない機器の 0、altitudeAngle / azimuthAngle・ホバー・消しゴム、点の上限 2000、複数タブ、egui-proxy の wasm canvas 経路。実ブラウザとペン実機の確認は #354",

@@ -9,7 +9,6 @@
     "ios": {
       "status": "possible",
       "api": "File Provider（`NSFileProviderReplicatedExtension`、iOS 16 以上。ファイルアプリに表示）",
-      "perm": "File Provider 拡張ターゲット。App Group の要否は未確認",
       "url": [
         "https://developer.apple.com/documentation/fileprovider",
         "https://developer.apple.com/documentation/fileprovider/nsfileproviderreplicatedextension",
@@ -23,7 +22,6 @@
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#1003）",
       "api": "`DocumentsProvider`（Storage Access Framework のドキュメントプロバイダー）。Root に `FLAG_LOCAL_ONLY`・`FLAG_SUPPORTS_CREATE`",
-      "perm": "`uses-permission` 不要。manifest の `<provider>` に `MANAGE_DOCUMENTS`（システムだけが持てる権限）を書く",
       "url": [
         "https://developer.android.com/reference/android/provider/DocumentsProvider",
         "https://developer.android.com/guide/topics/providers/create-document-provider",
@@ -36,7 +34,6 @@
     "macos": {
       "status": "possible",
       "api": "File Provider（`NSFileProviderReplicatedExtension`、macOS 11 以上。Finder に表示）",
-      "perm": "App Extension の追加 + App Group",
       "url": [
         "https://developer.apple.com/documentation/fileprovider/nsfileproviderreplicatedextension",
         "https://developer.apple.com/documentation/fileprovider/nsfileproviderdomain"
@@ -47,7 +44,6 @@
     "windows": {
       "status": "possible",
       "api": "Cloud Files API（Win32 `CfRegisterSyncRoot` / `Windows.Storage.Provider.StorageProviderSyncRootManager`）",
-      "perm": "パッケージ ID（Desktop Bridge）が実装要件（公式）。パッケージなしで登録できるかは未確認",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/cfapi/cloud-files-api-portal",
         "https://learn.microsoft.com/en-us/windows/win32/cfapi/build-a-cloud-file-sync-engine",
@@ -60,7 +56,6 @@
     "web": {
       "status": "no",
       "api": "公開 API を確認できず",
-      "perm": "-",
       "url": "",
       "note": "ブラウザから OS のファイル画面へ保存先を出す API はない"
     }

@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "UIKit key window の `UIView.safeAreaInsets`（`UIWindow`。1 秒間隔で読み直し、通知は購読しない）",
-      "perm": "不要",
       "url": "https://developer.apple.com/documentation/uikit/uiview/safeareainsets",
       "note": "実装済み（#445）。回転・分割表示は 1 秒間隔の読み直しで追従する。window が取れないときは 0 を出さず「失敗」を出す。守る範囲: 嘘の 0 を出さない、1 プロセス内の取得。守らない範囲: 反映は最大 1 秒 + 1 フレーム、key window のみ、起動直後の一時的な失敗表示",
       "detail": "できている（iOS 実機確認待ち）",
@@ -19,7 +18,6 @@
     "android": {
       "status": "done",
       "api": "`WindowInsetsCompat`（`systemBars()` / `displayCutout()`）、`layoutInDisplayCutoutMode`（API 28+）。共通層 `HostInsets` の `OnApplyWindowInsetsListener` が受けた値を 1 秒間隔で読み直す",
-      "perm": "不要",
       "url": "https://developer.android.com/develop/ui/views/layout/display-cutout",
       "note": "実装済み（#446）。受信前は 0 を出さず読み取り中。API 28 未満は切り欠き分が 0。守らない範囲: 反映は最大 1 秒 + 1 フレーム、Activity 再生成の直後に前の値が 1 回残り得る、zoom が 1 でないときのずれ",
       "detail": "できている（Android 実機確認待ち）",
@@ -29,7 +27,6 @@
     "macos": {
       "status": "done",
       "api": "AppKit 窓の `contentView.safeAreaInsets`（`NSView`、macOS 11+。key window を 1 秒間隔で読み直し、通知は購読しない）",
-      "perm": "不要",
       "url": "https://developer.apple.com/documentation/appkit/nsview/safeareainsets",
       "note": "OS の全画面（`toggleFullScreen`）は中身をセーフエリアの内側へ自動で置くため、窓表示でも全画面でも普段は 0。窓が取れないときは 0 を出さず「取得できません／失敗」を出す。守らない範囲: 反映は最大 1 秒 + 1 フレーム、複数窓では key window のみ、`NSScreen.safeAreaInsets`（画面についての値）は使わない",
       "detail": "できている（Mac 目視待ち）",
@@ -43,7 +40,6 @@
     "web": {
       "status": "done",
       "api": "CSS `env(safe-area-inset-top/right/bottom/left)` を非表示の要素の `padding` に指定し、`getComputedStyle` で読む（1 秒間隔で読み直し、購読はしない。`viewport-fit=cover` が前提）",
-      "perm": "不要",
       "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/env",
       "safari": "対応（MDN では Baseline Widely available、2020 年 1 月以降）。値が 0 でなくなるのは主に iPhone Safari",
       "note": "実装済み（#447）。`env()` を解さない環境は「取得できません」を出し、0 にしない。解析できない値・値域外は「失敗」。守る範囲: 非対応・解析不能を 0 に倒さない、破棄時にタイマーと探り用要素を解放する。守らない範囲: 反映は最大 1 秒 + 1 フレーム（背景タブではさらに遅れる）、viewport の `env()` を見る、zoom が 1 でないときのずれ。実ブラウザの確認は #442",

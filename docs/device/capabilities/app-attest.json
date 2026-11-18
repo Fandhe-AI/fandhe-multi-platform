@@ -9,7 +9,6 @@
     "ios": {
       "status": "possible",
       "api": "DeviceCheck `DCAppAttestService`（鍵生成・attestation・assertion）。能力判定は `isSupported`",
-      "perm": "App Attest の capability（有料の Apple Developer Program 限定）。開発中は entitlement `com.apple.developer.devicecheck.appattest-environment` を省くと sandbox を使う",
       "url": [
         "https://developer.apple.com/documentation/devicecheck/dcappattestservice",
         "https://developer.apple.com/documentation/devicecheck/establishing-your-app-s-integrity",
@@ -22,7 +21,6 @@
     "android": {
       "status": "done",
       "api": "Key Attestation（`AndroidKeyStore` の `KeyGenParameterSpec.Builder.setAttestationChallenge` で鍵を作り、`KeyStore.getCertificateChain` で証明書チェーンを取る。API 24+、GMS 不要）",
-      "perm": "なし",
       "url": [
         "https://developer.android.com/privacy-and-security/security-key-attestation",
         "https://developer.android.com/reference/android/security/keystore/KeyGenParameterSpec.Builder#setAttestationChallenge(byte[])"
@@ -35,7 +33,6 @@
     "macos": {
       "status": "no",
       "api": "なし（`DCAppAttestService` の API は macOS 11+ にあるが、Mac で `isSupported` が `false`。Mac Catalyst と Apple silicon 上の iOS アプリも同じ）",
-      "perm": "なし",
       "url": [
         "https://developer.apple.com/documentation/devicecheck/dcappattestservice/issupported",
         "https://developer.apple.com/documentation/devicecheck/dcappattestservice"
@@ -45,14 +42,12 @@
     "windows": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "なし",
       "url": "",
       "note": "端末・アプリの真正性証明に相当する OS 提供 API を報告で確認できていない（報告は『限定的』。TPM 証明は用途が異なり要確認）"
     },
     "web": {
       "status": "no",
       "api": "公開 API なし",
-      "perm": "なし",
       "url": "",
       "note": "Web に相当する API はない（Digital Credentials API は MDN の URL が 404 で確認できず）"
     }

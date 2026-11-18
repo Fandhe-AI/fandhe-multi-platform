@@ -9,7 +9,6 @@
     "ios": {
       "status": "possible",
       "api": "NetworkExtension `NEHotspotNetwork`（現在の接続のみ）",
-      "perm": "Access Wi-Fi Information entitlement（`com.apple.developer.networking.wifi-info`。有料の Apple Developer Program のみ。無料登録では不可）と、正確な位置情報の許可など",
       "url": [
         "https://developer.apple.com/documentation/networkextension/nehotspotnetwork",
         "https://developer.apple.com/help/account/reference/supported-capabilities-ios"
@@ -20,7 +19,6 @@
     "android": {
       "status": "done",
       "api": "`WifiManager.getConnectionInfo` / `getScanResults`（OS のキャッシュのみ。`startScan` は呼ばない）と `LocationManagerCompat.isLocationEnabled`",
-      "perm": "`ACCESS_FINE_LOCATION`（`ACCESS_COARSE_LOCATION` と同時に要求）、`ACCESS_WIFI_STATE`。位置情報サービスが ON であること。`CHANGE_WIFI_STATE` は不要",
       "url": "https://developer.android.com/develop/connectivity/wifi/wifi-scan",
       "note": "実装済み（#516）。読む前に機能有無・許可・位置情報サービス・Wi-Fi の電源を判定し、空の一覧を成功にしない。「おおよそ」のみの許可は拒否扱いで Android 用の案内が出る。許可ダイアログへの応答を含めて 30 秒で失敗にし、Activity 破棄で中断する。API 31 以降の接続情報の SSID は #510 で実機確認する。",
       "detail": "できている（Android 実機確認待ち）",
@@ -30,7 +28,6 @@
     "macos": {
       "status": "done",
       "api": "CoreWLAN `CWWiFiClient` の `interface`（`ssidData`・`rssiValue`・`powerOn`・`cachedScanResults`）と CoreLocation の許可判定",
-      "perm": "位置情報の許可（`requestAlwaysAuthorization`、既存の `NSLocationUsageDescription`）。macOS 14 以降は SSID に必要",
       "url": "https://developer.apple.com/documentation/corewlan",
       "note": "実装済み（#514）。読む前に位置情報サービス・許可・Wi-Fi の電源を判定し、空の一覧を成功にしない。許可があっても SSID が nil なら「非公開」と出す。素の実行体で nil の場合は #510 で `.app` 化して確かめる。",
       "detail": "できている（Mac 目視待ち）",
@@ -40,7 +37,6 @@
     "windows": {
       "status": "done",
       "api": "Win32 wlanapi。`WlanEnumInterfaces`・`WlanQueryInterface`（`current_connection`・`rssi`・`radio_state`）・`WlanGetNetworkBssList`（OS のキャッシュ。`WlanScan` は呼ばない）",
-      "perm": "位置情報の同意（Windows 11 24H2 以降。未同意だと wlanapi が `ERROR_ACCESS_DENIED`。初回は OS のダイアログが出て、押し直しが要る）。unpackaged で宣言は不要の見込み（推測。#510 で確認する）",
       "url": [
         "https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/",
         "https://learn.microsoft.com/en-us/windows/win32/nativewifi/wi-fi-access-location-changes"
@@ -53,7 +49,6 @@
     "web": {
       "status": "no",
       "api": "なし",
-      "perm": "なし",
       "url": "",
       "safari": "同左（API なし）",
       "note": "ブラウザから Wi-Fi 情報を読む API は無い。"

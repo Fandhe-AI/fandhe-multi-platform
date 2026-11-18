@@ -431,9 +431,9 @@ jobs:
   # capabilities.md / capabilities.html は scripts/device/build-capabilities.mjs の生成物で、
   # 並列の PR どうしの競合を避けるため git に入れない（手元で生成して見る）。
   # ここではスキーマ違反（必須キー欠落・status の enum 外・id とファイル名の不一致）・
-  # 実装パスの不在・Android 権限宣言の漏れと、生成が例外なく通ることを検査する。
-  # あわせて migrate-capability.mjs sync --check で、gallery の feature・依存と gradle の srcDirs の
-  # ずれ、機能 crate の公開入口 platform_<stem>() の欠けを検査する（#1366）。
+  # 実装パスの不在・crate の宣言との id の結合と、生成が例外なく通ることを検査する。
+  # あわせて migrate-capability.mjs sync --check で、gallery の機能 crate の依存のずれと、
+  # 機能 crate の公開入口 platform_<stem>() の欠けを検査する（#1366）。
   # --------------------------------------------------
   capabilities:
     name: capabilities 対応表の検査
@@ -445,12 +445,16 @@ jobs:
     # fork PR でのスキップは ci-complete が result != success を検出して落とすため素通りしない。
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           persist-credentials: false
+
+      # 権限欄を crate の宣言から出すため cargo metadata を使う（#1195）
+      - name: Rust toolchain を導入
+        uses: ./.github/actions/ensure-rust-toolchain
 
       # node は GitHub ホスト runner のプリインストールを使う。無ければ fail-closed で落とす。
       - name: node の存在確認

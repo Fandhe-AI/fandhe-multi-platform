@@ -9,7 +9,6 @@
     "ios": {
       "status": "done",
       "api": "UIKit `UIImagePickerController`（`sourceType = .camera`、`mediaTypes = [public.movie]`、`videoMaximumDuration`）。撮れた動画は `InfoKey.mediaURL` のファイルを AVFoundation `AVURLAsset`（`loadValuesAsynchronouslyForKeys:` の `duration`、`loadTracksWithMediaType:completionHandler:` の映像トラックの `naturalSize` / `preferredTransform`）で読む",
-      "perm": "`NSCameraUsageDescription` と `NSMicrophoneUsageDescription`（どちらも宣言済み。文言に本機能の画面名を足す）、実行時のカメラの許可（`AVCaptureDevice.requestAccess`）",
       "url": [
         "https://developer.apple.com/documentation/uikit/uiimagepickercontroller",
         "https://developer.apple.com/documentation/uikit/uiimagepickercontroller/videomaximumduration",
@@ -27,7 +26,6 @@
     "android": {
       "status": "done",
       "api": "`MediaStore.ACTION_VIDEO_CAPTURE`（Intent、`EXTRA_OUTPUT` に `FileProvider` の content URI、`EXTRA_DURATION_LIMIT`）を `ActivityResultContracts.StartActivityForResult` で起動。撮れた動画は `MediaMetadataRetriever`（`METADATA_KEY_DURATION` / `VIDEO_WIDTH` / `VIDEO_HEIGHT` / `VIDEO_ROTATION`）で読む",
-      "perm": "`android.permission.CAMERA`（宣言済みのため実行時の許可が要る）。`RECORD_AUDIO`・`<queries>` は使わない。`FileProvider` は宣言済みのものに公開パスを 1 つ足す",
       "url": [
         "https://developer.android.com/media/camera/camera-intents",
         "https://developer.android.com/reference/android/provider/MediaStore#ACTION_VIDEO_CAPTURE",
@@ -43,7 +41,6 @@
     "macos": {
       "status": "done",
       "api": "AVFoundation `AVCaptureSession` + `AVCaptureMovieFileOutput`（`maxRecordedDuration` に上限 30 秒、`startRecordingToOutputFileURL:recordingDelegate:`、完了は `captureOutput:didFinishRecordingToOutputFileAtURL:fromConnections:error:`、エラー付きの完了は `AVErrorRecordingSuccessfullyFinishedKey` で成否を読む）。OS 標準の撮影 UI が無いため、アプリが AppKit のパネル（`NSPanel` に `AVCaptureVideoPreviewLayer` のプレビューと「録画を始める」「止める」「キャンセル」）を組む。撮れた動画は iOS と同じく `AVURLAsset` で長さ・寸法・回転を読む",
-      "perm": "`NSCameraUsageDescription`（camera-preview-stream の macOS で足すキーの文言に本機能の画面名を足す）、実行時のカメラの許可（`AVCaptureDevice.requestAccess`）。音声は録らないためマイクの宣言・許可は使わない。App Sandbox・Hardened Runtime を使わない素の実行体のため entitlement は不要",
       "url": [
         "https://developer.apple.com/documentation/avfoundation/avcapturemoviefileoutput",
         "https://developer.apple.com/documentation/avfoundation/avcapturefileoutput/startrecording(to:recordingdelegate:)",
@@ -62,7 +59,6 @@
     "windows": {
       "status": "done",
       "api": "Windows App SDK `Microsoft.Windows.Media.Capture.CameraCaptureUI`（`CaptureFileAsync(CameraCaptureUIMode.Video)`、`AppWindow.Id` が要る）。自前で組むなら WinRT `MediaCapture.StartRecordToStorageFileAsync`（`MediaEncodingProfile.CreateMp4`）+ `StorageFile.Properties.GetVideoPropertiesAsync`",
-      "perm": "unpackaged の実行では宣言不要の見込み（設定の「デスクトップ アプリにカメラへのアクセスを許可する」に従い、拒否は `E_ACCESSDENIED`）。パッケージ時は `webcam` / `microphone` capability",
       "url": [
         "https://learn.microsoft.com/en-us/windows/uwp/audio-video-camera/capture-photos-and-video-with-cameracaptureui",
         "https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.windows.media.capture.cameracaptureui",
@@ -79,7 +75,6 @@
     "web": {
       "status": "done",
       "api": "`<input type=\"file\" accept=\"video/*\" capture=\"environment\">`（HTML Media Capture）。選ばれた `File` の `size`、`URL.createObjectURL` を入れた `<video>`（`preload = metadata`）の `loadedmetadata` で `duration` / `videoWidth` / `videoHeight` を読む",
-      "perm": "不要（撮影はブラウザ・OS のカメラアプリが行う）。secure context の制約なし",
       "url": [
         "https://www.w3.org/TR/html-media-capture/",
         "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/capture",

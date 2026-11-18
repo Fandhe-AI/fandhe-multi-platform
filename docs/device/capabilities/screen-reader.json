@@ -1,5 +1,6 @@
 {
   "id": "screen-reader",
+  "crate": null,
   "name": "画面読み上げ（VoiceOver/TalkBack/ナレーター）",
   "group": "既存機能の棚卸し",
   "order": 6,
@@ -9,7 +10,6 @@
       "status": "no",
       "detail": "できない（上流未対応）",
       "api": "UIKit（`UIAccessibility`）",
-      "perm": "不要",
       "url": "https://developer.apple.com/documentation/uikit/uiaccessibility",
       "note": "未達・上流待ち",
       "sourceName": [
@@ -22,7 +22,6 @@
       "status": "done",
       "detail": "できている（未確認）",
       "api": "`accesskit_android`",
-      "perm": "なし（機能自体に権限不要）",
       "url": "https://docs.rs/accesskit_android/latest/accesskit_android/",
       "note": "実装済み（旧#243、TASK-9.3-S2）。`Cargo.toml` の `cfg(target_os = \"android\")` 分岐で eframe の `accesskit` feature と `accesskit_winit` の `accesskit_android` feature を有効化済み。`crates/fandhe-render-egui/src/render.rs` に Android 向け AX ノード公開処理あり（macOS と同じ `accesskit_node_builder` 経路）。TalkBack 実機読み上げ確認のみ #39（人間担当）で未完了",
       "sourceName": [
@@ -42,7 +41,6 @@
       "status": "done",
       "detail": "できている（未確認）",
       "api": "`accesskit_windows`（UI Automation）",
-      "perm": "なし（機能自体に権限不要）",
       "url": "https://docs.rs/accesskit_windows/latest/accesskit_windows/",
       "note": "実装済み（Issue 旧#1001）。`Cargo.toml` の `cfg(target_os = \"windows\")` 分岐で eframe の `accesskit` feature を有効化済み（Cargo.lock 既存の `accesskit_windows` 0.29.2 を使うのみで新規パッケージは増えない）。`crates/fandhe-render-egui/src/render.rs` / `crates/fandhe-render-egui/src/text_role.rs` に Windows 向け AX ノード公開処理あり（macOS / Android と同じ `accesskit_node_builder` 経路）。ナレーター実機読み上げ確認は人間担当（msvc 環境・実機がないため未確認）",
       "sourceName": [
