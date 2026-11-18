@@ -4,7 +4,7 @@
 //! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod human_presence_read;` と対）。
 //!
-//! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは `fandhe-egui-proxy` の
+//! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは
 //! `crates/fandhe-cap-human-presence/src/driver.rs` が [`take_request`] で要求を観測し [`finish_read`] で結果を注入する
 //! （`pedometer_read.rs` と同型の状態機械）。購読しないため登録・解除ボタンは無い。
 //!

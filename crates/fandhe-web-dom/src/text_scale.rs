@@ -5,8 +5,8 @@
 //! [`super::mount::mount_with_effect`] の effect として観測し、
 //! `getComputedStyle(document.documentElement).fontSize`（ブラウザの既定フォントサイズ、
 //! `medium` = 100% のとき 16px）を読んで [`fandhe_core::screens::text_scale_preview::finish_read`]
-//! へ書き戻す。対象は本クレート（DOM 出力）のみで、`fandhe-egui-proxy` の wasm
-//! canvas 経路（egui 自前描画）は対象外（対応表 `docs/device/capabilities/dynamic-type.json`
+//! へ書き戻す。対象は本クレート（DOM 出力）のみで、egui の wasm
+//! canvas 経路（`fandhe-render-egui`）（egui 自前描画）は対象外（対応表 `docs/device/capabilities/dynamic-type.json`
 //! の `web.note` 参照）。
 //!
 //! # 倍率を Rust 側から再適用しない理由

@@ -6,7 +6,7 @@
 //! `Settings.Secure.ANDROID_ID`）・機能宣言（`Cargo.toml`）を 1 つに集める。呼び出し元は画面カタログ
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect "device_identifier_show"` 行）。
 //! 依存方向は本 crate → `fandhe-core` / `fandhe-runtime` / `fandhe-platform-android` の一方向で、
-//! egui・`fandhe-egui-proxy`・`fandhe-device` には依存しない。
+//! egui・`fandhe-device` には依存しない。
 //!
 //! 守る範囲 / 守らない範囲、値の扱い（全体を取り出さない・ログに出さない）は `contract` のモジュール doc を正とする。
 //! 画面の状態型を参照してよいのは `driver` だけ。入口 `platform_device_identifier()` は状態型に依存しないため、

@@ -171,8 +171,9 @@ workspace メンバー自身のコードに限定）。既知脆弱性確認（`
 - **FFI 境界での `unsafe` 追加時**: `.claude/rules/coding-rust.md` の規約（最小範囲の関数・モジュールに
   閉じる／`// SAFETY:` コメントで安全性根拠を明記する／安全な公開 API でラップし `unsafe` を呼び出し側へ
   漏らさない）に従う。現行の FFI 境界クレート（`fandhe-swiftui-bridge` の `ffi` モジュール、
-  `fandhe-winit-ime` の `macos_secure_input` モジュール、`fandhe-egui-proxy` の Android 分岐
-  `android.rs` と iOS 分岐 `device/ios.rs`）はいずれも FFI 境界で `unsafe` が不可避なため forbid を付けられず、
+  `fandhe-winit-ime` の `macos_secure_input` モジュール、`fandhe` の iOS の入力欄
+  `src/entry/ios_text_input.rs`、`fandhe-platform-android` の `with_activity`、
+  機能 crate の OS 別モジュール）はいずれも FFI 境界で `unsafe` が不可避なため forbid を付けられず、
   `scripts/audit/unsafe-audit.sh` 冒頭の `FORBID_EXEMPT_CRATES`（`scripts/android/versions.env` と同様の
   SSOT パターン）へ明示的に登録済みである。新規クレートを追加する際も同様に登録する運用とする。
   登録しない限り forbid 未適用は違反（exit 1）として検出されるため、登録漏れによる監査基準の
@@ -197,8 +198,8 @@ workspace メンバー自身のコードに限定）。既知脆弱性確認（`
 - `docs/spec/06-roadmap.md` L30〜58（M2）
 - `crates/fandhe-core/src/lib.rs`・`crates/fandhe-device/src/lib.rs`（`#![forbid(unsafe_code)]` の適用箇所）
 - `scripts/audit/unsafe-audit.sh`（本書の監査結果を生成する再現可能スクリプト）
-- `crates/fandhe-egui-proxy/src/lib.rs`・`crates/fandhe-egui-proxy/src/android.rs`（Android 分岐の
-  `unsafe` 境界）・`crates/fandhe-egui-proxy/src/device/ios.rs`（iOS 分岐の `unsafe` 境界、Issue #751）
+- `crates/fandhe-platform-android/src/lib.rs`（Android 分岐の `unsafe` 境界、`with_activity`）・
+  `crates/fandhe/src/entry/ios_text_input.rs`（iOS の入力欄の `unsafe` 境界）
 - `crates/fandhe-swiftui-bridge/src/ffi/`（`mod.rs`・`buffer.rs`、FFI 境界の `unsafe` 一式）
 - `crates/fandhe-winit-ime/src/macos_secure_input.rs`（Carbon SecureEventInput FFI 境界）
 - `docs/architecture/crate-feature-matrix.md`・`docs/architecture/responsibility-boundary.md`（同一の

@@ -4,7 +4,7 @@
 //! [`super::mount::mount_with_effect`] の effect として観測し、
 //! `navigator.mediaDevices.enumerateDevices()` の結果を `finish_read` へ書き戻す。
 //! `fandhe-device` の `AudioDevices` トレイトは経由しない（`fandhe-device/src/audio_devices.rs`
-//! の module doc どおり、Web は本クレートの担当）。`fandhe-egui-proxy` の wasm canvas 経路は対象外。
+//! の module doc どおり、Web は本クレートの担当）。egui の wasm canvas 経路（`fandhe-render-egui`）は対象外。
 //! 範囲は一覧のみ。出力先の選択（`selectAudioOutput` / `setSinkId`）は扱わない。
 //!
 //! # 読み取り方
@@ -109,7 +109,7 @@ mod web {
     use super::reading_from_entries;
     use crate::mount::Applier;
 
-    /// 例外・reject 時の固定文言（egui-proxy 側と同じ）。
+    /// 例外・reject 時の固定文言（`fandhe-cap-audio-devices` の effect ドライバと同じ）。
     const READ_FAILED: &str = "音声デバイスの読み取り";
 
     thread_local! {

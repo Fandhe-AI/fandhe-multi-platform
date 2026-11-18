@@ -62,7 +62,7 @@
         "https://developer.mozilla.org/en-US/docs/Web/API/Window/print",
         "https://developer.mozilla.org/en-US/docs/Web/CSS/print-color-adjust"
       ],
-      "note": "実装済み（#1013）。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。取り出しはマウント中の画面 DOM の複製（読み戻しではない。複製内の `id` は外す）で、`print` と共用の印刷用ブロックへ入れて `window.print()` を呼ぶ。複製・ブロック作成の失敗は `print()` を呼ばず「画面を取り込めませんでした」、`print()` の例外は失敗、戻れば常に `Unconfirmed`（`Submitted`・`Cancelled` には到達しない）。`window` が無ければ非対応。ブロックは次の要求かマウント破棄まで残す。背景色は `print-color-adjust: exact` で求める。守る範囲: 1 マウント内の要求と完了の順序、嘘の成功の禁止、ブロックの解放。守らない範囲: 紙に出たか、`print-color-adjust` が利用者設定で無視される場合、`<canvas>` の中身、ブラウザごとの改ページ・余白・書体、sandbox で `print()` が黙って無視される場合、複数タブ、egui-proxy の wasm canvas 経路（非対応のまま）",
+      "note": "実装済み（#1013）。画面に出している内容（テキスト + 単純な図形）を 1 ページとして印刷する。取り出しはマウント中の画面 DOM の複製（読み戻しではない。複製内の `id` は外す）で、`print` と共用の印刷用ブロックへ入れて `window.print()` を呼ぶ。複製・ブロック作成の失敗は `print()` を呼ばず「画面を取り込めませんでした」、`print()` の例外は失敗、戻れば常に `Unconfirmed`（`Submitted`・`Cancelled` には到達しない）。`window` が無ければ非対応。ブロックは次の要求かマウント破棄まで残す。背景色は `print-color-adjust: exact` で求める。守る範囲: 1 マウント内の要求と完了の順序、嘘の成功の禁止、ブロックの解放。守らない範囲: 紙に出たか、`print-color-adjust` が利用者設定で無視される場合、`<canvas>` の中身、ブラウザごとの改ページ・余白・書体、sandbox で `print()` が黙って無視される場合、複数タブ、egui の wasm canvas 経路（`fandhe-render-egui`）（非対応のまま）",
       "safari": "MDN では全主要ブラウザが対応。実ブラウザでの確認は #1001",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実ブラウザ確認待ち（#1001）",

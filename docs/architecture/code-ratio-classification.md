@@ -21,12 +21,12 @@ PoC-1（`docs/spec/03-poc/ui-rendering/README.md`）の最小デモ実測値は 
 |------|------|------|------|
 | 共通コード | `crates/fandhe-prototype/src/**/*.rs` | ○ | ○ |
 | プラットフォーム別コード | 分類 SSOT（`scripts/metrics/code-classification.env`）に列挙したファイル全体、および既存プラットフォームファイル内のマーカー区間 | × | ○ |
-| 母集団外 | `fandhe-core`（フレームワーク本体）、`fandhe-egui-proxy` の既存コード（マーカー区間外）、Cargo.toml・HTML・スクリプト、`tests/` 配下の結合テスト | — | — |
+| 母集団外 | `fandhe-core`（フレームワーク本体）、`fandhe-gallery`・`fandhe-render-egui` の既存コード（マーカー区間外）、Cargo.toml・HTML・スクリプト、`tests/` 配下の結合テスト | — | — |
 
 - **共通コード**: TASK-2.2-S1（issue #48）で切り出した独立クレート `crates/fandhe-prototype` に
   隔離済み。`fandhe-core` のみに依存し `#![forbid(unsafe_code)]` を付与している。
 - **プラットフォーム別コード**: プロトタイプ描画起動のためにプラットフォーム側
-  （`fandhe-egui-proxy` 等）へ追加する差分。以下の 2 通りで表現する。
+  （`fandhe-gallery` 等）へ追加する差分。以下の 2 通りで表現する。
   1. **専用ファイル化**: 差分が独立した `.rs` ファイルに切り出せる場合、
      `code-classification.env` の `PLATFORM_FILES` に REPO_ROOT からの相対パスを追記する
      （`measure-code-ratio.sh` が REPO_ROOT へ cd した上で `find` 出力の相対パスと
@@ -46,7 +46,7 @@ PoC-1（`docs/spec/03-poc/ui-rendering/README.md`）の最小デモ実測値は 
   共有できる資産」の効果を測るのはプロトタイプ層（`fandhe-prototype`）であり、
   フレームワーク本体はどのプラットフォームでも必須の基盤として別に扱う（PoC-1 と同じ整理）。
 - **注意（PoC-1 との前提差）**: 「母集団外」の扱いは
-  `fandhe-core` に限らず、`fandhe-egui-proxy` の**既存コード（マーカー区間外、`ProxyApp` や
+  `fandhe-core` に限らず、`fandhe-gallery`・`fandhe-render-egui` の**既存コード（マーカー区間外、`ProxyApp` や
   `render_screen` 等）**にも及ぶ。PoC-1（`docs/spec/03-poc/ui-rendering/README.md`）は
   「デモ 1 本分の起動・ブリッジコード全体」をネイティブ + Web の 2 プラットフォームに配線した
   状態で分母に計上しているのに対し、本書のマーカー方式は `fandhe-prototype` の配線コスト
@@ -79,7 +79,7 @@ PoC-1（`docs/spec/03-poc/ui-rendering/README.md`）の最小デモ実測値は 
   - `PLATFORM_FILES`: プラットフォーム別コード（専用ファイル）の REPO_ROOT からの相対パス一覧
     （該当ファイルを切り出した時点で追記する。現状は空）
   - `PLATFORM_MARKER_DIRS`: マーカー区間走査対象ディレクトリ
-    （現状 `crates/fandhe-egui-proxy/src`）
+    （現状 `crates/fandhe-gallery/src`）
   - `scripts/android/versions.env`・`scripts/audit/unsafe-audit.sh` の
     `FORBID_EXEMPT_CRATES` と同じ SSOT 流儀（分類基準の変更を diff で追跡可能にする）。
 - **計測スクリプト**: `scripts/metrics/measure-code-ratio.sh`
@@ -94,14 +94,14 @@ PoC-1（`docs/spec/03-poc/ui-rendering/README.md`）の最小デモ実測値は 
 
 ## 5. プラットフォーム別差分の追加手順
 
-`fandhe-egui-proxy` に追加する起動・切替差分は、以下のいずれかで
+`fandhe-gallery` に追加する起動・切替差分は、以下のいずれかで
 本計測ツールの対象に含める必要がある。
 
 1. 差分を専用ファイルに切り出し、`code-classification.env` の `PLATFORM_FILES` へ
    REPO_ROOT からの相対パスを追記する（推奨。マーカーより境界が明確でレビューしやすい）。
 2. 既存ファイルへ直接追記する場合は `// fandhe-prototype:begin` / `:end` で囲み、
    走査対象ディレクトリが `PLATFORM_MARKER_DIRS` に含まれていることを確認する
-   （`crates/fandhe-egui-proxy/src` は登録済み）。
+   （`crates/fandhe-gallery/src` は登録済み）。
 
 ## 6. TASK-2.3 への申し送り（実行手順の想定）
 

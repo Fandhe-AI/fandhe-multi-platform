@@ -5,7 +5,7 @@
 //! `fandhe-device` の `LocalFonts` トレイトは経由しない（`fandhe-device/src/local_fonts.rs` の
 //! module doc どおり、Web は本クレートの担当）。整形・重複除去・昇順・上限は
 //! `fandhe_cap_local_fonts::{families_from, require_named}` を macOS / Windows と共用する。
-//! `fandhe-egui-proxy` の wasm canvas 経路は対象外。範囲はファミリー名の一覧のみ。
+//! egui の wasm canvas 経路（`fandhe-render-egui`）は対象外。範囲はファミリー名の一覧のみ。
 //!
 //! # 読み取り方
 //!
@@ -34,7 +34,7 @@
 use fandhe_cap_local_fonts::{families_from, require_named};
 use fandhe_core::screens::local_fonts_show::{LocalFontsReading, ReadFailure};
 
-/// 失敗時の固定文言（egui-proxy 側と同じ）。
+/// 失敗時の固定文言（`fandhe-cap-local-fonts` の effect ドライバと同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const READ_FAILED: &str = "フォント一覧の読み取り";
 

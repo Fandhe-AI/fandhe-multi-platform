@@ -88,7 +88,7 @@ pub enum Axis {
 ///
 /// AI 型安全 DSL の方針として、DSL には色を直接書かせない。開発者は役割
 /// （`Body` / `Error`）のみを宣言し、役割から実際の色（`token::semantic_color::SemanticColorRole`）
-/// への解決はプラットフォームレイヤ（`fandhe-egui-proxy` 等）の `TokenResolver` が担う
+/// への解決はプラットフォームレイヤ（`fandhe-render-egui` 等）の `TokenResolver` が担う
 /// （後続 #813）。共通コアはトークン基盤に依存しない責務分界を保つ。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextRole {
@@ -108,7 +108,7 @@ pub const RGBA_MAX_SIDE: u32 = 2048;
 /// 画像ノード [`Node::RgbaImage`] が運ぶ RGBA8 画素列（行優先・パディングなし・
 /// 非乗算アルファ、`fandhe_device::Image` と同じレイアウト）。
 ///
-/// 描画バックエンド（`fandhe-egui-proxy` / `fandhe-web-dom`）は長さ不一致で panic する
+/// 描画バックエンド（`fandhe-render-egui` / `fandhe-web-dom`）は長さ不一致で panic する
 /// API（egui の `ColorImage::from_rgba_unmultiplied` 等）へ渡すため、不正な値を
 /// 型の外へ出さないよう検証は [`RgbaPixels::new`] の 1 か所に集約し、フィールドは
 /// 非公開にする。`Arc` なので `Screen` を毎フレーム作り直して `Node` を clone しても

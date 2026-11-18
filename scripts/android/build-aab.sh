@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # TASK-11.2-S2（REQ-11 / M3、Issue #226、親: TASK-11.2 系列 / #224）:
 # cargo-ndk が生成する Android 向け cdylib（libfandhe_gallery.so、
-# crates/fandhe-egui-proxy/src/android.rs の android_main エントリ。Activity 方式は
+# crates/fandhe/src/entry/android.rs の android_main エントリ。Activity 方式は
 # TASK-9.3-S1 / Issue #242 で GameActivity に確定、docs/architecture/android-activity-method.md
 # 参照）を
 # platforms/android/ の Gradle プロジェクトへ統合し、`.aab` を単一スクリプトから

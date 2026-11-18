@@ -1,4 +1,4 @@
-//! `fandhe_core::screens::confirm_dialog`（Issue #729 / #739）の egui-proxy 実描画
+//! `fandhe_core::screens::confirm_dialog`（Issue #729 / #739）の egui 実描画
 //! 結合テスト。`render_node`（`lib.rs`）の `Node::Widget` 分岐が `DialogWidget` を
 //! `egui::Modal` で実描画し、パネル外タップを `dismiss_label` と同名のパネル内
 //! `Button` へ変換して dispatch することを egui_kittest で検証する。

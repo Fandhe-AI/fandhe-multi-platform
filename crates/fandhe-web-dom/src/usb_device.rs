@@ -38,7 +38,7 @@
 use fandhe_cap_usb_device::{normalize, UsbDeviceEntry};
 use fandhe_core::screens::usb_device_show::{ReadFailure, UsbDeviceRow};
 
-/// 失敗時の固定文言（egui-proxy 側と同じ）。例外の `message` は使わない。
+/// 失敗時の固定文言（`fandhe-cap-usb-device` の effect ドライバと同じ）。例外の `message` は使わない。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const FAILED_TEXT: &str = "USB 機器の読み取り";
 

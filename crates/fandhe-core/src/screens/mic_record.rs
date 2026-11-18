@@ -11,7 +11,7 @@
 //! [`take_start_request`]/[`take_stop_request`] で要求を観測し [`finish_record`] で
 //! 結果を注入する（`biometric_check.rs`「認証した・キャンセル・使えない・失敗を
 //! 混同しない理由」と同じ構造。マイク録音は権限確認・録音完了が非同期に届くため、
-//! `fandhe-egui-proxy` 側は `MicRecorder` トレイトを通さず本状態機械へ直接書き戻す
+//! `fandhe-cap-mic-record` の effect ドライバは `MicRecorder` トレイトを通さず本状態機械へ直接書き戻す
 //! 契約になる、`fandhe-cap-mic-record` の `contract` の doc 参照）。
 //!
 //! # 経過秒数は画面側の時刻で表示する（OS からの継続 push は受けない）

@@ -24,7 +24,7 @@ fandhe-core = { path = "../fandhe-core" }
 # `normalize_axis` 等）を共有するため、wasm32 限定ではなく全ターゲットの依存にする
 # （Issue #936。`fandhe-device` は thiserror のみに依存が解決するため新規パッケージは
 # 増えない、下の wasm32 向けコメント参照）。同じ最適化レイヤ同士（本クレート ⇔
-# fandhe-egui-proxy と同様の関係）の依存であり、共通コアとの一方向性は崩さない
+# fandhe-render-egui と同様の関係）の依存であり、共通コアとの一方向性は崩さない
 # （coding-rust.md 準拠）。
 fandhe-device = { path = "../fandhe-device" }
 # Issue #1333: ファイルの関連付け・バックグラウンドダウンロードの契約（`FileInbox`・`accepts`・`DownloadStatus` など）の正本。
@@ -159,7 +159,7 @@ fandhe-platform-web = { path = "../fandhe-platform-web" }
 wasm-bindgen = { workspace = true }
 # Phase 11（Issue #859）: `navigator.clipboard` の Promise を待つ（`clipboard` モジュール）と、
 # 各機能が Promise を待つために使う（`Applier::apply` の退避は `fandhe-platform-web` 側）。
-# workspace 既定（0.4）で、egui-proxy の web 分岐が既に引いているため新規パッケージは増えない。
+# workspace 既定（0.4）で、fandhe-render-egui の web 分岐が既に引いているため新規パッケージは増えない。
 wasm-bindgen-futures = { workspace = true }
 console_error_panic_hook = { workspace = true }
 # Phase 11（Issue #875）: `file_picker` モジュールが読み取った `ArrayBuffer` のサイズを

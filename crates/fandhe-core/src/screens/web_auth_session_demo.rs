@@ -4,7 +4,7 @@
 //! （`screens/mod.rs` の `pub mod web_auth_session_demo;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS の認証 UI・デモ認可サーバー・
-//! コールバック URL の検査は `fandhe-egui-proxy` の effect ドライバ（`crates/fandhe-cap-web-auth-session/src/driver.rs`）が
+//! コールバック URL の検査は 機能 crate の effect ドライバ（`crates/fandhe-cap-web-auth-session/src/driver.rs`）が
 //! [`take_request`] で要求を観測して行い、[`finish`] で結果を注入する。全 OS 分の状態・文言は
 //! ここで定義し、後続の OS 別 issue は画面に触らない。
 //!

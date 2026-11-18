@@ -6,7 +6,7 @@
 //! [`camera_capture_effect`]。画面の状態型を参照してよいのは `driver` だけ）、機能宣言（`Cargo.toml` の `[package.metadata.fandhe]`）を 1 つに集める。
 //!
 //! 依存方向は本 crate → `fandhe-core` / `fandhe-runtime` / `fandhe-platform-*` の一方向で、
-//! egui・`fandhe-egui-proxy`・`fandhe-device` には依存しない。呼び出し元は画面カタログ
+//! egui・`fandhe-device` には依存しない。呼び出し元は画面カタログ
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect "camera_capture"` 行）で、
 //! `ProxyApp::update` のフレーム末尾から毎フレーム [`camera_capture_effect`] が呼ばれる。
 //! 画面の状態機械は `fandhe-web-dom` も使うため `fandhe-core` に残している

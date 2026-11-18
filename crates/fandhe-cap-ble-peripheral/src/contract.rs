@@ -4,7 +4,7 @@
 //! 範囲は固定のサービス UUID 1 つと読み取り専用の特性 1 つ（固定の短い文字列を返す）の登録、
 //! ローカル名とサービス UUID のアドバタイズ、読み取り要求の通知だけ。書き込み・通知（購読）・
 //! ペアリング・背景でのアドバタイズは扱わない。UUID・名前・値は各 OS 実装へ定数で渡し、
-//! 利用者・ネットワークから受け取らない。`fandhe-egui-proxy` の effect ドライバが本 trait を呼び、
+//! 利用者・ネットワークから受け取らない。本 crate の effect ドライバ（`driver.rs`）が本 trait を呼び、
 //! 事象は [`OnEvent`] 経由で画面へ反映される。macOS は CoreBluetooth `CBPeripheralManager`
 //! （Issue #778）。iOS は同じ `.m` を共用するが、背景遷移の扱いを含め b-ios（#779）で委譲する。
 //! Windows は WinRT `GattServiceProvider`（Issue #1101）。次の違いだけが macOS・iOS と異なり、

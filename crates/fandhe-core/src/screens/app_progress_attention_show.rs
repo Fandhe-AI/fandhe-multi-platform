@@ -86,7 +86,7 @@ pub enum ProgressOp {
     Clear,
 }
 
-/// 進捗の OS 結果（写像は `fandhe-egui-proxy` 側の責務）。
+/// 進捗の OS 結果（写像は機能 crate 側の責務）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProgressOutcome {
     /// 進捗を OS へ渡した。

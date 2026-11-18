@@ -33,7 +33,7 @@ graph TD
     Core --> State["状態管理・イベント配線<br/>Event / StateStore&lt;S&gt;<br/>ReadFn・WriteFn（型安全アクセサ）"]
     Core --> Render["レイアウト・描画呼び出し<br/>render_headless（ヘッドレス描画マッピング）"]
 
-    Core --> Proxy["描画プロキシ<br/>crates/fandhe-egui-proxy（egui / eframe）"]
+    Core --> Proxy["描画層<br/>crates/fandhe-render-egui（egui / eframe）"]
 
     Proxy --> Desktop["macOS / Windows / Linux<br/>バックエンド: glow (OpenGL)<br/>起動: ネイティブウィンドウ生成"]
     Proxy --> IOS["iOS<br/>バックエンド: wgpu (Metal)<br/>起動: Metal 起動"]
@@ -67,8 +67,8 @@ graph TD
 | 共通コア | 状態管理 | `state::ReadFn<S, T>`/`ReadAccessor`・`state::WriteFn<S, T>`/`WriteAccessor`（関数ポインタ限定の型安全アクセサ、REQ-13） | `counter`, `items`（構造体フィールド直接保持） |
 | 共通コア | イベント → 状態更新 → 再描画判定の配線 | `state::Event` / `state::StateStore<S>`（`StateStore::dispatch` が `click_button` 等の走査ロジックへ委譲） | 未分離（`impl eframe::App` 内に混在） |
 | 共通コア | レイアウト・描画呼び出し | `ui::render_headless`（ヘッドレス描画マッピング。PoC-6 の `render_headless` を公開 API へ昇格） | `egui::CentralPanel` 等への描画コマンド呼び出し |
-| 最適化レイヤー（M2 は暫定的に描画プロキシが代替） | グラフィックスバックエンド選択 | `crates/fandhe-egui-proxy`（`egui`/`eframe` 経由で `glow`/`wgpu` を選択。iOS は Cargo.toml のターゲット分岐、Android は `wgpu::Backends::VULKAN` 固定で arm64-v8a/armeabi-v7a/x86_64 の 3 ABI 対応。iOS 側は TASK-1.3-S1〜S3、Android 側は TASK-1.5-S1〜S3） | macOS/Win/Linux＝`glow`、iOS＝`wgpu`(Metal)、Web＝`glow`(WebGL2)、Android＝`wgpu`(Vulkan)。Web の `WebGlContextOption::WebGl2` 固定・WebGPU 非採用の根拠は `web-rendering-policy.md`（TASK-4.3）参照 |
-| 最適化レイヤー | 起動・イベントループのブートストラップ | ネイティブウィンドウ生成 / `wasm_bindgen` の DOM 連携 / Android は `android_main`（`crates/fandhe-egui-proxy/src/android.rs`、`android-activity` の NativeActivity 方式、TASK-1.5-S2、実機/エミュレータでの起動確認は TASK-1.6） | ネイティブウィンドウ生成／`wasm_bindgen` の DOM 連携（37 行）／`android-activity`（`crates/fandhe-egui-proxy/src/android.rs`） |
+| 最適化レイヤー（M2 は暫定的に描画プロキシが代替） | グラフィックスバックエンド選択 | `crates/fandhe-render-egui`（`egui`/`eframe` 経由で `glow`/`wgpu` を選択。iOS は Cargo.toml のターゲット分岐、Android は `wgpu::Backends::VULKAN` 固定で arm64-v8a/armeabi-v7a/x86_64 の 3 ABI 対応。iOS 側は TASK-1.3-S1〜S3、Android 側は TASK-1.5-S1〜S3） | macOS/Win/Linux＝`glow`、iOS＝`wgpu`(Metal)、Web＝`glow`(WebGL2)、Android＝`wgpu`(Vulkan)。Web の `WebGlContextOption::WebGl2` 固定・WebGPU 非採用の根拠は `web-rendering-policy.md`（TASK-4.3）参照 |
+| 最適化レイヤー | 起動・イベントループのブートストラップ | ネイティブウィンドウ生成 / `wasm_bindgen` の DOM 連携 / Android は `android_main`（`crates/fandhe/src/entry/android.rs`、`android-activity` の NativeActivity 方式、TASK-1.5-S2、実機/エミュレータでの起動確認は TASK-1.6） | ネイティブウィンドウ生成／`wasm_bindgen` の DOM 連携（37 行）／`android-activity`（`crates/fandhe/src/entry/android.rs`） |
 
 ## 4. 依存方向・境界の規約
 

@@ -8,12 +8,12 @@
 //! （`docs/architecture/consumer-app-structure.md` §3・§7、`.claude/rules/coding-rust.md`）。
 //! eframe はこのクレートの中だけで使い、公開 API に eframe の型を出さない
 //! （`eframe::App`・`CreationContext`・`NativeOptions`・`Frame`・`eframe::Result`）。
-//! 端末機能（保存・カメラ・OS 連携）は持たない。端末機能の配線は旧構造の `fandhe-egui-proxy` が
+//! 端末機能（保存・カメラ・OS 連携）は持たない。端末機能の配線は機能 crate の driver と入口（`fandhe` の `src/entry/`）が
 //! 担い、終了・破棄の解放処理だけは [`app::set_teardown_hooks`] で登録して呼ぶ。
 //! 入力欄のヒント（`HostView::set_text_input_hint`）の橋渡しは [`app::set_text_input_hint_hook`] で登録する。
 //!
 //! 全ターゲットで `#![forbid(unsafe_code)]` を維持する。`android_main` の `#[no_mangle]` や
-//! iOS・Windows の FFI は `fandhe-egui-proxy` 側に置く（coding-rust.md の FFI 例外規定）。
+//! iOS・Windows の FFI は `fandhe`（`#[fandhe::main]` と `src/entry/`）・機能 crate 側に置く（coding-rust.md の FFI 例外規定）。
 //!
 //! 仕様との対応: REQ-21 / TASK-21.2（Issue #1164）。
 #![forbid(unsafe_code)]
@@ -21,7 +21,7 @@
 pub mod accessibility;
 pub mod app;
 pub mod font;
-// 旧構造（`fandhe-egui-proxy` の端末機能の配線）専用の暫定の口。#1194 で撤去する。
+// 機能 crate の driver（写真選択・書類スキャン等）が使う口。利用者向けの公開 API ではない。
 #[doc(hidden)]
 pub mod image_store;
 pub mod launch;

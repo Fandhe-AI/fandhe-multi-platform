@@ -7,7 +7,7 @@
 //! 非空の被覆（インクされた画素）が得られることまで確認し、「cmap にはあるが
 //! 実際には描画できない」= tofu の見落としを防ぐ。
 //!
-//! `fandhe-egui-proxy` 側の日本語ラベル（`sample_screen()`）に実在する代表文字
+//! `fandhe-core` の日本語ラベル（`ui::sample` の `sample_screen()`）に実在する代表文字
 //! （ひらがな・カタカナ・常用漢字）を対象にする。
 
 use ab_glyph::{Font, FontRef, ScaleFont};

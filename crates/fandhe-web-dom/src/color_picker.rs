@@ -41,8 +41,8 @@ use fandhe_cap_color_picker::{color_from_input_value, ColorPickerError};
 use fandhe_core::screens::color_picker_pick::ColorPickerOutcome;
 use fandhe_device::eye_dropper::PickedColor;
 
-/// `Result<PickedColor, ColorPickerError>` を画面用の結果へ畳む。egui-proxy の同名処理と同じ写像
-/// （web-dom は egui-proxy に依存できないため重複を許容する）。権限拒否が来ても成功にしない。
+/// `Result<PickedColor, ColorPickerError>` を画面用の結果へ畳む。`fandhe-cap-color-picker` の `driver.rs` の同名処理と同じ写像
+/// （重複を許容する）。権限拒否が来ても成功にしない。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn outcome_from_result(
     result: Result<PickedColor, ColorPickerError>,

@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。実際の共有シート提示・入力検証は
-//! 本モジュール外（`fandhe-egui-proxy` の effect ドライバ、`device/share.rs`）が
+//! 本モジュール外（`fandhe-cap-share-sheet` の effect ドライバ（`driver.rs`）が
 //! [`take_request`] で要求を観測し [`finish_share`] で結果を注入する。
 //!
 //! # 成功・キャンセル・共有先なし・失敗を混同しない理由
@@ -61,7 +61,7 @@ pub enum SharePhase {
 }
 
 /// 共有結果（画面表示用。`fandhe_device::share::ShareOutcome` と 3 腕対応する。
-/// `fandhe-core` は `fandhe-device` に依存しないため、写像は `fandhe-egui-proxy`
+/// `fandhe-core` は `fandhe-device` に依存しないため、写像は機能 crate
 /// 側の責務にする、モジュール doc 参照）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShareOutcome {

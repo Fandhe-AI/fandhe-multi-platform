@@ -3,7 +3,7 @@
 //!
 //! 扱う範囲は「OS にショートカット 1 件を出す側」だけ。選ばれたときの受信は新しく作らず、
 //! 各 OS が URL（ネイティブは `fandhe://shortcut/open-demo`、Web は `web+fandhe://…`）として
-//! 起動・転送し、既存の `url_scheme::UrlInbox` に入る。呼び出し元は `fandhe-egui-proxy` の
+//! 起動・転送し、既存の `url_scheme::UrlInbox` に入る。呼び出し元は
 //! `crates/fandhe-cap-app-shortcuts/src/driver.rs`（画面向け effect ドライバ）と各 OS 実装。
 //!
 //! # 契約（各 OS 実装・呼び出し元が守る不変条件）

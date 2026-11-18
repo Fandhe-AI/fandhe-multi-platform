@@ -5,7 +5,7 @@
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。判定器 `GeofenceTracker` は
 //! `fandhe-device` 側の型のため、本モジュールは持たない。effect ドライバ
-//! （`fandhe-egui-proxy` の `device/geofence.rs`）が判定器を保持し、結果を
+//! （`fandhe-cap-geofence` の `driver.rs`）が判定器を保持し、結果を
 //! 表示用スナップショット [`GeofenceView`] として注入する。ボタンは世代番号
 //! [`GeofenceShowState::register_seq`] を進めるだけで、実際の登録は effect が行う。
 

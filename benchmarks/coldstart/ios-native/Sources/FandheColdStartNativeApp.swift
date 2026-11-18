@@ -6,7 +6,7 @@ import SwiftUI
 /// `crates/fandhe-core/src/ui/sample.rs` の `sample_screen()` と同一の 6 要素
 /// （見出し・テキスト・テキスト入力・ボタン 2 種・リスト）を SwiftUI で再現し、
 /// `scripts/ios/measure-cold-start.sh` が fandhe 実装（wgpu/Metal、
-/// `crates/fandhe-egui-proxy/src/ios.rs` の `ColdStartProbe`）と同一条件で
+/// `crates/fandhe-gallery/src/demo/cold_start.rs` の `ColdStartProbe`）と同一条件で
 /// 起動時間を比較するための計測専用フィクスチャである。
 /// `benchmarks/` 配下に隔離しており、`platforms/` のストア提出パイプラインには
 /// 影響しない（本ファイル冒頭 `project.yml` のコメント参照）。

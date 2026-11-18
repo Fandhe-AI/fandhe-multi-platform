@@ -3,8 +3,8 @@
 //! `fandhe_core::screens::accessibility_prefs_show`（端末依存ゼロ）の画面を
 //! [`super::mount::mount_with_effect`] の effect として駆動する。値の取得は
 //! `matchMedia('(prefers-reduced-motion: reduce)')` と `matchMedia('(prefers-contrast: more)')`。
-//! `AccessibilityPrefs` トレイトは経由しない（トレイト doc どおり）。`fandhe-egui-proxy` の
-//! wasm canvas 経路は対象外で、共有するのは `fandhe_cap_accessibility_prefs::READ_INTERVAL` だけ。
+//! `AccessibilityPrefs` トレイトは経由しない（トレイト doc どおり）。egui の
+//! wasm canvas 経路（`fandhe-render-egui`）は対象外で、共有するのは `fandhe_cap_accessibility_prefs::READ_INTERVAL` だけ。
 //!
 //! # 方式
 //!

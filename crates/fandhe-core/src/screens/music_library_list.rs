@@ -5,8 +5,8 @@
 //! （`screens/mod.rs` の `pub mod music_library_list;` と対）。再生・アートワーク・総件数は扱わない。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
-//! 「新規画面ファイルの置き場」節）。OS 呼び出しは `fandhe-egui-proxy` の
-//! `device/music_library.rs` が [`take_request`] で要求を観測し [`finish_list`] で結果を注入する
+//! 「新規画面ファイルの置き場」節）。OS 呼び出しは
+//! `crates/fandhe-cap-music-library/src/driver.rs` が [`take_request`] で要求を観測し [`finish_list`] で結果を注入する
 //! （`pedometer_read.rs` と同型の状態機械）。
 //!
 //! 全対象 OS（macOS / Windows / iOS / Android）の文言・状態をここで確定済みで、後続の OS 実装

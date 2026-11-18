@@ -5,7 +5,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS から届いた URL の検査・保持は
 //! `fandhe_device::url_scheme`、スナップショットを本モジュールへ注入するのは
-//! `fandhe-egui-proxy` の effect ドライバ（`crates/fandhe-cap-url-scheme/src/driver.rs`）の責務。
+//! 機能 crate の effect ドライバ（`crates/fandhe-cap-url-scheme/src/driver.rs`）の責務。
 //!
 //! Issue #1216（Windows）: Windows にはアプリ側の宣言で scheme を登録する手段がないため、
 //! 画面の操作でレジストリ登録・解除を行う（`registrable` が立った OS だけボタンを出す。

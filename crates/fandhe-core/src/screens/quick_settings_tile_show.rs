@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod quick_settings_tile_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。回数の読み出しは
-//! `fandhe_device::quick_settings_tile`、結果を本モジュールへ注入するのは `fandhe-egui-proxy` の
+//! `fandhe_device::quick_settings_tile`、結果を本モジュールへ注入するのは 機能 crate の
 //! effect ドライバ（`device/quick_settings_tile.rs`）の責務。ドライバは読み出しを高々 1 件に
 //! 絞り、世代番号つきで [`finish_read`] へ届ける。
 //!

@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。実際の OS 呼び出しは本モジュール外
-//! （`fandhe-egui-proxy` の effect ドライバ、`device/background_task.rs`）が
+//! （`fandhe-cap-background-task` の effect ドライバ（`driver.rs`）が
 //! [`take_request`] で要求を観測し [`finish_action`] で結果を注入する
 //! （`notification_send.rs` と同型の状態機械）。
 //!
@@ -65,7 +65,7 @@ pub enum Phase {
 }
 
 /// 予約状態の表示用写像（`fandhe_device::background_task::ScheduleState` と対応する。
-/// `fandhe-core` は `fandhe-device` に依存しないため、写像は `fandhe-egui-proxy` 側の
+/// `fandhe-core` は `fandhe-device` に依存しないため、写像は機能 crate 側の
 /// 責務にする、モジュール doc 参照）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ScheduleView {

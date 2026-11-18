@@ -61,7 +61,7 @@
 //! 途切れたらセッション終了とみなす監視タイマー（[`handle_watchdog`]）を
 //! 別途持つ。詳細はそのドキュメンテーションコメントを参照。
 //!
-//! # 世代管理（契約表 2、`fandhe-egui-proxy::device::drag_drop` と同じ考え方）
+//! # 世代管理（契約表 2、`fandhe_cap_drag_drop::driver` と同じ考え方）
 //!
 //! `drop` イベントの同期ハンドラ内でのみ [`Entry::generation`] を書き換える
 //! （`begin_drop_read` を呼ぶのもこのハンドラ）ため、ローカルの世代カウンタは
@@ -90,7 +90,7 @@
 use fandhe_core::screens::drag_drop::DropItem;
 use fandhe_device::drag_drop::{DropError, MAX_FILE_BYTES};
 
-/// 名前が取れないときの表示名（`fandhe-egui-proxy::device::drag_drop::display_name` と
+/// 名前が取れないときの表示名（`fandhe_cap_drag_drop::driver::display_name` と
 /// 同じ文言。フルパスは扱わないため衝突の心配はない、security.md A09）。
 // native ビルドでは `mod web`（唯一の呼び出し元）が存在しないため未使用警告が出る。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -127,7 +127,7 @@ pub(crate) fn check_len(len: usize) -> Result<usize, DropError> {
 }
 
 /// [`fandhe_device::drag_drop::MAX_DROP_FILES`] 超過分を末尾へ 1 行（
-/// `DropError::TooMany`）へ集約する（`fandhe-egui-proxy::device::drag_drop::read_all`
+/// `DropError::TooMany`）へ集約する（`fandhe_cap_drag_drop::driver::read_all`
 /// の集約と同じ形。置き場の共通クレートが無いため複製する、実装計画 §9 スコープ外）。
 /// `overflow == 0` なら何もしない。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]

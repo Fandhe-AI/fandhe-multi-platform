@@ -85,14 +85,14 @@
 //! - `children`（Issue #739）と `content_nodes`（PR #792 codex-review 指摘 A）:
 //!   [`Self::with_content`] で設定した `content` スロットは開状態のときだけ
 //!   `content(state)` を返す `Node<S>` 列である。表示用に常時この列を取得したい
-//!   呼び出し（egui-proxy 側の描画）は [`Self::content_nodes`] を使う。一方
+//!   呼び出し（`fandhe-render-egui` 側の描画）は [`Self::content_nodes`] を使う。一方
 //!   `Widget::children` は走査ツリー（`Node::expand_children` /
 //!   `Screen::visit_node_expanded` / `ui::event::resolve_node_at`）双方の入口であり、
 //!   ここが子を返すとイベント解決（`resolve_node_at` 経由のクリック判定）も子へ
 //!   降下してしまう。そのため `children` は `interaction.disabled` の間は常に空を
 //!   返し、`content_nodes` へは委譲しない（「disabled 中はすべての入力を無視する」
 //!   契約を子ノードの入力にも及ぼすための実装。子の表示自体は `content_nodes` 経由で
-//!   維持される想定 — egui-proxy が `add_enabled_ui(false)` 等で描画するのは表示側の
+//!   維持される想定 — `fandhe-render-egui` が `add_enabled_ui(false)` 等で描画するのは表示側の
 //!   責務）。上記の [`Self::has_content_slot`]（フォーカス巡回対象に含めるかの
 //!   真偽値のみ）とは別物であり、両者は独立して設定できる。
 //!
@@ -407,7 +407,7 @@ impl<S> DialogWidget<S> {
     }
 
     /// 表示用に子ノード列を返す（PR #792 codex-review 指摘 A）。`disabled` は見ない
-    /// （表示は維持し、egui-proxy が `add_enabled_ui(false)` 等で disabled 見た目を
+    /// （表示は維持し、`fandhe-render-egui` が `add_enabled_ui(false)` 等で disabled 見た目を
     /// 描く用途）。開閉判定は [`Widget::children`] と同じ基準（`open_source` があれば
     /// それを直接呼び、なければ `cached_open`）。閉状態・`content` 未設定なら空。
     pub fn content_nodes(&self, state: &S) -> Vec<Node<S>> {
@@ -1478,7 +1478,7 @@ mod tests {
     fn children_is_empty_when_disabled_but_content_nodes_still_returns_content() {
         // PR #792 codex-review 指摘 A: disabled 中は children を空にして
         // resolve_node_at 経由の入力解決から子を除外する。表示用の content_nodes は
-        // disabled を見ないため、egui-proxy 側で見た目だけ維持できる。
+        // disabled を見ないため、`fandhe-render-egui` 側で見た目だけ維持できる。
         let mut dialog = make_dynamic(true).with_content(expand_content);
         let state = FormState {
             dialog_open: true,

@@ -60,7 +60,7 @@
       "api": "`DeviceOrientationEvent`（`beta`/`gamma`）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/deviceorientation_event",
       "safari": "対応（ただし上記 `requestPermission()` 未配線のため許可ボタンが無く、Safari では「取得できない」表示になる）",
-      "note": "`DeviceOrientationEvent` の `beta`/`gamma`（度）から重力ベクトル相当の傾きへ変換し、`screen.orientation.angle` で画面回転を補正する（`fandhe-egui-proxy::device::tilt::gravity_to_tilt` と同じ回転表）。null（センサ無し環境で 1 回だけ出る）・非有限値・API 不在・非 secure context・3 秒間無応答は「取得できない」（`SensorStatus::Unavailable`）にし、0 の傾きを成功値として出さない。初期表示は「取得しています」（`Waiting`）。`document.hidden`・`pagehide` でリスナーを外し `Waiting` に戻す（最後の値を使い続けない）、`pageshow`・可視化復帰で再登録する。iOS Safari の `requestPermission()`（ユーザー操作起因の許可ボタン）は未配線（out-of-scope-tracking.md 対象）。横持ちでの軸の向きは実機未確認（人間担当）",
+      "note": "`DeviceOrientationEvent` の `beta`/`gamma`（度）から重力ベクトル相当の傾きへ変換し、`screen.orientation.angle` で画面回転を補正する（`fandhe_cap_tilt_motion::driver::gravity_to_tilt` と同じ回転表）。null（センサ無し環境で 1 回だけ出る）・非有限値・API 不在・非 secure context・3 秒間無応答は「取得できない」（`SensorStatus::Unavailable`）にし、0 の傾きを成功値として出さない。初期表示は「取得しています」（`Waiting`）。`document.hidden`・`pagehide` でリスナーを外し `Waiting` に戻す（最後の値を使い続けない）、`pageshow`・可視化復帰で再登録する。iOS Safari の `requestPermission()`（ユーザー操作起因の許可ボタン）は未配線（out-of-scope-tracking.md 対象）。横持ちでの軸の向きは実機未確認（人間担当）",
       "sourceName": [
         "センサ（傾き）"
       ],
@@ -68,5 +68,5 @@
       "impl": "`crates/fandhe-web-dom/src/tilt.rs`（`tilt_ball_effect`）+ `crates/fandhe-web-dom/src/demo.rs`（`mount_tilt_ball_screen`）+ `crates/fandhe-web-dom/src/dom_tree.rs`（Canvas の円描画）+ `crates/fandhe-core/src/screens/tilt_ball.rs`（`SensorStatus`）、Issue 旧#989"
     }
   },
-  "note": "Issue 旧#827（closed）。Android は `SensorManager`（`TYPE_GRAVITY`）→ JNI（旧#831）、iOS は `CMMotionManager` → `extern \"C\"`（旧#832）、両方とも実機で確認済み（旧#827 クローズコメント）。macOS/Windows は `DummyMotion`（`motion.rs`、wasm32 除外 cfg なし＝Web でもコンパイル対象）が画面下部スライダーで値を差し替える代替 UI（`tilt_ball.rs`）。Web は Issue 旧#989 で `DeviceOrientationEvent` を直接配線した（`fandhe-egui-proxy` の `DummyMotion`/`registry.rs` の wasm32 除外は egui 経路専用のままで、Web はこれを経由しない `fandhe-web-dom::tilt` が別経路として実装済み）"
+  "note": "Issue 旧#827（closed）。Android は `SensorManager`（`TYPE_GRAVITY`）→ JNI（旧#831）、iOS は `CMMotionManager` → `extern \"C\"`（旧#832）、両方とも実機で確認済み（旧#827 クローズコメント）。macOS/Windows は `DummyMotion`（`motion.rs`、wasm32 除外 cfg なし＝Web でもコンパイル対象）が画面下部スライダーで値を差し替える代替 UI（`tilt_ball.rs`）。Web は Issue 旧#989 で `DeviceOrientationEvent` を直接配線した（`fandhe-cap-tilt-motion` の `DummyMotion`・`fandhe-gallery` の `registry.rs` の wasm32 除外は egui 経路専用のままで、Web はこれを経由しない `fandhe-web-dom::tilt` が別経路として実装済み）"
 }

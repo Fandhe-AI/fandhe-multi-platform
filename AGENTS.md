@@ -44,7 +44,7 @@ Codex code review は既定で P0/P1 を報告・ブロック対象とするた�
   根拠にしない
 - **P0 は実証を伴う**: 「契約に反する可能性がある」「弱まりうる」は P0 にしない
 - **端末機能の並行性は守備範囲で判定する**: 端末機能の橋渡し
-  （`crates/fandhe-egui-proxy/src/device/`・`crates/fandhe-web-dom/` 等）が守るのは
+  （機能 crate `crates/fandhe-cap-*/`・`crates/fandhe-web-dom/` 等）が守るのは
   「1 画面・1 プロセス内での要求と完了の順序」と「失敗を成功と表示しないこと」
   （[device-bridge-contracts.md](.claude/rules/device-bridge-contracts.md)）。
   次の重なりで**表示・参考値の状態が一時的に食い違うだけ**の指摘は、base の trait
@@ -96,7 +96,7 @@ Codex code review は既定で P0/P1 を報告・ブロック対象とするた�
 
 - **クレート責務境界の侵犯**: 共通コア（`fandhe-core`。プラットフォーム非依存）→
   プラットフォーム統合レイヤ（`fandhe-swiftui-bridge` / `fandhe-web-dom` /
-  `fandhe-winit-ime` / `fandhe-egui-proxy`）→ 配布プロジェクト（`platforms/`）の
+  `fandhe-winit-ime` / `fandhe-render-egui` / 機能 crate `fandhe-cap-*`）→ 配布プロジェクト（`platforms/`）の
   層構造に反する依存方向・責務の混入（例: fandhe-core への OS 固有 API・FFI の
   持ち込み）: **P1**
 - **`docs/spec/` 準拠**: 仕様（MoSCoW 要件 `04-requirements.md`・タスク分解

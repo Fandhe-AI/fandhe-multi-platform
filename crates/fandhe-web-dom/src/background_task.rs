@@ -145,8 +145,8 @@ pub(crate) fn to_device_error(e: BackgroundTaskError) -> crate::background_downl
 }
 
 /// `BackgroundTaskError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
-/// それ以外は `Display` の文言のみを転送する（`fandhe-egui-proxy::device::
-/// background_task::to_message` と同じ文言で揃える、security.md A09）。
+/// それ以外は `Display` の文言のみを転送する（`fandhe_cap_background_task::driver::
+/// to_message` と同じ文言で揃える、security.md A09）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn to_message(e: BackgroundTaskError) -> String {
     match e {
@@ -194,7 +194,7 @@ fn to_run_result_view(result: RunResult) -> RunResultView {
 }
 
 /// 最後の実行記録の読み取り結果を画面表示用の [`LastRunView`] へ写す
-/// （`fandhe-egui-proxy::device::background_task::to_last_run_view` と同じ 3 値の
+/// （`fandhe_cap_background_task::driver::to_last_run_view` と同じ 3 値の
 /// 区別。壊れた値を「未実行」として成功へ畳まない、`device-bridge-contracts.md`
 /// 「6. 嘘の成功」）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]

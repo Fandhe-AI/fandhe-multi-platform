@@ -4,7 +4,7 @@
 //! [`super::mount::mount_with_effect`] の effect として観測し、Battery Status API
 //! （`navigator.getBattery()`）の値を `finish_read` へ書き戻す。`fandhe-device` の
 //! `PowerState` トレイトは経由しない（`fandhe-device/src/power_state.rs` の module doc どおり、
-//! Web は本クレートの担当）。`fandhe-egui-proxy` の wasm canvas 経路は対象外。
+//! Web は本クレートの担当）。egui の wasm canvas 経路（`fandhe-render-egui`）は対象外。
 //!
 //! # 読み取り方
 //!

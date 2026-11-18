@@ -19,7 +19,7 @@ use crate::release_hooks;
 pub type RenderTrigger = Rc<dyn Fn() -> Result<(), JsValue>>;
 
 /// 再描画の直後に呼ばれる effect。状態を直接は変更できず、結果の書き戻しは
-/// [`Applier::apply`] を通す（`fandhe-egui-proxy::app::EffectFn` と同じ形）。
+/// [`Applier::apply`] を通す（`fandhe-runtime::EffectFn` と同じ形）。
 pub type WebEffect<S> = fn(&S, &Applier<S>);
 
 /// effect が状態を更新して再描画を起こすためのハンドル。

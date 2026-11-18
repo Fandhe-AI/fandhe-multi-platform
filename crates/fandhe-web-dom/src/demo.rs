@@ -5,8 +5,8 @@
 //! `mount` へ渡す呼び出し元（本来はアプリ層、TASK-4.4-S3 の `RenderMode` 選択導線経由）が
 //! まだ存在しないため、`scripts/web/verify-dom-a11y.sh`（`Accessibility.getFullAXTree` 相当の
 //! 確認）が使う最小のエントリポイントをここに用意する。**検証専用**であり、正式な
-//! 選択導線（S3、`fandhe-core::ui::RenderMode`）とは無関係（`fandhe-egui-proxy` の
-//! `web.rs` とは別の確認用エントリ）。
+//! 選択導線（S3、`fandhe-core::ui::RenderMode`）とは無関係（`fandhe` の
+//! `src/entry/web.rs` とは別の確認用エントリ）。
 //!
 //! `fandhe_core::sample_screen()` は `SampleState::default()` だと `items` が空になり、
 //! `<ul>` に `<li>` が 1 つも現れず AX ツリーで `listitem` ロールを観測できない

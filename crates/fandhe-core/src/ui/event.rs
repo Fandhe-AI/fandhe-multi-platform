@@ -16,7 +16,7 @@
 //! 生成する子ノードは `Screen::iter()` に現れないため、ラベル一致の非展開走査では
 //! 発見できない。[`click_button_at`] はツリー上の位置（`path: &[usize]`）を降下して
 //! 対象ノードへ到達する解決経路を提供する。`path` の意味論はレンダラ側
-//! （`fandhe-egui-proxy::render_node` / `render_virtual_list`）が構築する
+//! （`fandhe-render-egui::render_node` / `render_virtual_list`）が構築する
 //! `path` / `child_path` と一致させている: `path[0]` はトップレベルノードの挿入順
 //! index、以降のセグメントは直前ノードが `List` なら `expand(state)` の列挙 index、
 //! `VirtualList` なら絶対項目 index、`Widget`（[`super::widget::Widget`] 実装、

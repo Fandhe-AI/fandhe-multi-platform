@@ -3,7 +3,7 @@
 # エミュレータでの起動確認スクリプト。
 #
 # 位置づけ: TASK-1.5（#43〜#46）が確立した cargo-ndk クロスビルド・
-# GameActivity 方式の Vulkan バックエンド（crates/fandhe-egui-proxy/src/android.rs、
+# GameActivity 方式の Vulkan バックエンド（crates/fandhe/src/entry/android.rs、
 # TASK-9.3-S1 / #242 で NativeActivity から確定）を、実機/エミュレータへ実際に
 # インストール・起動し、REQ-1 受け入れ基準
 # 「Android NDK・cargo-ndk を用いたクロスビルドが成立し、実機またはエミュレータで
@@ -244,7 +244,7 @@ log "  - プロセス生存確認 OK（pid=${pid}）"
 # `logcat -c`（上記フェーズ 5）で当該起動以降のログのみに絞ってあるため、
 # 無関係な既存プロセスの過去のクラッシュ痕跡を拾わない。`--pid` は minSdk 24 で
 # 対応済みの adb logcat オプションのため、当該 pid のログのみへさらに絞る。
-# Vulkan/NDK バックエンド（fandhe-egui-proxy/src/android.rs）で起こりやすいネイティブ
+# Vulkan/NDK バックエンド（crates/fandhe-render-egui/src/launch.rs の Android 経路）で起こりやすいネイティブ
 # クラッシュ（SIGSEGV 等）は "abort" という語を含まない tombstone 行になりうるため、
 # debuggerd が出力する "Fatal signal" 行・代表的なシグナル名も検出対象に含める
 # （直前の (a) プロセス生存確認が既にプロセス終了ケースの大半をカバーしているため、

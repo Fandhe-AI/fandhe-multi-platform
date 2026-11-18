@@ -4,7 +4,7 @@
 //! 画面に出す」ことだけ。権限を拒否された後に利用者を OS の設定画面へ案内する操作で、任意の
 //! URL・Intent・URI を外から渡す経路は作らない。頁は [`SettingsPage`] の 2 値に限るため、入力不正
 //! （`InvalidInput`）の余地は型で無くしてある。画面（`fandhe_core::screens::open_system_settings_show`、
-//! 端末依存ゼロ）へは `fandhe-egui-proxy` の effect ドライバが写像する。
+//! 端末依存ゼロ）へは 本 crate の effect ドライバ（`driver.rs`）が写像する。
 //!
 //! # 結果の種類（[`OpenSettingsOutcome`]）
 //!

@@ -11,7 +11,7 @@ publish = false
 # TASK-21.3（Issue #1171）: 利用者が使う機能だけを依存に足せる構造の先行機能（document-scan）。
 # 契約・effect ドライバ・iOS の FFI と ObjC・Android の JNI と Java・機能宣言をこの crate に持つ。
 # 依存は fandhe-core / fandhe-runtime / fandhe-platform-* と、表示用の復号の共有部品（fandhe-device の feature `display-decode`）のみで、
-# egui・winit・fandhe-egui-proxy には依存しない（docs/architecture/consumer-app-structure.md §7）。
+# egui・winit には依存しない（docs/architecture/consumer-app-structure.md §7）。
 
 # 機能宣言（docs/architecture/capability-declaration.md）。`cargo fandhe check` とテストが検証する。
 [package.metadata.fandhe]

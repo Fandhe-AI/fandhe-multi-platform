@@ -43,7 +43,7 @@
       "status": "done",
       "api": "Translator API（`Translator.availability()` / `Translator.create()` / `translate()` / `destroy()`）。Chrome 138+ / Edge 148+ のデスクトップで flag 不要。Language Detector API は使わない（元言語は ja 固定）",
       "url": "https://developer.chrome.com/docs/ai/translator-api",
-      "note": "固定の日本語文を ja → en に 1 回訳す。`available` のときだけ `create()` し、`downloadable` / `downloading` は未取得として失敗にする（ダウンロードを始めない）。期限は 30 秒（`performance.now()` が起点）。`pagehide` は中断。全経路で `destroy()`。Android 版 Chrome・Safari・Firefox は `Translator` が無く使えない。守る範囲は 1 マウント内の順序・嘘の成功の禁止・資源の解放で、ブラウザごとの訳文の差・所要時間・期限後もブラウザ側の処理が走り切ること・複数タブ・egui-proxy の wasm canvas 経路は守らない。実ブラウザの確認は #529 で行う",
+      "note": "固定の日本語文を ja → en に 1 回訳す。`available` のときだけ `create()` し、`downloadable` / `downloading` は未取得として失敗にする（ダウンロードを始めない）。期限は 30 秒（`performance.now()` が起点）。`pagehide` は中断。全経路で `destroy()`。Android 版 Chrome・Safari・Firefox は `Translator` が無く使えない。守る範囲は 1 マウント内の順序・嘘の成功の禁止・資源の解放で、ブラウザごとの訳文の差・所要時間・期限後もブラウザ側の処理が走り切ること・複数タブ・egui の wasm canvas 経路（`fandhe-render-egui`）は守らない。実ブラウザの確認は #529 で行う",
       "safari": "非対応（`Translator` が無いので Unsupported）",
       "detail": "できている（実ブラウザ確認待ち）",
       "implStatus": "実ブラウザでの確認は確認用 issue #529 で追う",

@@ -241,7 +241,7 @@
   発火タイミングの向きが異なることを許容する必要がある。
 - **緩和策**: 結合テスト（`crates/fandhe-winit-ime/tests/linux_japanese_input.rs`、
   7 シナリオ）で既存状態モデルが変更なく許容できることを確認済み。
-- egui プロキシ経路（`fandhe-egui-proxy` の `text_edit_singleline`）は、fcitx5 既定設定の
+- egui 経路（`fandhe-render-egui` の `text_edit_singleline`）は、fcitx5 既定設定の
   XIM（`PreeditNothing`）で `Preedit` が一切届かないと `egui::TextEdit` 側の
   `ime_cursor_range`（`Enabled`/`Preedit` 受信時のみ更新）が既定値のまま残り、カーソルが
   先頭以外のときに `Commit` が無言で破棄されていたが（Issue #616 症状 B）、`Commit` 直前へ
@@ -322,7 +322,7 @@
 
 ### 3.14 Linux X11（XIM）: preedit のインライン表示は IM サーバーの on-the-spot 広告に依存
 
-- **内容**: デスクトップ版（eframe 分岐、`fandhe-egui-proxy`）の Linux X11 経路は
+- **内容**: デスクトップ版（eframe 分岐、`fandhe-render-egui`）の Linux X11 経路は
   `winit → egui-winit → egui::TextEdit` を直結しており、`fandhe-winit-ime`（§3.7 が対象とする
   クレート）は経路上にない。winit の X11 IME 実装（`x11/ime/input_method.rs`）は IM サーバーが
   広告するスタイル一覧から `XIMPreeditCallbacks|XIMStatusNothing`（on-the-spot）を優先し、
@@ -337,7 +337,7 @@
   最初の `Ime::Preedit(_, Some)` 受信時にのみ `egui::ImeEvent::Enabled` を合成する。
   egui-0.33.3（`src/widgets/text_edit/builder.rs` L1067-1106）の `TextEdit` 状態は
   `Enabled`/`Preedit` でのみ `ime_cursor_range` を更新する。Issue #616 実測、Issue #662
-  実装時の回帰テスト（`crates/fandhe-egui-proxy/tests/ime_preedit_render.rs`）で固定。
+  実装時の回帰テスト（`crates/fandhe-render-egui/tests/ime_preedit_render.rs`）で固定。
 - **影響**: 既定設定の fcitx5 + winit の組み合わせでは常に `PreeditNothing` へ後退し、
   症状 A が構造的に発生する。加えて egui-winit の Linux 特例により `Enabled` も合成されず
   `ime_cursor_range` が既定値（index 0）のまま残るため、カーソルが index 0 以外での

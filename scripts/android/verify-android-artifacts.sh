@@ -10,8 +10,8 @@
 # 二重管理を解消することが望ましい（out-of-scope-tracking.md に記録。TASK-11.2-S4
 # 時点でも #44/#45 は既にマージ済みだが、本二重管理自体は未解消のまま残っている）。
 #
-# TASK-11.2-S4（REQ-11 / M3、Issue #228）: fandhe-egui-proxy（cdylib、TASK-1.5-S2）の
-# .so 検証を追加した（下記 PACKAGES 参照）。fandhe-core は rlib のみ、fandhe-egui-proxy は
+# TASK-11.2-S4（REQ-11 / M3、Issue #228）: fandhe-gallery（cdylib、TASK-1.5-S2）の
+# .so 検証を追加した（下記 PACKAGES 参照）。fandhe-core は rlib のみ、fandhe-gallery は
 # 3 ABI 分の libfandhe_gallery.so を検証する。cargo-ndk 呼び出しは package ごとに
 # 対象成果物種別（rlib / so）が異なるため、本スクリプトの単一ループで両方を処理する
 # （新規スクリプトを並置しない）。
@@ -129,7 +129,7 @@ cd "${repo_root}"
 # 一切触れないディレクトリのため、cargo の uplift 挙動（他ステップの呼び出し
 # 内容に左右される）に依存せず、本スクリプト自身が要求した `-p` 対象の
 # ビルド結果のみが確実に uplift された状態で存在する（ローカル再現で確認済み）。
-# 初回実行時は実コンパイルが発生する分コストが増えるが（fandhe-egui-proxy は
+# 初回実行時は実コンパイルが発生する分コストが増えるが（fandhe-gallery は
 # eframe/egui 等の重い依存を含むため数分規模）、本スクリプトを繰り返し実行する
 # 限りは `target/android-verify` 自体がキャッシュとして機能し、2 回目以降は
 # 通常の fresh 判定で高速に完了する（冪等性は保たれる）。
@@ -137,7 +137,7 @@ verify_target_dir="${repo_root}/target/android-verify"
 
 # --- cargo-ndk 呼び出し（全 package を単一呼び出しで --lib ビルド） ---
 # 3 ABI を一括ビルド（-t 複数指定）し、その後 triple ごとに成果物の存在を検証する。
-# `fandhe-core` と `fandhe-egui-proxy` を同一 cargo 呼び出しの `-p` root unit として
+# `fandhe-core` と `fandhe-gallery` を同一 cargo 呼び出しの `-p` root unit として
 # 一緒にビルドする（package ごとに呼び出しを分けない。上記 `--target-dir` 隔離が
 # 主対策のため必須ではなくなったが、cargo-ndk への呼び出し回数を減らせるため維持する）。
 declare -a cargo_ndk_args=()
@@ -186,7 +186,7 @@ done
 
 # --- 固定シンボルの書き出し検証（Issue #1165） ---
 # `android_main`（android-activity が探す）と `Java_com_fandhe_platform_*`（JNI）は、cdylib を作る
-# fandhe-gallery の依存 rlib（fandhe-egui-proxy・fandhe-platform-android）が持つ。rlib のシンボルが
+# fandhe-gallery の依存 rlib（機能 crate・fandhe-platform-android）が持つ。rlib のシンボルが
 # cdylib へ書き出されないと、起動時に UnsatisfiedLinkError / android_main 未解決で落ちるため、
 # ビルドが通ってもここで定義の有無を確かめる。
 llvm_nm="$(ls "${ANDROID_NDK_HOME}"/toolchains/llvm/prebuilt/*/bin/llvm-nm 2>/dev/null | head -n 1)"

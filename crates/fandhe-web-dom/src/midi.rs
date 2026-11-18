@@ -4,7 +4,7 @@
 //! effect として駆動する。`take_command` で要求を観測し、Web MIDI API（`navigator.requestMIDIAccess`）
 //! の接続中の入力へ `onmidimessage` を付けて、届いたバイト列を `fandhe_cap_midi::MidiParser` で
 //! ノートオン / オフにし、`apply_update` で書き戻す。`fandhe-device` の `MidiInput` trait は通らない。
-//! `fandhe-egui-proxy` の wasm canvas 経路は対象外（従来どおり `Unsupported`）。
+//! egui の wasm canvas 経路（`fandhe-render-egui`）は対象外（従来どおり `Unsupported`）。
 //!
 //! # Reflect を使う理由
 //!
@@ -51,7 +51,7 @@
 use fandhe_cap_midi::{MidiParser, NoteEvent};
 use fandhe_core::screens::midi_show::{MidiFailure, MidiNoteRow};
 
-/// 開始失敗の固定文言（`fandhe-egui-proxy` のドライバと同じ）。
+/// 開始失敗の固定文言（`fandhe-cap-midi` の effect ドライバと同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const START_FAILED: &str = "MIDI の開始";
 

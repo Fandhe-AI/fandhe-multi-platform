@@ -69,7 +69,7 @@ pub fn select_prev(state: &mut AppState) {
 
 /// `state.route` に応じて表示すべき画面を返す。
 ///
-/// プラットフォームレイヤ（`fandhe-egui-proxy` 等）が状態更新のたびに呼び直し、
+/// 描画層（`fandhe-render-egui` 等）が状態更新のたびに呼び直し、
 /// 返された `Screen<AppState>` を描画する想定の入口関数。各画面本体の実装は
 /// [`crate::screens`] の各サブモジュールを参照。
 pub fn current_screen(state: &AppState) -> Screen<AppState> {

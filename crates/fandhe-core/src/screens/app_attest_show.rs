@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod app_attest_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import せず、時計も持たない）。OS 呼び出しと期限は
-//! 本モジュール外（`fandhe-egui-proxy` の `device/app_attest.rs`）が [`take_request`] で要求を
+//! 本モジュール外（`fandhe-cap-app-attest` の `driver.rs`）が [`take_request`] で要求を
 //! 観測し、[`mark_running`]・[`finish_attest`] で状態を進める。全対象 OS の分の状態・文言は
 //! ここで定義するため、OS 別の子 issue はこのファイルを触らない。iOS 再開時の
 //! `serverUnavailable` は対応表で deferred のため、今は [`AttestFailure::Failed`] に寄せる。

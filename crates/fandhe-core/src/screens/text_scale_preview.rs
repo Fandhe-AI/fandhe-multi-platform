@@ -5,8 +5,8 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。OS 値の取得・実描画への倍率反映は
-//! 本モジュール外（`fandhe-egui-proxy` の effect ドライバ、
-//! `device/text_scale.rs`）が [`OsScale::Unread`] を観測し [`finish_read`] で
+//! 本モジュール外（`fandhe-cap-dynamic-type` の
+//! `driver.rs`）が [`OsScale::Unread`] を観測し [`finish_read`] で
 //! 結果を注入する（`http_fetch` の Requested/Idle 型状態機械と同型）。
 //!
 //! 見出し・本文・注釈のサイズ差を持つ描画プリミティブは DSL に無く、親 #911 で
@@ -30,7 +30,7 @@ const SLIDER_ID: WidgetId = WidgetId::from_raw(1);
 
 /// 倍率の下限（`fandhe_device::text_scale::SCALE_MIN` と同値。`fandhe-core` は
 /// `fandhe-device` に依存できないため複製する。同値であることはユニットテスト
-/// （`fandhe-egui-proxy` 側の `scale_range_constants_match_device_crate`）で固定する）。
+/// （`fandhe-cap-dynamic-type` の `driver.rs` の `scale_range_constants_match_device_crate`）で固定する）。
 pub const SCALE_MIN: f32 = 0.5;
 /// 倍率の上限（`fandhe_device::text_scale::SCALE_MAX` と同値）。
 pub const SCALE_MAX: f32 = 3.0;
@@ -54,7 +54,7 @@ pub enum OsScale {
     Failed(String),
 }
 
-/// [`finish_read`] へ渡す結果（`fandhe-egui-proxy` 側が `DeviceError` から写像する。
+/// [`finish_read`] へ渡す結果（`fandhe-cap-dynamic-type` の effect ドライバが `DeviceError` から写像する。
 /// `fandhe-core` は `fandhe-device` に依存しないため、両者の型を橋渡しするのは
 /// 呼び出し元の責務、`device.rs::to_note_storage_error` と同じ判断）。
 #[derive(Debug, Clone, PartialEq)]

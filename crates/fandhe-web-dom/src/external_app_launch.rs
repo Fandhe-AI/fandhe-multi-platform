@@ -6,7 +6,7 @@
 //! （`PHONE_URI` / `GEO_URI`）だけで、外部入力から URL を組み立てる経路は無い。
 //! `ExternalAppLaunch` トレイトは経由しない（`compose_mail_sms` の Web 経路と同じ構成）。
 //! `fandhe-device` の「Web: `HandedOff` しか返せない」は本モジュールの話で、
-//! `fandhe-egui-proxy` の wasm canvas 経路（`Unsupported` のまま）とは別経路。
+//! egui の wasm canvas 経路（`fandhe-render-egui`）（`Unsupported` のまま）とは別経路。
 //!
 //! # 結果の写像
 //!

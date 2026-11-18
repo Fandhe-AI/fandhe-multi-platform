@@ -2,7 +2,7 @@
 //!
 //! 機能 crate が egui に依存しないよう、「別スレッドの完了結果を UI スレッドへ渡し、
 //! 描画ループを起こす」責務だけをレンダラ非依存で切り出した crate。依存方向は
-//! `fandhe-egui-proxy`（レンダラ実装）→ 本 crate → `fandhe-core` の一方向で、
+//! `fandhe-render-egui`（レンダラ実装）→ 本 crate → `fandhe-core` の一方向で、
 //! 本 crate は egui / eframe / winit を参照しない。
 //!
 //! - レンダラ差し替えの契約は [`Renderer`]（1 フレーム分の画面描画）。描画命令
@@ -38,7 +38,7 @@ pub use host_view::{
 
 /// レンダラ差し替えの契約。1 フレーム分の `screen` を描き、UI イベントを `store.dispatch` へ流す。
 ///
-/// 実装は `fandhe-egui-proxy` の `EguiRenderer` など。`PaintCommand`（`Widget::paint` が返す
+/// 実装は `fandhe-render-egui` の `EguiRenderer` など。`PaintCommand`（`Widget::paint` が返す
 /// 描画命令）をどこまで使うかは実装に任せる。`fandhe_core::RendererLifecycle`（Web の
 /// canvas / DOM の排他起動）とは別物。
 ///

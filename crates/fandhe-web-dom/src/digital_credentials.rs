@@ -26,7 +26,7 @@ use fandhe_cap_digital_credentials::CredentialOutcome;
 use fandhe_cap_digital_credentials::DigitalCredentialsError;
 use fandhe_core::screens::digital_credentials::CoreOutcome;
 
-/// 失敗時の固定文言。内部名を含めない（`fandhe-egui-proxy` の文言と揃える）。
+/// 失敗時の固定文言。内部名を含めない（`fandhe-cap-digital-credentials` の effect ドライバの文言と揃える）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const FAILED_TEXT: &str = "身分証の提示要求を完了できませんでした";
 

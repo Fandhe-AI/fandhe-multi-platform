@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# TASK-1.2（REQ-1 / M2）: fandhe-egui-proxy の wasm32 ビルド → wasm-bindgen → 検証用
+# TASK-1.2（REQ-1 / M2）: fandhe-gallery の wasm32 ビルド → wasm-bindgen → 検証用
 # 配信ディレクトリ（web/dist）組み立てを行う冪等スクリプト。
 #
 # scripts/android/setup-android-env.sh と同様の作法（set -euo pipefail・冪等）に揃える。
@@ -7,10 +7,10 @@
 # TASK-10.1（REQ-10 / M3、Issue #218）: CJK フォント（Noto Sans JP）はシステムフォントへの
 # 依存をやめ、`crates/fandhe-fonts` にリポジトリ同梱済みの資産（SHA-256 等は
 # crates/fandhe-fonts/assets/README.md 参照）から dist/fonts/ へコピーする。
-# native 分岐（`fandhe-egui-proxy` の `cfg(not(target_arch = "wasm32"))`）は
+# native 分岐（`fandhe-render-egui` の `cfg(not(target_arch = "wasm32"))`）は
 # `include_bytes!` で直接埋め込むが、wasm32 は配信サイズ（REQ-4 の 3MB 基準）と
 # 衝突するため埋め込まず、本スクリプトによる `fonts/` への配置 + `web.rs` の
-# `fetch` で自己完結させる（crates/fandhe-egui-proxy/src/web.rs のモジュールコメント参照）。
+# `fetch` で自己完結させる（crates/fandhe/src/entry/web.rs のモジュールコメント参照）。
 #
 # 使い方: scripts/web/build-wasm-proxy.sh
 #   環境変数 FANDHE_PROXY_CJK_FONT でコピー元フォントパスを上書きできる
@@ -42,7 +42,7 @@ if [[ "${release_build}" == "1" ]]; then
   wasm_path="${repo_root}/target/wasm32-unknown-unknown/release/fandhe_gallery.wasm"
 else
   echo "[build-wasm-proxy] cargo build --lib --target wasm32-unknown-unknown"
-  # `--lib` で cdylib（wasm-bindgen が処理する対象、crates/fandhe-egui-proxy/Cargo.toml の
+  # `--lib` で cdylib（wasm-bindgen が処理する対象、crates/fandhe-gallery/Cargo.toml の
   # [lib] 参照）のみをビルドする。native 用 bin（fandhe-gallery-desktop）は wasm32 では
   # no-op であり、同時ビルドしても使わないため除外する。
   cargo build --manifest-path "${repo_root}/Cargo.toml" \

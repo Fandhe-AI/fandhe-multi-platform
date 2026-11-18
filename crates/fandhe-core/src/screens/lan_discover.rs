@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。実際の探索は本モジュール外
-//! （`fandhe-egui-proxy` の effect ドライバ、`device/lan_discovery.rs`）が
+//! （`fandhe-cap-lan-discovery` の effect ドライバ（`driver.rs`）が
 //! [`take_request`] で要求を観測し、[`finish_browse`] で結果を注入する。状態・定数・文言は
 //! 全 OS 分をここで確定し、後続の OS 実装は画面に触らない。
 //!

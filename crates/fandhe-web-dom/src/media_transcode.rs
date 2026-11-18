@@ -5,7 +5,7 @@
 //! （`fandhe_device::media_playback::demo_pcm`）を WebCodecs の `AudioEncoder` で符号化し、
 //! `AudioDecoder` で復号し直して検証する。`MediaTranscode` trait（`Send + Sync`）は `JsValue` を
 //! 持てないため通らない。WebCodecs は web-sys の不安定 API（`web_sys_unstable_apis` が要る）なので、
-//! ビルドフラグを増やさず `js_sys::Reflect` で呼ぶ。`fandhe-egui-proxy` の wasm canvas 経路は
+//! ビルドフラグを増やさず `js_sys::Reflect` で呼ぶ。egui の wasm canvas 経路（`fandhe-render-egui`）は
 //! 対象外（従来どおり `Unsupported`）。mux は作らないため、出力はコンテナなしの AAC か Opus になる。
 //!
 //! # 結果の種類
@@ -26,12 +26,12 @@
 //! 守る: 1 マウント内の要求と完了の順序（世代照合）、失敗・期限切れ・非対応を成功へ畳まないこと、
 //! codec・`AudioData`・タイマー・リスナーの解放。
 //! 守らない: ブラウザごとのコーデックの有無・ビットレート、複数タブ・複数マウント間の一致、
-//! egui-proxy の wasm canvas 経路。例外の `message` は画面にも console にも出さない（security.md A09）。
+//! egui の wasm canvas 経路（`fandhe-render-egui`）。例外の `message` は画面にも console にも出さない（security.md A09）。
 
 use fandhe_cap_media_transcode::{check_duration, input_duration, SAMPLE_RATE, TRANSCODE_DEADLINE};
 use fandhe_core::screens::media_transcode::{TranscodeFailure, TranscodeFormat, TranscodeOutput};
 
-/// 変換失敗の固定文言（`fandhe-egui-proxy` の `to_failure` と同じ）。
+/// 変換失敗の固定文言（`fandhe-cap-media-transcode` の `driver.rs` の `to_failure` と同じ）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const FAILED: &str = "変換できませんでした";
 

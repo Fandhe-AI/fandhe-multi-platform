@@ -12,7 +12,7 @@
 #
 # 呼び出し先: `scripts/ios/build-simulator-app.sh`（cargo build → .app 組み立て →
 # ad-hoc 署名 → .ipa 化。フェーズ分割済み）。`FANDHE_IOS_CARGO_FEATURES=frame-metrics` を
-# 与えて計測専用ビルドへ切り替える（`crates/fandhe-egui-proxy/src/frame_metrics.rs`
+# 与えて計測専用ビルドへ切り替える（`crates/fandhe-gallery/src/demo/frame_metrics.rs`
 # モジュール doc の「feature ゲート契約」参照）。ビルド・署名・パッケージング・
 # シミュレータ起動確認のロジックは重複実装せず、`verify-simulator-render.sh` と同じ
 # UDID 解決・boot/install/launch パターンを踏襲する。

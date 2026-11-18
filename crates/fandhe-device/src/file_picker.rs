@@ -122,7 +122,7 @@ pub fn read_picked_from(
 /// （呼び出し元の `.m` は戻ってから一時コピーを消す）。0 を返したのにパスが無い・UTF-8 でないときは内容を推測せず
 /// `Internal(what)`（成功にしない）。
 ///
-/// 呼び出し元: 機能 crate `fandhe-cap-file-picker` の iOS 受け口と、`fandhe-egui-proxy` の写真選択の受け口。ポインタの読み取り
+/// 呼び出し元: 機能 crate `fandhe-cap-file-picker` の iOS 受け口と、`fandhe-cap-photo-picker` の写真選択の受け口。ポインタの読み取り
 /// （`unsafe`）は各呼び出し元に 1 か所だけ残し、ここは安全な部分（検証と読み取り）だけを持つ。
 pub fn picked_from_path_bytes(
     code: i32,

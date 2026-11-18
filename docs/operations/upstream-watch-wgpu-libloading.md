@@ -42,7 +42,7 @@ TASK-8.6（Issue #212）が別途担当するため、本文書では重複管�
 （環境起因の失敗であり、PoC-2 制約の解消・継続いずれの確認にもならない）。したがって
 「バージョンは進行しているが、制約が現行版でも継続しているかは未確認」というのが現時点の
 正確な状態である。次回監視サイクルで、macOS 実機環境（TASK-18.1）が整備され次第、
-`fandhe-core` 単体（TASK-3.1 実績あり）に加えて `fandhe-egui-proxy`（wgpu 依存経路）での
+`fandhe-core` 単体（TASK-3.1 実績あり）に加えて `fandhe-render-egui`（wgpu 依存経路）での
 再現確認を優先的に実施する。
 
 ## 3. 監視方法
@@ -67,7 +67,7 @@ TASK-8.6（Issue #212）が別途担当するため、本文書では重複管�
      ワークスペース既定の `rust-toolchain.toml` 固定は変更しない）
    - `cargo update --dry-run`（ワークスペースルートで実行）による `wgpu`/`libloading` の
      新バージョン検知
-   - macOS 実機環境が利用可能になった場合は、`fandhe-egui-proxy`（wgpu 依存経路）の
+   - macOS 実機環境が利用可能になった場合は、`fandhe-render-egui`（wgpu 依存経路）の
      visionOS 向けクロスビルドも合わせて確認する（本文書 §2 で未確認と記録した項目の解消）
 
 ## 4. 頻度とトリガー
@@ -130,7 +130,7 @@ TASK-8.6（Issue #212）が別途担当するため、本文書では重複管�
   最小権限・fork PR での任意コード実行防止）に従う必要がある。本文書ではスコープ外の
   候補として記録するに留め、Issue 起票はユーザー承認後に行う。
 - **PoC-2 制約の現行版での再現確認**: §2 のとおり、Linux 環境の制約により
-  `fandhe-egui-proxy`（wgpu 依存経路）での visionOS 向けビルド確認が未実施。macOS 実機
+  `fandhe-render-egui`（wgpu 依存経路）での visionOS 向けビルド確認が未実施。macOS 実機
   環境（TASK-18.1）整備後に優先実施する。
 
 ## 10. 監視ログ

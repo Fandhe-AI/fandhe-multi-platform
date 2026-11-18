@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
  *
  * `crates/fandhe-core/src/ui/sample.rs` の `sample_screen()` が宣言する 6 要素
  * （見出しテキスト・テキスト入力・ボタン 2 種・リスト）を Jetpack Compose で再現し、
- * fandhe（NativeActivity + fandhe-egui-proxy）のアイドル時メモリ増分を同一機能の
+ * fandhe（NativeActivity + fandhe-gallery）のアイドル時メモリ増分を同一機能の
  * ネイティブ SDK 実装と比較するための基準点とする。PoC-4（300 項目リスト＋アニメーション）
  * とは異なり、fandhe 側が実機で実際に表示している画面に合わせた構成である
  * （差異は検証記録（非公開）に明記）。

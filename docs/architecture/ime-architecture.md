@@ -110,9 +110,9 @@
   ケース（独自レンダラ方式の macOS/iOS/Android/デスクトップ Linux/Windows）を主眼とし、
   Web は §4.5 でマッピングを追加定義する。
 
-### 3.3 `fandhe-egui-proxy`（参考実装、独自レンダラではない）
+### 3.3 `fandhe-render-egui`（参考実装、独自レンダラではない）
 
-- `crates/fandhe-egui-proxy` は eframe 0.33 / winit 0.30 経由で `fandhe-core` の宣言的 UI を
+- `crates/fandhe-render-egui` は eframe 0.33 / winit 0.30 経由で `fandhe-core` の宣言的 UI を
   検証するプロキシであり、egui 自体が持つ IME 処理（`egui::Event::Ime` 相当）に委ねている。
   本設計の契約（§4）はこのプロキシを対象読者に含めない（egui が独自に IME を処理するため）。
   ただし winit 0.30 系のバージョン整合（`docs/architecture/swiftui-bridge-architecture.md`

@@ -5,7 +5,7 @@
 //! `window` の `deviceorientation`（継続 push 型、`Motion`/`location` と同じ束）から
 //! 重力ベクトル相当の傾きを取り、`step` を毎フレーム進める。`fandhe-device` の
 //! `Motion` トレイトは egui 経路（デスクトップのスライダー代替・iOS/Android の実センサ、
-//! `fandhe-egui-proxy::device::tilt` 参照）専用で、Web は `location.rs`/`gamepad.rs` と
+//! `fandhe_cap_tilt_motion::driver` 参照）専用で、Web は `location.rs`/`gamepad.rs` と
 //! 同じ理由（機能 crate の OS 実装は wasm32 を対象にしない設計（Web の実装は本クレート、consumer-app-structure.md §7））で
 //! これを通らず、本モジュールが DOM レンダラ側の対応実装にあたる。
 //!
@@ -13,8 +13,8 @@
 //!
 //! `DeviceOrientationEvent.beta`/`gamma`（度）から、端末座標の「下向き」ベクトル
 //! `(dx, dy) = (cos(beta)·sin(gamma), -sin(beta))`（右・上が正の基底）を求め、
-//! `screen.orientation.angle`（0/90/180/270）で `fandhe-egui-proxy::device::
-//! tilt::gravity_to_tilt` と同じ表に従って画面基準へ回転してから
+//! `screen.orientation.angle`（0/90/180/270）で `fandhe_cap_tilt_motion::driver::
+//! gravity_to_tilt` と同じ表に従って画面基準へ回転してから
 //! `tilt = (sx, -sy)` へ写す（`-1.0..=1.0` へクランプ）。`beta`/`gamma` が
 //! `null`（Chrome はセンサ無し環境で全 `null` のイベントを 1 回出す）・非有限値の
 //! 場合は [`Reading::Unavailable`] にする（[`tilt_from_orientation`] 参照）。
@@ -48,7 +48,7 @@
 
 use fandhe_core::screens::tilt_ball::{is_at_rest, SensorStatus, TiltBallState};
 
-/// 「傾き無し」とみなす閾値（`fandhe-egui-proxy::device::tilt::TILT_EPSILON` と同じ値。
+/// 「傾き無し」とみなす閾値（`fandhe_cap_tilt_motion::driver::TILT_EPSILON` と同じ値。
 /// 実センサのノイズを無視し、静止判定を成立させる）。
 const TILT_EPSILON: f32 = 0.02;
 
@@ -123,8 +123,8 @@ impl Shown {
     }
 }
 
-/// `reading` を適用せずスキップしてよいかを判定する（`fandhe-egui-proxy::device::
-/// tilt::can_skip_send` と同じ考え方。無駄な再描画を避ける）。
+/// `reading` を適用せずスキップしてよいかを判定する（`fandhe_cap_tilt_motion::driver::
+/// can_skip_send` と同じ考え方。無駄な再描画を避ける）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn can_skip(shown: &Shown, reading: &Reading) -> bool {
     match reading {
@@ -163,7 +163,7 @@ mod web {
     use super::{can_skip, is_stale, tilt_from_orientation, Reading, Shown, TILT_EPSILON};
     use crate::mount::Applier;
 
-    /// 1 フレームで進める時間の上限（`fandhe-egui-proxy::device::tilt::MAX_DT` と同じ値）。
+    /// 1 フレームで進める時間の上限（`fandhe_cap_tilt_motion::driver::MAX_DT` と同じ値）。
     const MAX_DT: f32 = 0.1;
     /// マウント後、最初の `requestAnimationFrame` コールバックで使う既定 dt
     /// （60fps 相当。直前のタイムスタンプが無いため実測できない）。

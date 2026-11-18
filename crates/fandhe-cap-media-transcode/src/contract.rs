@@ -5,7 +5,7 @@
 //! AAC-LC（m4a）へ 1 回変換する」ことだけ。動画・利用者が持ち込むファイル・進捗・取り消し・
 //! 形式の選択・保存は扱わない。対象は macOS / iOS（AVAudioFile）、Windows（MediaTranscoder）、
 //! Android（MediaCodec + MediaMuxer）、Web（WebCodecs。コンテナなしの AAC / Opus）。
-//! 一発呼び出し型の同期 API で、呼び出し側（`fandhe-egui-proxy` の effect ドライバ）は
+//! 一発呼び出し型の同期 API で、呼び出し側（本 crate の effect ドライバ（`driver.rs`））は
 //! UI を止めないようワーカースレッドから呼ぶ。
 //!
 //! # 契約

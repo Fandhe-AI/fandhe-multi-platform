@@ -4,7 +4,7 @@
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod audio_play;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 呼び出しは
-//! `fandhe-egui-proxy` の `device/media_playback.rs` が [`take_command`] で要求を観測し、
+//! `fandhe-cap-media-playback` の `driver.rs` が [`take_command`] で要求を観測し、
 //! [`apply_update`] で通知を注入する（`midi_show.rs` と同型の状態機械）。
 //!
 //! 全対象 OS（macOS / iOS / Android / Windows / Web）の状態・文言をここで確定済みで、後続の OS 実装は

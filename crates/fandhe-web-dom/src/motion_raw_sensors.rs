@@ -4,7 +4,7 @@
 //! [`super::mount::mount_with_effect`] の effect として駆動する。呼び出し元は `demo.rs` の
 //! エントリポイントと `mount::release_features`。`MotionRawSensors` trait は `Send + Sync` で JS の
 //! `Closure` を持てないため通さず、core の `apply_reading` / `apply_failure` へ直接流す
-//! （compass / memory_pressure と同じ扱い）。`fandhe-egui-proxy` の wasm canvas 経路は対象外
+//! （compass / memory_pressure と同じ扱い）。egui の wasm canvas 経路（`fandhe-render-egui`）は対象外
 //! （`UnsupportedMotionRawSensors` のまま）。
 //!
 //! # 方式

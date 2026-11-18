@@ -16,7 +16,7 @@ thiserror = { workspace = true }
 # Linux）ターゲットで `cargo check -p fandhe-winit-ime` した際に X11/Wayland backend
 # feature 不足で compile_error にならないよう、加法的に有効化する
 # （workspace 側の `default-features = false` を維持したまま本クレートのみで有効化し、
-# `fandhe-egui-proxy` 等の既存 feature 選択と衝突しない）。
+# `fandhe-render-egui` 等の既存 feature 選択と衝突しない）。
 # "wayland-dlopen" は wayland-client を実行時 dlopen で解決する winit の既定構成
 # （`winit` の `default` feature が採用する組み合わせ）で、ビルド時に
 # `wayland-client.pc`（pkg-config）を要求しない。CI ランナーに
@@ -27,7 +27,7 @@ winit = { workspace = true, features = ["x11", "wayland", "wayland-dlopen"] }
 [target.'cfg(target_os = "android")'.dependencies]
 # Android（`android-activity` の GameActivity 方式、TASK-9.3-S1 / REQ-9 / M4、Issue #242 で
 # NativeActivity から確定。決定記録: docs/architecture/android-activity-method.md）向け分岐。
-# `fandhe-egui-proxy` の Android 分岐（同一クレート・同一バージョン解決）と同じ
+# `fandhe-render-egui` の Android 分岐（同一クレート・同一バージョン解決）と同じ
 # "android-game-activity" feature を選択し、winit 側で android-activity 0.6.1 の
 # GameActivity バックエンドを有効化する。android-activity 0.6.1 は
 # "native-activity" / "game-activity" の同時有効化を workspace 全体で拒否するため

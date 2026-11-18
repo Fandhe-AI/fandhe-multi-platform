@@ -29,7 +29,7 @@
 //!
 //! [`failure_kind_from_code`] と [`is_retry_request`] はコード → 種別の対応・
 //! 再試行検知という、ブラウザ API を呼ばない判定ロジックのみを持つ。
-//! `fandhe-egui-proxy` 側の `device/location.rs::is_retry_request` と同じ観点で
+//! `fandhe-cap-location` の `driver.rs::is_retry_request` と同じ観点で
 //! native の `cargo test` から固定できるようにするため、他モジュールと異なり
 //! ブラウザ API を直接使う部分（[`mod@web`]）だけを `wasm32` へ gate する。
 
@@ -50,7 +50,7 @@ pub(crate) fn failure_kind_from_code(code: u16) -> FailureKind {
 /// 直前・今回の `state.view` から「再試行ボタン押下」を判定する純関数。
 /// 表示済みの失敗（`Waiting` 以外）から今回 `Waiting` へ戻った場合のみ真とし、
 /// 起動直後（前回も今回も `Waiting`）を誤検知しない
-/// （`fandhe-egui-proxy` の `device/location.rs::is_retry_request` と同じ判定基準）。
+/// （`fandhe-cap-location` の `driver.rs::is_retry_request` と同じ判定基準）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn is_retry_request(current_view: LocationView, previous_view: LocationView) -> bool {
     current_view == LocationView::Waiting && previous_view != LocationView::Waiting

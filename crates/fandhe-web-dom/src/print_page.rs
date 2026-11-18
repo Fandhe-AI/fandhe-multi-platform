@@ -4,7 +4,7 @@
 //! effect として観測し、`body` 直下の印刷用ブロックを組んで `window.print()` を呼び、結果を
 //! `finish_print` へ書き戻す。`fandhe-device` の `Print` トレイトは経由せず、検証は
 //! `PrintRequest::new`（macOS・Windows と共用）に一本化する。`fandhe-device` module doc の
-//! 「非対応（Web ほか）→ `Unsupported`」は `fandhe-egui-proxy` の wasm canvas 経路の話で、
+//! 「非対応（Web ほか）→ `Unsupported`」は egui の wasm canvas 経路（`fandhe-render-egui`）の話で、
 //! 本モジュールとは別経路（そちらは `Unsupported` のまま）。
 //!
 //! # 印刷用ブロック

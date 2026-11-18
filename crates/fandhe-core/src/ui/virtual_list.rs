@@ -7,9 +7,9 @@
 //! [`compute_visible_range`] はスクロール位置・ビューポート寸法・項目数という
 //! 数値のみを入力にとる純粋関数であり、状態 `S` にもプラットフォーム（egui 等の
 //! 描画基盤）にも依存しない（S1 設計文書 §3.1 のレイヤ分界判断）。呼び出し文脈は
-//! プラットフォームレイヤ（`fandhe-egui-proxy` では `egui::ScrollArea`）が
+//! プラットフォームレイヤ（`fandhe-render-egui` では `egui::ScrollArea`）が
 //! ビューポート実寸・現在のスクロールオフセットを取得し、本関数へ渡して
-//! 描画すべき index 範囲を得る想定であり、`fandhe-egui-proxy::render_screen` への
+//! 描画すべき index 範囲を得る想定であり、`fandhe-render-egui::render_screen` への
 //! 実配線は Issue #487（親 issue #83 の残課題）で完了した
 //! （`crates/fandhe-render-egui/src/render.rs` の `render_virtual_list` 参照）。
 //!
@@ -29,7 +29,7 @@
 //! [`grid_item_range`] は Grid 軸（`Axis::Grid { columns }`）専用の付随変換で、
 //! [`compute_visible_range`] が返す「可視行範囲」を「可視項目 index 範囲」へ写す。
 //! TV 側・非 TV 側の Grid 描画経路が二重実装していたものを Issue #557 で本モジュールへ
-//! 集約した（`fandhe-egui-proxy` の `render_virtual_list_grid` / `tv_focus` 参照）。
+//! 集約した（`fandhe-render-egui` の `render_virtual_list_grid` / `tv_focus` 参照）。
 
 /// 可視範囲を表す半開区間。`std::ops::Range<usize>` と同じ意味論を持つが、
 /// ウィンドウイング専用の名前を与えて呼び出し側の意図を明確にする

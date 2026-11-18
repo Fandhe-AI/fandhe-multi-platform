@@ -3,8 +3,8 @@
 //! 端末機能ドライバ向けの読み書き口（[`HostView`] の egui 実装）を置く。
 //!
 //! 起動（eframe）は [`crate::launch`] が担い、本モジュールは eframe に依存しない
-//! （[`EguiApp`] を実装するだけ）。`#[doc(hidden)]` の項目は旧構造（`fandhe-egui-proxy` の
-//! 端末機能の配線）専用の暫定の口で、#1194 で撤去する。
+//! （[`EguiApp`] を実装するだけ）。`#[doc(hidden)]` の項目は入口（`fandhe` の
+//! `src/entry/`）・カタログ・機能 crate の driver が使う口で、利用者向けの公開 API ではない。
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -40,8 +40,8 @@ pub use fandhe_runtime::{Completion, CompletionSender, EffectFn};
 pub struct EguiWaker(egui::Context);
 
 impl EguiWaker {
-    /// `ctx` を起こす起床口を作る。旧構造（`fandhe-egui-proxy` の iOS / Android 入口）が
-    /// `set_repaint_waker` へ渡すための口（#1194 で撤去）。
+    /// `ctx` を起こす起床口を作る。入口（`fandhe` の iOS / Android 入口とカタログの計測ビルド）が
+    /// `set_repaint_waker` へ渡すための口。
     #[doc(hidden)]
     pub fn new(ctx: egui::Context) -> Self {
         Self(ctx)
@@ -631,7 +631,7 @@ impl<S: 'static> EguiApp for ProxyApp<S> {
     /// ウィンドウを閉じる（プロセスは直後に終了する）タイミングで、登録済みの終了フック
     /// （[`set_teardown_hooks`]）を呼ぶ。`static` に保持しているため `Drop` が走らない端末リソース
     /// （TTS の子プロセス等）を明示的に止めるためのもの（Issue #865 の codex-review P1 指摘）。
-    /// 何を止めるかは端末機能の配線を持つ側（`fandhe-egui-proxy`）が登録する。
+    /// 何を止めるかは入口（`fandhe` の `src/entry/lifecycle.rs`）が登録する。
     fn on_exit(&mut self) {
         run_exit_hook();
     }
@@ -670,7 +670,7 @@ static TEXT_INPUT_HINT_HOOK: std::sync::OnceLock<
 /// 入力欄のヒント（[`HostView::set_text_input_hint`]）の橋渡しを登録する（プロセスで 1 回。2 回目以降は無視）。
 ///
 /// 本 crate は `forbid(unsafe_code)` で OS の入力欄（iOS の UIKit 等）を触れないため、橋渡しを持つ層
-/// （現状は `fandhe-egui-proxy` の iOS 入力橋渡し）が登録する。未登録なら `Unsupported` を返す。
+/// （現状は `fandhe` の iOS 入力橋渡し、`src/entry/ios_text_input.rs`）が登録する。未登録なら `Unsupported` を返す。
 pub fn set_text_input_hint_hook(hook: fn(TextInputHint) -> Result<(), TextInputHintError>) {
     let _ = TEXT_INPUT_HINT_HOOK.set(hook);
 }

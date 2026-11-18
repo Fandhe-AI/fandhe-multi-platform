@@ -5,7 +5,7 @@
 //! `finish_set` へ書き戻す。`fandhe-device` の `AppBadge` トレイトは経由しない
 //! （`fandhe-device/src/app_badge.rs` の module doc どおり、Web は本クレートの担当）。
 //! 値の範囲検証は `BadgeValue::new` に一本化し、数値を JS へ渡す前に行う。
-//! `fandhe-egui-proxy` の wasm canvas 経路は対象外。
+//! egui の wasm canvas 経路（`fandhe-render-egui`）は対象外。
 //!
 //! # 結果の写像
 //!

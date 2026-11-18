@@ -3,7 +3,7 @@
 //! `effect` 区画（native）と `fandhe-web-dom`（Web、#632）から呼ばれる。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。native は
-//! `fandhe-egui-proxy` の `device/user_idle.rs` が 1 秒間隔で最後の入力からの経過秒を読み、
+//! `fandhe-cap-user-idle` の `driver.rs` が 1 秒間隔で最後の入力からの経過秒を読み、
 //! [`apply_read`] で注入する。Web は経過秒が取れず（Idle Detection API は操作中 / 離席中と画面ロック
 //! の状態だけを返す）、許可ダイアログを要するためボタン起点（[`request_watch`] /
 //! [`pending_request`] / [`finish_request`]）で、世代を照合して古い完了を捨てる。pagehide /

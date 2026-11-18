@@ -22,7 +22,7 @@
 # ポート層・staticlib 化）が新設されたため、本スクリプトのビルド対象へ追加した。
 # Swift 側ラッパ API（S5・#62、`platforms/apple/` 配下）等、Rust クレート境界の外側
 # にあるものは引き続き本スクリプトの対象外。ビルド対象を fandhe-core /
-# fandhe-swiftui-bridge に限定するのは、fandhe-egui-proxy が wgpu 依存で PoC-2 の
+# fandhe-swiftui-bridge に限定するのは、fandhe-render-egui が wgpu 依存で PoC-2 の
 # 知見どおり watchOS/visionOS 未対応のため。
 #
 # 使い方: scripts/apple/build-watchos-visionos-targets.sh
@@ -39,7 +39,7 @@ repo_root="$(cd "${script_dir}/../.." && pwd)"
 
 # 現時点で watchOS/visionOS ターゲット向けにビルド可能なのは、プラットフォーム依存
 # コードを持たない共通コア（fandhe-core）と、それのみに依存する FFI ブリッジ層
-# （fandhe-swiftui-bridge、TASK-3.2-S2）のみ（fandhe-egui-proxy は wgpu 依存で対象外）。
+# （fandhe-swiftui-bridge、TASK-3.2-S2）のみ（fandhe-render-egui は wgpu 依存で対象外）。
 packages="${FANDHE_APPLE_PACKAGES:-fandhe-core fandhe-swiftui-bridge}"
 targets="${FANDHE_APPLE_TARGETS:-aarch64-apple-watchos aarch64-apple-watchos-sim aarch64-apple-visionos aarch64-apple-visionos-sim}"
 toolchain="${FANDHE_APPLE_TOOLCHAIN:-1.96.0}"

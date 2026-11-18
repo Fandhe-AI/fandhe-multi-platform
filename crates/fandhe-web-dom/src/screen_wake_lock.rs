@@ -3,8 +3,8 @@
 //! `fandhe_core::screens::wake_lock_toggle`（端末依存ゼロ）の画面を
 //! [`super::mount::mount_with_effect`] の effect として駆動する。`take_request` で要求を観測し
 //! Screen Wake Lock API（`navigator.wakeLock.request("screen")`）へ渡して `finish` で結果を返す。
-//! `fandhe-device` の trait は通らない（他の Web モジュールと同じ。`fandhe-egui-proxy` の
-//! wasm canvas 経路は対象外）。
+//! `fandhe-device` の trait は通らない（他の Web モジュールと同じ。egui の
+//! wasm canvas 経路（`fandhe-render-egui`）は対象外）。
 //!
 //! # Reflect を使う理由
 //!

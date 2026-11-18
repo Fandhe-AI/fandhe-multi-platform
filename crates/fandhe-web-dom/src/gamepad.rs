@@ -202,14 +202,14 @@ pub(crate) struct Shown {
     pub at_rest: bool,
 }
 
-/// `frame` を適用せずスキップしてよいかを判定する（`fandhe-egui-proxy::device::
-/// gamepad::can_skip_send` と同じ考え方。無駄な再描画を避ける）。
+/// `frame` を適用せずスキップしてよいかを判定する（`fandhe_cap_gamepad::driver::
+/// can_skip_send` と同じ考え方。無駄な再描画を避ける）。
 ///
 /// Web DOM 出力では代替入力ウィジェット（スライダー・チェックボックス）が
 /// `Node::Widget` の空 `div` プレースホルダとして描画され実際には操作できない
 /// （`dom_tree.rs` 参照、既存の天井）ため、`alt_x`/`alt_y`/`alt_button` は
 /// 常に既定値のままで変化しない。`DisconnectedAlt`/`UnsupportedAlt` の判定は
-/// view と静止状態の一致だけを見れば足り、`fandhe-egui-proxy` 版のように
+/// view と静止状態の一致だけを見れば足り、`fandhe-cap-gamepad` の `driver.rs` 版のように
 /// alt 側を比較する必要はない。
 // ponytail: `Node::Widget` の実 DOM マッピングを導入して代替入力が実際に操作
 // できるようになったら、alt 側の変化も比較対象へ足す必要がある

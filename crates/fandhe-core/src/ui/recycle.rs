@@ -2,7 +2,7 @@
 //!
 //! 可視範囲算出（`virtual_list`、#84・#85）の型・API には依存しない自己完結モジュール
 //! として実装する。可視ウィンドウは `std::ops::Range<usize>` を引数で受け取る
-//! 汎用 API とし、呼び出し側（`fandhe-egui-proxy`）からの配線で統合する。
+//! 汎用 API とし、呼び出し側（`fandhe-render-egui`）からの配線で統合する。
 //!
 //! `Node::List::expand`（[`crate::ui::Node::expand_children`]）は走査のたびに
 //! 全項目分の `Vec<Node<S>>` を再構築する都度評価設計であり、300 項目規模の
@@ -19,14 +19,14 @@
 //! 固有クレートへ依存しないため（coding-rust.md）、実際の呼び出し配線は
 //! プラットフォームレイヤ側の責務とする。
 //!
-//! Issue #487（親 issue #83 の残課題）で `fandhe-egui-proxy::render_screen` への
+//! Issue #487（親 issue #83 の残課題）で `fandhe-render-egui::render_screen` への
 //! `egui::ScrollArea::show_viewport` + `compute_visible_range` 配線は完了し、
 //! Issue #490 で本型（フレーム間のノード再利用キャッシュ）の呼び出し配線も完了した。
 //! `ListRecycler<S>` はフレームをまたいで `Node<S>` を保持する必要がある一方、
 //! `render_screen<S>` は `S: 'static` を要求しないため egui 側の永続領域
 //! （`Ui::memory` 等、`'static` 前提）へそのまま保持できない（`Widget<S>` への
 //! `Send + Sync` 追加という、より大きな破壊的変更を伴う）。そのため
-//! `fandhe-egui-proxy::VirtualListRecyclers<S>` が呼び出し側（`ProxyApp` /
+//! `fandhe-render-egui::VirtualListRecyclers<S>` が呼び出し側（`ProxyApp` /
 //! `PrototypeApp` 等のアプリ構造体）のフィールドとしてフレームをまたいで保持し、
 //! `render_screen_with_recyclers` へ明示的に渡す設計を採る
 //! （`crates/fandhe-render-egui/src/recyclers.rs` モジュール doc 参照）。

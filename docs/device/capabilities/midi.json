@@ -48,7 +48,7 @@
       "api": "Web MIDI API（`navigator.requestMIDIAccess({ sysex: false })` + `MIDIInput.open()` / `onmidimessage` / `MIDIAccess.onstatechange`。`Reflect` で呼ぶ）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API",
       "safari": "非対応の場合「この環境では MIDI 入力を使えません」と表示する。実ブラウザの確認は #35",
-      "note": "実装済み（旧#1401）。範囲は macOS（旧#1398）と同じ。入力 0 台は成功、`open()` 失敗は件数で出す（嘘の成功にしない）。拒否は PermissionDenied、非対応は Unsupported。許可ダイアログ中は期限を張らず、停止で取り消せる（遅れて届いた結果は世代照合で捨てる）。停止・破棄・pagehide でハンドラ解除と close を行う。開始確定前に届いたノートは最大 100 件を保留し、超過分は取りこぼしへ加算する（消去では保留を捨て DroppedBase で累計を返す）。守る範囲: 1 マウント内の順序と世代照合、失敗を成功へ畳まないこと、資源の解放、停止後の通知を捨てること。守らない範囲: 許可ダイアログ放置時の期限、Safari、複数タブ・複数マウント間の一致、open 確定直前の数 ms のノート、背景タブでの受信継続、抜き差し確定との時間差による件数表示の食い違い、egui-proxy の wasm canvas 経路。ポート名・id・演奏内容・例外の message は出さない。実ブラウザ・実機の目視は #35",
+      "note": "実装済み（旧#1401）。範囲は macOS（旧#1398）と同じ。入力 0 台は成功、`open()` 失敗は件数で出す（嘘の成功にしない）。拒否は PermissionDenied、非対応は Unsupported。許可ダイアログ中は期限を張らず、停止で取り消せる（遅れて届いた結果は世代照合で捨てる）。停止・破棄・pagehide でハンドラ解除と close を行う。開始確定前に届いたノートは最大 100 件を保留し、超過分は取りこぼしへ加算する（消去では保留を捨て DroppedBase で累計を返す）。守る範囲: 1 マウント内の順序と世代照合、失敗を成功へ畳まないこと、資源の解放、停止後の通知を捨てること。守らない範囲: 許可ダイアログ放置時の期限、Safari、複数タブ・複数マウント間の一致、open 確定直前の数 ms のノート、背景タブでの受信継続、抜き差し確定との時間差による件数表示の食い違い、egui の wasm canvas 経路（`fandhe-render-egui`）。ポート名・id・演奏内容・例外の message は出さない。実ブラウザ・実機の目視は #35",
       "detail": "できている（Chrome で確認・他ブラウザは未確認）",
       "implStatus": "実装済み（Chrome で確認済み・Firefox / Safari は未確認）",
       "impl": "crates/fandhe-web-dom/src/midi.rs + crates/fandhe-web-dom/src/demo.rs + crates/fandhe-web-dom/web/index.html + crates/fandhe-web-dom/src/mount.rs + crates/fandhe-core/src/screens/midi_show.rs + crates/fandhe-cap-midi/src/contract.rs、Issue 旧#1401"

@@ -54,7 +54,7 @@ pub enum BadgePhase {
     Setting,
 }
 
-/// OS が判定した結果（写像は `fandhe-egui-proxy` 側の責務）。
+/// OS が判定した結果（写像は機能 crate 側の責務）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreOutcome {
     /// 0 以外を OS へ渡した。

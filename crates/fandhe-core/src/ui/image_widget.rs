@@ -42,7 +42,7 @@
 //! - `hit_test` は常に `false`（表示専用、`Label::hit_test` と同じ判断）。タップ可能画像等の
 //!   対話イベントは見送る（out-of-scope-tracking.md 対象）。
 //!
-//! **実描画の経路**（Issue #1103）: `fandhe-egui-proxy`（`Node::Widget` の `ImageWidget`
+//! **実描画の経路**（Issue #1103）: `fandhe-render-egui`（`Node::Widget` の `ImageWidget`
 //! 分岐）と `fandhe-web-dom`（`convert_image_widget`）は [`Widget::as_any`] で本型へ
 //! downcast し、クローンを `sync_from_state` してから `source_text()` を読んで描く。
 //! 下記の「未配線」は `render_headless` / `to_snapshot_node` の話で、この 2 経路は含まない。
@@ -396,7 +396,7 @@ impl<S: 'static> Widget<S> for ImageWidget<S> {
         Box::new(self.clone())
     }
 
-    /// 描画バックエンド（`fandhe-egui-proxy`・`fandhe-web-dom`）が具象型へ downcast して
+    /// 描画バックエンド（`fandhe-render-egui`・`fandhe-web-dom`）が具象型へ downcast して
     /// `source_text()` を読み、実画素を描くための口（写真選択、Issue #1103）。
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)

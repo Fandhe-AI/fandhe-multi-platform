@@ -6,7 +6,7 @@ import UIKit
 /// `FandheMemBaselineApp`（SwiftUI `App`/`Color.clear`）は、SwiftUI ネイティブ比較アプリ
 /// （`FandheMemNativeApp`）の増分計測では正しく機能する（両者とも SwiftUI ランタイムの
 /// コストを負っており、差し引きでそのコストが相殺される）。しかし `FandheIosApp`
-/// （`fandhe-egui-proxy`、`winit`/`UIApplicationMain` 経由で起動し SwiftUI には一切
+/// （`fandhe-gallery`、`winit`/`UIApplicationMain` 経由で起動し SwiftUI には一切
 /// 依存しない）から SwiftUI 版ベースラインを差し引くと、`FandheIosApp` が実際には
 /// 負っていない SwiftUI フレームワークのコストまで誤って除去してしまい、REQ-5 の
 /// 相対・絶対チェックの pass/fail を歪める（PR #497）。

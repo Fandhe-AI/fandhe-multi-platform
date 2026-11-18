@@ -33,7 +33,7 @@
 //!   されることは `tests/compile_fail.rs`（trybuild）で固定化している
 //! - `Widget<S>` 実装（widget 層）は `&mut S` に直接触れず、`state::Event` を返す
 //!   だけのブリッジとして実装する（依存方向: widget 層 → `state`）
-//! - `Node::Widget` は egui-proxy / `render_headless` では描画未配線であり、AX ノードの
+//! - `Node::Widget` は `fandhe-render-egui` / `render_headless` では描画未配線であり、AX ノードの
 //!   公開のみを行う
 //! - `ui::RenderMode` は Web 以外のプラットフォームレイヤが無視してよい
 //! - `token` の値解決はベース → テーマ差分 → エイリアス解決の順序で行い

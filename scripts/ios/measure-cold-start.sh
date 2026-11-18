@@ -17,8 +17,8 @@
 #   プロビジョニングプロファイル）が必須。TASK-18.2 完了前は本スクリプトを
 #   実行しても署名フェーズで fail-fast する（下記フェーズ 2 参照）。
 #
-# 計測方法（fandhe 側）: `crates/fandhe-egui-proxy/src/ios.rs` の `ColdStartProbe`
-# が `run()` 呼び出しから初回フレーム描画完了までの経過時間を
+# 計測方法（fandhe 側）: `crates/fandhe-gallery/src/demo/cold_start.rs` の `ColdStartProbe`
+# が計測の起点（`crates/fandhe-gallery/src/main.rs` の iOS 版 `main`）から初回フレーム描画完了までの経過時間を
 # `COLD_START_MS=<value>` の形式で stderr（Console.app 経由で `log` コマンドから
 # 参照可能）へ出力する契約（同ファイル冒頭コメント参照）。本スクリプトは
 # `log stream`（または `devicectl` 経由のプロセスログ）からこの行を抽出する。
@@ -27,7 +27,7 @@
 # SwiftUI アプリが `main.swift` 冒頭を `t0` として同一の `COLD_START_MS=<value>`
 # 形式で出力する（同ディレクトリの `main.swift` 冒頭コメント参照）。
 #
-# 両者の t0 の対称性については fandhe-egui-proxy/src/ios.rs の `run()` 直前の
+# 両者の t0 の対称性については crates/fandhe-gallery/src/demo/cold_start.rs のモジュール
 # コメントに明記した限界（dyld・プロセス起動時間は含まれない近似）を参照。
 #
 # 実行環境について: `xcodebuild` / `devicectl` は macOS + Xcode 限定のため、
@@ -172,8 +172,8 @@ codesign_identity="${FANDHE_IOS_CODESIGN_IDENTITY:-}"
 log "rustup target add ${fandhe_target}"
 rustup target add "${fandhe_target}" >/dev/null
 
-# `cold-start-probe` feature（既定 off、`crates/fandhe-egui-proxy/Cargo.toml` 参照）を
-# 本スクリプトから明示的に有効化する。無効のままだと `ios.rs` の `run()` は
+# `cold-start-probe` feature（既定 off、`crates/fandhe-gallery/Cargo.toml` 参照）を
+# 本スクリプトから明示的に有効化する。無効のままだと `main.rs` の iOS 版 `main` は
 # `ColdStartProbe` を経由せず `COLD_START_MS=` を出力しないため（Review 指摘対応）、
 # 計測を行う本スクリプトの実行時のみ opt-in する。
 log "cargo build -p fandhe-gallery --bin ${fandhe_bin_name} --target ${fandhe_target} --profile release --features fandhe-gallery/cold-start-probe"

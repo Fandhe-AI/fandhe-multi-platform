@@ -5,7 +5,7 @@
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod audio_session_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 呼び出しは
-//! `fandhe-egui-proxy` の `crates/fandhe-cap-audio-session/src/driver.rs` が [`take_command`] で要求を観測し、
+//! `crates/fandhe-cap-audio-session/src/driver.rs` が [`take_command`] で要求を観測し、
 //! [`apply_update`] で通知を注入する（`midi_show.rs` と同型の状態機械 + 継続配信）。
 //! 種別・出来事・読み戻しの列挙は `fandhe_cap_audio_session` と同順で複製している（依存方向のため）。
 //!

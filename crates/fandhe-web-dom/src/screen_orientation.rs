@@ -4,7 +4,7 @@
 //! `fandhe_core::screens::screen_orientation_show`（端末依存ゼロ）の画面を
 //! [`super::mount::mount_with_effect`] の effect として駆動する。`take_request` で要求を観測し、
 //! Screen Orientation API（`screen.orientation`）と Fullscreen API へ渡して `finish` /
-//! `apply_read` で結果を返す。`fandhe-egui-proxy` の driver（非 wasm32 専用）は通らず、
+//! `apply_read` で結果を返す。`fandhe-cap-screen-orientation` の driver（egui 経路）は通らず、
 //! 本モジュールが同じ契約（`fandhe_cap_screen_orientation` の doc）を Web 向けに満たす。
 //! 整数コードの検証は `fandhe_cap_screen_orientation::parse_reading` を共有する。
 //!

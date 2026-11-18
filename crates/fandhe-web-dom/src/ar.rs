@@ -1,7 +1,7 @@
 //! 型サンプル「AR 表示」の Web 経路（親 #90、Issue #309）。
 //!
 //! `fandhe_core::screens::ar_show`（端末依存ゼロ）の画面を [`super::mount::mount_with_effect`]
-//! の effect として駆動する。`fandhe-egui-proxy` の wasm canvas 経路は対象外
+//! の effect として駆動する。egui の wasm canvas 経路（`fandhe-render-egui`）は対象外
 //! （`UnsupportedAr` のまま）。`fandhe_device::ar` から `READ_INTERVAL`・`checked_reading` を、
 //! `fandhe_device::compass` から `WaitTracker`・`NO_READING_TIMEOUT_MS` を共用する。
 //! `ArTracking` trait（`Send + Sync`）は JS の Closure を持てないため通さず、core の

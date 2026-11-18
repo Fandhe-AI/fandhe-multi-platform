@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod screen_brightness_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
-//! 置き場」節の制約どおり）。OS への要求・読み戻しは `fandhe-egui-proxy` の effect ドライバ
+//! 置き場」節の制約どおり）。OS への要求・読み戻しは 機能 crate の effect ドライバ
 //! （`device/screen_brightness.rs`）が [`take_request`] で要求を取り、[`mark_applying`] →
 //! [`finish`] / [`apply_read`] で結果を注入する（`wake_lock_toggle` と同型）。
 //!
@@ -91,7 +91,7 @@ pub struct BrightnessRequest {
     pub command: BrightnessCommand,
 }
 
-/// 失敗の種別（`fandhe-egui-proxy` が `DeviceError` から写す。OS の詳細は載せない）。
+/// 失敗の種別（機能 crate の effect ドライバが `DeviceError` から写す。OS の詳細は載せない）。
 #[derive(Debug, Clone, PartialEq)]
 pub enum BrightnessFailure {
     /// この環境では使えない。

@@ -4,7 +4,7 @@
 //! effect として直接駆動する。`take_command` で要求を観測し、Remote Playback API
 //! （`HTMLMediaElement.remote`）へ渡して、`apply_update` / `expire` で結果を書き戻す。
 //! `MediaCast` trait は `Send + Sync` で `JsValue` を持てないため通らない（他の Web モジュールと同じ）。
-//! `fandhe-egui-proxy` の wasm canvas 経路は対象外（従来どおり `Unsupported`）。
+//! egui の wasm canvas 経路（`fandhe-render-egui`）は対象外（従来どおり `Unsupported`）。
 //!
 //! # 方式
 //!
@@ -36,7 +36,7 @@
 //! 守る: 1 マウント内の操作順と世代の照合、非対応・拒否・期限切れを接続中や再生中と見せないこと、
 //! 資源の解放、`pagehide` 後に勝手に再開しないこと。例外の `message` は転送しない（security.md A09）。
 //! 守らない: 複数タブ・複数マウント、受信機側で再開した再生の反映（画面は「停止しました」のまま）、
-//! 受信機の品質や遅延、出力先の名前、egui-proxy の wasm canvas 経路、
+//! 受信機の品質や遅延、出力先の名前、egui の wasm canvas 経路（`fandhe-render-egui`）、
 //! `prompt()` が選択を待たず解決するブラウザでの `Choosing` 表示の長さ。
 
 use fandhe_core::screens::cast_show::{
@@ -44,7 +44,7 @@ use fandhe_core::screens::cast_show::{
 };
 use std::time::Duration;
 
-/// 失敗の固定文言（`fandhe-egui-proxy` のドライバと同じ。例外の `message` は使わない）。
+/// 失敗の固定文言（`fandhe-cap-media-cast` の effect ドライバと同じ。例外の `message` は使わない）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 const FAILED_CAST: &str = "外部機器への再生";
 

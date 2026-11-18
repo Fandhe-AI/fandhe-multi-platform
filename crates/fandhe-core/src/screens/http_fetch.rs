@@ -21,7 +21,7 @@
 //!
 //! `Requested` → `Loading` を二段階に分けているのは、effect ドライバが
 //! `fn(&S, &CompletionSender<S>)` という**関数ポインタで状態を持たない**ため
-//! （`fandhe-egui-proxy::app::EffectFn`）。ドライバは `Requested` を見た瞬間に
+//! （`fandhe-runtime::EffectFn`）。ドライバは `Requested` を見た瞬間に
 //! 起動要求を検知するが、自分がすでにスレッドを起動済みかを覚えておけない。
 //! そこで「起動済みか」を状態側（`Loading`）で表現し、ドライバは `Loading` へは
 //! 一度も自分で遷移させず、`mark_loading` の完了を送るだけにする。完了は

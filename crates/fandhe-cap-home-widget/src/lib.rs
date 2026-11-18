@@ -8,7 +8,7 @@
 //! iOS は有料登録が前提のため対象外（#1212）。Windows は package identity 必須のため対象外（#1208）。
 //!
 //! 依存方向は本 crate → `fandhe-core` / `fandhe-runtime` / `fandhe-platform-*` の一方向で、
-//! egui・`fandhe-egui-proxy`・`fandhe-device` には依存しない。呼び出し元は画面カタログ
+//! egui・`fandhe-device` には依存しない。呼び出し元は画面カタログ
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect "home_widget_show"` 行）で、
 //! `ProxyApp::update` のフレーム末尾から毎フレーム [`home_widget_show_effect`] が呼ばれる。
 //!

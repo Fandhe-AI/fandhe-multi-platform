@@ -24,7 +24,7 @@ image = { workspace = true, features = ["jpeg"], optional = true }
 # codex-review P1 是正（PR #1018）: `drag_drop::open_for_type_check` が
 # `O_NONBLOCK`（`OpenOptionsExt::custom_flags`）で開くために使う定数。
 # FIFO で open が無期限に待つのは Unix 全般（macOS に限らず Linux も）なので
-# `cfg(unix)` で持つ。`fandhe-egui-proxy` の Android 分岐で既に直接依存として
+# `cfg(unix)` で持つ。`fandhe-gallery` の Android 分岐などで既に直接依存として
 # 使っている 0.2 系と同じで、新規パッケージは増えない。
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

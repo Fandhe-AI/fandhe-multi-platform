@@ -10,7 +10,7 @@
 //! `Node::VirtualList` / `compute_visible_range`（S2・#85）の型・API に
 //! 一切依存しない自己完結の純粋関数として実装している。
 //!
-//! 呼び出し文脈: プラットフォームレイヤ（`fandhe-egui-proxy`）が毎フレーム
+//! 呼び出し文脈: プラットフォームレイヤ（`fandhe-render-egui`）が毎フレーム
 //! [`total_content_extent`]（`ScrollArea` へ渡す総高さ）と
 //! [`clamp_scroll_offset`]（`ScrollArea` から得たオフセットの防御的クランプ）を呼ぶ。
 //! `render_screen` 側の `egui::ScrollArea::show_viewport` 統合は Issue #487（親 issue #83

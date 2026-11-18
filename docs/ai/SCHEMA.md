@@ -370,10 +370,10 @@ assert_eq!(assert_iter(screen.iter()), 2);
   `ui::request_back` 経由で発火する（パターン 8 参照）。未設定（既定）の画面では
   戻る操作に応答しない
 - **`.dialog()`（`Dialog<S>`、S46）は AX ノード公開のみで、描画・開閉イベントは未配線**
-  （egui-proxy の実描画・`render_headless` のどちらからも呼ばれない）。実際に描画される
+  （`fandhe-render-egui` の実描画・`render_headless` のどちらからも呼ばれない）。実際に描画される
   ダイアログは、`DialogWidget::new_dynamic(..).with_content(expand_fn)`（`DialogWidget`
   S47、`ui::dialog_widget`）を `Node::Widget` として `.with_node()` で置いたものに限る。
-  egui-proxy はこれを前面パネル + スクリムで描画する。外側タップは、`with_content` の
+  `fandhe-render-egui` はこれを前面パネル + スクリムで描画する。外側タップは、`with_content` の
   子ノード列の中に `dismiss_label` と同名の `Node::Button` があるときに限り、その
   `Button` の path へ `Event::ButtonClickedAt` を dispatch する（Issue #739）。同名の
   `Button` が子ノード列に無ければ外側タップは何もしない（トップレベルの `.button()` への
@@ -1021,12 +1021,12 @@ assert_eq!(store.state().body, "pong");
 assert_eq!(store.version(), 1);
 ```
 
-`fandhe-egui-proxy::ProxyApp` はフレーム先頭で完了キューを drain して `apply` する
+`fandhe-render-egui::ProxyApp` はフレーム先頭で完了キューを drain して `apply` する
 受け口を持つ。別スレッドから完了を送るには `ProxyApp::completion_sender` を使う:
 
 ```rust,ignore
-// main.rs 等（doctest 不可。`fandhe_egui_proxy::` のクレート外 API を使うため）
-use fandhe_egui_proxy::{Completion, ProxyApp};
+// main.rs 等（doctest 不可。`fandhe_render_egui::` のクレート外 API を使うため）
+use fandhe_render_egui::{Completion, ProxyApp};
 
 let sender = app.completion_sender(); // CompletionSender<S>（再描画要求を組み込んだラッパー）
 
@@ -1080,7 +1080,7 @@ std::thread::spawn(move || {
 画面 ↔ 端末実装の接続方式（上記「新規画面ファイルの置き場」節）の参照実装。
 `crates/fandhe-core/src/screens/storage_note.rs`（結合テストは
 `crates/fandhe-core/tests/storage_note.rs`）が画面本体と最小トレイト `NoteStorage` を持ち、
-`crates/fandhe-egui-proxy/src/device.rs` が `fandhe_device::storage::FsStorage` への橋渡しと
+`crates/fandhe-cap-local-storage-kv/src/driver.rs` が `fandhe_device::storage::FsStorage` への橋渡しと
 `registry.rs` の `init` 行が呼ぶ状態ファクトリを持つ。`FANDHE_PROXY_APP=storage_note` で
 起動でき、保存したメモは `$HOME/.fandhe` 配下に残るため再起動後も一覧に残る。
 
@@ -1096,25 +1096,25 @@ std::thread::spawn(move || {
 （`camera_capture_effect`、機能 crate 内の `Camera` トレイトを呼ぶ側。Issue #1170 で移した）。
 
 **Android の配線先（Issue #750）**: `DataDir`（「メモ保存」の保存先）は
-`crates/fandhe-egui-proxy/src/device/android.rs` の `data_dir()` が
+`crates/fandhe-cap-local-storage-kv/src/android.rs` の `data_dir()` が
 `AndroidApp::internal_data_path()`（`getFilesDir()` 相当）を返す。カメラは
 `AndroidCamera`（`fandhe-cap-camera-capture/src/android.rs`）が JNI 経由で `CameraCaptureHelper.request(Activity, long)`（機能 crate の Java の static メソッド。利用者の `MainActivity` に受け口は要らない、#1257）を呼び、
 `CameraCaptureHelper`（同 crate の `android/java`）の `ActivityResultContracts.TakePicturePreview` が撮影した `Bitmap` を
 `nativeOnCameraResult` へ渡す往復で
-`Camera::capture` を実現する。新規画面が Android 固有の端末実装を要る場合はこの
-`device/android.rs` 配下に閉じ、`fandhe-core` へは持ち込まない。
+`Camera::capture` を実現する。新規画面が Android 固有の端末実装を要る場合は機能 crate の
+`android.rs` に閉じ、`fandhe-core` へは持ち込まない。
 
 **画像表示（Issue #5）**: 撮影結果等の実画素は `Screen::rgba_image(RgbaPixels, alt)`
 （`Node::RgbaImage`）で出す。`Screen::image` / `image_bound`（`ui/image.rs`）は識別子
 （パス・URL の不透明文字列）を保持するだけで画素を運べないため、画素を見せたい画面には使わない。
 状態に生の RGBA を持たせず、`camera_capture.rs` の `thumbnail_from_rgba` のように長辺 160px 程度へ
-縮小してから `RgbaPixels` にする。`fandhe-egui-proxy` は GPU テクスチャ、`fandhe-web-dom` は
+縮小してから `RgbaPixels` にする。`fandhe-render-egui` は GPU テクスチャ、`fandhe-web-dom` は
 `<img src="data:image/png;base64,…">` で描く。`fandhe-swiftui-bridge` は未対応で、alt を
 `SnapshotNode::Text` として渡す。
 
-iOS 固有の端末実装（Issue #751）は `crates/fandhe-egui-proxy/src/device/ios.rs`（Rust、
-`Camera`/`Storage` トレイトの橋渡し）+ `crates/fandhe-egui-proxy/ios/*.m`（ObjC、UIKit /
-AVFoundation の実処理。`build.rs` が iOS ターゲットのみコンパイルする）に置く。
+iOS 固有の端末実装（Issue #751）は機能 crate の `src/ios.rs`（Rust、トレイトの橋渡し。例:
+`crates/fandhe-cap-camera-capture/src/ios.rs`）+ `ios/*.m`（ObjC、UIKit /
+AVFoundation の実処理。機能 crate の `build.rs` が iOS ターゲットのみコンパイルする）に置く。
 
 ### 参照実装への誘導
 
@@ -1144,7 +1144,7 @@ crates/fandhe-core/tests/<name>.rs             # 結合テスト（パターン 
 
 端末機能（保存・HTTP・カメラ、Phase 8 / Issue #746）を使う画面は `fandhe-device` の
 トレイト（`Storage`/`Http`/`Camera`）を直接 import しない。依存方向は
-`fandhe-egui-proxy` → `fandhe-device` の一方向のみで、`fandhe-core` からは参照できない
+機能 crate（`fandhe-cap-*`）→ `fandhe-device` の一方向のみで、`fandhe-core` からは参照できない
 （coding-rust.md の二層アーキテクチャ原則）。画面 ↔ 端末実装の接続は次の 2 形にする:
 
 - 構築時に副作用を伴う状態初期化（端末保存領域からの読み込み等、メモ保存等）は
@@ -1152,7 +1152,7 @@ crates/fandhe-core/tests/<name>.rs             # 結合テスト（パターン 
   1. `fandhe-core` 側に `fandhe_device` の対象トレイトと同形の最小トレイト
      （エラーは表示用文字列に単純化）を画面ファイル内に定義する。純粋なトレイト定義
      のみで I/O を持たないため「端末依存」には当たらず、画面ファイルと一緒に削除できる
-  2. `fandhe-egui-proxy` 側の `device.rs` が `fandhe-device` の実装を newtype で
+  2. 機能 crate の `driver.rs` が `fandhe-device` の実装を newtype で
      そのトレイトへ橋渡しし、状態ファクトリ（`fn() -> S`）を提供する
   3. `crates/fandhe-gallery/src/screens/registry.rs` の `init "<name>" => 画面ビルダー,
      状態ファクトリ,` 行（`generated_screens!` マクロの `init` 区画、下記参照）が

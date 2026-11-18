@@ -82,7 +82,7 @@ NSAppleMusicUsageDescription = "型サンプル「音楽ライブラリ」の動
 NSPhotoLibraryAddUsageDescription = "型サンプル「写真の保存」の動作確認に使います"
 
 [build-dependencies]
-# Apple のリンク指定（弱リンク・rpath）を `fandhe-egui-proxy` と機能 crate から受け取って出し直す。
+# Apple のリンク指定（弱リンク・rpath）を機能 crate から受け取って出し直す。
 fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
 # macOS の実行体へ埋め込む Info.plist を宣言から生成する（`build.rs`、#1194）。
 cargo-fandhe = { path = "../cargo-fandhe" }

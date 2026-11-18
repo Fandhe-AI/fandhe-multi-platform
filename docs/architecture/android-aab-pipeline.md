@@ -48,7 +48,7 @@ flowchart LR
   並置しない（後述 3 節「既存 `build-android.sh` との関係」参照）。
 - 出力: `cargo ndk -o <jniLibs 相当ディレクトリ>` により ABI 別ディレクトリ
   （`arm64-v8a/` / `armeabi-v7a/` / `x86_64/`）へ `libfandhe_gallery.so` が生成される
-  （`[lib] name = "fandhe_egui_proxy"`、`Cargo.toml` 記載どおり）。
+  （`crates/fandhe-gallery/Cargo.toml` の `[lib] name = "fandhe_gallery"` どおり）。
 - 3 ABI・`--platform "${ANDROID_MIN_API}"`（24）は `build-android.sh` の既存実装をそのまま流用する。
 
 ### Phase 2: Gradle プロジェクトへの `.so` 統合
@@ -144,7 +144,7 @@ flowchart LR
 - **fandhe-gallery との契約**: Gradle 側は `.so` を `jniLibs/` へ配置するのみで、
   Rust 側のシンボル解決・エントリポイント（`android_main`）には関与しない
   （`android-activity` クレートが `dlopen`/`dlsym` 相当の解決を担う。契約の詳細は
-  `crates/fandhe-gallery/src/lib.rs` と `crates/fandhe-egui-proxy/src/android.rs` のモジュールコメント参照）。
+  `crates/fandhe-gallery/src/lib.rs` と `crates/fandhe/src/entry/android.rs` のモジュールコメント参照）。
 
 ## 5. 開発署名設計（S3 への引き継ぎ）
 

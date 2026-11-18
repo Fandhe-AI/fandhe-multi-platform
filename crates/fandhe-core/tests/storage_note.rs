@@ -3,7 +3,7 @@
 //! （`click_button` / `render_headless` / `screens::storage_note::*`）のみを使う。
 //!
 //! `NoteStorage` のインメモリ実装で「保存 → 新しい状態で復元」を検証し、
-//! 端末実装（`fandhe-egui-proxy` の `FsStorage` 橋渡し）に依らず永続化の意味論
+//! 端末実装（`fandhe-cap-local-storage-kv` の `FsStorage` 橋渡し）に依らず永続化の意味論
 //! （最新が先頭で復元される）を機械的に固定化する（受入 (b)）。
 
 use fandhe_core::screens::storage_note::{

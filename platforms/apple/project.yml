@@ -131,7 +131,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
 
   # FandheMemBaselineApp（SwiftUI 版）は FandheMemNativeApp（SwiftUI）の増分計測でのみ
-  # 差し引きに使う。FandheIosApp（fandhe-egui-proxy、winit/UIApplicationMain 経由で
+  # 差し引きに使う。FandheIosApp（fandhe-gallery、winit/UIApplicationMain 経由で
   # SwiftUI には依存しない）の増分計測では、代わりにこの UIKit 版ベースラインを使う
   # （SwiftUI ベースラインを egui 系アプリの差し引きに使うと SwiftUI ランタイム分を
   # 誤って除去してしまうため。PR #497。AppDelegate.swift 参照）。
@@ -292,7 +292,7 @@ targets:
   # Issue #295: ライブアクティビティの Widget Extension（iOS）。Rust/winit の手組みバンドル
   # （scripts/ios/build-simulator-app.sh）へ `PlugIns/` として同梱する。アプリ側の
   # `FandheIosApp` ターゲット（プロファイル生成専用）には依存を足さない。属性型はアプリ側の
-  # 静的ライブラリ（crates/fandhe-egui-proxy/build.rs）と同じファイルを共有する。
+  # 静的ライブラリ（crates/fandhe-cap-live-activity/build.rs）と同じファイルを共有する。
   FandheLiveActivity:
     type: app-extension
     platform: iOS

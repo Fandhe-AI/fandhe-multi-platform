@@ -45,7 +45,7 @@
 //! 「`dispatch` は同期・関数ポインタ限定」という既存契約を壊す。そのため `apply` を
 //! `Event`/`dispatch` とは別の公開 API として追加し、既存契約を変更しないまま
 //! 「外部 I/O 完了の反映」というユースケースに対応する（呼び出し元は
-//! `fandhe-egui-proxy::drain_completions` を想定。`ui::Node` ハンドラ（AI 生成コード）
+//! `fandhe-runtime::drain_completions` を想定。`ui::Node` ハンドラ（AI 生成コード）
 //! からは呼べない設計で、`StateStore` を握るのはプラットフォーム統合レイヤのみ）。
 
 use crate::ui::{
@@ -120,7 +120,7 @@ pub enum Event {
     },
     /// OS の戻る操作（Issue #726）。プラットフォームレイヤが macOS/Linux/Windows の
     /// Esc・Android のバックキー等のネイティブ入力をこのバリアントへ変換して渡す契約
-    /// （`fandhe-egui-proxy::dispatch_back_if_requested` 参照）。`ui::request_back` へ
+    /// （`fandhe-render-egui::dispatch_back_if_requested` 参照）。`ui::request_back` へ
     /// 委譲し、画面の `.on_back()` ハンドラ（典型的には
     /// [`crate::ui::ScreenStack::pop`] を呼ぶ）を発火する。ハンドラ未設定の画面では
     /// 状態を変更せず `false` を返す。

@@ -31,7 +31,7 @@
 //! 端末依存ゼロ（ボタンハンドラは `fn(&mut S)` で I/O を持てない）ため、
 //! 「ボタンが状態へ要求を立てる → effect が観測して実際の I/O を行う →
 //! [`Applier::apply`] で結果を書き戻す」という一巡にする。
-//! `fandhe-egui-proxy` 側の `app::EffectFn` + `CompletionSender` と同じ役割分担で、
+//! `fandhe-runtime` の `EffectFn` + `CompletionSender` と同じ役割分担で、
 //! 本モジュールはその Web（DOM レンダラ）版にあたる。
 //!
 //! effect は再描画の完了後に呼ばれ、[`Applier::apply`] はさらに再描画を起こすため、

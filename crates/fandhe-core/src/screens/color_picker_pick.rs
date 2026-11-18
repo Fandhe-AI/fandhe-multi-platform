@@ -4,7 +4,7 @@
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod color_picker_pick;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。橋渡し層が `DeviceError` を
-//! [`ColorPickerOutcome`] へ畳んで渡す。macOS・Windows・iOS は egui-proxy、Web は `fandhe-web-dom`
+//! [`ColorPickerOutcome`] へ畳んで渡す。macOS・Windows・iOS は機能 crate（`fandhe-cap-color-picker`）の effect ドライバ、Web は `fandhe-web-dom`
 //! が同じ型・同じ文言定数を使う。
 //!
 //! # 成功・取り消し・非対応・失敗を混同しない

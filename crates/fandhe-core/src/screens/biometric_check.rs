@@ -6,8 +6,8 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。実際の認証 UI 提示・入力検証は
-//! 本モジュール外（`fandhe-egui-proxy` の effect ドライバ、
-//! `device/biometric_auth.rs`）が [`take_request`] で要求を観測し [`finish_auth`] で
+//! 本モジュール外（`fandhe-cap-biometric-auth` の
+//! `driver.rs`）が [`take_request`] で要求を観測し [`finish_auth`] で
 //! 結果を注入する。
 //!
 //! # 認証した・キャンセル・使えない・失敗を混同しない理由
@@ -62,7 +62,7 @@ pub enum AuthPhase {
 }
 
 /// 認証結果（画面表示用。`fandhe_device::biometric_auth::AuthOutcome` と 4 腕対応する。
-/// `fandhe-core` は `fandhe-device` に依存しないため、写像は `fandhe-egui-proxy` 側の
+/// `fandhe-core` は `fandhe-device` に依存しないため、写像は機能 crate 側の
 /// 責務にする、モジュール doc 参照）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthOutcome {
@@ -70,7 +70,7 @@ pub enum AuthOutcome {
     /// `LAPolicyDeviceOwnerAuthenticationWithBiometrics` 固定のため常に生体確認だが、
     /// Windows（`UserConsentVerifier`）は API 設計上 PIN 等の端末所有者認証も同じ成功
     /// 結果として返し、Web（WebAuthn の user verification）も PIN 等の生体以外の方式で
-    /// 成立しうる（`fandhe-egui-proxy` 側 `outcome_from_verification` の doc・
+    /// 成立しうる（`fandhe-cap-biometric-auth` の `driver.rs` の `outcome_from_verification` の doc・
     /// `fandhe-web-dom::biometric_auth` モジュール doc・`docs/device/capabilities/
     /// biometric-auth.json` の windows/web 欄参照。「生体認証に成功した」と読み替えない）。
     Authenticated,

@@ -27,7 +27,7 @@
 //! effect ドライバは `fn(&S, &CompletionSender<S>)` の関数ポインタで状態を持てないが、
 //! クリップボードは同期 API のため `http_fetch` の `Requested` → `Loading` 二段構えが
 //! 要らない。フレーム内順序が「drain → 描画/dispatch → effect」で固定されている
-//! （`fandhe-egui-proxy::app` の契約）ため、ボタン押下で立った `pending` を観測する
+//! （`fandhe-render-egui::app` の契約）ため、ボタン押下で立った `pending` を観測する
 //! effect 呼び出しは 1 回だけで、完了の `apply`（次フレーム先頭の drain）で
 //! `pending` が下りる。
 

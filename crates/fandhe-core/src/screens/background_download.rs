@@ -3,7 +3,7 @@
 //! で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod background_download;` と対）。
 //!
-//! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは `fandhe-egui-proxy` の
+//! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは 機能 crate の
 //! effect ドライバ（`crates/fandhe-cap-background-download/src/driver.rs`）が [`take_request`] で要求を観測し
 //! [`finish_action`] で結果を注入する（`background_task.rs` と同型の状態機械）。全 OS 分の文言と
 //! 定数はここに置き、OS ごとの子 issue はこの画面を触らない。
