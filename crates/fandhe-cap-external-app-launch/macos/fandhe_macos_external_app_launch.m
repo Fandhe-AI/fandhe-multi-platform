@@ -2,7 +2,7 @@
 // `NSWorkspace openURL:` で固定の `tel:` / Apple 地図の URL を開き、既定のアプリに渡す。権限は不要。
 //
 // `crates/fandhe-cap-external-app-launch/src/macos.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_macos_external_app_open_url(const char *url) -> int32_t

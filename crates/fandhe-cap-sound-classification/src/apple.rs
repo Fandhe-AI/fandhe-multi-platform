@@ -1,6 +1,6 @@
 //! macOS・iOS 向け環境音の分類実装（Issue #725、親 #142）。`apple/fandhe_apple_sound_classification.m`
 //! （SoundAnalysis の内蔵分類器 `SNClassifySoundRequest` と `AVAudioEngine` の入力タップ。
-//! `build.rs` が macOS・iOS 双方の feature `device` 分岐でコンパイルする）を `unsafe extern "C"`
+//! `build.rs` が macOS・iOS 双方の分岐でコンパイルする）を `unsafe extern "C"`
 //! 3 関数で呼ぶ。`driver` の macOS 経路が [`implementation`] を呼ぶ。
 //! iOS（Issue #726）も同じ `.m` を使い、`ios.rs` がこのモジュールへ委譲する
 //! （iOS では背景遷移・音声の割り込みを中断にし、`AVAudioSession` を保存して全終了経路で戻す）。dispatch・共通コア画面・ドライバ・trait 契約
@@ -138,8 +138,8 @@ mod imp {
 
     use super::{RawRead, read_result, start_result};
 
-    // SAFETY: `apple/fandhe_apple_sound_classification.m`（`build.rs` が macOS・iOS の feature `device`
-    // 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
+    // SAFETY: `apple/fandhe_apple_sound_classification.m`（`build.rs` が macOS・iOS で
+    // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {
         fn fandhe_apple_sound_classification_start() -> i32;

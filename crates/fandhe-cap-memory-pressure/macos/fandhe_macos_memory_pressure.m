@@ -5,7 +5,7 @@
 // 非公開の sysctl は使わない。権限の宣言は増やさない。
 //
 // `crates/fandhe-cap-memory-pressure/src/macos.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_macos_memory_pressure_start(id) -> int32_t

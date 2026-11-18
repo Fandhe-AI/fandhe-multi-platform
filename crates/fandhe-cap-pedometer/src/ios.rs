@@ -36,7 +36,7 @@ fn result_from_code(code: i32, steps: i64) -> Result<u64, PedometerFailure> {
 }
 
 // SAFETY: `ios/fandhe_ios_pedometer.m` が定義する C ABI（`build.rs` が iOS ターゲットのみ・
-// feature `device` 有効時のみコンパイル・リンクする）。契約は同 .m 冒頭コメント。
+// コンパイル・リンクする）。契約は同 .m 冒頭コメント。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
 unsafe extern "C" {

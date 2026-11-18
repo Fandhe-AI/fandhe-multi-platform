@@ -26,7 +26,7 @@ use crate::contract::UnsupportedHealthData;
 use crate::contract::{HealthDataFailure, HealthSteps, decode_code};
 
 // SAFETY: `ios/fandhe_ios_health_data.m` が定義する C ABI（`build.rs` が iOS ターゲットのみ・
-// feature `device` 有効時のみコンパイル・リンクする）。契約は同 .m 冒頭コメント。
+// コンパイル・リンクする）。契約は同 .m 冒頭コメント。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
 unsafe extern "C" {

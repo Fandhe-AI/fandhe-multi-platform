@@ -1,8 +1,8 @@
 // Phase 11 の拡充ループ（親 #1141）型サンプル「バッジの設定」: macOS 実装（Issue #1360）。
 // `NSDockTile.badgeLabel` に件数の文字列を設定し、0 なら nil で消す。権限は不要。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_app_badge.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `crates/fandhe-cap-app-badge/src/macos.rs` から C ABI 経由で呼ばれる。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_macos_app_badge_set(uint32_t value) -> int32_t

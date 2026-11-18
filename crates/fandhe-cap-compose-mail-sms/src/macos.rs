@@ -1,5 +1,5 @@
 //! macOS 向けメール・SMS 作成画面の実装（Issue #1384）。`macos/fandhe_macos_compose_mail_sms.m`
-//! （`NSWorkspace openURL:`、`build.rs` が macOS ターゲットの feature `device` 有効時にコンパイル
+//! （`NSWorkspace openURL:`、`build.rs` が macOS ターゲットでコンパイル
 //! する）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を
 //! 明記する。`driver` の macOS 経路から呼ばれ、契約は
 //! `crate::contract`。URL は `ComposeRequest::to_url`（scheme は `mailto:` /

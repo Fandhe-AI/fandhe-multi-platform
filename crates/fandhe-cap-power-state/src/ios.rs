@@ -1,5 +1,5 @@
 //! iOS 向け電源状態実装（Issue #1275）。`ios/fandhe_ios_power_state.m`（`UIDevice` +
-//! `NSProcessInfo`、`build.rs` が iOS ターゲットの feature `device` 有効時にコンパイルする）を
+//! `NSProcessInfo`、`build.rs` が iOS ターゲットでコンパイルする）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。#1274 のスタブを置き換えたもので、dispatch
 //! （`driver.rs`）と共通コア画面は変えない。契約は `crate::contract`。
 //!
@@ -82,8 +82,8 @@ fn from_raw(raw: Raw) -> PowerSnapshot {
 mod ffi {
     use super::Raw;
 
-    // SAFETY: `ios/fandhe_ios_power_state.m`（`build.rs` が iOS ターゲットの feature `device`
-    // 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
+    // SAFETY: `ios/fandhe_ios_power_state.m`（`build.rs` が iOS ターゲットで
+    // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {
         fn fandhe_ios_power_state_read(out: *mut Raw) -> i32;

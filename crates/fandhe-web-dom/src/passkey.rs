@@ -61,7 +61,7 @@ fn to_summary(s: PasskeySummary) -> CoreSummary {
     }
 }
 
-/// `PasskeySigninError` を画面用の結果へ写す。`fandhe-egui-proxy/src/device/passkey.rs` の
+/// `PasskeySigninError` を画面用の結果へ写す。`fandhe-cap-passkey-signin/src/driver.rs` の
 /// `to_outcome` と同期する（同クレートに依存しないため同じ写像をここに置く）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 fn to_outcome(result: Result<PasskeyOutcome, PasskeySigninError>) -> Result<CoreOutcome, String> {

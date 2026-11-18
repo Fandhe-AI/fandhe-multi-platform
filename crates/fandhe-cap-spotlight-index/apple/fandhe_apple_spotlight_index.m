@@ -2,7 +2,7 @@
 // 検索結果から開かれたときの受信を Apple（macOS / iOS）へ橋渡しする。
 //
 // `crates/fandhe-cap-spotlight-index/src/apple.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が feature `device` 有効時に `cc` コンパイルし CoreSpotlight をリンクする。
+// `build.rs` が `cc` コンパイルし CoreSpotlight をリンクする。
 // 登録・削除（CoreSpotlight）は iOS と共用する。受信は OS ごとに別部で、macOS は `NSApp.delegate`
 // への差し込み、iOS（#561）は scene（`ios/fandhe_ios_scene.m`）が投げる通知
 // `FandheSceneContinueUserActivityNotification`（object = NSUserActivity）の observer。

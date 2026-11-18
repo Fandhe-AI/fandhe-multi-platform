@@ -3,7 +3,7 @@
 // （`fandhe_apple_share.m` と同じ分け方。`#if TARGET_OS_IPHONE` が iOS 側）。
 //
 // `crates/fandhe-cap-calendar/src/apple.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos` が feature `device` 有効時に `cc` でコンパイルし、
+// `build.rs` の `build_macos` が `cc` でコンパイルし、
 // EventKit をリンクする。iOS は同じく `build.rs` の iOS 分岐が EventKit / EventKitUI を
 // リンクする。
 //

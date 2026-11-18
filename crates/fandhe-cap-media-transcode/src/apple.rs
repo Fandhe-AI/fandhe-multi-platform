@@ -1,6 +1,6 @@
 //! macOS / iOS 向け音声変換実装（Issue #311 macOS、iOS は #313 で `ios_media_transcode` 経由）。
 //! `fandhe-cap-media-transcode/src/driver.rs` の macOS 経路から呼ばれ、`apple/fandhe_apple_media_transcode.m`
-//! （`AVAudioFile` で AAC の m4a を書く。`build.rs` が feature `device` 有効時にコンパイル）を
+//! （`AVAudioFile` で AAC の m4a を書く。`build.rs` がコンパイル）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。出力は `.m` からコールバックで Rust の `Vec<u8>` へコピーし、
 //! 所有権とアロケータは境界を越えない。`unsafe` はこの呼び出しとコールバックの 2 箇所に閉じる
 //! （coding-rust.md の FFI 例外規定準拠）。`build.rs` のコンパイル条件・`device.rs` の mod cfg と
@@ -18,7 +18,7 @@ use crate::contract::{EMPTY, MediaTranscode, UNREADABLE};
 use crate::error::MediaTranscodeError;
 
 // SAFETY: `apple/fandhe_apple_media_transcode.m` が定義する C ABI（`build.rs` が macOS / iOS
-// ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は `.m` 冒頭コメントに集約する。
+// ターゲットでコンパイル・リンクする）。契約は `.m` 冒頭コメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {
     fn fandhe_apple_media_transcode_run(

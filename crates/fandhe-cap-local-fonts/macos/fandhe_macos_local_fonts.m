@@ -3,8 +3,8 @@
 // ファミリー名を同期で読む。書体（fullName・PostScript 名・スタイル）・ファイルパス・バイト列は
 // 読まない。名前はログに出さない（フィンガープリントになりうるため）。権限の宣言は増やさない。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_local_fonts.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `crates/fandhe-cap-local-fonts/src/macos.rs` から C ABI 経由で呼ばれる。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_macos_local_fonts_list(buf, cap, out_len, out_count, out_overflowed) -> int32_t

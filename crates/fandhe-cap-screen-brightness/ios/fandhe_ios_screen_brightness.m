@@ -2,7 +2,7 @@
 // 前面にいる間だけ上書きする。
 //
 // `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
-// feature `device` 有効時のみ `cc` コンパイルする（UIKit / Foundation はリンク済み）。
+// `cc` でコンパイルする（UIKit / Foundation はリンク済み）。
 //
 // 契約（戻りコードは値渡しの int32_t）:
 //   fandhe_ios_screen_brightness_set(double level, double tolerance) -> int32_t

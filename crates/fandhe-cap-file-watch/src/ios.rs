@@ -1,5 +1,5 @@
 //! iOS 向けフォルダ変更監視実装（Issue #1412）。`ios/fandhe_ios_file_watch.m`（`open(O_EVTONLY)` +
-//! `DISPATCH_SOURCE_TYPE_VNODE`。`build.rs` が iOS 分岐で feature `device` 有効時にコンパイルする）を
+//! `DISPATCH_SOURCE_TYPE_VNODE`。`build.rs` が iOS 分岐でコンパイルする）を
 //! `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
 //! `fandhe-cap-file-watch/src/driver.rs` の iOS 経路から UI スレッドで呼ばれ、契約は `fandhe_cap_file_watch`。
 //!
@@ -30,7 +30,7 @@ mod imp {
     use crate::driver::{register, unregister};
 
     mod ffi {
-        // SAFETY: `ios/fandhe_ios_file_watch.m`（`build.rs` が iOS 分岐で feature `device` 有効時に
+        // SAFETY: `ios/fandhe_ios_file_watch.m`（`build.rs` が iOS 分岐で
         // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
         #[allow(unsafe_code)]
         unsafe extern "C" {

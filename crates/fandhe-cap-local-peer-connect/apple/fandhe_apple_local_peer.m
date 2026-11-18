@@ -3,7 +3,7 @@
 // UIKit は `#if TARGET_OS_IPHONE` の背景遷移の購読にだけ使う（AppKit は使わない）。
 //
 // `crates/fandhe-cap-local-peer-connect/src/apple.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が iOS / macOS の feature `device` 有効時に `cc` でコンパイルし、MultipeerConnectivity を
+// `build.rs` が iOS / macOS で `cc` でコンパイルし、MultipeerConnectivity を
 // リンクする。
 //
 // 動作: 同じサービス種別（"fandhe-p2p"）を advertise と browse の両方で行い、見つけた相手のうち

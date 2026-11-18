@@ -5,7 +5,7 @@
 // するため `apple/` に置く。iOS 側（`TARGET_OS_IOS`、Issue #417）は scene の通知から同じ C ABI 関数を呼ぶ。
 //
 // `crates/fandhe-cap-file-association/src/apple.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が feature `device` 有効時にコンパイルする。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_apple_file_association_register(void) -> void   （macOS・iOS）

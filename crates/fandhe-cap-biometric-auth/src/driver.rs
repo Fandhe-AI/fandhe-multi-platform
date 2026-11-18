@@ -4,7 +4,7 @@
 //! `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
+//! 非 wasm32 でのみコンパイル対象になる
 //! （`device.rs` モジュール doc と同じ理由）。
 //!
 //! # macOS/iOS/Android/Windows: pull 型 `bridge`（OS の認証 UI はいずれもコールバック型）

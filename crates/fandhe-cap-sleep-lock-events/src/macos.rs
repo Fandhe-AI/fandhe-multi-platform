@@ -1,5 +1,5 @@
 //! macOS 向けスリープ・ロックの通知実装（Issue #810）。`macos/fandhe_macos_sleep_lock_events.m`
-//! （NSWorkspace の通知センター。`build.rs` が macOS 分岐で feature `device` 有効時にコンパイルする）を
+//! （NSWorkspace の通知センター。`build.rs` が macOS 分岐でコンパイルする）を
 //! `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
 //! `driver` の macOS 経路から UI スレッドで呼ばれ、契約は
 //! `crate::contract`。
@@ -41,7 +41,7 @@ extern "C" fn fandhe_rust_sleep_lock_events_fire(id: u64, code: i32) {
 }
 
 mod ffi {
-    // SAFETY: `macos/fandhe_macos_sleep_lock_events.m`（`build.rs` が macOS 分岐で feature `device` 有効時に
+    // SAFETY: `macos/fandhe_macos_sleep_lock_events.m`（`build.rs` が macOS 分岐で
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {

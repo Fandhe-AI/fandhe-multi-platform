@@ -2,7 +2,7 @@
 //! 同一 API のため、iOS 側は提示 VC を要求せず同じ経路で完了する）。
 //! `device/biometric_auth.rs` の macOS/iOS 経路から呼ばれ、`LocalAuthentication`
 //! （`LAContext`）実装（`apple/fandhe_apple_biometric.m`、`build.rs` が iOS 全体・
-//! macOS の feature `device` 有効時のみコンパイル・リンクする）を `unsafe extern "C"`
+//! macOS でコンパイル・リンクする）を `unsafe extern "C"`
 //! 1 関数（[`present`]）で呼ぶ。`unsafe` はこの呼び出し 1 箇所に閉じ `// SAFETY:` で
 //! 契約を明記する（`apple_share.rs::present` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
@@ -18,7 +18,7 @@ use std::ffi::CString;
 use std::os::raw::c_char;
 
 // SAFETY: `apple/fandhe_apple_biometric.m` が定義する C ABI（`build.rs` が iOS 全体・
-// macOS ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は `.m`
+// macOS ターゲットでコンパイル・リンクする）。契約は `.m`
 // ファイル冒頭コメントおよび下記 `present` 実装のコメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {

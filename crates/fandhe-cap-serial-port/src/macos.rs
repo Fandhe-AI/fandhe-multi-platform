@@ -81,8 +81,8 @@ struct Handle {
 mod ffi {
     use super::{Handle, RawList};
 
-    // SAFETY: `macos/fandhe_macos_serial_port.m`（`build.rs` が macOS ターゲットの feature `device`
-    // 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
+    // SAFETY: `macos/fandhe_macos_serial_port.m`（`build.rs` が macOS ターゲットで
+    // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {
         fn fandhe_macos_serial_list(out: *mut RawList) -> i32;

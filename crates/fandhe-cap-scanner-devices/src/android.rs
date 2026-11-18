@@ -22,7 +22,7 @@
 //! 機器名・画像・id・コードはログに出さない。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `ScannerDevicesHelper.start` を経た後でしか呼ばれず、
-//! feature `device` 無効ビルドではその経路に到達しない（radio-control と同じ）。
+//! この crate を選ばないアプリではその経路に到達しない（radio-control と同じ）。
 
 use std::time::{Duration, Instant};
 

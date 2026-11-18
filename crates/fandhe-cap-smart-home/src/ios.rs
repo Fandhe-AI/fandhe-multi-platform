@@ -1,5 +1,5 @@
 //! iOS 向けスマートホーム実装（Issue #1080、親 #147）。`ios/fandhe_ios_smart_home.m`
-//! （HomeKit `HMHomeManager`。`build.rs` が iOS 分岐で feature `device` 有効時にコンパイルし HomeKit をリンクする）を
+//! （HomeKit `HMHomeManager`。`build.rs` が iOS 分岐でコンパイルし HomeKit をリンクする）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
 //! `driver` の iOS 経路からワーカースレッドで呼ばれ、契約は `crate::contract`。
 //!
@@ -42,7 +42,7 @@ const BUF_CAP: usize = 64 * 1024;
 
 #[cfg(target_os = "ios")]
 mod ffi {
-    // SAFETY: `ios/fandhe_ios_smart_home.m`（`build.rs` が iOS 分岐で feature `device` 有効時に
+    // SAFETY: `ios/fandhe_ios_smart_home.m`（`build.rs` が iOS 分岐で
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {

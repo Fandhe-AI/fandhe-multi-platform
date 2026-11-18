@@ -6,8 +6,8 @@ import android.net.Uri;
 // ディープリンク（App Links、Issue #1279、親 #153）の Android 実装ヘルパー。
 // `DeepLinkLifecycle` が共通層の `deliverIntents` で起動時と `onNewIntent` を配り、ACTION_VIEW のうち scheme が https の
 // ものだけを Rust の deep-link 受信箱へ渡す（それ以外は url-scheme 側が受信箱へ渡す。`UrlSchemeHelper` は https を除く）。
-// Rust 側の実体は `crates/fandhe-cap-deep-link/src/android.rs`
-// （feature `device` 無効時の no-op は `crates/fandhe-gallery/src/lib.rs`）。JNI 署名はこの宣言・no-op・実体の 3 か所で一致させる。
+// Rust 側の実体は `crates/fandhe-cap-deep-link/src/android.rs`。JNI 署名はこの宣言と実体の 2 か所で一致させる
+// （本 crate を選んだアプリにだけ入るので no-op スタブは要らない、#1194）。
 //
 // 検査（https・許可ホストの完全一致・長さ・制御文字）は Rust に一本化しており、ここでは
 // 文字列を加工しない。二重配送の防ぎ方は url-scheme と同じで、呼び出し側が

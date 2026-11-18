@@ -458,7 +458,7 @@ print・print-screen・window-management・screen-orientation・autofill-otp の
 | 既定値 | 読み戻しは届かず（期限で失敗）、`window_state` は全項目 `None`（全画面が読めず依頼を出さずに失敗）、ヒントは `Unsupported`。いずれも嘘の成功にならない |
 | 呼んでよい時点 | §13 と同じ（フレーム末尾の UI スレッド） |
 | egui 実装 | `fandhe-render-egui` の `EguiWaker`。読み戻しは `ViewportCommand::Screenshot`、ウィンドウは `ViewportCommand` と `ViewportInfo` |
-| ヒントの橋渡し | `fandhe-render-egui` は `forbid(unsafe_code)` で OS の入力欄を触れないため、`app::set_text_input_hint_hook` で橋渡しを持つ層が登録する（`set_teardown_hooks` と同じ形。2 回目以降は無視）。現状は `fandhe-egui-proxy` の `ios_text_input.rs`（置き場の移動は #1194） |
+| ヒントの橋渡し | `fandhe-render-egui` は `forbid(unsafe_code)` で OS の入力欄を触れないため、`app::set_text_input_hint_hook` で橋渡しを持つ層が登録する（`set_teardown_hooks` と同じ形。2 回目以降は無視）。現状は `fandhe-egui-proxy` の `ios_text_input.rs`（置き場の移動は入口 crate の #1199・#1200） |
 | 採らなかった案 | `RgbaPixels` の流用（辺の上限 2048 で、Retina の読み戻しが通らなくなる）、`HostView: Send + Sync`（他の実装の fake を壊す）、`fandhe-render-egui` から C ABI を直接呼ぶ（`unsafe` の禁止に反する） |
 | 範囲外 | `egui_context`（fullscreen-immersive・safe-area-insets）と `canvas_*`（pen-stylus）は口を足さない（第 14 束 #1334 で足した。§24） |
 
@@ -664,7 +664,7 @@ web-auth-session）で、URL・Intent・背景転送の完了を受ける 9 機�
 | 2 つの id を 1 つの crate にまとめる（print・print-screen） | `print_screen_page_effect` が `SLOT`・`.m`・`PrintHelper` を print と共用するため、crate は 1 つ（`fandhe-cap-print`）。宣言の `id` は print で、print-screen の対応表の `impl` は同じ crate のパスを指す（compose-mail-sms と同じ扱い、§15） |
 | Web 実装の置き場 | 第 2 束以降の多数と同じく、Web 実装の本体は `fandhe-web-dom` に残し、`fandhe-web-dom` が機能 crate に依存して契約の純関数・定数・エラー型を使う（`DeviceError` から各機能のエラー型へ付け替えた）。`fandhe-web-dom/src/<stem>.rs` を `src/web.rs` へ動かす形にはしていない |
 | `Send + Sync` を要求する trait で `HostView` を使う（window-management・fullscreen-immersive・autofill-otp） | `&CompletionSender<S>` を持つ実装にし、使うたびに `host_view()` を引く（§17）。dispatch の戻りは `Box<dyn … + '_>` / `Arc<dyn … + '_>`。autofill-otp は OS 実装を持たない（`platform_autofill_otp(sender)` が描画層へ委譲する） |
-| iOS の入力欄のヒント（autofill-otp） | 機能 crate に C ABI を持ち込まず、driver が `HostView::set_text_input_hint` だけを呼ぶ（§17）。UIKit 側（`fandhe-egui-proxy` の `ios_text_input.rs`・`fandhe_ios_text_input.m`）は描画層の IME 橋渡しのため動かさない（置き場は #1194）。対応表 iOS 欄の `impl` は driver と `HostView` の口を指し、`note` に橋渡しの現在地を書いた |
+| iOS の入力欄のヒント（autofill-otp） | 機能 crate に C ABI を持ち込まず、driver が `HostView::set_text_input_hint` だけを呼ぶ（§17）。UIKit 側（`fandhe-egui-proxy` の `ios_text_input.rs`・`fandhe_ios_text_input.m`）は描画層の IME 橋渡しのため動かさない（置き場は入口 crate の #1199・#1200）。対応表 iOS 欄の `impl` は driver と `HostView` の口を指し、`note` に橋渡しの現在地を書いた |
 | insets に値だけ要る機能（safe-area-insets） | Rust は `fandhe_platform_android::window_insets_px()` を読む。取り付けは `HostInsets` の最初の `addListener` で起きるため、`SafeAreaInsetsLifecycle` が `onHostStarted` で何もしない配り先（`static final` の同一インスタンス）を登録する（§18）。従来は `MainActivity` が fullscreen の配り先を常に登録していた |
 | insets の配り先を持つ機能（fullscreen-immersive） | `FullscreenLifecycle` が `onHostCreated` で `attach`、`onHostStarted` で `HostInsets.addListener(activity, <helper が持つ同一インスタンス>)`、`onHostDestroyed` で `detach` する。`getDecorView()` を呼ぶため `onHostCreated` では登録しない。`current` の世代判定は従来どおり |
 | タッチ入力を観測する機能（pen-stylus） | `PenStylusLifecycle` が `onHostCreated` で `HostInput.addTouchObserver(activity, <helper が持つ同一インスタンス>)`、`onHostPaused`・`onHostDestroyed` で接触なしへ戻す。イベントは消費しない |
@@ -748,3 +748,23 @@ PiP の切り替わりの口は #1327（§18）で決着していた。はじめ
 - iOS の `.m`・Java と Rust に複製されている `MAX_PHOTO_*`・`PHOTO_CONVERT_SIDE` を片側（Rust）から JNI・C ABI の引数で渡す形にすること（挙動を変えない移動を優先した。device-bridge-contracts 5 の既存の指摘対象）
 - 写真選択の Web と、バーコード読み取りの Web 本体を `fandhe-web-dom` から機能 crate へ移すこと
 - iOS・Android・Windows の実機確認（人間担当。PHPicker の振り分け・Activity 再生成での破棄・HEIC の変換・OCR の言語）
+
+## 28. 旧構造の撤去（#1194）
+
+全機能を機能 crate へ移した後に残っていた旧構造を撤去した。上の各節の「#1194 で撤去する」「#1194 まで残す」はここで済んだ。
+
+| 項目 | 扱い |
+|------|------|
+| 全機能の一括切り替え（`fandhe-gallery`・`fandhe-egui-proxy` の feature `device`） | 撤去した。カタログは全機能 crate を常に依存に持つ。`device` 無効時の JNI の no-op スタブも消した（機能を選ばないアプリには Java の受け口自体が入らない）。`migrate-capability.mjs sync` は gallery の依存の一覧だけを書き直す |
+| `fandhe-egui-proxy` の optional 依存（`fandhe-device`・`serde_json`・`jni`・`windows` とその features・`windows-future`・`windows-core`） | 使う箇所が無くなったので撤去した |
+| カタログの Android Manifest・Gradle | 殻（`platforms/android`）は `<application>` の属性だけを持ち、権限・コンポーネント・Java / res の置き場・Gradle 依存は `cargo fandhe gen` の出力（`crates/fandhe-gallery/gen/android/`）を取り込む。手書きの `data_extraction_rules.xml` は gen のバックアップ規則に置き換えた。Gradle を呼ぶスクリプトは先に `scripts/build/gen-gallery.sh` を実行する |
+| gen に出ていなかった Android の宣言 | location の `uses-feature`（`android.hardware.location*`、required=false）、mic-record・speech-recognition の `android.hardware.microphone`（required=false）、managed-app-config の `APP_RESTRICTIONS`（制限スキーマと表示名は crate の `android/res`）、file-provider の表示名（`file_provider_root_title`）を機能 crate へ移した |
+| カタログの iOS・macOS の Info.plist・entitlements | 手書き（`FandheIosApp/Resources`・`FandheLiveActivity`・`FandheTextWidget`・`fandhe-egui-proxy/macos`）を撤去し、gen の出力を使う。iOS の .app は `scripts/ios/stage-info-plist.sh` が配置し、macOS の素の実行体へは `fandhe-gallery` の `build.rs` が同じ生成をして埋め込む。表示名・対応言語・LAN 内通信の許可はアプリ設定（`fandhe-app.<os>`）に書く |
+| 切り離し手順書（`docs/architecture/device-feature-removal.md`） | 一括切り替えが無くなったので撤去した。機能を外すのは依存を外すだけで済む |
+
+### 対象外
+
+- `fandhe-egui-proxy` そのもの（各 OS の入口・ソフトキーボード・TV のフォーカス移動・計測用の入口・iOS の入力欄の橋渡し）の撤去。入口の置き場は入口 crate（#1199）と `#[fandhe::main]`（#1200）で決まるため、そちらで撤去する
+- 機能を 1 つも登録しない利用者アプリで `HostInsets` が取り付けられない制約（§18 の範囲外）。入口を生成する #1200 で扱う
+- `fandhe-device` の整理（`DeviceError` の削除、OS を呼ぶ処理の移動）。#1194 の続きの PR で扱う
+- 実機確認（人間担当。Android・iOS の生成物で組んだカタログの起動、macOS の許可プロンプト）

@@ -10,8 +10,8 @@
 - 本書を入れた時点で `crates/` は未移行です。構造の実装は #1155 配下の後続 issue で進めます（`fandhe-gallery` は #1165 で追加済み）
 - 本書より古い文書と食い違う場合は、本書を正とします
 - 古い文書の「独自レンダラ」は、第 2 バックエンドの候補と読み替えます
-- #1194 までは旧構造（`feature device`、手書きの設定、`fandhe-egui-proxy/src/device/`）が併存します。
-  併存そのものは欠陥として扱いません
+- 旧構造（`feature device`、手書きの設定、`fandhe-egui-proxy/src/device/`）は #1194 で撤去しました。
+  `fandhe-egui-proxy` に残る各 OS の入口は、入口 crate（#1199）と `#[fandhe::main]`（#1200）で撤去します
 
 ## 2. 決定の要約
 
@@ -40,11 +40,11 @@ crates.io では、公開する crate の通常依存も公開が要るためで
 | `fandhe-platform-android` / `-apple` / `-windows` / `-web` | 機能をまたいで共有する OS 層。`-windows` は HWND の保持と COM 初期化ガードだけを持ち、`windows` crate の feature は共通層が最小限（`Win32_Foundation`・`Win32_System_Com`）、各機能 crate が自分の分を宣言する | する | #1166・#1168・#1184・#1185 |
 | `fandhe-cap-<id>` | 1 機能 1 crate。OS 別実装・ObjC・Java・`build.rs`・宣言を同居 | する | #1170〜#1174、第 5 Phase |
 | `fandhe-web-dom` | Web の DOM 出力 | する | 既存 |
-| `fandhe-gallery` | 全機能を載せるカタログ（実機確認用）。画面の登録と各 OS の最終成果物（デスクトップ・iOS の bin、Android・Web の cdylib）を持つ。#1194 までは端末機能を `fandhe-egui-proxy` に依存する | しない | #1165（追加済み） |
+| `fandhe-gallery` | 全機能を載せるカタログ（実機確認用）。画面の登録と各 OS の最終成果物（デスクトップ・iOS の bin、Android・Web の cdylib）を持つ。各 OS の設定は `cargo fandhe gen` の出力だけを使う（#1194）。各 OS の入口は #1200 までは `fandhe-egui-proxy` を使う | しない | #1165（追加済み） |
 | `fandhe-prototype` | 検証用プロトタイプ | しない | 既存 |
 | `fandhe-winit-ime` | 入口から到達しない。第 2 バックエンド着手時に判断 | しない | 既存 |
 | `fandhe-swiftui-bridge` | watchOS / visionOS 用。入口から到達しない | しない | 既存 |
-| `fandhe-egui-proxy` | 上記へ分解して消す | 消滅 | #1164〜#1168・#1194 |
+| `fandhe-egui-proxy` | 上記へ分解して消す。端末機能の配線と一括切り替えは撤去済み（#1355・#1194）で、各 OS の入口・ソフトキーボード・TV のフォーカス移動・計測用の入口が残る | 消滅 | #1164〜#1168・#1194・#1199・#1200 |
 | `fandhe-device` | 機能 crate へ移した後に残る、OS に触れない共有の型・検証・定数・符号化（宣言は持たない）。縮小して残す。名前は #1215 で決める。残りの整理は #1194 | する（機能 crate の通常依存になるため） | #1183・#1194 |
 
 依存は `fandhe-core` へ向かう一方向です。

@@ -1,8 +1,8 @@
 // Phase 11 の拡充ループ（親 #1141）型サンプル「バッジの設定」の iOS 実装（Issue #1361）。
 // `UNUserNotificationCenter.setBadgeCount(_:withCompletionHandler:)`（iOS 16+）を呼ぶ。
 //
-// `crates/fandhe-egui-proxy/src/device/ios_app_badge.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が feature `device` 有効時のみ `cc` コンパイルする（UserNotifications は
+// `crates/fandhe-cap-app-badge/src/ios.rs` から C ABI 経由で呼ばれる。
+// `build.rs` が `cc` コンパイルする（UserNotifications は
 // 通知機能 #1005 で既にリンク済み）。
 //
 // 契約（pull 型。`fandhe_ios_notification.m` と同型、coding-rust.md の FFI 例外規定）:

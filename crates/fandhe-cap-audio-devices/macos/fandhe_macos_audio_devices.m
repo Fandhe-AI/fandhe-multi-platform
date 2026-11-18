@@ -5,8 +5,8 @@
 // デバイス ID・UID は読まない。hidden のデバイスは `kAudioHardwarePropertyDevices` に含まれない
 // （`AudioHardwareBase.h`）ため `kAudioDevicePropertyIsHidden` は判定しない。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_audio_devices.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `crates/fandhe-cap-audio-devices/src/macos.rs` から C ABI 経由で呼ばれる。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_macos_audio_devices_list(FandheAudioDevicesRaw *out) -> int32_t

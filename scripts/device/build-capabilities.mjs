@@ -153,26 +153,12 @@ function checkImplPaths(features, root) {
 
 /**
  * Android 権限宣言の検証。status=done かつ perm 欄に `android.permission.X` を
- * 含む機能について、AndroidManifest.xml 側に対応する `<uses-permission>` があるかを見る。
+ * 含む機能について、機能 crate の宣言（`[package.metadata.fandhe.android] permissions`）に
+ * 対応する権限があるかを見る。カタログの Manifest は gen の出力で、権限の正本は宣言にある（#1194）。
  * perm が短縮形（例: `USE_BIOMETRIC`）のみで完全修飾名を含まない機能は対象外
  * （Issue #948 の検査対象は perm 欄が完全修飾名を書いている場合に限る）。
  */
-function checkAndroidPermissions(features, manifestPath) {
-  let manifest = "";
-  try {
-    manifest = readFileSync(manifestPath, "utf8");
-  } catch {
-    manifest = "";
-  }
-  // XML コメントを除いてから `<uses-permission ...>` 要素を拾い、属性順に依らず
-  // `android:name` の値を集める（コメントアウトされた宣言を「宣言済み」と誤判定しない、
-  // `android:maxSdkVersion` が先に来る宣言を見落とさない。codex-review 指摘 P2、PR #951）。
-  const declared = new Set();
-  const stripped = manifest.replace(/<!--[\s\S]*?-->/g, "");
-  for (const el of stripped.matchAll(/<uses-permission(?:-sdk-23)?\b([^>]*)>/g)) {
-    const name = /android:name\s*=\s*"([^"]+)"/.exec(el[1]);
-    if (name) declared.add(name[1]);
-  }
+function checkAndroidPermissions(features, declared) {
   const errors = [];
   for (const f of features) {
     const a = f.platforms.android;
@@ -183,6 +169,25 @@ function checkAndroidPermissions(features, manifestPath) {
     }
   }
   return errors;
+}
+
+/**
+ * `crates/*\/Cargo.toml` が宣言する Android 権限の名前。TOML のコメント（`#` 以降）は除き、
+ * `name = "android.permission.X"` の値を集める（宣言の形式は docs/architecture/capability-declaration.md）。
+ */
+function declaredAndroidPermissions(cratesDir) {
+  const declared = new Set();
+  for (const d of readdirSync(cratesDir)) {
+    let toml;
+    try {
+      toml = readFileSync(join(cratesDir, d, "Cargo.toml"), "utf8");
+    } catch {
+      continue;
+    }
+    const body = toml.replace(/#.*$/gm, "");
+    for (const m of body.matchAll(/name\s*=\s*"(android\.permission\.[A-Z_]+)"/g)) declared.add(m[1]);
+  }
+  return declared;
 }
 
 const data = load();
@@ -601,13 +606,12 @@ if (invokedAsCli) {
   if (check) {
     const pathErrors = checkImplPaths(features, repoRoot);
     for (const e of pathErrors) console.error(`[impl-path] 実装パスが存在しません: ${e}`);
-    const manifestPath = join(repoRoot, "platforms", "android", "app", "src", "main", "AndroidManifest.xml");
-    const permErrors = checkAndroidPermissions(features, manifestPath);
-    for (const e of permErrors) console.error(`[android-perm] AndroidManifest.xml に uses-permission がありません: ${e}`);
+    const permErrors = checkAndroidPermissions(features, declaredAndroidPermissions(join(repoRoot, "crates")));
+    for (const e of permErrors) console.error(`[android-perm] 機能 crate の宣言に権限がありません: ${e}`);
     if (pathErrors.length > 0 || permErrors.length > 0) process.exit(1);
     console.log(`docs/device/capabilities/ の検査を通過（${features.length} 機能）。`);
   }
 }
 
 // テスト（scripts/device/build-capabilities.test.mjs）専用のエクスポート。
-export { checkImplPaths, checkAndroidPermissions, extractImplPaths, badUrls };
+export { checkImplPaths, checkAndroidPermissions, declaredAndroidPermissions, extractImplPaths, badUrls };

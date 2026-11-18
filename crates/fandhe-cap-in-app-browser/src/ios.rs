@@ -1,6 +1,6 @@
 //! iOS 向けアプリ内ブラウザ実装（親 #135、Issue #702）。`driver` の iOS 経路
 //! （dispatch）から呼ばれ、`ios/fandhe_ios_in_app_browser.m`（`SFSafariViewController`。`build.rs` が
-//! feature `device` 有効時にコンパイルして SafariServices をリンクする）を `unsafe extern "C"` で呼ぶ。
+//! コンパイルして SafariServices をリンクする）を `unsafe extern "C"` で呼ぶ。
 //! `unsafe` はこの FFI 宣言と受け口に閉じ、各所に `// SAFETY:` を書く（coding-rust.md の FFI 例外規定）。
 //! 契約の SSOT は `crate::contract`。
 //!

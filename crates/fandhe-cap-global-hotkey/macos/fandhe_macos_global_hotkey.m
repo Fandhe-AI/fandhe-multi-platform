@@ -3,7 +3,7 @@
 // 入力監視の許可は不要（`NSEvent` の global monitor は許可が要るため採らない）。
 //
 // `crates/fandhe-cap-global-hotkey/src/macos.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルし、Carbon をリンクする。
+// `build.rs` がコンパイルし、Carbon をリンクする。
 //
 // 契約:
 //   fandhe_macos_global_hotkey_register(uint32_t token) -> int32_t

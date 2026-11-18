@@ -2,7 +2,7 @@
 // `NSBeep()` で OS 標準の警告音を 1 回鳴らす。権限は不要。音は利用者がシステム設定のサウンドで選ぶ。
 //
 // `crates/fandhe-cap-system-sound/src/macos.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_macos_system_sound_beep(void) -> int32_t

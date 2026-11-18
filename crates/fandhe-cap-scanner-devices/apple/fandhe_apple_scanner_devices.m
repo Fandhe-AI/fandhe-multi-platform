@@ -5,7 +5,7 @@
 // `applicationState` を使う。
 //
 // `crate::apple` から C ABI 経由で呼ばれる。
-// `build.rs` が macOS・iOS ターゲットの feature `device` 有効時に `cc` コンパイルする
+// `build.rs` が macOS・iOS ターゲットで `cc` コンパイルする
 // （Rust 側 cfg と同じ OS 集合に保つ）。写像の SSOT は Rust 側の純関数 `failure_for` / `failure_for_os_code`。
 //
 // 契約（ブロッキング型。Rust のワーカースレッドから呼ぶ。main スレッドから呼ぶと 8）:

@@ -72,7 +72,7 @@ bundle_id="com.fandhe.iosapp"
 out_dir="${FANDHE_IOS_OUT_DIR:-${repo_root}/target/ios-sim}"
 evidence_dir="${repo_root}/_/verification/task-1.4"
 
-# アプリの `MinimumOSVersion`（`platforms/apple/FandheIosApp/Resources/Info.plist`）と
+# アプリの `MinimumOSVersion`（`cargo fandhe gen` の `crates/fandhe-gallery/gen/ios/Info.plist`）と
 # 揃える。既定デバイス選択（`FANDHE_IOS_SIM_DEVICE` 未指定時）がこれ未満のランタイムに
 # 解決されると `simctl install` が非互換エラーで必ず失敗するため、既定選択はこの
 # メジャーバージョン以降のランタイムに限定する（Review 指摘 Medium 対応）。
@@ -228,7 +228,7 @@ resolve_sim_device() {
     default_candidates="$(echo "${raw_devices}" | filter_devices_by_min_ios_major_version "${min_ios_major_version}" | grep -E 'iPhone|iPad' || true)"
     matched_line="$(echo "${default_candidates}" | head -n 1)"
     if [[ -z "${matched_line}" ]]; then
-      err "iOS ${min_ios_major_version} 以降の利用可能なシミュレータデバイスが見つかりません（iPhone/iPad）。アプリの MinimumOSVersion=17.0（platforms/apple/FandheIosApp/Resources/Info.plist）未満のランタイムしか導入されていない可能性があります。"
+      err "iOS ${min_ios_major_version} 以降の利用可能なシミュレータデバイスが見つかりません（iPhone/iPad）。アプリの MinimumOSVersion=17.0（crates/fandhe-gallery/gen/ios/Info.plist）未満のランタイムしか導入されていない可能性があります。"
       echo "[verify-simulator-render] Xcode の Settings > Platforms から iOS ${min_ios_major_version} 以降のランタイムを導入するか、FANDHE_IOS_SIM_DEVICE で対象デバイスを明示指定してください。" >&2
       echo "[verify-simulator-render] 利用可能なデバイス一覧（全ランタイム）:" >&2
       echo "${all_available_devices}" >&2

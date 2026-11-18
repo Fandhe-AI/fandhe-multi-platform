@@ -1,7 +1,7 @@
 //! macOS / iOS 向け近くの端末との直接通信の実装（Issue #511 macOS。iOS は Issue #512 で委譲する）。
 //! `driver.rs` の macOS 経路（iOS は `ios.rs` の委譲）から呼ばれ、
 //! `apple/fandhe_apple_local_peer.m`（MultipeerConnectivity、`build.rs` が iOS / macOS の
-//! feature `device` 有効時にコンパイル・リンクする）を `unsafe extern "C"` 2 関数
+//! コンパイル・リンクする）を `unsafe extern "C"` 2 関数
 //! （[`present`] / [`stop`]）で呼ぶ。`unsafe` はこの呼び出しと `CStr` / `slice` の読み取りに閉じ
 //! `// SAFETY:` で契約を明記する（`apple_lan_discovery.rs` と同型、coding-rust.md の FFI 例外規定）。
 //!
@@ -21,7 +21,7 @@ use crate::error::LocalPeerConnectError;
 use crate::driver::{PENDING, finish};
 
 // SAFETY: `apple/fandhe_apple_local_peer.m` が定義する C ABI（`build.rs` が iOS / macOS の
-// feature `device` 有効時にコンパイル・リンクする）。契約は `.m` ファイル冒頭コメントに集約する。
+// コンパイル・リンクする）。契約は `.m` ファイル冒頭コメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {
     fn fandhe_apple_local_peer_start(

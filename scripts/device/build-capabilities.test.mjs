@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkImplPaths, checkAndroidPermissions, extractImplPaths, badUrls } from "./build-capabilities.mjs";
+import { checkImplPaths, checkAndroidPermissions, declaredAndroidPermissions, extractImplPaths, badUrls } from "./build-capabilities.mjs";
 
 test("extractImplPaths: 対象拡張子のパスのみ抽出し、関数名・拡張子の取りこぼしをしない", () => {
   const text =
@@ -42,49 +42,35 @@ test("checkImplPaths: 実在しないパスを機能 id / OS / パスの形式�
   }
 });
 
-test("checkAndroidPermissions: done かつ perm 記載があるのに Manifest 未宣言なら検出する", () => {
-  const root = mkdtempSync(join(tmpdir(), "cap-perm-"));
-  try {
-    const manifestPath = join(root, "AndroidManifest.xml");
-    writeFileSync(
-      manifestPath,
-      '<manifest><uses-permission android:name="android.permission.INTERNET" /></manifest>',
-    );
-    const features = [
-      { id: "http-get", platforms: { android: { status: "done", perm: "android.permission.INTERNET" } } },
-      { id: "camera", platforms: { android: { status: "done", perm: "android.permission.CAMERA" } } },
-      // possible（未達成）は対象外
-      { id: "future", platforms: { android: { status: "possible", perm: "android.permission.NFC" } } },
-      // perm が「なし」等で完全修飾名を含まない場合は対象外
-      { id: "clipboard", platforms: { android: { status: "done", perm: "なし" } } },
-    ];
-    const errors = checkAndroidPermissions(features, manifestPath);
-    assert.deepEqual(errors, ["camera / android / android.permission.CAMERA"]);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
+test("checkAndroidPermissions: done かつ perm 記載があるのに宣言に無ければ検出する", () => {
+  const declared = new Set(["android.permission.INTERNET"]);
+  const features = [
+    { id: "http-get", platforms: { android: { status: "done", perm: "android.permission.INTERNET" } } },
+    { id: "camera", platforms: { android: { status: "done", perm: "android.permission.CAMERA" } } },
+    // possible（未達成）は対象外
+    { id: "future", platforms: { android: { status: "possible", perm: "android.permission.NFC" } } },
+    // perm が「なし」等で完全修飾名を含まない場合は対象外
+    { id: "clipboard", platforms: { android: { status: "done", perm: "なし" } } },
+  ];
+  assert.deepEqual(checkAndroidPermissions(features, declared), ["camera / android / android.permission.CAMERA"]);
 });
 
-test("checkAndroidPermissions: コメントアウトは未宣言、属性順が違っても宣言済みと判定する", () => {
-  const dir = mkdtempSync(join(tmpdir(), "cap-perm-"));
+test("declaredAndroidPermissions: crate の宣言から集め、TOML のコメントは除く", () => {
+  const root = mkdtempSync(join(tmpdir(), "cap-decl-"));
   try {
-    const manifest = join(dir, "AndroidManifest.xml");
+    mkdirSync(join(root, "fandhe-cap-a"));
     writeFileSync(
-      manifest,
+      join(root, "fandhe-cap-a", "Cargo.toml"),
       [
-        "<manifest>",
-        '<!-- <uses-permission android:name="android.permission.CAMERA" /> -->',
-        '<uses-permission android:maxSdkVersion="32" android:name="android.permission.INTERNET" />',
-        "</manifest>",
+        "[package.metadata.fandhe.android]",
+        '# permissions = [{ name = "android.permission.CAMERA" }]',
+        'permissions = [{ name = "android.permission.INTERNET", max-sdk = 32 }]',
       ].join("\n"),
     );
-    const features = [
-      { id: "a", platforms: { android: { status: "done", perm: "android.permission.CAMERA" } } },
-      { id: "b", platforms: { android: { status: "done", perm: "android.permission.INTERNET" } } },
-    ];
-    assert.deepEqual(checkAndroidPermissions(features, manifest), ["a / android / android.permission.CAMERA"]);
+    mkdirSync(join(root, "no-manifest"));
+    assert.deepEqual([...declaredAndroidPermissions(root)], ["android.permission.INTERNET"]);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

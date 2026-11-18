@@ -5,7 +5,7 @@
 // 個体識別子（UDID・`identifierForVendor`・シリアル）と端末名（`UIDevice.name`）は読まない。
 //
 // `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
-// feature `device` 有効時にのみコンパイルする（Foundation はリンク済み）。
+// コンパイルする（Foundation はリンク済み）。
 //
 // 契約:
 //   fandhe_ios_device_info_read(FandheIosDeviceInfoRaw *out) -> int32_t

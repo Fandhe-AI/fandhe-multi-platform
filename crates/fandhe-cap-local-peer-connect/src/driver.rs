@@ -5,7 +5,7 @@
 //! 契約の SSOT は `contract.rs`（30 秒の窓・200 バイト・`sanitize_received`・
 //! `should_invite`・`decode_code`）。`fandhe-cap-bluetooth-le` などと同型の pull 型。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
+//! 非 wasm32 でのみコンパイル対象になる
 //! （`device.rs` モジュール doc と同じ理由）。
 //!
 //! # iOS / macOS / Android: pull 型 `bridge`

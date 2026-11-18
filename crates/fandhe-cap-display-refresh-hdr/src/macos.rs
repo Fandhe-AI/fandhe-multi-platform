@@ -1,6 +1,6 @@
 //! macOS 向け画面のリフレッシュレート・HDR・広色域実装（Issue #870）。
 //! `macos/fandhe_macos_display_refresh_hdr.m`（`NSScreen` / `CGDisplayMode`、`build.rs` が macOS
-//! ターゲットの feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。
+//! ターゲットでコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。
 //! `unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。`driver.rs`
 //! の macOS 経路から呼ばれ、契約は `crate::contract`。
 //!

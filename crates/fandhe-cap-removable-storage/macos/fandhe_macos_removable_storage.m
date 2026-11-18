@@ -5,7 +5,7 @@
 // 権限の宣言は増やさない（本体アプリは sandbox なし）。
 //
 // `crates/fandhe-cap-removable-storage/src/macos.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_macos_removable_storage_start(id) -> int32_t

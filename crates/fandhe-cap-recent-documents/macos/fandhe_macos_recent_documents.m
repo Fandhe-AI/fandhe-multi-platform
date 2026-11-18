@@ -3,7 +3,7 @@
 // 権限は不要。一覧の消去（`clearRecentDocuments:`）は呼ばない。
 //
 // `crate::macos` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_macos_recent_documents_register(const char *path) -> int32_t   登録して読み戻す

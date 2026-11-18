@@ -1,6 +1,6 @@
 //! macOS / iOS 向けサムネイル実装（Issue #917 macOS、iOS は b-ios が共用）。
 //! `driver.rs` の macOS 経路（と `ios_file_preview`）から呼ばれ、QuickLookThumbnailing 実装
-//! （`apple/fandhe_apple_file_preview.m`、`build.rs` が feature `device` 有効時のみコンパイル・
+//! （`apple/fandhe_apple_file_preview.m`、`build.rs` がコンパイル・
 //! リンクする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこのモジュールの extern 宣言と
 //! 呼び出し 1 か所に閉じ `// SAFETY:` で契約を明記する（coding-rust.md の FFI 例外規定準拠）。
 //!

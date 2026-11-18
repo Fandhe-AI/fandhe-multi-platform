@@ -3,7 +3,7 @@
 // Foundation と CoreBluetooth だけを使い AppKit / UIKit は使わない。
 //
 // `src/apple.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が iOS / macOS の feature `device` 有効時に `cc` でコンパイルし、CoreBluetooth
+// `build.rs` が iOS / macOS で `cc` でコンパイルし、CoreBluetooth
 // をリンクする。
 //
 // 契約（pull 型。`fandhe_apple_speech_recognition.m` と同型）:

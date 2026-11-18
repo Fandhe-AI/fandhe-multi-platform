@@ -1,5 +1,5 @@
 //! macOS 向けバッジ設定実装（Issue #1360）。`macos/fandhe_macos_app_badge.m`
-//! （`NSDockTile.badgeLabel`、`build.rs` が macOS ターゲットの feature `device` 有効時に
+//! （`NSDockTile.badgeLabel`、`build.rs` が macOS ターゲットで
 //! コンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ
 //! `// SAFETY:` で契約を明記する。`fandhe-cap-app-badge/src/driver.rs` の macOS 経路から呼ばれ、契約は
 //! `fandhe_cap_app_badge`。

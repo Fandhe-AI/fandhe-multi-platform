@@ -1,7 +1,7 @@
 // ライト（トーチ）: iOS 実装（Issue #460、親 #106）。`AVCaptureDevice` の torch を点け消しする。
 //
 // `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
-// feature `device` 有効時のみ `cc` コンパイルする（AVFoundation / UIKit はリンク済み）。
+// `cc` でコンパイルする（AVFoundation / UIKit はリンク済み）。
 // コードの意味は `crate::contract` の SSOT（`decode_set` / `decode_read`）に従う。
 //
 // 契約:

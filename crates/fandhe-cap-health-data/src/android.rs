@@ -18,7 +18,7 @@
 //! 守らない範囲: 期限後に届く `aggregate` の結果、既定で許可時点の 30 日前までしか読めないこと。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `requestHealthDataRead` を経た後でしか
-//! 呼ばれず、feature `device` 無効ビルドではその経路に到達しない（pedometer と同じ）。
+//! 呼ばれず、この crate を選ばないアプリではその経路に到達しない（pedometer と同じ）。
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};

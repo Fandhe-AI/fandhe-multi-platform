@@ -2,7 +2,7 @@
 name = "fandhe-device"
 version = "0.1.0"
 edition = "2024"
-description = "Phase 8（端末機能の型検証、Issue #746）: 保存・HTTP・カメラの抽象トレイトと共通実装。fandhe-egui-proxy の feature `device` からのみ参照される切り離し可能なクレート"
+description = "機能 crate（fandhe-cap-*）が共有する OS に触れない型・検証・定数（consumer-app-structure.md §8）"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
 publish = false

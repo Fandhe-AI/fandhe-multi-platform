@@ -7,7 +7,7 @@
 // メソッドを足す。既にメソッドがあれば NO が返るので、上書きせず失敗（-3）として返す。
 //
 // `crates/fandhe-cap-app-shortcuts/src/macos.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   int32_t fandhe_macos_app_shortcuts_install(title, title_len, url, url_len)

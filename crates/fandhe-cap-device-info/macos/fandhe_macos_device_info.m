@@ -4,7 +4,7 @@
 // 見積り）を同期で読む。個体識別子（`hw.uuid`・シリアル）は読まない。
 //
 // `src/macos.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_macos_device_info_read(FandheDeviceInfoRaw *out) -> int32_t

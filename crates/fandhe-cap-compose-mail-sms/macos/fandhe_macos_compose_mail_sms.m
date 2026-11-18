@@ -4,7 +4,7 @@
 // （Issue #1042）。権限は不要。
 //
 // `crate::macos` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_macos_compose_open_url(const char *url) -> int32_t

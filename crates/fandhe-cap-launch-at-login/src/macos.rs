@@ -1,5 +1,5 @@
 //! macOS 向けログイン時の自動起動の実装（Issue #696）。`macos/fandhe_macos_launch_at_login.m`
-//! （`SMAppService.mainApp`、`build.rs` が macOS ターゲットの feature `device` 有効時に
+//! （`SMAppService.mainApp`、`build.rs` が macOS ターゲットで
 //! コンパイルし ServiceManagement をリンクする）を `unsafe extern "C"` で呼ぶ。`unsafe` は
 //! `mod ffi` に閉じ `// SAFETY:` で契約を明記する。`driver` の macOS 経路から
 //! 呼ばれ、契約は `crate::contract`。

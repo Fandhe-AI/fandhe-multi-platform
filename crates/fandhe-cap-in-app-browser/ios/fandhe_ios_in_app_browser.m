@@ -1,5 +1,5 @@
 // iOS 向けアプリ内ブラウザ（SafariServices `SFSafariViewController`、Issue #702、親 #135）。
-// `src/ios.rs` から呼ばれ、`build.rs` が feature `device` 有効時に
+// `src/ios.rs` から呼ばれ、`build.rs` が
 // コンパイルして SafariServices をリンクする。Info.plist・entitlement の追加は要らない。
 //
 // C ABI（Rust 側の `// SAFETY:` の根拠）:

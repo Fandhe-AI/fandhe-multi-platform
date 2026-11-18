@@ -1,6 +1,6 @@
 //! iOS 向け画面のリフレッシュレート・HDR・広色域実装（親 #177、Issue #871）。
 //! `ios/fandhe_ios_display_refresh_hdr.m`（`UIScreen` / `UITraitCollection`、`build.rs` が iOS
-//! ターゲットの feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。
+//! ターゲットでコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。
 //! `unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。`driver.rs`
 //! の iOS 経路から呼ばれ、契約の SSOT は `crate::contract`。
 //!

@@ -3,7 +3,7 @@
 // 広告 ID（IDFA）は読まず、権限・usage description・privacy manifest は要らない。
 //
 // `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
-// feature `device` 有効時にのみコンパイルする（Foundation・UIKit はリンク済み）。
+// コンパイルする（Foundation・UIKit はリンク済み）。
 //
 // 契約:
 //   fandhe_ios_device_identifier_read(char *out, size_t cap) -> int32_t

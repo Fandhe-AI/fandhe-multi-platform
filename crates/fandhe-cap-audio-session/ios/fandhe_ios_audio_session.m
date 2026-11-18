@@ -4,7 +4,7 @@
 // categoryOptions・routeSharingPolicy を保存し、停止・開始途中の失敗の全経路で無効化と復元を行う。
 //
 // `crates/fandhe-cap-audio-session/src/ios.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の iOS 分岐が feature `device` 有効時にのみコンパイルする（AVFoundation はリンク済み）。
+// `build.rs` の iOS 分岐でコンパイルする（AVFoundation はリンク済み）。
 //
 // 契約（呼ぶのはすべて main thread。`dispatch_sync` は使わない）:
 //   fandhe_ios_audio_session_start(id, kind) -> int32_t

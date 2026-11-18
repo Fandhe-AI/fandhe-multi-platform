@@ -4,7 +4,7 @@
 // 権限の宣言も増やさない。既定の出力機器は毎回 OS へ問い、デバイス ID・名前は保持しない・返さない。
 //
 // `crates/fandhe-cap-volume-control/src/macos.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_macos_volume_control_read(FandheVolumeRaw *out) -> int32_t

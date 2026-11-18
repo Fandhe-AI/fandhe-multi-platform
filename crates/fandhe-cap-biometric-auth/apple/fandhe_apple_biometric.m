@@ -3,8 +3,8 @@
 // `fandhe_apple_share.m` と同じ判断）。`LAContext.evaluatePolicy` は提示 VC を要求
 // しないため、iOS/macOS で分岐せず同じ共通関数を呼ぶだけで完了する。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_biometric.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が iOS 全体・macOS ターゲット（feature `device` 有効時）で `cc`
+// `crates/fandhe-cap-biometric-auth/src/apple.rs` から C ABI 経由で呼ばれる。
+// `build.rs` が iOS 全体・macOS ターゲットで `cc`
 // コンパイルし、LocalAuthentication をリンクする。
 //
 // 契約（pull 型。`fandhe_apple_share.m` と同型、coding-rust.md の FFI 例外規定）:

@@ -171,12 +171,8 @@ rustc 1.88.0 固定、6.1 節参照）から選定されたものであり、既
 `crates/fandhe-egui-proxy` 自身の crate feature（依存を増やさない既定 off）: `frame-metrics` /
 `debug-proxy-app` / `cold-start-probe`。
 
-例外として `device`（Phase 8 / Issue #746、既定 **on**）がある。`fandhe-device`（`ureq` 経由で
-依存を増やす）への optional 依存を切り替える feature で、spec 要件化が否決された
-場合に crate ごと削除して切り離す前提のため、他の feature と異なり既定 off ではなく既定 on
-にしている（切り離し手順は device-feature-removal.md 参照）。wasm32 では `fandhe-device` 自体が
-`target.'cfg(not(target_arch = "wasm32"))'.dependencies` に置かれているため、この feature を
-有効にしても依存は増えない。
+かつて例外として、端末機能を一括で切り替える `device`（Phase 8 / Issue #746、既定 **on**）があった。
+機能を 1 機能 1 crate へ分け、使う機能は依存の有無で選ぶ形にしたため撤去した（#1194）。
 
 直接依存の補完（`[workspace.dependencies]` に定義済み・target 分岐で個別に有効化）: `wgpu`
 （iOS/Android 分岐）・`accesskit_winit`（Android 分岐のみ。macOS は `eframe` の

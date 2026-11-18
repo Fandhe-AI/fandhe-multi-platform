@@ -1,6 +1,6 @@
 //! iOS 向け Web 認証セッション実装（Issue #532、親 #113）。`crates/fandhe-cap-web-auth-session/src/driver.rs` の
 //! iOS 経路から呼ばれ、`ios/fandhe_ios_web_auth_session.m`（`ASWebAuthenticationSession`、
-//! `build.rs` が feature `device` 有効時にコンパイルして AuthenticationServices をリンクする）を
+//! `build.rs` がコンパイルして AuthenticationServices をリンクする）を
 //! `unsafe extern "C"` で呼ぶ。`unsafe` はこの FFI 宣言と受け口に閉じ、各所に `// SAFETY:` を書く
 //! （coding-rust.md の FFI 例外規定）。契約の SSOT は `fandhe_cap_web_auth_session`。
 //!

@@ -3,7 +3,7 @@
 // iOS にもあり、`#if` 分岐は要らない）。
 //
 // `crates/fandhe-cap-file-preview/src/apple.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の macOS / iOS 両分岐が feature `device` 有効時に `cc` でコンパイルし、
+// `build.rs` の macOS / iOS 両分岐で `cc` でコンパイルし、
 // QuickLookThumbnailing と CoreGraphics をリンクする。
 //
 // 契約（同期呼び出し。ワーカースレッドから呼ぶ。UI・main スレッドは不要）:

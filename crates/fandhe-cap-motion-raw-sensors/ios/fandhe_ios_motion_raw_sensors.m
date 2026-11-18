@@ -3,7 +3,7 @@
 // （µT）・`deviceMotion.userAcceleration`（G）を OS が返した単位と軸のまま保持する（pull 型）。
 //
 // `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
-// feature `device` 有効時のみ `cc` コンパイルする（CoreMotion・UIKit は他の .m 用にリンク済み）。
+// `cc` でコンパイルする（CoreMotion・UIKit は他の .m 用にリンク済み）。
 //
 // manager は `fandhe_ios_motion.m`（tilt）と共有する 1 つだけを使う。そちらを正とし、ここでは
 // extern 宣言のみ置く。deviceMotion は tilt が使った後は維持し、線形加速度だけが使っていた

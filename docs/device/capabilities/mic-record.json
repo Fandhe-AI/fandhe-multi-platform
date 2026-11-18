@@ -17,7 +17,7 @@
         "マイク録音"
       ],
       "implStatus": "実装済み（シミュレータ確認のみ・実機目視は人間確認待ち）",
-      "impl": "crates/fandhe-cap-mic-record/apple/fandhe_apple_mic_record.m + crates/fandhe-cap-mic-record/src/apple.rs + crates/fandhe-cap-mic-record/src/driver.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue 旧#956"
+      "impl": "crates/fandhe-cap-mic-record/apple/fandhe_apple_mic_record.m + crates/fandhe-cap-mic-record/src/apple.rs + crates/fandhe-cap-mic-record/src/driver.rs + crates/fandhe-cap-mic-record/Cargo.toml（宣言）、Issue 旧#956"
     },
     "android": {
       "status": "done",

@@ -1,7 +1,7 @@
 //! iOS / macOS 向け BLE の周辺機器役の実装（Issue #778 macOS、#779 iOS）。
 //! 本 crate の `driver` の macOS 経路と `ios`（委譲）から呼ばれ、
 //! CoreBluetooth `CBPeripheralManager` 実装（`apple/fandhe_apple_ble_peripheral.m`、`build.rs` が
-//! iOS / macOS の feature `device` 有効時にコンパイル・リンクする）を `unsafe extern "C"` 2 関数で
+//! iOS / macOS でコンパイル・リンクする）を `unsafe extern "C"` 2 関数で
 //! 呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する（`apple_bluetooth_le.rs` と
 //! 同型、coding-rust.md の FFI 例外規定）。
 //!
@@ -25,7 +25,7 @@ use crate::SessionSlot;
 static SESSION: SessionSlot = SessionSlot::new();
 
 // SAFETY: `apple/fandhe_apple_ble_peripheral.m` が定義する C ABI（`build.rs` が iOS / macOS の
-// feature `device` 有効時にコンパイル・リンクする）。契約は `.m` ファイル冒頭コメントに集約する。
+// コンパイル・リンクする）。契約は `.m` ファイル冒頭コメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {
     fn fandhe_apple_ble_peripheral_start(

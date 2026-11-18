@@ -4,7 +4,7 @@
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は
 //! `crate::contract` のモジュール doc。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。
+//! 非 wasm32 でのみコンパイル対象になる。
 //!
 //! # dispatch（最終形）
 //!

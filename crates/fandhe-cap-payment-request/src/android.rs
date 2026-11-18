@@ -21,7 +21,7 @@
 //! 守らない範囲: プロセス死をまたぐ結果・GMS の Task が返らない場合の処理中表示・複数プロセス。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `requestPayment` を経た後でしか呼ばれず、
-//! feature `device` 無効ビルドではその経路に到達しない（translation と同じ）。
+//! この crate を選ばないアプリではその経路に到達しない（translation と同じ）。
 
 use crate::contract::{PaymentOutcome, outcome_from_android_result};
 use crate::error::PaymentRequestError;

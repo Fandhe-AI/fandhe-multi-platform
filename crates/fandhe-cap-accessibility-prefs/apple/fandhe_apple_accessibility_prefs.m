@@ -1,8 +1,8 @@
 // Phase 11 の拡充ループ（親 #1132）「アクセシビリティ設定の追従」: macOS / iOS 共用の読み取り
 // （Issue #1308 が macOS、#1309 が iOS）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_accessibility_prefs.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が macOS・iOS 双方の分岐で feature `device` 有効時にコンパイルする。
+// `crates/fandhe-cap-accessibility-prefs/src/apple.rs` から C ABI 経由で呼ばれる。
+// `build.rs` が macOS・iOS 双方の分岐でコンパイルする。
 //
 // 契約:
 //   int32_t fandhe_apple_accessibility_prefs_read(void)

@@ -37,7 +37,7 @@
 //! 出来事、複数プロセス、OS 側の遅れ。id・例外の内容・OS のコードはログ・エラーに出さない。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `sleepLockEventsStart` を経た後でしか呼ばれず、
-//! feature `device` が無効のビルドではその経路に届かない（midi・call_ui と同じ根拠）。
+//! この crate を選ばないアプリではその経路に届かない（midi・call_ui と同じ根拠）。
 
 use std::sync::Arc;
 

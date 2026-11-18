@@ -1,6 +1,6 @@
 //! iOS 向け気圧・近接センサー実装（Issue #610、親 #123）。`ios/fandhe_ios_environment_sensors.m`
 //! （CoreMotion `CMAltimeter` の気圧購読と `UIDevice` の近接監視、`build.rs` が iOS ターゲットの
-//! feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 6 関数で呼ぶ。#609 のスタブを
+//! コンパイルする）を `unsafe extern "C"` 6 関数で呼ぶ。#609 のスタブを
 //! 置き換えたもので、dispatch（本 crate の `driver`）・共通コア画面・trait 契約
 //! （`crate::contract`）は変えない。
 //!
@@ -87,7 +87,7 @@ mod imp {
 
     use super::{read_pressure_result, read_proximity_result, start_result};
 
-    // SAFETY: `ios/fandhe_ios_environment_sensors.m`（`build.rs` が iOS ターゲットの feature `device` 有効時に
+    // SAFETY: `ios/fandhe_ios_environment_sensors.m`（`build.rs` が iOS ターゲットで
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {

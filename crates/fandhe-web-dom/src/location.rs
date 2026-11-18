@@ -5,7 +5,7 @@
 //! `navigator.geolocation.watchPosition`（継続 push 型、`Motion` と同じ束）で
 //! 測位して結果を書き戻す。`fandhe-device` の `Location` トレイトは Windows 実装
 //! （Issue #888）のみが使う経路で、Web は `clipboard.rs`/`tts.rs`/`file_picker.rs` と
-//! 同じ理由（`fandhe-egui-proxy` の feature `device` が wasm32 に依存を持ち込まない設計）で
+//! 同じ理由（機能 crate の OS 実装は wasm32 を対象にしない設計（Web の実装は本クレート、consumer-app-structure.md §7））で
 //! これを通らず、本モジュールが DOM レンダラ側の対応実装にあたる。
 //! ただし座標の妥当性検証だけは [`fandhe_cap_location::is_valid_fix`] を共有する
 //! （検証ロジックの SSOT を 1 箇所に保つ）。

@@ -3,8 +3,8 @@
 // ファミリー名を同期で読む。書体（fullName・PostScript 名・スタイル）・ファイルパス・バイト列は
 // 読まない（`fontNames(forFamilyName:)` も呼ばない）。名前はログに出さない（フィンガープリントになりうるため）。権限の宣言は増やさない（iOS 2+ で権限不要）。
 //
-// `crates/fandhe-egui-proxy/src/device/ios_local_fonts.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の iOS 分岐（`compile_ios_local_fonts`）が feature `device` 有効時にのみコンパイルする。
+// `crates/fandhe-cap-local-fonts/src/ios.rs` から C ABI 経由で呼ばれる。
+// `build.rs` の iOS 分岐（`compile_ios_local_fonts`）がコンパイルする。
 //
 // 契約:
 //   fandhe_ios_local_fonts_list(buf, cap, out_len, out_count, out_overflowed) -> int32_t

@@ -6,7 +6,7 @@
 // maximumExtendedDynamicRangeColorComponentValue は EDR を描いている間だけ 1 を超えるので使わない。
 //
 // `crates/fandhe-cap-display-refresh-hdr/src/macos.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_macos_display_refresh_hdr_read(FandheDisplayRaw *out) -> int32_t

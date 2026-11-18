@@ -34,7 +34,7 @@
 //! 画面を開く前・止めた後の出来事、複数プロセス。id・例外の内容・OS のコードはログ・エラーに出さない。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `appLifecycleStart` を経た後でしか呼ばれず、
-//! feature `device` が無効のビルドではその経路に届かない（sleep_lock_events・midi と同じ根拠）。
+//! この crate を選ばないアプリではその経路に届かない（sleep_lock_events・midi と同じ根拠）。
 
 use std::sync::Arc;
 

@@ -7,16 +7,15 @@ import android.content.Intent;
 //
 // 呼び出し元: `ShareReceiveLifecycle`（非公開 provider。コールドスタートは Activity の生成時、起動中は
 // `addOnNewIntentListener`）。利用者の `MainActivity` には何も書かせない（#1257）。
-// 呼び出し先: `crates/fandhe-cap-share-receive/src/android.rs` の JNI 実体
-// （feature `device` 無効時の no-op は `crates/fandhe-egui-proxy/src/android.rs`）。JNI 署名は本ファイルの宣言・no-op
-// スタブ・Rust 実体の 3 か所で `(String) -> void` に一致させる。
+// 呼び出し先: `crates/fandhe-cap-share-receive/src/android.rs` の JNI 実体。
+// JNI 署名は本ファイルの宣言と Rust 実体の 2 か所で `(String) -> void` に一致させる
+// （本 crate を選んだアプリにだけ入るので no-op スタブは要らない、#1194）。
 //
 // 検査（長さ・制御文字・UTF-8）は Rust 側の共通層に一本化し、ここでは文字列を加工しない
 // （trim もしない）。受け取るのは `EXTRA_TEXT` だけで、`EXTRA_STREAM`・`ClipData`・件名は
 // 読まない（他アプリのファイルへ届く URI 読み取り許可を使わない）。本文・例外メッセージは
 // ログへ出さない。状態を持たず UI スレッドから呼ばれる。
 // 守らない範囲: プロセス死亡後の再表示（新プロセスの受け口は空）。
-// 切り離し時に削除する（feature `device`）。
 final class ShareReceiveHelper {
     private ShareReceiveHelper() {}
 

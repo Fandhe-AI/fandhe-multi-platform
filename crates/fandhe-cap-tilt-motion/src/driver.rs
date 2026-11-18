@@ -4,7 +4,7 @@
 //! 物理を進める（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S,
 //! &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
+//! 非 wasm32 でのみコンパイル対象になる
 //! （`device.rs` モジュール doc と同じ理由）。
 //!
 //! # デスクトップのスライダー代替と実機センサ（#831/#832）の関係

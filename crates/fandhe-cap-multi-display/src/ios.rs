@@ -1,6 +1,6 @@
 //! iOS 向け複数ディスプレイ実装（Issue #27）。`ios/fandhe_ios_multi_display.m`
 //! （`UIApplication.connectedScenes` の `UIWindowScene.screen`、`build.rs` が iOS ターゲットの
-//! feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの
+//! コンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの
 //! 呼び出しに閉じる。`fandhe-cap-multi-display/src/driver.rs` の iOS 経路から呼ばれ、契約は
 //! `fandhe_cap_multi_display`。`macos_multi_display.rs` と同型の薄いラッパーで、
 //! 生値の写像（`Raw` / `from_raw`）は macOS 版を共用する。
@@ -26,7 +26,7 @@ use crate::contract::ScreenInfo;
 
 use crate::macos::{CAP, Raw, from_raw};
 
-// SAFETY: `ios/fandhe_ios_multi_display.m`（`build.rs` が iOS ターゲットの feature `device` 有効時に
+// SAFETY: `ios/fandhe_ios_multi_display.m`（`build.rs` が iOS ターゲットで
 // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
 #[allow(unsafe_code)]
 unsafe extern "C" {
