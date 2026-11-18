@@ -1,5 +1,5 @@
 //! local-storage-kv の失敗の種類。保存先を決められないときだけを表す（読み書きの失敗は `Storage` が
-//! `fandhe_device::DeviceError` で返す）。表示文言は移行前の `DeviceError::Unsupported` と同じ。
+//! `fandhe_device::storage::StorageError` で返す）。表示文言は移行前の `DeviceError::Unsupported` と同じ。
 
 /// local-storage-kv の失敗。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]

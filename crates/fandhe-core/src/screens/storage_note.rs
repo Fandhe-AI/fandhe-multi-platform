@@ -22,10 +22,10 @@ use crate::ui::{Node, Screen, WidgetId};
 /// （A03 インジェクション対策、security.md 準拠）。
 pub const NOTES_KEY: &str = "storage_note.txt";
 
-/// 端末保存領域への読み書きで発生し得るエラー。`fandhe_device::DeviceError` を
+/// 端末保存領域への読み書きで発生し得るエラー。`fandhe_device::storage::StorageError` を
 /// 直接使わない（本クレートは `fandhe-device` に依存しない、coding-rust.md の
-/// 二層アーキテクチャ準拠）。橋渡し側（`fandhe-egui-proxy::device::DeviceNoteStorage`）
-/// が `DeviceError` の各バリアントをこの型へ変換する。表示文言は `Display` 経由で
+/// 二層アーキテクチャ準拠）。橋渡し側（`fandhe-cap-local-storage-kv` の driver）
+/// が `StorageError` の各バリアントをこの型へ変換する。表示文言は `Display` 経由で
 /// `status` にそのまま流用する（`SAVE_FAILED_PREFIX`/`LOAD_FAILED_PREFIX` 参照）。
 #[derive(Debug, thiserror::Error)]
 pub enum NoteStorageError {

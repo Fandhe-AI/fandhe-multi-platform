@@ -372,13 +372,6 @@ mod tests {
             to_outcome(Err(EyeDropperError::Internal("x"))),
             EyeDropperOutcome::Failed(_)
         ));
-        // 権限拒否が来ても成功にならない（`from_device` が Internal に畳む）。
-        assert!(matches!(
-            to_outcome(Err(EyeDropperError::from_device(
-                fandhe_device::DeviceError::PermissionDenied("eye_dropper")
-            ))),
-            EyeDropperOutcome::Failed(_)
-        ));
     }
 
     /// macOS: `present` は NSApp を要るので呼ばず、owner と slot を直接使う。slot は静的なので直列に走らせる。

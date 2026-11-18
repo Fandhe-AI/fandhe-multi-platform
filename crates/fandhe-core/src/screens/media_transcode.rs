@@ -78,7 +78,7 @@ pub struct TranscodeOutput {
     pub output_ms: u64,
 }
 
-/// 失敗の種別（`fandhe_device::DeviceError` から写す責務は effect 側）。
+/// 失敗の種別（機能 crate の失敗型から写す責務は effect 側）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TranscodeFailure {
     /// 非対応 OS・OS が古い。

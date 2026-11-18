@@ -4,7 +4,18 @@
 //! `FsStorage` は `DataDir` 配下に閉じたファイル I/O のみを行い、`key` はパス区切りや
 //! `..` を含む文字列を拒否する（A01/A03 パストラバーサル対策、security.md 準拠）。
 
-use crate::{DataDir, DeviceError};
+use crate::DataDir;
+
+/// 保存の失敗（`DeviceError` の後継、#1194）。使うバリアントだけを持ち、表示文言は旧型と同じ書き出し。
+#[derive(Debug, thiserror::Error)]
+pub enum StorageError {
+    #[error("入出力エラー: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("不正な key: {0}")]
+    InvalidKey(String),
+    #[error("このプラットフォームでは未対応です: {0}")]
+    Unsupported(&'static str),
+}
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -24,9 +35,9 @@ const TMP_SUBDIR: &str = ".fandhe-tmp";
 /// （呼び出し元は `fandhe-egui-proxy` の描画スレッドと将来の worker スレッド、#745 参照）。
 pub trait Storage: Send + Sync {
     /// `key` に対応する値を読む。未存在は `Ok(None)`（エラーにしない契約）。
-    fn read(&self, key: &str) -> Result<Option<Vec<u8>>, DeviceError>;
+    fn read(&self, key: &str) -> Result<Option<Vec<u8>>, StorageError>;
     /// `key` に `bytes` を書く。既存値があれば置き換える。
-    fn write(&self, key: &str, bytes: &[u8]) -> Result<(), DeviceError>;
+    fn write(&self, key: &str, bytes: &[u8]) -> Result<(), StorageError>;
 }
 
 /// `key` を許可文字集合（英数字・`.`・`_`・`-`）のみに制限し、パストラバーサルを防ぐ。
@@ -34,7 +45,7 @@ pub trait Storage: Send + Sync {
 /// 空文字列・`.`/`..` そのもの・区切り文字（`/`・`\`）を含む値はすべて拒否する。
 /// `pub`: 機能 crate `fandhe-cap-secure-credential` の `validate_key` が同じ許可文字集合・トラバーサル
 /// 拒否ロジックを再利用する（Issue #922・#1330、二重実装を避ける）。
-pub fn validate_key(key: &str) -> Result<(), DeviceError> {
+pub fn validate_key(key: &str) -> Result<(), StorageError> {
     let is_valid = !key.is_empty()
         && key != "."
         && key != ".."
@@ -44,7 +55,7 @@ pub fn validate_key(key: &str) -> Result<(), DeviceError> {
     if is_valid {
         Ok(())
     } else {
-        Err(DeviceError::InvalidKey(key.to_string()))
+        Err(StorageError::InvalidKey(key.to_string()))
     }
 }
 
@@ -80,30 +91,30 @@ impl FsStorage {
     /// Android/iOS はサンドボックスパスが別途必要なためここでは提供しない
     /// （呼び出し元が `DataDir` を構築する契約、`lib.rs` の `DataDir` doc 参照）。
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    pub fn desktop_default() -> Result<DataDir, DeviceError> {
+    pub fn desktop_default() -> Result<DataDir, StorageError> {
         #[allow(deprecated)]
         std::env::home_dir()
             .map(|home| DataDir(home.join(".fandhe")))
-            .ok_or(DeviceError::Unsupported("home directory not found"))
+            .ok_or(StorageError::Unsupported("home directory not found"))
     }
 
-    fn path_for(&self, key: &str) -> Result<PathBuf, DeviceError> {
+    fn path_for(&self, key: &str) -> Result<PathBuf, StorageError> {
         validate_key(key)?;
         Ok(self.dir.join(encode_key(key)))
     }
 }
 
 impl Storage for FsStorage {
-    fn read(&self, key: &str) -> Result<Option<Vec<u8>>, DeviceError> {
+    fn read(&self, key: &str) -> Result<Option<Vec<u8>>, StorageError> {
         let path = self.path_for(key)?;
         match fs::read(&path) {
             Ok(bytes) => Ok(Some(bytes)),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(DeviceError::Io(e)),
+            Err(e) => Err(StorageError::Io(e)),
         }
     }
 
-    fn write(&self, key: &str, bytes: &[u8]) -> Result<(), DeviceError> {
+    fn write(&self, key: &str, bytes: &[u8]) -> Result<(), StorageError> {
         let path = self.path_for(key)?;
         fs::create_dir_all(&self.dir)?;
         // 書きかけファイルが読み戻し破損を起こさないよう、一時ファイル + rename で
@@ -125,11 +136,11 @@ impl Storage for FsStorage {
         // 元のエラーより優先度が低いため無視し、必ず元のエラーを返す。
         if let Err(e) = fs::write(&tmp_path, bytes) {
             let _ = fs::remove_file(&tmp_path);
-            return Err(DeviceError::Io(e));
+            return Err(StorageError::Io(e));
         }
         if let Err(e) = fs::rename(&tmp_path, &path) {
             let _ = fs::remove_file(&tmp_path);
-            return Err(DeviceError::Io(e));
+            return Err(StorageError::Io(e));
         }
         Ok(())
     }
@@ -172,9 +183,9 @@ mod tests {
     fn traversal_key_is_rejected() {
         let storage = temp_storage();
         let err = storage.write("../x", b"x").unwrap_err();
-        assert!(matches!(err, DeviceError::InvalidKey(_)));
+        assert!(matches!(err, StorageError::InvalidKey(_)));
         let err = storage.read("../x").unwrap_err();
-        assert!(matches!(err, DeviceError::InvalidKey(_)));
+        assert!(matches!(err, StorageError::InvalidKey(_)));
     }
 
     #[test]
@@ -226,7 +237,7 @@ mod tests {
         fs::create_dir_all(&target).expect("target をディレクトリとして作成");
 
         let err = storage.write("busy", b"x").unwrap_err();
-        assert!(matches!(err, DeviceError::Io(_)));
+        assert!(matches!(err, StorageError::Io(_)));
 
         let tmp_dir = storage.dir.join(TMP_SUBDIR);
         let leftover: Vec<_> = fs::read_dir(&tmp_dir)
@@ -243,7 +254,7 @@ mod tests {
         let storage = temp_storage();
         assert!(matches!(
             storage.write("", b"x").unwrap_err(),
-            DeviceError::InvalidKey(_)
+            StorageError::InvalidKey(_)
         ));
     }
 }

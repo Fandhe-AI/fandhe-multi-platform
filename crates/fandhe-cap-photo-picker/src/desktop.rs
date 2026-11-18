@@ -8,9 +8,9 @@
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use fandhe_device::DeviceError;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use fandhe_device::file_picker::BusyGuard;
+use fandhe_device::file_picker::PickError;
 use fandhe_device::file_picker::PickedFile;
 #[cfg(target_os = "macos")]
 use fandhe_device::file_picker::read_picked;
@@ -31,7 +31,7 @@ const WINDOWS_PHOTO_FILTER: &str = "Images (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jp
 /// 選択は 1 段目 [`validate_photo`] を通す。OS を問わずホストでテストできるよう `cfg` を付けない。
 #[cfg_attr(not(any(target_os = "macos", target_os = "windows")), allow(dead_code))]
 pub(crate) fn photo_from_pick(
-    picked: Result<Option<PickedFile>, DeviceError>,
+    picked: Result<Option<PickedFile>, PickError>,
 ) -> Result<PickedPhoto, PhotoPickerError> {
     match picked? {
         None => Err(PhotoPickerError::Cancelled("photo_picker")),
@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn pick_failure_passes_through() {
         assert!(matches!(
-            photo_from_pick(Err(DeviceError::Internal("x"))),
+            photo_from_pick(Err(PickError::Internal("x"))),
             Err(PhotoPickerError::Internal(_))
         ));
     }

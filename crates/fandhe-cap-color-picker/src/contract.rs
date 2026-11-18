@@ -39,14 +39,13 @@ use fandhe_device::eye_dropper::{PickedColor, color_from_rgb, color_from_srgb_he
 /// ダイアログに入れる固定の初期色（0xRRGGBB）。
 pub const INITIAL_RGB: u32 = 0x33_66cc;
 
-/// eye-dropper 側（`fandhe-device` の `DeviceError`）の失敗を、`color_picker` 自身の失敗の種類と識別子へ写す。
-fn rgb_err(e: fandhe_device::DeviceError) -> ColorPickerError {
-    use fandhe_device::DeviceError;
+/// eye-dropper 側（`fandhe-device` の `PickColorError`）の失敗を、`color_picker` 自身の失敗の種類と識別子へ写す。
+fn rgb_err(e: fandhe_device::eye_dropper::PickColorError) -> ColorPickerError {
+    use fandhe_device::eye_dropper::PickColorError;
     match e {
-        DeviceError::Unsupported(_) => ColorPickerError::Unsupported,
-        DeviceError::Cancelled(_) => ColorPickerError::Cancelled,
-        DeviceError::PermissionDenied(_) => ColorPickerError::PermissionDenied,
-        _ => ColorPickerError::Internal("color_picker rgb"),
+        PickColorError::Unsupported(_) => ColorPickerError::Unsupported,
+        PickColorError::Cancelled(_) => ColorPickerError::Cancelled,
+        PickColorError::Internal(_) => ColorPickerError::Internal("color_picker rgb"),
     }
 }
 

@@ -314,11 +314,18 @@ mod tests {
     struct MemStorage(Mutex<Option<Vec<u8>>>);
 
     impl Storage for MemStorage {
-        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, fandhe_device::DeviceError> {
+        fn read(
+            &self,
+            _key: &str,
+        ) -> Result<Option<Vec<u8>>, fandhe_device::storage::StorageError> {
             Ok(self.0.lock().expect("lock は成功する").clone())
         }
 
-        fn write(&self, _key: &str, bytes: &[u8]) -> Result<(), fandhe_device::DeviceError> {
+        fn write(
+            &self,
+            _key: &str,
+            bytes: &[u8],
+        ) -> Result<(), fandhe_device::storage::StorageError> {
             *self.0.lock().expect("lock は成功する") = Some(bytes.to_vec());
             Ok(())
         }
@@ -327,12 +334,20 @@ mod tests {
     struct ErrOnReadStorage;
 
     impl Storage for ErrOnReadStorage {
-        fn read(&self, key: &str) -> Result<Option<Vec<u8>>, fandhe_device::DeviceError> {
-            Err(fandhe_device::DeviceError::InvalidKey(key.to_string()))
+        fn read(&self, key: &str) -> Result<Option<Vec<u8>>, fandhe_device::storage::StorageError> {
+            Err(fandhe_device::storage::StorageError::InvalidKey(
+                key.to_string(),
+            ))
         }
 
-        fn write(&self, key: &str, _bytes: &[u8]) -> Result<(), fandhe_device::DeviceError> {
-            Err(fandhe_device::DeviceError::InvalidKey(key.to_string()))
+        fn write(
+            &self,
+            key: &str,
+            _bytes: &[u8],
+        ) -> Result<(), fandhe_device::storage::StorageError> {
+            Err(fandhe_device::storage::StorageError::InvalidKey(
+                key.to_string(),
+            ))
         }
     }
 
@@ -431,10 +446,19 @@ mod tests {
         // 読み出しだけ失敗し書き込みは成功する保存層（一時的な I/O 失敗）。
         struct ReadErrWriteOk(Mutex<bool>);
         impl Storage for ReadErrWriteOk {
-            fn read(&self, key: &str) -> Result<Option<Vec<u8>>, fandhe_device::DeviceError> {
-                Err(fandhe_device::DeviceError::InvalidKey(key.to_string()))
+            fn read(
+                &self,
+                key: &str,
+            ) -> Result<Option<Vec<u8>>, fandhe_device::storage::StorageError> {
+                Err(fandhe_device::storage::StorageError::InvalidKey(
+                    key.to_string(),
+                ))
             }
-            fn write(&self, _key: &str, _bytes: &[u8]) -> Result<(), fandhe_device::DeviceError> {
+            fn write(
+                &self,
+                _key: &str,
+                _bytes: &[u8],
+            ) -> Result<(), fandhe_device::storage::StorageError> {
                 *self.0.lock().expect("lock は成功する") = true;
                 Ok(())
             }

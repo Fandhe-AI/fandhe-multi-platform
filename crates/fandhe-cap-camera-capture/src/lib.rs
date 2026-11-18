@@ -69,7 +69,7 @@ pub struct Image {
     pub rgba: Vec<u8>,
 }
 
-/// 撮影の失敗。文言は `fandhe_device::DeviceError` の同名バリアントと同じにしてあり、
+/// 撮影の失敗。文言は移行前の共通エラー型（`DeviceError`、#1194 で撤去）の同名バリアントと同じにしてあり、
 /// `CaptureFailure::Other` に出る表示を移行前から変えない。第 1 引数は内部識別子のみ
 /// （端末固有情報は含めない、security.md A09）。
 #[derive(Debug, Clone, thiserror::Error)]

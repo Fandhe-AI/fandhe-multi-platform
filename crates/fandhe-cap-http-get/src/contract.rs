@@ -82,14 +82,11 @@ impl Default for UreqHttp {
     }
 }
 
-/// `fandhe_device::DeviceError::Http(msg)` の `msg` だけを取り出す（`check_url` の失敗を契約のエラーへ写す）。
+/// `check_url` の失敗（`fandhe_device::http::UrlRejected`）を契約のエラーの文言へ写す。
 /// `Http` 以外のバリアントは `check_url` から返らないが、握りつぶさず `Display` の文言を残す。
 #[cfg(not(target_arch = "wasm32"))]
-fn http_message(e: fandhe_device::DeviceError) -> String {
-    match e {
-        fandhe_device::DeviceError::Http(m) => m,
-        other => other.to_string(),
-    }
+fn http_message(e: fandhe_device::http::UrlRejected) -> String {
+    e.to_string()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
