@@ -172,6 +172,8 @@ done
 # （A05 対策。.aab のインストール検証は TASK-11.3（#246）のスコープ、
 # release 署名は TASK-11.2-S3 のスコープであり本スクリプトでは触れない）。
 abi_csv="$(IFS=,; echo "${abi_list[*]}")"
+# 殻が取り込む gen の出力（Manifest の overlay・Java / res・Gradle 依存）を作り直す（#1194）。
+fandhe_gen_gallery
 log "gradle -p ${gradle_project_dir} :app:assembleDebug -PfandheAndroidAbis=${abi_csv}"
 gradle -p "${gradle_project_dir}" :app:assembleDebug --console=plain \
   "-PfandheAndroidAbis=${abi_csv}"
