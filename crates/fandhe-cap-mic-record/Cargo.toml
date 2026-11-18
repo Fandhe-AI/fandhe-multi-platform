@@ -41,6 +41,8 @@ frameworks = ["AVFoundation", "AudioToolbox"]
 
 [package.metadata.fandhe.android]
 permissions = [{ name = "android.permission.RECORD_AUDIO" }]
+# RECORD_AUDIO が暗に要求するマイクを必須にしない（マイクの無い端末をストアの自動フィルタから外さない）。
+features = [{ name = "android.hardware.microphone", required = false }]
 java = ["android/java"]
 
 [[package.metadata.fandhe.android.components]]

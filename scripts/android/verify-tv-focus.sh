@@ -289,6 +289,7 @@ done
 
 # --- フェーズ 4: APK 生成（debug、起動確認専用） ------------------------------
 abi_csv="$(IFS=,; echo "${abi_list[*]}")"
+fandhe_gen_gallery
 log "gradle -p ${gradle_project_dir} :app:assembleDebug -PfandheAndroidAbis=${abi_csv}"
 gradle -p "${gradle_project_dir}" :app:assembleDebug --console=plain \
   "-PfandheAndroidAbis=${abi_csv}"

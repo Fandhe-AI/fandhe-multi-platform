@@ -182,122 +182,91 @@ fn main_activity_filters(t: &[Tag]) -> Vec<IntentFilter> {
 
 // ---- 1. gallery の生成結果と現行設定の比較 ----
 
+/// カタログアプリの殻（platforms/android）は application の属性だけを持ち、機能の宣言を手で書かない（#1194）。
+/// Java・res・依存は gen の `fandhe.gradle` を取り込むだけで、build.gradle.kts に機能ごとの行を書かない。
 #[test]
-fn android_manifest_overlay_matches_current_manifest() {
-    let cur = tags(&repo("platforms/android/app/src/main/AndroidManifest.xml"));
+fn android_shell_has_no_hand_written_declarations() {
+    let shell = tags(&repo("platforms/android/app/src/main/AndroidManifest.xml"));
+    let kinds: BTreeSet<&str> = shell
+        .iter()
+        .map(|(k, _)| k.trim_start_matches('/'))
+        .collect();
+    assert_eq!(kinds, BTreeSet::from(["manifest", "application"]));
+    let kts = repo("platforms/android/app/build.gradle.kts");
+    assert!(kts.contains("gen/android/fandhe.gradle") && kts.contains("apply(from = fandheGradle)"));
+    for l in kts.lines().filter(|l| !l.trim_start().starts_with("//")) {
+        assert!(!l.contains("implementation("), "{l}");
+        assert!(!l.contains("srcDirs(") || l.contains("jniLibs"), "{l}");
+    }
+}
+
+#[test]
+fn android_manifest_overlay_covers_all_declarations() {
     let gen = tags(&gallery()["android/AndroidManifest.xml"]);
-    // 権限・feature は生成側の各要素が現行にあり（属性まで同じ）、宣言が無い camera の feature は現行にも無い。
-    for (kind, key) in [("uses-permission", "name"), ("uses-feature", "name")] {
-        let g: Vec<_> = gen.iter().filter(|(k, _)| k == kind).collect();
-        assert!(!g.is_empty(), "{kind} が生成されていない");
-        for (_, a) in g {
+    let m = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.toml");
+    let decls = check_workspace(Some(&m)).unwrap();
+    // カタログは全機能を載せるので、全宣言の権限・feature・コンポーネントが生成側にある。
+    let mut n = 0;
+    for a in decls.iter().filter_map(|d| d.android.as_ref()) {
+        for p in &a.permissions {
             assert!(
-                cur.iter().any(|(k, m)| k == kind && m == a),
-                "{kind} {} が現行 Manifest と違う",
-                a[key]
+                gen.iter().any(|(k, m)| k == "uses-permission" && m["name"] == p.name),
+                "{}",
+                p.name
             );
         }
-    }
-    let names = |t: &[Tag], prefix: &str| -> BTreeSet<String> {
-        t.iter()
-            .filter(|(k, a)| k == "uses-feature" && a["name"].starts_with(prefix))
-            .map(|(_, a)| a["name"].clone())
-            .collect()
-    };
-    assert_eq!(
-        names(&cur, "android.hardware.camera"),
-        names(&gen, "android.hardware.camera")
-    );
-    // android.hardware.nfc は nfc（タグ読み取り、`fandhe-cap-nfc`）の宣言、android.hardware.nfc.hce は nfc-card-emulation の宣言。
-    assert_eq!(
-        names(&cur, "android.hardware.nfc"),
-        names(&gen, "android.hardware.nfc")
-    );
-
-    // コンポーネントは宣言ごとに、生成側と現行が同じ型の値になる。
-    let mut n = 0;
-    for d in real_decls() {
-        for c in d.android.iter().flat_map(|a| &a.components) {
-            assert_eq!(
-                manifest_component(&gen, c),
-                manifest_component(&cur, c),
+        for f in &a.features {
+            assert!(
+                gen.iter().any(|(k, m)| k == "uses-feature"
+                    && m["name"] == f.name
+                    && m["required"] == f.required.to_string()),
                 "{}",
-                c.name
+                f.name
             );
+        }
+        for c in &a.components {
+            assert_eq!(manifest_component(&gen, c).name, c.name);
             n += 1;
         }
     }
+    assert!(n > 5, "{n}");
+
+    // MainActivity の SEND の filter（share-receive）と `fandhe` scheme の VIEW（url-scheme と web-auth-session が
+    // 同じ filter を宣言し、統合規則で 1 つになる、#1333）、MAIN/LAUNCHER（殻の値として gen が出す）の 3 つ。
+    let filters = main_activity_filters(&gen);
+    let has = |action: &str| {
+        filters
+            .iter()
+            .filter(|f| f.actions.iter().any(|a| a == action))
+            .count()
+    };
+    assert_eq!(has("android.intent.action.SEND"), 1);
+    assert_eq!(has("android.intent.action.MAIN"), 1);
     assert_eq!(
-        n, 5,
-        "HomeWidgetProvider・NfcCardEmulationService と、camera-capture・document-scan・share-receive の Lifecycle provider"
+        filters
+            .iter()
+            .filter(|f| f.data.iter().any(|d| d.scheme.as_deref() == Some("fandhe")))
+            .count(),
+        1
     );
+    assert_eq!(filters.len(), 3);
 
-    // MainActivity の SEND の filter は両側で一致する（fandhe scheme など他の filter は機能の宣言ではない）。
-    let send = |t: &[Tag]| -> Vec<IntentFilter> {
-        main_activity_filters(t)
-            .into_iter()
-            .filter(|f| f.actions.iter().any(|a| a == "android.intent.action.SEND"))
-            .collect()
-    };
-    assert_eq!(send(&gen).len(), 1);
-    assert_eq!(send(&gen), send(&cur));
-    // `fandhe` scheme の VIEW（url-scheme と web-auth-session が同じ filter を宣言し、統合規則で 1 つになる、#1333）も両側で一致する。
-    let fandhe_view = |t: &[Tag]| -> Vec<IntentFilter> {
-        main_activity_filters(t)
-            .into_iter()
-            .filter(|f| {
-                f.actions.iter().any(|a| a == "android.intent.action.VIEW")
-                    && f.data.iter().any(|d| d.scheme.as_deref() == Some("fandhe"))
-            })
-            .collect()
-    };
-    assert_eq!(fandhe_view(&gen).len(), 1);
-    assert_eq!(fandhe_view(&gen), fandhe_view(&cur));
-    // MAIN/LAUNCHER・SEND・`fandhe` scheme の VIEW の 3 つ（MAIN は殻の値として gen が出す）。
-    assert_eq!(main_activity_filters(&gen).len(), 3);
-
-    // MainActivity の宣言（#1259）は gallery の現行 Manifest と同じ（`supportsPictureInPicture` は picture-in-picture の宣言から出る）。
-    let main = |t: &[Tag]| -> (Attrs, Attrs) {
-        let (_, a) = t
-            .iter()
-            .find(|(n, a)| n == "activity" && a["name"].ends_with(".MainActivity"))
-            .unwrap();
-        let (_, m) = t
-            .iter()
-            .find(|(n, a)| n == "meta-data" && a["name"] == "android.app.lib_name")
-            .unwrap();
-        (a.clone(), m.clone())
-    };
-    let (mut ga, gm) = main(&gen);
-    let (ca, cm) = main(&cur);
-    for k in ["name", "exported", "launchMode", "configChanges"] {
-        assert_eq!(ga.remove(k), ca.get(k).cloned(), "{k}");
-    }
-    // 残りの属性（機能の宣言が足すもの）は現行 Manifest と同じ値。
-    for (k, v) in &ga {
-        assert_eq!(ca.get(k), Some(v), "{k}");
-    }
-    assert_eq!(gm, cm);
-    assert_eq!(gm["value"], "fandhe_gallery");
+    // MainActivity の lib_name はアプリの cdylib 名。
+    let (_, lib) = gen
+        .iter()
+        .find(|(n, a)| n == "meta-data" && a["name"] == "android.app.lib_name")
+        .unwrap();
+    assert_eq!(lib["value"], "fandhe_gallery");
     assert!(
         gallery()["android/java/com/fandhe/platform/FandheLibrary.java"]
             .contains("NAME = \"fandhe_gallery\"")
     );
-    // LAUNCHER の filter は現行と同じ。
-    let launcher = |t: &[Tag]| {
-        main_activity_filters(t)
-            .into_iter()
-            .find(|f| f.actions.iter().any(|a| a == "android.intent.action.MAIN"))
-    };
-    assert_eq!(launcher(&gen), launcher(&cur));
-    assert!(launcher(&gen).is_some());
 }
 
 /// `application-meta-data`（`<application>` 直下の `<meta-data>`）を宣言する機能は、生成側と現行 Manifest の
-/// 同名の要素が同じ属性になる（第 15 束 #1335 で car-display・payment-request が使い始めた）。
+/// 宣言どおりの属性で出る（第 15 束 #1335 で car-display・payment-request、#1194 で managed-app-config が使い始めた）。
 #[test]
-fn application_meta_data_matches_current_manifest() {
-    let cur = tags(&repo("platforms/android/app/src/main/AndroidManifest.xml"));
+fn application_meta_data_matches_declarations() {
     let gen = tags(&gallery()["android/AndroidManifest.xml"]);
     let find = |t: &[Tag], name: &str| -> Option<Attrs> {
         t.iter()
@@ -307,17 +276,14 @@ fn application_meta_data_matches_current_manifest() {
     let m = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.toml");
     let mut n = 0;
     for d in check_workspace(Some(&m)).unwrap() {
-        if !["car-display", "payment-request"].contains(&d.id.as_str()) {
-            continue;
-        }
         for md in d.android.iter().flat_map(|a| &a.application_meta_data) {
-            let g = find(&gen, &md.name);
-            assert!(g.is_some(), "{} が生成されていない", md.name);
-            assert_eq!(g, find(&cur, &md.name), "{}", md.name);
+            let g = find(&gen, &md.name).unwrap_or_else(|| panic!("{} が生成されていない", md.name));
+            assert_eq!(g.get("value"), md.value.as_ref(), "{}", md.name);
+            assert_eq!(g.get("resource"), md.resource.as_ref(), "{}", md.name);
             n += 1;
         }
     }
-    assert_eq!(n, 3, "car-display の 2 件と payment-request の 1 件");
+    assert_eq!(n, 4, "car-display の 2 件・payment-request の 1 件・managed-app-config の 1 件");
 }
 
 /// `fandhe.gradle` の `java.srcDirs += [...]` などの引用符内を取り出す。
@@ -334,23 +300,48 @@ fn gradle_dirs(gradle: &str, kind: &str) -> BTreeSet<String> {
         .collect()
 }
 
+/// Gradle 依存の版の選定根拠は `scripts/android/versions.env` に残す。宣言（`gradle`）が正で、ここで両者の一致を確かめる。
+const GRADLE_VERSION_KEYS: &[(&str, &str)] = &[
+    ("androidx.games:games-activity", "GAMES_ACTIVITY_VERSION"),
+    ("androidx.appcompat:appcompat", "APPCOMPAT_VERSION"),
+    ("androidx.core:core", "ANDROIDX_CORE_VERSION"),
+    ("androidx.activity:activity", "ANDROIDX_ACTIVITY_VERSION"),
+    ("androidx.biometric:biometric", "BIOMETRIC_VERSION"),
+    ("androidx.security:security-crypto", "SECURITY_CRYPTO_VERSION"),
+    ("androidx.work:work-runtime", "WORK_RUNTIME_VERSION"),
+    ("androidx.browser:browser", "ANDROIDX_BROWSER_VERSION"),
+    ("androidx.window:window", "WINDOW_VERSION"),
+    ("androidx.window:window-java", "WINDOW_VERSION"),
+    ("androidx.car.app:app", "CAR_APP_VERSION"),
+    ("com.google.guava:guava", "GUAVA_VERSION"),
+    ("androidx.credentials:credentials", "CREDENTIALS_VERSION"),
+    ("androidx.credentials:credentials-play-services-auth", "CREDENTIALS_VERSION"),
+    ("com.google.android.gms:play-services-location", "PLAY_SERVICES_LOCATION_VERSION"),
+    ("com.google.android.gms:play-services-wallet", "PLAY_SERVICES_WALLET_VERSION"),
+    (
+        "com.google.android.gms:play-services-mlkit-document-scanner",
+        "PLAY_SERVICES_MLKIT_DOCUMENT_SCANNER_VERSION",
+    ),
+];
+
 #[test]
-fn gradle_srcdirs_and_dependencies_match_build_gradle() {
+fn gradle_srcdirs_and_dependency_versions() {
     let gen = &gallery()["android/fandhe.gradle"];
-    let kts = repo("platforms/android/app/build.gradle.kts");
+    // カタログは全機能を載せるので、Java・res を持つ crate（共通層を含む）がすべて入る。
+    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     for kind in ["java", "res"] {
-        let cur: BTreeSet<String> = kts
-            .lines()
-            .filter(|l| l.contains(&format!("{kind}.srcDirs(")) && l.contains("crates/fandhe-"))
-            .map(|l| {
-                let p = l.split('"').nth(1).unwrap();
-                p[p.find("crates/").unwrap()..].to_string()
-            })
+        let mut want: BTreeSet<String> = fs::read_dir(&crates)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .filter(|n| n.starts_with("fandhe-cap-") || n == "fandhe-platform-android")
+            .filter(|n| crates.join(n).join("android").join(kind).is_dir())
+            .map(|n| format!("crates/{n}/android/{kind}"))
             .collect();
-        // gen 自身の res（バックアップ規則）は手書きの build.gradle.kts に対応が無い。
-        let mut got = gradle_dirs(gen, kind);
-        got.remove("crates/fandhe-gallery/gen/android/res");
-        assert_eq!(got, cur, "{kind}");
+        if kind == "res" {
+            // gen 自身の res（バックアップ規則）。
+            want.insert("crates/fandhe-gallery/gen/android/res".to_string());
+        }
+        assert_eq!(gradle_dirs(gen, kind), want, "{kind}");
     }
     let env = repo("scripts/android/versions.env");
     let deps: Vec<&str> = gen
@@ -361,17 +352,10 @@ fn gradle_srcdirs_and_dependencies_match_build_gradle() {
     assert!(!deps.is_empty());
     for g in deps {
         let (ga, ver) = g.rsplit_once(':').unwrap();
-        let line = kts
-            .lines()
-            .find(|l| l.contains(&format!("\"{ga}:${{androidVersion(\"")))
-            .unwrap_or_else(|| panic!("{ga} が build.gradle.kts にない"));
-        let key = line
-            .split("androidVersion(\"")
-            .nth(1)
-            .unwrap()
-            .split('"')
-            .next()
-            .unwrap();
+        let (_, key) = GRADLE_VERSION_KEYS
+            .iter()
+            .find(|(k, _)| *k == ga)
+            .unwrap_or_else(|| panic!("{ga} の版の選定根拠（versions.env の鍵）が GRADLE_VERSION_KEYS にない"));
         assert!(
             env.lines().any(|l| l == format!("{key}=\"{ver}\"")),
             "{key}={ver} が versions.env にない"
@@ -930,12 +914,9 @@ fn excludes(xml: &str) -> BTreeSet<(String, String, String)> {
 }
 
 #[test]
-fn gallery_backup_exclusions_match_hand_written_rules() {
-    // 寿命: 手書きを gen へ切り替える #1194 で撤去する。
-    let hand = repo("platforms/android/app/src/main/res/xml/data_extraction_rules.xml");
+fn gallery_backup_exclusions_are_generated() {
     let g = gallery();
     let gen_ = &g["android/res/xml/fandhe_data_extraction_rules.xml"];
-    assert_eq!(excludes(gen_), excludes(&hand));
     assert!(!excludes(gen_).is_empty());
     let legacy = excludes(&g["android/res/xml/fandhe_backup_rules.xml"]);
     assert_eq!(legacy.len(), 1, "{legacy:?}");

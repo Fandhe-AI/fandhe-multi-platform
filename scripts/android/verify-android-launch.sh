@@ -186,6 +186,7 @@ done
 # 「起動確認」という目的に対して最短経路の debug APK を用いる（A05 注意点は
 # 上記スクリプト冒頭コメント参照）。
 abi_csv="$(IFS=,; echo "${abi_list[*]}")"
+fandhe_gen_gallery
 log "gradle -p ${gradle_project_dir} :app:assembleDebug -PfandheAndroidAbis=${abi_csv}"
 gradle -p "${gradle_project_dir}" :app:assembleDebug --console=plain \
   "-PfandheAndroidAbis=${abi_csv}"

@@ -658,33 +658,6 @@ fn declared(id: &str) -> Declaration {
 }
 
 #[test]
-fn android_gradle_versions_match_versions_env() {
-    let env = repo("scripts/android/versions.env");
-    let gradle = repo("platforms/android/app/build.gradle.kts");
-    for id in IDS {
-        for g in declared(id).android.map(|a| a.gradle).unwrap_or_default() {
-            let (ga, ver) = g.rsplit_once(':').unwrap();
-            let line = gradle
-                .lines()
-                .find(|l| l.contains(&format!("\"{ga}:${{androidVersion(\"")))
-                .unwrap_or_else(|| panic!("{ga} が build.gradle.kts にない"));
-            let key = line
-                .split("androidVersion(\"")
-                .nth(1)
-                .unwrap()
-                .split('"')
-                .next()
-                .unwrap();
-            let want = format!("{key}=\"{ver}\"");
-            assert!(
-                env.lines().any(|l| l == want),
-                "{id}: {want} が versions.env にない"
-            );
-        }
-    }
-}
-
-#[test]
 fn ios_declarations_match_current_settings() {
     let plist = repo("platforms/apple/FandheIosApp/Resources/Info.plist");
     for id in IDS {

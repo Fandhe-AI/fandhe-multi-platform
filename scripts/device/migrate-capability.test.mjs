@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   checkId, stemOf, pascalOf, moveTargets, rewriteSource, usedErrorVariants, unmappedVariants,
-  renderErrorRs, replaceBlock, depLines, gradleLines, renderUnsafeAttr, renderBuildRs, unsafeOsesOf,
+  renderErrorRs, replaceBlock, depLines, renderUnsafeAttr, renderBuildRs, unsafeOsesOf,
   strErrorVariants, rewriteEdition2024, stripRustLiterals, refPatterns, missingEntry,
 } from "./migrate-capability.mjs";
 
@@ -77,14 +77,6 @@ test("replaceBlock: 目印の間だけ書き直し、冪等で、目印が無け
   assert.equal(replaceBlock(once, 0, depLines(["a", "b"])), once);
   assert.throws(() => replaceBlock("no markers", 0, depLines([])));
   assert.throws(() => replaceBlock(t, 2, depLines([])));
-});
-
-test("gradleLines: java と res がある分だけ出す", () => {
-  const l = gradleLines([{ id: "a", java: true, res: false }, { id: "b", java: false, res: true }])("");
-  assert.deepEqual(l.filter((x) => x.includes("srcDirs")), [
-    'java.srcDirs("../../../crates/fandhe-cap-a/android/java")',
-    'res.srcDirs("../../../crates/fandhe-cap-b/android/res")',
-  ]);
 });
 
 test("rewriteSource: --module で id と違う stem の契約パスも書き換える", () => {

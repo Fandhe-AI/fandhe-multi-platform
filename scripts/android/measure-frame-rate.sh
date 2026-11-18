@@ -301,6 +301,7 @@ log "計測用 .so を Gradle 参照先へコピー: ${jnilibs_out_dir} -> ${sta
 cp -R "${jnilibs_out_dir}" "${standard_jnilibs_dir}"
 
 abi_csv="$(IFS=,; echo "${abi_list[*]}")"
+fandhe_gen_gallery
 log "gradle -p ${gradle_project_dir} :app:assembleDebug -PfandheAndroidAbis=${abi_csv}"
 gradle -p "${gradle_project_dir}" :app:assembleDebug --console=plain \
   "-PfandheAndroidAbis=${abi_csv}"

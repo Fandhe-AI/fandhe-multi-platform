@@ -30,6 +30,12 @@ id = "location"
 [package.metadata.fandhe.android]
 # おおよその位置の取得（実行時許可）。精密位置（ACCESS_FINE_LOCATION）はジオフェンスの機能が宣言する。
 permissions = [{ name = "android.permission.ACCESS_COARSE_LOCATION" }]
+# 位置情報の機器が無い端末（Android TV 等）をストアの自動フィルタから外さない。
+features = [
+  { name = "android.hardware.location", required = false },
+  { name = "android.hardware.location.gps", required = false },
+  { name = "android.hardware.location.network", required = false },
+]
 java = ["android/java"]
 
 # Activity のライフサイクルへ参加する非公開 provider（FeatureLifecycleProvider、fandhe-platform-android）。
