@@ -8,6 +8,8 @@ members = [
     # 1 機能ごとに行を足すと並列の移行作業で衝突するため glob で拾う（docs/operations/capability-crate-migration.md）。
     "crates/fandhe-cap-*",
     "crates/fandhe-core",
+    # Issue #1199: 利用者が依存する入口 crate。端末機能を feature で選ぶ（docs/architecture/consumer-app-structure.md §3）。
+    "crates/fandhe",
     # 機能 crate が共有する OS に触れない型・検証・定数（docs/architecture/consumer-app-structure.md §8）。
     "crates/fandhe-device",
     "crates/fandhe-egui-proxy",
