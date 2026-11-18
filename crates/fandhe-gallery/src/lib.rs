@@ -25,10 +25,17 @@ pub use select::autoshot_failed;
 
 /// 起動画面を作る。名前の解決は `select.rs`（`FANDHE_PROXY_APP` など）。
 ///
-/// 計測専用ビルド（`frame-metrics`）は入口ごと差し替えるため、`#[fandhe::main]` を付けない
-/// （`main.rs` と下の `android_main` が計測アプリを直接起動する）。
-#[cfg_attr(not(feature = "frame-metrics"), fandhe::main)]
-#[cfg_attr(feature = "frame-metrics", allow(dead_code))]
+/// 計測専用ビルド（`frame-metrics`）は、デスクトップ・iOS・Android で入口ごと差し替えるため `#[fandhe::main]` を付けない
+/// （`main.rs` と下の `android_main` が計測アプリを直接起動する）。Web は計測専用の入口を持たず、通常の入口のまま
+/// `?measure=1` で計測するため、wasm32 では feature に関係なく付ける。
+#[cfg_attr(
+    any(not(feature = "frame-metrics"), target_arch = "wasm32"),
+    fandhe::main
+)]
+#[cfg_attr(
+    all(feature = "frame-metrics", not(target_arch = "wasm32")),
+    allow(dead_code)
+)]
 fn app(ctx: &egui::Context) -> Box<dyn fandhe_render_egui::ProxyAppDyn> {
     select::app(ctx)
 }
