@@ -1695,6 +1695,7 @@ dependencies = [
  "fandhe-platform-apple",
  "fandhe-runtime",
  "libc",
+ "rfd",
  "thiserror 2.0.20",
  "windows 0.61.3",
 ]
@@ -2936,7 +2937,6 @@ dependencies = [
  "fandhe-core",
  "image",
  "libc",
- "rfd",
  "serde_json",
  "thiserror 2.0.20",
 ]

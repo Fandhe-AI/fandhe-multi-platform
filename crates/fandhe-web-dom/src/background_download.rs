@@ -46,11 +46,39 @@
 
 use fandhe_cap_background_download::{completion_status, DownloadStatus};
 use fandhe_core::screens::background_download::{DownloadView, UNSUPPORTED};
-use fandhe_device::DeviceError;
 
 #[cfg(target_arch = "wasm32")]
 use fandhe_cap_background_download::FILE_NAME;
 use fandhe_device::http::check_url;
+
+/// Web の背景ダウンロードの失敗（旧 `fandhe_device::DeviceError` の使っていた分、#1194）。表示文言は旧型と同じ書き出し。
+#[derive(Debug)]
+pub(crate) enum DeviceError {
+    Unsupported(&'static str),
+    PermissionDenied(&'static str),
+    Disabled(&'static str),
+    Internal(&'static str),
+    /// 保存元 URL の検査（`check_url`）に通らなかった。
+    Http(String),
+}
+
+impl std::fmt::Display for DeviceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unsupported(s) => write!(f, "このプラットフォームでは未対応です: {s}"),
+            Self::PermissionDenied(s) => write!(f, "権限が拒否されました: {s}"),
+            Self::Disabled(s) => write!(f, "端末側で機能が無効化されています: {s}"),
+            Self::Internal(s) => write!(f, "内部エラーが発生しました: {s}"),
+            Self::Http(m) => write!(f, "HTTP エラー: {m}"),
+        }
+    }
+}
+
+impl From<fandhe_device::http::UrlRejected> for DeviceError {
+    fn from(e: fandhe_device::http::UrlRejected) -> Self {
+        Self::Http(e.to_string())
+    }
+}
 
 /// SW が `result` に書く結果の 1 世代分（`web/background-download-sw.js` と形を合わせる）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]

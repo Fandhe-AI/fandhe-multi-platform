@@ -30,8 +30,8 @@
 
 use fandhe_cap_barcode_scan::normalize_payloads;
 use fandhe_core::screens::barcode_scan::ScanFailure;
+use fandhe_device::file_picker::PickError;
 use fandhe_device::photo_picker::{dimensions_within_limits, image_dimensions, PickedPhoto};
-use fandhe_device::DeviceError;
 
 /// 読み取り失敗の固定文言（`fandhe-egui-proxy` と同文言）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -39,9 +39,9 @@ const READ_FAILED: &str = "コードを読み取れませんでした";
 
 /// `validate_photo` の失敗を画面の失敗種別へ写す。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-fn photo_failure(e: DeviceError) -> ScanFailure {
+fn photo_failure(e: PickError) -> ScanFailure {
     match e {
-        DeviceError::InvalidInput(_) => ScanFailure::InvalidInput,
+        PickError::InvalidInput(_) => ScanFailure::InvalidInput,
         _ => ScanFailure::Failed(READ_FAILED.to_string()),
     }
 }
@@ -259,11 +259,11 @@ mod tests {
     #[test]
     fn photo_failure_maps_kinds() {
         assert_eq!(
-            photo_failure(DeviceError::InvalidInput("x")),
+            photo_failure(PickError::InvalidInput("x")),
             ScanFailure::InvalidInput
         );
         assert_eq!(
-            photo_failure(DeviceError::Internal("secret")),
+            photo_failure(PickError::Internal("secret")),
             ScanFailure::Failed(READ_FAILED.to_string())
         );
     }

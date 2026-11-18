@@ -108,11 +108,11 @@ pub fn thumbnail_from_rgba(width: u32, height: u32, rgba: &[u8]) -> Option<Thumb
     })
 }
 
-/// 撮影失敗の理由。端末非依存（`fandhe_device::DeviceError` からの変換は
+/// 撮影失敗の理由。端末非依存（機能 crate の失敗型 `CameraError` からの変換は
 /// `crates/fandhe-cap-camera-capture/src/driver.rs` の責務）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CaptureFailure {
-    /// カメラの権限が拒否された（`fandhe_device::DeviceError::PermissionDenied`）。
+    /// カメラの権限が拒否された（`CameraError::PermissionDenied`）。
     PermissionDenied,
     /// この環境ではカメラを利用できない（`DeviceError::Unsupported` 等）。
     Unsupported,

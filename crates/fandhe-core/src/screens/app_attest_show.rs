@@ -44,7 +44,7 @@ pub const TOO_LARGE_MESSAGE: &str = "証明データが大きすぎます";
 /// 期限切れのときの案内。
 pub const TIMEOUT_MESSAGE: &str = "時間内に取得が終わりませんでした";
 
-/// 失敗の種別（`fandhe_device::DeviceError` から写す責務は effect 側）。
+/// 失敗の種別（機能 crate の失敗型から写す責務は effect 側）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AttestFailure {
     /// 非対応 OS・OS が古い。

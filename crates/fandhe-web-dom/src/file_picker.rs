@@ -76,11 +76,11 @@ use fandhe_core::screens::tsv_import::{
     finish_import, mark_picking as tsv_mark_picking, take_request as tsv_take_request,
     TsvImportState,
 };
+use fandhe_device::file_picker::PickError;
 use fandhe_device::file_picker::MAX_FILE_BYTES;
 use fandhe_device::photo_picker::{
     dimensions_within_limits, image_dimensions, validate_photo, MAX_PHOTO_BYTES,
 };
-use fandhe_device::DeviceError;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -455,7 +455,7 @@ async fn read_photo(mount_id: u64, file: File) -> Result<ShownPhoto, String> {
     let picked = read(file).await?;
     let bytes = js_sys::Uint8Array::new(&picked.buffer).to_vec();
     let photo = validate_photo(bytes).map_err(|e| match e {
-        DeviceError::InvalidInput(_) => format!(
+        PickError::InvalidInput(_) => format!(
             "{} MiB を超える画像は選べません",
             MAX_PHOTO_BYTES / (1024 * 1024)
         ),

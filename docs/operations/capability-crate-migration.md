@@ -761,10 +761,11 @@ PiP の切り替わりの口は #1327（§18）で決着していた。はじめ
 | gen に出ていなかった Android の宣言 | location の `uses-feature`（`android.hardware.location*`、required=false）、mic-record・speech-recognition の `android.hardware.microphone`（required=false）、managed-app-config の `APP_RESTRICTIONS`（制限スキーマと表示名は crate の `android/res`）、file-provider の表示名（`file_provider_root_title`）を機能 crate へ移した |
 | カタログの iOS・macOS の Info.plist・entitlements | 手書き（`FandheIosApp/Resources`・`FandheLiveActivity`・`FandheTextWidget`・`fandhe-egui-proxy/macos`）を撤去し、gen の出力を使う。iOS の .app は `scripts/ios/stage-info-plist.sh` が配置し、macOS の素の実行体へは `fandhe-gallery` の `build.rs` が同じ生成をして埋め込む。表示名・対応言語・LAN 内通信の許可はアプリ設定（`fandhe-app.<os>`）に書く |
 | 切り離し手順書（`docs/architecture/device-feature-removal.md`） | 一括切り替えが無くなったので撤去した。機能を外すのは依存を外すだけで済む |
+| `fandhe-device` の共通エラー型 `DeviceError` | 撤去した。各モジュールが使うバリアントだけの型（`PickError`・`StorageError`・`UrlRejected`・`InvalidUrl`・`PickColorError`・`InvalidPng`）を返し、機能 crate の `From` はそれぞれから写す。表示文言は旧型と同じ書き出しのまま。Web の背景ダウンロードは `fandhe-web-dom` に自前の型を置いた |
+| フォルダ選択 `pick_folder`（macOS は rfd の `NSOpenPanel`） | 唯一の利用者 `fandhe-cap-file-watch` の driver へ移し、`fandhe-device` から rfd の依存を外した。Windows の PowerShell ダイアログの組み立てと実行は、ファイル選択・写真選択と共有するため `fandhe-device` に残す（`run_windows_dialog`・`windows_folder_command` を公開） |
 
 ### 対象外
 
 - `fandhe-egui-proxy` そのもの（各 OS の入口・ソフトキーボード・TV のフォーカス移動・計測用の入口・iOS の入力欄の橋渡し）の撤去。入口の置き場は入口 crate（#1199）と `#[fandhe::main]`（#1200）で決まるため、そちらで撤去する
 - 機能を 1 つも登録しない利用者アプリで `HostInsets` が取り付けられない制約（§18 の範囲外）。入口を生成する #1200 で扱う
-- `fandhe-device` の整理（`DeviceError` の削除、OS を呼ぶ処理の移動）。#1194 の続きの PR で扱う
 - 実機確認（人間担当。Android・iOS の生成物で組んだカタログの起動、macOS の許可プロンプト）

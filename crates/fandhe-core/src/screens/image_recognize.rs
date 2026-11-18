@@ -55,7 +55,7 @@ pub enum ImageRecognizePhase {
     Recognizing,
 }
 
-/// 失敗の種別（`fandhe_device::DeviceError` から写す責務は effect 側。
+/// 失敗の種別（機能 crate の失敗型から写す責務は effect 側。
 /// `fandhe-core` は `fandhe-device` に依存しないため）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecognizeFailure {

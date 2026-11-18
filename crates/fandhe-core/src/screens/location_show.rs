@@ -79,7 +79,7 @@ pub fn apply_waiting(state: &mut LocationShowState) {
     state.view = LocationView::Waiting;
 }
 
-/// 失敗の種別を画面表示へ反映する（effect ドライバが `fandhe_device::DeviceError` の
+/// 失敗の種別を画面表示へ反映する（effect ドライバが機能 crate の失敗型の
 /// バリアントを見て呼び分ける契約。`fandhe-core` は `fandhe-device` に依存しないため、
 /// バリアント名の対応は effect ドライバ側の責務）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

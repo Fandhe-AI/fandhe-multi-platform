@@ -18,18 +18,9 @@ pub enum PhotoLibraryError {
     Internal(&'static str),
 }
 
-impl From<fandhe_device::DeviceError> for PhotoLibraryError {
-    /// 検査済み PNG（`fandhe-device` の `PngImage::new`）の失敗を写す。固定識別子を持つ種別は同じ種別へ、
-    /// 想定外の種別は内部エラーへ畳む（OS の文言は持たない）。
-    fn from(e: fandhe_device::DeviceError) -> Self {
-        use fandhe_device::DeviceError;
-        match e {
-            DeviceError::InvalidInput(s) => Self::InvalidInput(s),
-            DeviceError::Unsupported(s) => Self::Unsupported(s),
-            DeviceError::PermissionDenied(s) => Self::PermissionDenied(s),
-            DeviceError::Internal(s) => Self::Internal(s),
-            _ => Self::Internal("photo_library"),
-        }
+impl From<fandhe_device::photo_library::InvalidPng> for PhotoLibraryError {
+    fn from(_: fandhe_device::photo_library::InvalidPng) -> Self {
+        Self::InvalidInput("photo_library png")
     }
 }
 

@@ -4,7 +4,10 @@
 //! 未移行の背景ダウンロード・アップロード（`background_download`・`background_upload`）も使う共有部分だけ
 //! （`docs/architecture/consumer-app-structure.md` §8。移行が済めば機能 crate 側へ寄せる）。wasm32 でも使える。
 
-use crate::DeviceError;
+/// `check_url` が拒否した（`DeviceError::Http` の後継、#1194）。URL 全体は含めない（A09）。
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("unsupported scheme or host")]
+pub struct UrlRejected;
 
 /// 応答本文の上限（メモリ枯渇防止、security.md A05）。`fandhe-web-dom` の Web 実装
 /// （Issue #985）と共有するため wasm32 も含めた全ターゲットへ公開する。
@@ -14,7 +17,7 @@ pub const MAX_BODY_BYTES: u64 = 8 * 1024 * 1024;
 /// ループバック・RFC 1918 私設 IPv4 宛ての `http://`（実機テストで Mac の LAN IP から取得するため、
 /// Issue #660）のみ。ASCII の空白・制御文字を含む URL は拒否する。エラーに URL 全体は含めない（A09）。
 /// `UreqHttp::get` と `background_download`（OS 管理の転送、Issue #390）が共有し、wasm32 でも使える。
-pub fn check_url(url: &str) -> Result<(), DeviceError> {
+pub fn check_url(url: &str) -> Result<(), UrlRejected> {
     let ok = !url
         .bytes()
         .any(|b| b.is_ascii_whitespace() || b.is_ascii_control())
@@ -23,11 +26,7 @@ pub fn check_url(url: &str) -> Result<(), DeviceError> {
             Some(host) if url.starts_with("http://") => is_local_plain_http_host(host),
             _ => false,
         };
-    if ok {
-        Ok(())
-    } else {
-        Err(DeviceError::Http("unsupported scheme or host".to_string()))
-    }
+    if ok { Ok(()) } else { Err(UrlRejected) }
 }
 
 /// `url` の authority 部分（ユーザー情報・ポートを除いたホスト名）を取り出す。

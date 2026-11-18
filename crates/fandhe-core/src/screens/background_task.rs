@@ -101,7 +101,7 @@ pub enum LastRunView {
     Ran { at_ms: u64, result: RunResultView },
     /// 保存結果の読み出しに失敗した（未実行と区別して表示する、
     /// `device-bridge-contracts.md`「6. 嘘の成功」参照）。読み出し失敗の文言
-    /// （`fandhe_device::DeviceError` の `Display`）をそのまま保持する。
+    /// （保存層の失敗 `fandhe_device::storage::StorageError` の `Display`）をそのまま保持する。
     ReadFailed(String),
 }
 

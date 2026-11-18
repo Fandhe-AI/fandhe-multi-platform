@@ -20,12 +20,9 @@ pub enum BackgroundUploadError {
 }
 
 /// 送信先 URL の検査（`fandhe_device::http::check_url`）の失敗を、この機能の失敗へ写す。
-impl From<fandhe_device::DeviceError> for BackgroundUploadError {
-    fn from(e: fandhe_device::DeviceError) -> Self {
-        match e {
-            fandhe_device::DeviceError::Http(m) => Self::Http(m),
-            _ => Self::Internal("background upload"),
-        }
+impl From<fandhe_device::http::UrlRejected> for BackgroundUploadError {
+    fn from(e: fandhe_device::http::UrlRejected) -> Self {
+        Self::Http(e.to_string())
     }
 }
 

@@ -5,7 +5,7 @@
 //!
 //! # 契約
 //!
-//! - 結果は [`ActivityPoll`] か [`ActivityFailure`]。`fandhe_device::DeviceError` へ variant を足すと既存の網羅 match が
+//! - 結果は [`ActivityPoll`] か [`ActivityFailure`]。共有のエラー型へ variant を足すと既存の網羅 match が
 //!   壊れるため機能固有の enum にする（`compass::CompassFailure` と同じ判断）
 //! - [`ActivityRecognizer::read`] の [`ActivityPoll::Waiting`] は「まだ値が無い / 停止後 / 無効なサンプルを
 //!   捨てた後」。直前の値や [`ActivityKind::Stationary`] で代用しない

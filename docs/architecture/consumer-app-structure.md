@@ -45,7 +45,7 @@ crates.io では、公開する crate の通常依存も公開が要るためで
 | `fandhe-winit-ime` | 入口から到達しない。第 2 バックエンド着手時に判断 | しない | 既存 |
 | `fandhe-swiftui-bridge` | watchOS / visionOS 用。入口から到達しない | しない | 既存 |
 | `fandhe-egui-proxy` | 上記へ分解して消す。端末機能の配線と一括切り替えは撤去済み（#1355・#1194）で、各 OS の入口・ソフトキーボード・TV のフォーカス移動・計測用の入口が残る | 消滅 | #1164〜#1168・#1194・#1199・#1200 |
-| `fandhe-device` | 機能 crate へ移した後に残る、OS に触れない共有の型・検証・定数・符号化（宣言は持たない）。縮小して残す。名前は #1215 で決める。残りの整理は #1194 | する（機能 crate の通常依存になるため） | #1183・#1194 |
+| `fandhe-device` | 機能 crate へ移した後に残る、OS に触れない共有の型・検証・定数・符号化（宣言は持たない）。縮小して残す（共通エラー型の撤去と OS ダイアログの移動は #1194 で済んだ）。名前は #1215 で決める | する（機能 crate の通常依存になるため） | #1183・#1194 |
 
 依存は `fandhe-core` へ向かう一方向です。
 
@@ -178,7 +178,12 @@ graph TD
 | OS 層の定型（JNI・main thread・再描画・保存先の解決） | `fandhe-platform-<os>`・`fandhe-runtime` |
 
 - 利用者は `fandhe-device` に直接依存しません。使うのは機能 crate で、共有型は機能 crate が再公開します
-- `fandhe-device` は `forbid(unsafe_code)` を保ち、OS API を呼びません。`DeviceError` の削除と残ったモジュールの整理は #1194 です
+- `fandhe-device` は `forbid(unsafe_code)` を保ち、OS の API（Cocoa・Win32・JNI 等）を呼びません。Windows の標準ダイアログを
+  PowerShell の子プロセスで開く組み立てと実行（`std::process`）は、ファイル選択・写真選択・フォルダ監視が共有し、非 Windows でも
+  試験できるためここに置きます。macOS のフォルダ選択（`NSOpenPanel`）は使う機能 crate（`fandhe-cap-file-watch`）が持ちます
+- 共通のエラー型は持ちません。各モジュールが使うバリアントだけの型（`file_picker::PickError`・`storage::StorageError`・
+  `http::UrlRejected`・`url_scheme::InvalidUrl`・`eye_dropper::PickColorError`・`photo_library::InvalidPng`）を返し、
+  機能 crate が自分の失敗型へ写します（旧 `DeviceError` は #1194 で撤去）
 
 ### 8.1 画面と effect ドライバの置き場
 

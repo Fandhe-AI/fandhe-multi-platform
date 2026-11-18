@@ -45,7 +45,10 @@
 
 use std::sync::{Mutex, MutexGuard};
 
-use crate::DeviceError;
+/// URL の検査に通らなかった（`InvalidUrl` の後継、#1194）。値は固定の識別子で、URL は含めない。
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("入力が不正です: {0}")]
+pub struct InvalidUrl(pub &'static str);
 
 /// ネイティブ（macOS / iOS / Android / Windows）で受け付ける scheme。
 pub const SCHEME: &str = "fandhe";
@@ -59,8 +62,8 @@ pub const MAX_URL_BYTES: usize = 2048;
 ///
 /// scheme は RFC 3986 §3.1 に従い大文字小文字を区別しない。`fandhex:` が通らないよう
 /// コロン込みで比較する。
-pub fn validate_url(raw: &str, scheme: &str) -> Result<(), DeviceError> {
-    let invalid = || DeviceError::InvalidInput("url_scheme");
+pub fn validate_url(raw: &str, scheme: &str) -> Result<(), InvalidUrl> {
+    let invalid = || InvalidUrl("url_scheme");
     if raw.is_empty() || raw.len() > MAX_URL_BYTES || raw.chars().any(char::is_control) {
         return Err(invalid());
     }
@@ -122,7 +125,7 @@ impl UrlInbox {
         bytes: Option<&[u8]>,
         scheme: &str,
         now_ms: u64,
-    ) -> Result<(), DeviceError> {
+    ) -> Result<(), InvalidUrl> {
         self.receive_with(bytes, "url_scheme", now_ms, |s| validate_url(s, scheme))
     }
 
@@ -134,11 +137,11 @@ impl UrlInbox {
         bytes: Option<&[u8]>,
         label: &'static str,
         now_ms: u64,
-        validate: impl FnOnce(&str) -> Result<(), DeviceError>,
-    ) -> Result<(), DeviceError> {
+        validate: impl FnOnce(&str) -> Result<(), InvalidUrl>,
+    ) -> Result<(), InvalidUrl> {
         let checked = bytes
-            .ok_or(DeviceError::InvalidInput(label))
-            .and_then(|b| std::str::from_utf8(b).map_err(|_| DeviceError::InvalidInput(label)))
+            .ok_or(InvalidUrl(label))
+            .and_then(|b| std::str::from_utf8(b).map_err(|_| InvalidUrl(label)))
             .and_then(|s| validate(s).map(|()| s));
         let mut inner = self.guard();
         inner.seq += 1;
@@ -198,10 +201,7 @@ mod tests {
             long.as_str(),
         ] {
             assert!(
-                matches!(
-                    validate_url(bad, SCHEME),
-                    Err(DeviceError::InvalidInput("url_scheme"))
-                ),
+                matches!(validate_url(bad, SCHEME), Err(InvalidUrl("url_scheme"))),
                 "{bad:?}"
             );
         }
