@@ -19,7 +19,7 @@
         "音声認識"
       ],
       "implStatus": "実装済み（実機目視は人間確認待ち）",
-      "impl": "crates/fandhe-cap-speech-recognition/apple/fandhe_apple_speech_recognition.m + crates/fandhe-cap-speech-recognition/src/apple.rs + crates/fandhe-cap-speech-recognition/src/driver.rs + crates/fandhe-cap-speech-recognition/src/contract.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue 旧#1025"
+      "impl": "crates/fandhe-cap-speech-recognition/apple/fandhe_apple_speech_recognition.m + crates/fandhe-cap-speech-recognition/src/apple.rs + crates/fandhe-cap-speech-recognition/src/driver.rs + crates/fandhe-cap-speech-recognition/src/contract.rs + crates/fandhe-cap-speech-recognition/Cargo.toml（宣言）、Issue 旧#1025"
     },
     "android": {
       "status": "done",

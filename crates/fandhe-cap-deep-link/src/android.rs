@@ -11,8 +11,8 @@
 //! 許可ホストはビルド時の環境変数 `FANDHE_ANDROID_DEEP_LINK_HOST`（`option_env!`。Gradle の
 //! manifest 側も同じ変数を読む）。値は本リポジトリに書かない。未設定・不正な形式のときは
 //! `validate_host` に通らず、届いた URL を全件拒否する（件数だけ数える。成功を装わない）。
-//! feature `device` 無効ビルド向けの no-op は `fandhe-gallery` の `lib.rs` に置く。JNI 署名は Java の native 宣言・no-op スタブ・
-//! 本ファイルの 3 か所で `(String) -> void` に一致させる。
+//! JNI 署名は Java の native 宣言と本ファイルの 2 か所で `(String) -> void` に一致させる
+//! （本 crate を選んだアプリにだけ Java が入るので no-op スタブは要らない、#1194）。
 
 use crate::contract::{self, DeepLink};
 use crate::error::DeepLinkError;

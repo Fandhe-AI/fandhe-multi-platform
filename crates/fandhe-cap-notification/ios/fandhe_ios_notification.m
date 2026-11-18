@@ -4,7 +4,7 @@
 // src/driver.rs` モジュール doc 参照）。
 //
 // `src/ios.rs` から C ABI 経由で
-// 呼ばれる。`build.rs` が feature `device` 有効時のみ `cc` コンパイルし、
+// 呼ばれる。`build.rs` が `cc` コンパイルし、
 // UserNotifications をリンクする。
 //
 // 契約（pull 型。`fandhe_apple_biometric.m` と同型、coding-rust.md の FFI 例外規定）:

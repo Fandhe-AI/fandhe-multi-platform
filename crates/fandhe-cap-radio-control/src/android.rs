@@ -21,7 +21,7 @@
 //! 設定画面の待ち時間。id・コード・OS の例外はログに出さない。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `RadioControlHelper.set` を経た後でしか呼ばれず、
-//! feature `device` 無効ビルドではその経路に到達しない（wallpaper と同じ）。
+//! この crate を選ばないアプリではその経路に到達しない（wallpaper と同じ）。
 
 use crate::contract::{FAILED, FEATURE, RadioKind, RadioState, SwitchOutcome};
 use crate::error::RadioControlError;

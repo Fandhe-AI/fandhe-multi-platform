@@ -635,8 +635,8 @@ fn extension_usage_descriptions_validated_and_merged_by_equality() {
 
 // ---- 現行設定との突き合わせ（capability-declaration.md §6）----
 // Manifest・srcDirs・NSServices・拡張の plist/entitlements は生成物との比較へ移した（tests/gen.rs、#1176）。
-// ここに残すのは生成しない項目（framework のリンク・Gradle の版・Xcode の拡張ターゲット・Swift の import）。
-// 寿命: #1194（設定を生成へ切り替え）と #1212（Xcode ターゲット生成）で撤去する。
+// ここに残すのは生成しない項目（framework のリンク・Xcode の拡張ターゲット・Swift の import）。Gradle の版は
+// tests/gen.rs が versions.env と突き合わせる。寿命: #1212（Xcode ターゲット生成）で撤去する。
 
 fn repo(rel: &str) -> String {
     fs::read_to_string(
@@ -658,35 +658,8 @@ fn declared(id: &str) -> Declaration {
 }
 
 #[test]
-fn android_gradle_versions_match_versions_env() {
-    let env = repo("scripts/android/versions.env");
-    let gradle = repo("platforms/android/app/build.gradle.kts");
-    for id in IDS {
-        for g in declared(id).android.map(|a| a.gradle).unwrap_or_default() {
-            let (ga, ver) = g.rsplit_once(':').unwrap();
-            let line = gradle
-                .lines()
-                .find(|l| l.contains(&format!("\"{ga}:${{androidVersion(\"")))
-                .unwrap_or_else(|| panic!("{ga} が build.gradle.kts にない"));
-            let key = line
-                .split("androidVersion(\"")
-                .nth(1)
-                .unwrap()
-                .split('"')
-                .next()
-                .unwrap();
-            let want = format!("{key}=\"{ver}\"");
-            assert!(
-                env.lines().any(|l| l == want),
-                "{id}: {want} が versions.env にない"
-            );
-        }
-    }
-}
-
-#[test]
-fn ios_declarations_match_current_settings() {
-    let plist = repo("platforms/apple/FandheIosApp/Resources/Info.plist");
+fn ios_frameworks_match_build_rs() {
+    // 説明文は gen の出力に入る（tests/gen.rs の usage_descriptions_come_from_the_app_config）。ここは framework のリンクだけ。
     for id in IDS {
         // 機能 crate へ移した機能は crate の build.rs、それ以外は egui-proxy の build.rs と比べる。
         let own = format!("crates/fandhe-cap-{id}/build.rs");
@@ -702,12 +675,6 @@ fn ios_declarations_match_current_settings() {
         let Some(ios) = declared(id).ios else {
             continue;
         };
-        for k in &ios.usage_descriptions {
-            assert!(
-                plist.contains(&format!("<key>{k}</key>")),
-                "{id}: {k} が Info.plist にない"
-            );
-        }
         for f in &ios.frameworks {
             assert!(
                 build_rs.contains(&format!("\"{f}\"")),

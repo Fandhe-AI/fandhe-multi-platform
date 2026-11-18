@@ -6,8 +6,8 @@
 //! 発話・停止して結果を書き戻す。
 //!
 //! Web は `fandhe-device` の `Tts` トレイトを通らない（`clipboard.rs` と同じ理由。
-//! `fandhe-egui-proxy` の feature `device` は wasm32 に依存を持ち込まない設計、
-//! `crates/fandhe-egui-proxy/src/device.rs` 参照）。そのため本モジュールが
+//! 機能 crate の OS 実装は wasm32 を対象にしない設計（Web の実装は本クレート、consumer-app-structure.md §7）、
+//! consumer-app-structure.md §7 参照）。そのため本モジュールが
 //! DOM レンダラ側の対応実装にあたる。
 //!
 //! # ブラウザ側の制約

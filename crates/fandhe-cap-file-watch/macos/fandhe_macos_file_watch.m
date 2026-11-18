@@ -4,8 +4,8 @@
 // （MustScanSubDirs / *Dropped 等）も同じ合図に畳む。パス・ファイル名はログに出さない。権限の宣言は
 // 増やさない（アプリ専用の作業フォルダ。App Sandbox は使っていない）。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_file_watch.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `crates/fandhe-cap-file-watch/src/macos.rs` から C ABI 経由で呼ばれる。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_macos_file_watch_start(id, path) -> int32_t

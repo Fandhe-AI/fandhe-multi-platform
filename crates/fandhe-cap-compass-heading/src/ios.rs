@@ -1,5 +1,5 @@
 //! iOS 向け方位実装（Issue #1405、親 #1154）。`ios/fandhe_ios_compass.m`（CoreLocation の
-//! heading 購読、`build.rs` が iOS ターゲットの feature `device` 有効時にコンパイルする）を
+//! heading 購読、`build.rs` が iOS ターゲットでコンパイルする）を
 //! `unsafe extern "C"` 3 関数で呼ぶ。#1404 のスタブを置き換えたもので、dispatch
 //! （本 crate の `driver`）・共通コア画面・trait 契約（`crate::contract`）は変えない。
 //!
@@ -77,7 +77,7 @@ mod imp {
 
     use super::{read_result, start_result};
 
-    // SAFETY: `ios/fandhe_ios_compass.m`（`build.rs` が iOS ターゲットの feature `device` 有効時に
+    // SAFETY: `ios/fandhe_ios_compass.m`（`build.rs` が iOS ターゲットで
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {

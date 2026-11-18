@@ -5,9 +5,7 @@
 //! （Clipboard API）で読み書きして結果を書き戻す。
 //!
 //! Web は `fandhe-device` の `Clipboard` トレイトを通らない（`fandhe-device` は wasm32 で
-//! ureq/arboard の依存が解決できず、`fandhe-egui-proxy` の feature `device` も wasm32 には
-//! 依存自体を持ち込まない設計。`crates/fandhe-egui-proxy/src/device.rs` のモジュール doc
-//! 参照）。そのため本モジュールが DOM レンダラ側の対応実装にあたる。
+//! ureq/arboard の依存が解決できず、機能 crate の OS 実装は wasm32 を対象にしない設計（Web の実装は本クレート、consumer-app-structure.md §7））。そのため本モジュールが DOM レンダラ側の対応実装にあたる。
 //!
 //! # ブラウザ側の制約（対応表 `docs/device/capabilities/clipboard.json` の web 欄と対）
 //!

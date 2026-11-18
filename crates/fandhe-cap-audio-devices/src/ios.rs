@@ -1,5 +1,5 @@
 //! iOS 向け音声デバイス一覧実装（Issue #1331）。`ios/fandhe_ios_audio_devices.m`
-//! （`AVAudioSession` の読み取り。`build.rs` が iOS 分岐で feature `device` 有効時にコンパイルする）を
+//! （`AVAudioSession` の読み取り。`build.rs` が iOS 分岐でコンパイルする）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
 //! `fandhe-cap-audio-devices/src/driver.rs` の iOS 経路から呼ばれ、契約は `fandhe_cap_audio_devices`。
 //!
@@ -83,7 +83,7 @@ fn from_raw(raw: &Raw) -> AudioDeviceList {
 mod ffi {
     use super::Raw;
 
-    // SAFETY: `ios/fandhe_ios_audio_devices.m`（`build.rs` が iOS 分岐で feature `device` 有効時に
+    // SAFETY: `ios/fandhe_ios_audio_devices.m`（`build.rs` が iOS 分岐で
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {

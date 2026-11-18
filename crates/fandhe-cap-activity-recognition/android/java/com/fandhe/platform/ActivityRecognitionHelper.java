@@ -90,7 +90,7 @@ final class ActivityRecognitionHelper {
     private static native void nativeOnBackgrounded();
     private static native void nativeOnResumed();
 
-    // Rust から start が 1 度でも呼ばれたか。呼ばれる前は native を呼ばない（feature `device` 無効でも安全）。
+    // Rust から start が 1 度でも呼ばれたか。呼ばれる前は native を呼ばない。
     private static volatile boolean nativeReady;
     // start 成功〜stop までの購読意思（Activity 再生成をまたぐ）。新インスタンスの read が LOST かの区別に使う。
     private static volatile boolean subscribed;

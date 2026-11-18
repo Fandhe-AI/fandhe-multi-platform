@@ -3,7 +3,7 @@
 // ので TCC も entitlement も増やさない。シリアル番号・locationID など識別子は読まない。
 //
 // `crates/fandhe-cap-usb-device/src/macos.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルし IOKit をリンクする。
+// `build.rs` がコンパイルし IOKit をリンクする。
 //
 // 契約:
 //   fandhe_macos_usb_device_list(FandheUsbDeviceListRaw *out) -> int32_t

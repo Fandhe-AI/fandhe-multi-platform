@@ -29,6 +29,9 @@ id = "managed-app-config"
 
 [package.metadata.fandhe.android]
 java = ["android/java"]
+# 制限スキーマ（res/xml/app_restrictions.xml）と表示名。MDM / EMM が管理アプリ設定を配るために読む。
+res = ["android/res"]
+application-meta-data = [{ name = "android.content.APP_RESTRICTIONS", resource = "@xml/app_restrictions" }]
 
 [package.metadata.fandhe.macos]
 frameworks = ["CoreFoundation"]

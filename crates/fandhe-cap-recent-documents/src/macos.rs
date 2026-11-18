@@ -1,6 +1,6 @@
 //! macOS 向け「最近使った項目」の実装（Issue #988）。
 //! `macos/fandhe_macos_recent_documents.m`（`NSDocumentController`、`build.rs` が macOS ターゲットの
-//! feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` はこの
+//! コンパイルする）を `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` はこの
 //! 呼び出しに閉じ `// SAFETY:` で契約を明記する。`driver` の macOS 経路から
 //! 呼ばれ、契約は `crate::contract`。パスは `ShellPath`（検査・正規化済み）だけを渡す。
 //!

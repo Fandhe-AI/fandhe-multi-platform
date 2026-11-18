@@ -4,8 +4,8 @@
 // （com.apple.screenIsLocked 等）や CGSessionCopyCurrentDictionary は使わない（ロックは取れない扱い）。
 // 権限の宣言は増やさない。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_sleep_lock_events.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `crates/fandhe-cap-sleep-lock-events/src/macos.rs` から C ABI 経由で呼ばれる。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_macos_sleep_lock_events_start(id) -> int32_t

@@ -1,6 +1,6 @@
 //! macOS 向け動画の撮影実装（親 #169、Issue #1071）。`device/video_capture.rs` の macOS 経路（`platform`）から
 //! [`implementation`] が呼ばれ、`macos/fandhe_macos_video_capture.m`（AppKit の撮影パネル +
-//! `AVCaptureMovieFileOutput`。`build.rs` が feature `device` 有効時にコンパイルする）を `unsafe extern "C"` で
+//! `AVCaptureMovieFileOutput`。`build.rs` がコンパイルする）を `unsafe extern "C"` で
 //! 呼ぶ。`unsafe` はこの FFI 宣言と受け口に閉じ、各所に `// SAFETY:` を書く（coding-rust.md の FFI 例外規定）。
 //! 契約の SSOT は `crate::contract`。
 //!

@@ -24,7 +24,7 @@
 //! 遅れ（Rust の期限で失敗が確定する）、結果の精度と候補の選択、provider の有無による端末差。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `requestGeocode` を経た後でしか呼ばれず、
-//! feature `device` 無効ビルドではその経路に到達しない（translation と同じ）。
+//! この crate を選ばないアプリではその経路に到達しない（translation と同じ）。
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};

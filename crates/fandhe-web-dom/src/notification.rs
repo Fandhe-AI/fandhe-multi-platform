@@ -5,7 +5,7 @@
 //! （`Notification`）でローカル通知を作成して結果を書き戻す。
 //!
 //! Web は `fandhe-device` の `Notifier` トレイトを通らない（`share.rs`/`tts.rs` と同じ
-//! 理由。`fandhe-egui-proxy` の feature `device` は wasm32 に依存を持ち込まない設計）。
+//! 理由。機能 crate の OS 実装は wasm32 を対象にしない設計（Web の実装は本クレート、consumer-app-structure.md §7））。
 //! 入力検証だけは [`fandhe_cap_notification::NotificationRequest::new`] を共有する
 //! （`share.rs::ShareRequest::new` と同じ検証の SSOT 方針）。
 //!

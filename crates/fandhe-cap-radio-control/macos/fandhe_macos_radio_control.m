@@ -5,7 +5,7 @@
 // OS の戻り値を写す。NSError はログに出さない。
 //
 // `crate::macos` から C ABI 経由で呼ばれる。`build.rs` の
-// `build_macos()` が feature `device` 有効時にのみコンパイルし、CoreWLAN と IOBluetooth をリンクする。
+// `build.rs` がコンパイルし、CoreWLAN と IOBluetooth をリンクする。
 // 権限宣言は不要（`setPower` は管理者パスワードを求めることがある）。Rust のテスト実行体からは
 // 実物を呼ばない（無線の状態を変えてしまうため）。
 //

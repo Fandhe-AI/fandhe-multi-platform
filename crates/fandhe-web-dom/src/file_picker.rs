@@ -10,7 +10,7 @@
 //! `change` イベントで得た `File` を読み切って結果を書き戻す。
 //!
 //! Web は `fandhe-device` の `FilePicker` トレイトを通らない（`tts.rs`/`clipboard.rs` と
-//! 同じ理由。`fandhe-egui-proxy` の feature `device` は wasm32 に依存を持ち込まない設計）。
+//! 同じ理由。機能 crate の OS 実装は wasm32 を対象にしない設計（Web の実装は本クレート、consumer-app-structure.md §7））。
 //! そのため本モジュールが DOM レンダラ側の対応実装にあたる。`fandhe_device::file_picker`
 //! からは上限バイト数 [`fandhe_device::file_picker::MAX_FILE_BYTES`] のみを参照し
 //! （上限の SSOT を複製しない）、`FilePicker` トレイト自体は使わない。

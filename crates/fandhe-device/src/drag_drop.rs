@@ -7,7 +7,7 @@
 //! 「要求 → 応答」の往復を経ないユーザー操作そのもの（ウィンドウへ落とした瞬間に
 //! 中身が確定する）であり、`FilePicker` トレイトのような「1 回呼ぶとダイアログが
 //! 開く」抽象は不要。世代番号・`RequestSlot`・ワーカースレッドも要らない
-//! （`crates/fandhe-egui-proxy/src/device/drag_drop.rs` が winit のイベントを
+//! （`crates/fandhe-cap-drag-drop/src/driver.rs` が egui のイベントを
 //! そのまま UI スレッドで同期処理する、モジュール doc 参照）。
 //!
 //! # 契約（各実装・呼び出し元が守る不変条件）

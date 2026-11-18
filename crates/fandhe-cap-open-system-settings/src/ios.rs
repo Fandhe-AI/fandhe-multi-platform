@@ -1,6 +1,6 @@
 //! iOS 向け「OS の設定画面を開く」実装（親 #171、Issue #799）。
 //! `UIApplication.open(_:options:completionHandler:)`（`ios/fandhe_ios_open_system_settings.m`、
-//! `build.rs` が iOS 分岐の feature `device` 有効時にコンパイル）を `unsafe extern "C"` 1 関数で呼ぶ。
+//! `build.rs` が iOS 分岐でコンパイル）を `unsafe extern "C"` 1 関数で呼ぶ。
 //! `driver.rs` の iOS 経路（`begin_open`）から呼ばれ、dispatch・共通コア画面は
 //! #798 で確定済みで触らない。契約の SSOT は `crate::contract`。
 //!

@@ -1,6 +1,6 @@
 //! macOS 向け端末・OS 情報実装（Issue #1304）。`macos/fandhe_macos_device_info.m`
 //! （`NSProcessInfo` + `sysctl` + `NSURL` のボリューム容量、`build.rs` が macOS ターゲットの
-//! feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` は
+//! コンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` は
 //! この呼び出しに閉じ `// SAFETY:` で契約を明記する。本 crate の `driver` の macOS 経路から
 //! 呼ばれ、契約は `crate::contract`。
 //!

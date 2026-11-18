@@ -152,8 +152,8 @@ log "実機接続確認 OK"
 fandhe_target="aarch64-apple-ios"
 fandhe_bin_name="fandhe-gallery-desktop"
 fandhe_app_name="FandheIosApp"
-fandhe_info_plist_src="${repo_root}/platforms/apple/FandheIosApp/Resources/Info.plist"
-[ -f "${fandhe_info_plist_src}" ] || fail "Info.plist が見つかりません: ${fandhe_info_plist_src}"
+# Info.plist は機能 crate の宣言とアプリ設定から生成する（Issue #1194。配置は scripts/ios/stage-info-plist.sh）。
+"${repo_root}/scripts/build/gen-gallery.sh" || fail "cargo fandhe gen に失敗しました"
 
 fandhe_out_dir="${repo_root}/target/ios-device"
 mkdir -p "${fandhe_out_dir}"
@@ -187,8 +187,8 @@ log "アプリバンドル組み立て: ${fandhe_app_dir}"
 rm -rf "${fandhe_app_dir}"
 mkdir -p "${fandhe_app_dir}"
 cp "${fandhe_built_binary}" "${fandhe_app_dir}/${fandhe_app_name}"
-cp "${fandhe_info_plist_src}" "${fandhe_app_dir}/Info.plist"
-cp "${fandhe_info_plist_src%/*}/PrivacyInfo.xcprivacy" "${fandhe_app_dir}/PrivacyInfo.xcprivacy"
+"${repo_root}/scripts/ios/stage-info-plist.sh" "${fandhe_app_dir}" "${fandhe_app_name}" \
+  || fail "Info.plist の配置に失敗しました"
 # 実機インストールにはプロビジョニングプロファイルの同梱が必須（TeamID・
 # entitlements の解決に使われる。中身（証明書チェーン）はリポジトリに書き出さず、
 # バンドル内へコピーするのみ）。

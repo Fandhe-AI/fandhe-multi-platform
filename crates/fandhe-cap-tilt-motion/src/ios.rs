@@ -13,7 +13,7 @@ use crate::error::TiltMotionError;
 use fandhe_platform_apple::is_main_thread;
 
 // SAFETY: `ios/fandhe_ios_motion.m` が定義する C ABI（`build.rs` が iOS ターゲットの
-// み・feature `device` 有効時のみコンパイル・リンクする）。契約は下記 `tilt`
+// みでコンパイル・リンクする）。契約は下記 `tilt`
 // 実装のコメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {

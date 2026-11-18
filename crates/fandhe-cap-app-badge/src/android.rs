@@ -14,7 +14,7 @@
 //! （拒否とダイアログを閉じただけの場合を区別できないため）。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `AppBadgeHelper.set` を経た後でしか呼ばれず、
-//! feature `device` 無効ビルドではその経路に到達しない（pedometer と同じ）。
+//! この crate を選ばないアプリではその経路に到達しない（pedometer と同じ）。
 
 use crate::contract::{BadgeOutcome, BadgeValue};
 use crate::error::AppBadgeError;

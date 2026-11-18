@@ -1,5 +1,5 @@
 //! macOS 向け画面のスポイト実装（Issue #762）。`driver` の macOS 経路から呼ばれ、
-//! `macos/fandhe_macos_eye_dropper.m`（`NSColorSampler`。`build.rs` が feature `device` 有効時のみ
+//! `macos/fandhe_macos_eye_dropper.m`（`NSColorSampler`。`build.rs` が
 //! コンパイルする）を `unsafe extern "C"` 1 関数（[`present`]）で呼ぶ。
 //! `unsafe` はこの呼び出しと受け口に閉じ `// SAFETY:` で契約を明記する
 //! （`apple_contact_picker.rs` と同型、coding-rust.md の FFI 例外規定準拠）。

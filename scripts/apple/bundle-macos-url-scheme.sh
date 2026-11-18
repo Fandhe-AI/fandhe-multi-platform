@@ -3,13 +3,13 @@
 # （fandhe-gallery-desktop）を最小の .app に包み、LaunchServices に登録する。
 #
 # なぜ必要か: CFBundleURLTypes は LaunchServices に登録された .app でしか効かない。素の実行体に
-# macos/Info.plist を埋め込んでも scheme は届かない。そのため macos/Info.plist（SSOT）を
-# .app にコピーし、CFBundleURLTypes と LSEnvironment（FANDHE_PROXY_APP=url_scheme_show。
-# LaunchServices 経由の起動は環境変数が渡らないため）を足す。配布用の設定は変えない。
+# Info.plist を埋め込んでも scheme は届かない。そのため `cargo fandhe gen` の macOS の Info.plist
+# （機能 crate の宣言から作る。URL scheme・ファイルの関連付け・サービスメニューを含む、#1194）を
+# .app にコピーし、LSEnvironment（FANDHE_PROXY_APP=url_scheme_show。LaunchServices 経由の起動は
+# 環境変数が渡らないため）だけを足す。配布用の設定は変えない。
 #
 # Issue #416（親 #102）: ファイルの関連付け（.txt）の Mac 目視にも同じ .app を使う。
-# CFBundleDocumentTypes（public.plain-text、LSHandlerRank=Alternate で既定アプリを奪わない）を
-# 常に足し、--screen で LSEnvironment の画面を選ぶ。
+# --screen で LSEnvironment の画面を選ぶ。
 #
 # 出力: target/macos-url-scheme/FandheUrlScheme.app（git 管理外、ad-hoc 署名のローカル確認用）
 #
@@ -84,24 +84,12 @@ plist="$app/Contents/Info.plist"
 exe=fandhe-gallery-desktop
 
 (cd "$root" && cargo build -p fandhe-gallery --bin "$exe")
+(cd "$root" && cargo run -q -p cargo-fandhe -- fandhe gen --manifest-path crates/fandhe-gallery/Cargo.toml)
 
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS"
 cp "$root/target/debug/$exe" "$app/Contents/MacOS/$exe"
-cp "$root/crates/fandhe-egui-proxy/macos/Info.plist" "$plist"
-
-plutil -insert CFBundleExecutable -string "$exe" "$plist"
-# NSServices の NSPortName と servicesProvider のポート名を一致させるため、名前を実行体名に揃える。
-plutil -replace CFBundleName -string "$exe" "$plist"
-plutil -insert CFBundlePackageType -string APPL "$plist"
-plutil -insert CFBundleURLTypes -json \
-  '[{"CFBundleURLName":"com.fandhe.egui-proxy-desktop.url","CFBundleURLSchemes":["fandhe"]}]' "$plist"
-plutil -insert CFBundleDocumentTypes -json \
-  '[{"CFBundleTypeName":"Plain Text","CFBundleTypeRole":"Viewer","LSHandlerRank":"Alternate","LSItemContentTypes":["public.plain-text"]}]' "$plist"
-# サービスメニュー（Issue #606）。NSMenuItem.default は SERVICE_MENU_TITLE、NSMessage は
-# crates/fandhe-cap-share-receive/macos/fandhe_macos_share_receive.m の receiveSharedText:userData:error: と対。
-plutil -insert NSServices -json \
-  "[{\"NSMenuItem\":{\"default\":\"Fandhe で受け取る\"},\"NSMessage\":\"receiveSharedText\",\"NSPortName\":\"$exe\",\"NSSendTypes\":[\"public.utf8-plain-text\"]}]" "$plist"
+cp "$root/crates/fandhe-gallery/gen/macos/Info.plist" "$plist"
 # $screen は上の許可リストを通った固定の識別子だけ。
 plutil -insert LSEnvironment -json "{\"FANDHE_PROXY_APP\":\"$screen\"}" "$plist"
 plutil -lint "$plist"

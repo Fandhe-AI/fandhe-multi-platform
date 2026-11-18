@@ -51,8 +51,7 @@ final class EnvironmentSensorsHelper {
     // read が「未開始（値なし）」か「破棄で購読喪失」かの区別に使う。
     private static final boolean[] subscribed = new boolean[KIND_COUNT];
 
-    // 署名 `(Z)V`。実体は Rust の android_environment_sensors.rs、feature `device` 無効ビルドは
-    // android.rs の no-op スタブ。3 か所で一致させる。
+    // 署名 `(Z)V`。実体は Rust の `src/android.rs`。2 か所で一致させる。
     private static native void nativeOnForegroundChanged(boolean foreground);
 
     private static final class Slot {

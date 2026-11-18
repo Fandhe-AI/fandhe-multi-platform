@@ -1,7 +1,7 @@
 //! iOS / macOS 向け共有シート実装（Issue #897 macOS → #899 iOS 横展開）。
 //! `driver.rs` の macOS/iOS 経路から呼ばれ、AppKit（`NSSharingServicePicker`）/
 //! UIKit（`UIActivityViewController`）実装（`apple/fandhe_apple_share.m`、`build.rs` が
-//! iOS 全体・macOS の feature `device` 有効時のみコンパイル・リンクする）を
+//! iOS 全体・macOS でコンパイル・リンクする）を
 //! `unsafe extern "C"` 1 関数（[`present`]）で呼ぶ。`unsafe` はこの呼び出し 1 箇所に閉じ
 //! `// SAFETY:` で契約を明記する（`apple_location.rs` の `start` と同型、`lib.rs` の
 //! iOS/macOS `deny(unsafe_code)` 緩和・coding-rust.md の FFI 例外規定準拠）。
@@ -20,7 +20,7 @@ use std::os::raw::c_char;
 use crate::contract::ShareRequest;
 
 // SAFETY: `apple/fandhe_apple_share.m` が定義する C ABI（`build.rs` が iOS 全体・macOS
-// ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は `.m` ファイル
+// ターゲットでコンパイル・リンクする）。契約は `.m` ファイル
 // 冒頭コメントおよび下記 `present` 実装のコメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {

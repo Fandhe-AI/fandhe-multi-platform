@@ -2,7 +2,7 @@
 // `UIApplication.openURL:options:completionHandler:` で固定の URL（`tel:` / Apple 地図の統一 URL）を開く。
 //
 // `crates/fandhe-cap-external-app-launch/src/ios.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が iOS 分岐の feature `device` 有効時のみ `cc` コンパイルする（UIKit は既にリンク済み）。
+// `build.rs` が iOS 分岐で `cc` コンパイルする（UIKit は既にリンク済み）。
 //
 // 契約（pull 型。`fandhe_ios_open_system_settings.m` と同型）:
 //   int32_t fandhe_ios_external_app_launch_open(uint64_t request_id, const char *url)

@@ -80,8 +80,7 @@ pub fn platform_clipboard() -> Result<&'static dyn Clipboard, &'static str> {
                 .map(|c| Box::new(c) as Box<dyn Clipboard>)
                 .map_err(|e| e.to_string())
         }
-        // 上記いずれにも当たらないターゲット（feature `device` が有効な想定外の
-        // プラットフォーム）。ダミーで成功を装わず未対応として扱う。
+        // 上記いずれにも当たらないターゲット（想定外のプラットフォーム）。ダミーで成功を装わず未対応として扱う。
         #[cfg(not(any(
             target_os = "android",
             target_os = "ios",

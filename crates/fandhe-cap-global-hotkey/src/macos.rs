@@ -1,6 +1,6 @@
 //! macOS 向けグローバルホットキーの実装（Issue #766、親 #150）。
 //! `macos/fandhe_macos_global_hotkey.m`（Carbon の `RegisterEventHotKey`、`build.rs` が macOS ターゲットの
-//! feature `device` 有効時にコンパイルする）を `extern "C"` 2 関数で呼ぶ。`unsafe` はこの呼び出しに
+//! コンパイルする）を `extern "C"` 2 関数で呼ぶ。`unsafe` はこの呼び出しに
 //! 閉じ `// SAFETY:` で契約を明記する。`driver` の macOS 経路から呼ばれ、契約は
 //! `crate::contract`。Rust へは生ポインタを渡さず `token`（値）だけを渡す。
 //!
@@ -24,8 +24,8 @@ use crate::contract::{
 use crate::error::GlobalHotkeyError;
 
 mod ffi {
-    // SAFETY: `macos/fandhe_macos_global_hotkey.m`（`build.rs` が macOS ターゲットの feature `device`
-    // 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
+    // SAFETY: `macos/fandhe_macos_global_hotkey.m`（`build.rs` が macOS ターゲットで
+    // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {
         fn fandhe_macos_global_hotkey_register(token: u32) -> i32;

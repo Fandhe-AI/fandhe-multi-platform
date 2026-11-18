@@ -4,10 +4,9 @@
 //! [`super::mount::mount_with_effect`] の effect として観測し、`document` の
 //! `dragenter`/`dragover`/`dragleave`/`drop`（HTML Drag and Drop API）から
 //! ホバー開始・取り消し・受け取りを反映する。デスクトップ版
-//! （`crates/fandhe-egui-proxy/src/device/drag_drop.rs`）と同じ画面状態機械を使うが、
+//! （`crates/fandhe-cap-drag-drop/src/driver.rs`）と同じ画面状態機械を使うが、
 //! egui の `RawInput::hovered_files`/`dropped_files` を経由しないため配線は別実装になる
-//! （`tilt.rs`/`location.rs` と同じ理由。`fandhe-egui-proxy` の feature `device` は
-//! wasm32 に依存を持ち込まない設計）。
+//! （`tilt.rs`/`location.rs` と同じ理由。機能 crate の OS 実装は wasm32 を対象にしない設計（Web の実装は本クレート、consumer-app-structure.md §7））。
 //!
 //! # ドロップ領域（文書全体）
 //!

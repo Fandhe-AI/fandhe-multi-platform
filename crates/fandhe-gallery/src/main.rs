@@ -22,23 +22,23 @@
 //! `fandhe-egui-proxy` の wgpu（Metal）向けエントリ（`fandhe_egui_proxy::ios::run`）へ委譲する
 //! （TASK-1.3-S2）。自動撮影（`FANDHE_PROXY_AUTOSHOT`）は iOS 側へは配線しない。
 //!
-//! Issue #1215: macOS ターゲット（feature `device` 有効時）では、通常の画面起動の
+//! Issue #1215: macOS ターゲットでは、通常の画面起動の
 //! `run_native` より前に `fandhe_cap_url_scheme::register` で URL scheme の
 //! Apple Event ハンドラを登録する（起動時に届く URL を取りこぼさないため）。
 //!
-//! Issue #606: macOS ターゲット（feature `device` 有効時）では、同じく `run_native` より前に
+//! Issue #606: macOS ターゲットでは、同じく `run_native` より前に
 //! `fandhe_cap_share_receive::register` でサービスメニュー受信の provider を登録する。
 //!
-//! Issue #1216: Windows ターゲット（feature `device` 有効時）では、URL scheme 起動の判定と
+//! Issue #1216: Windows ターゲットでは、URL scheme 起動の判定と
 //! 起動済みインスタンスへの転送（`fandhe_cap_url_scheme::windows::win::startup`）を、通常の画面起動より
 //! 前に行う。URL 起動で `FANDHE_PROXY_APP` が未設定なら `url_scheme_show` 画面を既定にする。
 //!
-//! Issue #416: macOS ターゲット（feature `device` 有効時）では、同じく `run_native` より前に
+//! Issue #416: macOS ターゲットでは、同じく `run_native` より前に
 //! `fandhe_cap_file_association::register` でファイルを開く Apple Event（odoc）のハンドラを登録する。
 //! iOS では `UIApplicationMain` より前に同関数で scene 通知の observer を登録する（Issue #417）。
 //! Windows ターゲットでは起動引数がファイルなら `file_association_show` 画面を既定にする。
 //!
-//! Issue #1044: Windows ターゲット（feature `device` 有効時）では、通常の画面
+//! Issue #1044: Windows ターゲットでは、通常の画面
 //! 起動より前に `fandhe_cap_background_task::parse_scheduled_args` で
 //! コマンドライン引数を見る。Windows タスク スケジューラが専用引数付きで本 exe を
 //! 再起動した場合はそちらに一致し、`run_scheduled` が画面を出さずに実行結果を
@@ -119,8 +119,7 @@ fn main() -> Result<(), fandhe_render_egui::LaunchError> {
     // 再起動したときの入口。通常の画面起動（`FANDHE_PROXY_APP` の解決等）より
     // 前に判定し、一致したら画面を出さずに実行結果を書いて終了する
     // （`fandhe-cap-background-task` の `windows.rs` モジュール doc「契約の簡略化」参照）。
-    // feature `device` 無効時はこの経路自体が存在しない。
-    #[cfg(all(target_os = "windows", feature = "device"))]
+    #[cfg(target_os = "windows")]
     {
         let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
         if fandhe_cap_background_task::parse_scheduled_args(&args) {
@@ -132,7 +131,7 @@ fn main() -> Result<(), fandhe_render_egui::LaunchError> {
     // pipe で転送してここで終える。自分が受ける側なら URL を受け口へ入れて続行する
     // （`fandhe-cap-url-scheme` の `windows` モジュール doc 参照）。ファイル起動（file-association）の経路は、
     // 単一インスタンスの調停を持つ url-scheme の `startup` より前に登録する（Issue #1333。登録が無いとファイル起動は転送されない）。
-    #[cfg(all(target_os = "windows", feature = "device"))]
+    #[cfg(target_os = "windows")]
     let url_launch = {
         use fandhe_cap_url_scheme::windows as wus;
         fandhe_cap_file_association::windows::register_route();
@@ -142,39 +141,39 @@ fn main() -> Result<(), fandhe_render_egui::LaunchError> {
         }
         wus::parse_url_args(&args).is_some()
     };
-    #[cfg(not(all(target_os = "windows", feature = "device")))]
+    #[cfg(not(target_os = "windows"))]
     let url_launch = false;
 
     // Issue #416: ファイルの関連付け（Windows）。起動引数がファイルなら `file_association_show` を
     // 既定にする（レジストリのコマンドは環境変数を渡せないため）。転送した起動は `startup` の
     // 中で終了済みなので、`true` になるのは自分が受ける側のときだけ。
-    #[cfg(all(target_os = "windows", feature = "device"))]
+    #[cfg(target_os = "windows")]
     let file_launch = {
         let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
         fandhe_cap_file_association::windows::is_file_launch(&args)
     };
-    #[cfg(not(all(target_os = "windows", feature = "device")))]
+    #[cfg(not(target_os = "windows"))]
     let file_launch = false;
 
     // Issue #1215: カスタム URL scheme の Apple Event ハンドラはイベントループ開始前
     // （`run_native` より前）に main thread で登録する。起動時の URL を取りこぼさないため
     // （`fandhe-cap-url-scheme` の `src/apple.rs`・`macos/fandhe_macos_url_scheme.m` 参照）。
-    #[cfg(all(target_os = "macos", feature = "device"))]
+    #[cfg(target_os = "macos")]
     fandhe_cap_url_scheme::register();
 
     // Issue #606: 共有の受け取り（サービスメニュー）の provider も同じ位置で登録する
     // （`fandhe-cap-share-receive` の `src/macos.rs`・`macos/fandhe_macos_share_receive.m` 参照）。
-    #[cfg(all(target_os = "macos", feature = "device"))]
+    #[cfg(target_os = "macos")]
     fandhe_cap_share_receive::register();
 
     // Issue #560: OS の検索から開かれたときの受信（`continueUserActivity`）を登録する
     // （`fandhe-cap-spotlight-index` の `src/apple.rs`・`apple/fandhe_apple_spotlight_index.m` 参照）。
-    #[cfg(all(target_os = "macos", feature = "device"))]
+    #[cfg(target_os = "macos")]
     fandhe_cap_spotlight_index::register(fandhe_core::screens::spotlight_index::URL_PREFIX);
 
     // Issue #416: ファイルの関連付け（odoc）の Apple Event ハンドラも同じ理由で登録する
     // （`fandhe-cap-file-association` の `src/apple.rs`・`apple/fandhe_apple_file_association.m` 参照）。
-    #[cfg(all(target_os = "macos", feature = "device"))]
+    #[cfg(target_os = "macos")]
     fandhe_cap_file_association::register();
 
     // TASK-2.3（#54）計測マーカー: 以下は描画対象切替ロジック（TASK-2.2-S5 / #52）。
@@ -278,33 +277,26 @@ fn main() -> Result<(), fandhe_render_egui::LaunchError> {
     // `UIApplicationMain` 呼び出し前）に登録する契約（Apple ドキュメント要件、
     // 起動後の登録はできない）。`ios::run()`（内部で `UIApplicationMain` を呼ぶ）
     // より前にここで 1 回だけ呼ぶ（本番経路・計測 2 feature 経路の 3 つを
-    // この 1 箇所で覆う、実装計画 §3.5）。feature `device`（既定 on）無効時は
-    // `fandhe-device` への依存自体が無いため呼ばない。
-    #[cfg(feature = "device")]
+    // この 1 箇所で覆う、実装計画 §3.5）。
     fandhe_cap_background_task::register();
 
     // Issue #1217: カスタム URL scheme の observer も `UIApplicationMain` より前に登録する。
     // `UIApplicationDidFinishLaunchingNotification` に間に合わないと、コールドスタートの
     // URL の取り逃がしを防ぐ（`fandhe-cap-url-scheme` の `ios/fandhe_ios_url_scheme.m` 参照）。
-    #[cfg(feature = "device")]
     fandhe_cap_url_scheme::register();
 
     // Issue #1325: 背景転送の完了通知（`handleEventsForBackgroundURLSession`）の受け手を共通層へ登録する。
     // relaunch の完了通知は起動と同じターンで届くため、`UIApplicationMain` より前でないと間に合わない
     // （`fandhe-platform-apple` の `ios/fandhe_ios_app_delegate.m` 参照）。
-    #[cfg(feature = "device")]
     fandhe_cap_background_upload::register();
-    #[cfg(feature = "device")]
     fandhe_cap_background_download::register();
 
     // Issue #417: ファイルの関連付けも同じ位置で登録する（コールドスタートの通知に間に合わせる）。
-    #[cfg(feature = "device")]
     fandhe_cap_file_association::register();
 
     // Issue #561: OS の検索から開かれたときの受信も `UIApplicationMain` より前に登録する。
     // 未起動からの起動は `willConnectToSession` にだけ届くため、observer が後だと取りこぼす
     // （`fandhe-cap-spotlight-index` の `apple/fandhe_apple_spotlight_index.m`・`fandhe-platform-apple` の `ios/fandhe_ios_scene.m` 参照）。
-    #[cfg(feature = "device")]
     fandhe_cap_spotlight_index::register(fandhe_core::screens::spotlight_index::URL_PREFIX);
 
     // 終了時の解放処理を登録する（frame-metrics 単独の計測ビルドでは従来も登録しない）。

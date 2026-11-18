@@ -3,7 +3,7 @@
 // Foundation だけを使い、UIKit / AppKit に触れない）。
 //
 // `crates/fandhe-cap-nlp/src/apple.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が macOS・iOS ターゲットの feature `device` 有効時に `cc` コンパイルする
+// `build.rs` が macOS・iOS ターゲットで `cc` コンパイルする
 // （Rust 側 cfg と同じ OS 集合に保つ）。
 //
 // 契約（一発呼び出し型。結果を待つ要求は持たない）:

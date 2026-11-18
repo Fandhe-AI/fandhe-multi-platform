@@ -1,5 +1,5 @@
 // iOS 向けファイル・動画のプレビュー提示（QuickLook `QLPreviewController`、Issue #919、親 #182）。
-// `src/ios.rs` から呼ばれ、`build.rs` が feature `device` 有効時にコンパイルして
+// `src/ios.rs` から呼ばれ、`build.rs` がコンパイルして
 // QuickLook をリンクする。Info.plist・entitlement の追加は要らない。サムネイルは
 // `apple/fandhe_apple_file_preview.m`（macOS と共用）が担い、本ファイルは提示だけを扱う。
 //

@@ -1,6 +1,6 @@
 //! iOS 向け端末・OS 情報実装（Issue #1305）。`ios/fandhe_ios_device_info.m`
 //! （`NSProcessInfo` + `sysctl` + `NSURL` のボリューム容量、`build.rs` が iOS ターゲットの
-//! feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。#1304 の
+//! コンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。#1304 の
 //! スタブを置き換えたもので、dispatch（本 crate の `driver`）と共通コア画面は変えない。
 //! 契約は `crate::contract`。
 //!
@@ -73,8 +73,8 @@ fn from_raw(raw: Raw) -> DeviceInfoSnapshot {
 mod ffi {
     use super::Raw;
 
-    // SAFETY: `ios/fandhe_ios_device_info.m`（`build.rs` が iOS ターゲットの feature `device`
-    // 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
+    // SAFETY: `ios/fandhe_ios_device_info.m`（`build.rs` が iOS ターゲットで
+    // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {
         fn fandhe_ios_device_info_read(out: *mut Raw) -> i32;

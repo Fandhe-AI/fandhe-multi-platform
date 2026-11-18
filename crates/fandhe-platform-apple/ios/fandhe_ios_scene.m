@@ -13,7 +13,7 @@
 //     scene が接続されることで `connectedScenes` から外部画面を列挙できる。
 //   - URL: scene 形態では `application:openURL:options:` が呼ばれず scene 側へ届くため、
 //     通知 `FandheSceneOpenURLNotification`（object = NSURL）へ流す。受信側は機能の `.m`
-//     （本ファイルは feature `device` に依存しない）。通知名と署名の正本は
+//     （本ファイルは機能 crate に依存しない）。通知名と署名の正本は
 //     `include/fandhe_ios_app_events.h`（旧経路の URL は `ios/fandhe_ios_app_delegate.m` が同じ通知へ合流させる）。
 //   - ホーム画面のショートカット（Issue #425）: 未起動からの起動は `connectionOptions.shortcutItem`、
 //     起動中は `windowScene:performActionForShortcutItem:completionHandler:` で届く。type は
@@ -23,7 +23,7 @@
 //     起動中は `scene:continueUserActivity:` で届く（どちらか一方にだけ入るので二重には届かない）。
 //     `NSUserActivity` を通知 `FandheSceneContinueUserActivityNotification` へそのまま流す。
 //     種類の判定（Core Spotlight）は受信側 `apple/fandhe_apple_spotlight_index.m` が行う
-//     （本ファイルは feature `device` に依存せず CoreSpotlight をリンクしないため）。
+//     （本ファイルは機能 crate に依存せず CoreSpotlight をリンクしないため）。
 //
 // `fandhe-platform-apple` の `build.rs` が iOS で常にコンパイルする（Info.plist は 1 つのため）。
 // `fandhe_platform_apple::ios_scene_install()` が `fandhe_ios_scene_install()` を呼んで、リンカが

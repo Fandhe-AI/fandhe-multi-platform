@@ -6,8 +6,8 @@
 // `unsafe extern "C"` 宣言 1 点のみを Rust 側へ公開する（`fandhe_ios_file_picker.m` と同型。
 // coding-rust.md の FFI 例外規定）。
 //
-// `build.rs` が iOS ターゲット（`CARGO_CFG_TARGET_OS == "ios"`）かつ feature `device`
-// 有効時のみ `cc` でコンパイルし、PhotosUI・ImageIO をリンクする。
+// `build.rs` が iOS ターゲット（`CARGO_CFG_TARGET_OS == "ios"`）でだけ
+// `cc` でコンパイルし、PhotosUI・ImageIO をリンクする。
 //
 // 権限: 不要。`PHPickerViewController` はプロセス外のシステムピッカーで、選ばれた 1 枚だけが
 // アプリへ渡る（`NSPhotoLibraryUsageDescription` は追加しない）。

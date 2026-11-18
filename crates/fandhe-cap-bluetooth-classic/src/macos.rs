@@ -1,6 +1,6 @@
 //! macOS 向け Bluetooth Classic 実装（Issue #659、親 #130）。`macos/fandhe_macos_bluetooth_classic.m`
 //! （IOBluetooth の `pairedDevices` と `IOBluetoothDeviceInquiry`。`build.rs` が macOS ターゲットの
-//! feature `device` 有効時にコンパイルし IOBluetooth をリンクする）を `unsafe extern "C"` 3 関数
+//! コンパイルし IOBluetooth をリンクする）を `unsafe extern "C"` 3 関数
 //! （[`paired`](MacBluetoothClassic) の一覧・[`present`]・[`stop`]）で呼ぶ。`unsafe` はこの FFI 呼び出しと
 //! `CStr` の読み取りに閉じ `// SAFETY:` で契約を明記する（coding-rust.md の FFI 例外規定）。
 //! 本 crate の `driver` の macOS 経路から呼ばれ、契約は `crate::contract`。

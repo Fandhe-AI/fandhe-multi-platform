@@ -1,6 +1,6 @@
 //! macOS / iOS 向け端末内翻訳実装（Issue #535 macOS、iOS は #536）。
 //! `crate::driver` の macOS 経路（と #536 以降の iOS 経路）から呼ばれ、
-//! `apple/fandhe_apple_translation.swift`（Translation。`build.rs` が feature `device` 有効時に
+//! `apple/fandhe_apple_translation.swift`（Translation。`build.rs` が
 //! swiftc で静的ライブラリ化）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出し
 //! 1 か所に閉じる（coding-rust.md の FFI 例外規定準拠）。`build.rs` のコンパイル条件・
 //! `lib.rs` の mod cfg と同じ OS 集合に保つ。
@@ -17,7 +17,7 @@ use crate::contract::{
 use crate::error::TranslationError;
 
 // SAFETY: `apple/fandhe_apple_translation.swift` が `@_cdecl` で定義する C ABI（`build.rs` が
-// macOS・iOS ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は swift 冒頭コメントに集約する。
+// macOS・iOS ターゲットでコンパイル・リンクする）。契約は swift 冒頭コメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {
     fn fandhe_apple_translation_translate(

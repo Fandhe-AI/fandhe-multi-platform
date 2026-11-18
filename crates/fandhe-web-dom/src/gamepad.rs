@@ -5,8 +5,7 @@
 //! （`navigator.getGamepads()`、pull 型）を `requestAnimationFrame` の自己再
 //! スケジュールでポーリングして結果を書き戻す。`fandhe-cap-gamepad` の `Gamepad`
 //! トレイトは Windows 実装（Issue #933）のみが使う経路で、Web は
-//! `location.rs`/`share.rs` と同じ理由（`fandhe-egui-proxy` の feature `device`
-//! が wasm32 に依存を持ち込まない設計）でこれを通らず、本モジュールが
+//! `location.rs`/`share.rs` と同じ理由（機能 crate の OS 実装は wasm32 を対象にしない設計（Web の実装は本クレート、consumer-app-structure.md §7））でこれを通らず、本モジュールが
 //! DOM レンダラ側の対応実装にあたる。ただし値域の正規化（`normalize_axis`/
 //! `normalize_trigger`）とボタンラベル整形（`pressed_labels`）は
 //! `fandhe_cap_gamepad` を共有する（正規化ロジックの SSOT を 1 箇所に保つ）。

@@ -1,5 +1,5 @@
 //! macOS 向け音声デバイス一覧実装（Issue #1330）。`macos/fandhe_macos_audio_devices.m`
-//! （Core Audio のデバイス列挙、`build.rs` が macOS ターゲットの feature `device` 有効時に
+//! （Core Audio のデバイス列挙、`build.rs` が macOS ターゲットで
 //! コンパイルし CoreAudio をリンクする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` は
 //! この呼び出しに閉じ `// SAFETY:` で契約を明記する。`fandhe-cap-audio-devices/src/driver.rs` の macOS 経路から
 //! 呼ばれ、契約は `fandhe_cap_audio_devices`。

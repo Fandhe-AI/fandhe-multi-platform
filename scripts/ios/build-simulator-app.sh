@@ -110,7 +110,10 @@ case "${skip_sign}" in
     ;;
 esac
 
-info_plist_src="${repo_root}/platforms/apple/FandheIosApp/Resources/Info.plist"
+# Info.plist は機能 crate の宣言とアプリ設定から生成する（手書きを持たない、Issue #1194。
+# バンドルへの配置は scripts/ios/stage-info-plist.sh）。ライブアクティビティ拡張の Info.plist も同じ生成物。
+"${repo_root}/scripts/build/gen-gallery.sh"
+info_plist_src="${repo_root}/crates/fandhe-gallery/gen/ios/Info.plist"
 # FANDHE_IOS_OUT_DIR は build-and-sign.sh（CLI）からの委譲時に --output-dir を
 # 一致させるための注入点（Issue #486）。単体実行時は既定値のまま従来どおり。
 out_dir="${FANDHE_IOS_OUT_DIR:-${repo_root}/target/ios-sim}"
@@ -198,8 +201,22 @@ build_live_activity_extension() {
   echo "[build-simulator-app] ライブアクティビティ拡張をビルド（ARCHS=${archs}）"
   xcodegen generate --spec "${repo_root}/platforms/apple/project.yml" --project "${repo_root}/platforms/apple" >/dev/null
   rm -rf "${live_activity_build_dir}"
+  # 埋め込む拡張の版（CFBundleShortVersionString・CFBundleVersion）は本体と一致させる（Apple のバンドル要件）。
+  # 本体の Info.plist は gen が crate の version から作るため、その値を xcodebuild のビルド設定で拡張へ渡す（#1194）。
+  local versions marketing_version build_version
+  versions="$(python3 - "${info_plist_src}" <<'PYEOF'
+import plistlib
+import sys
+
+with open(sys.argv[1], "rb") as f:
+    p = plistlib.load(f)
+print(p["CFBundleShortVersionString"], p["CFBundleVersion"])
+PYEOF
+  )"
+  read -r marketing_version build_version <<<"${versions}"
   xcodebuild -project "${repo_root}/platforms/apple/Fandhe.xcodeproj" -target FandheLiveActivity \
     -sdk iphonesimulator -configuration Release CODE_SIGNING_ALLOWED=NO "ARCHS=${archs}" \
+    "MARKETING_VERSION=${marketing_version}" "CURRENT_PROJECT_VERSION=${build_version}" \
     "SYMROOT=${live_activity_build_dir}/build" "OBJROOT=${live_activity_build_dir}/obj" build >/dev/null
   if [[ ! -d "${live_activity_appex}" ]]; then
     echo "[build-simulator-app] エラー: 拡張の成果物が見つからない: ${live_activity_appex}" >&2
@@ -278,8 +295,7 @@ phase_bundle() {
   rm -rf "${app_dir}"
   mkdir -p "${app_dir}"
   cp "${built_binary}" "${app_dir}/${app_name}"
-  cp "${info_plist_src}" "${app_dir}/Info.plist"
-  cp "${info_plist_src%/*}/PrivacyInfo.xcprivacy" "${app_dir}/PrivacyInfo.xcprivacy"
+  "${repo_root}/scripts/ios/stage-info-plist.sh" "${app_dir}" "${app_name}"
 
   if [[ -z "${injected_binary}" ]]; then
     if [[ ! -d "${live_activity_appex}" ]]; then

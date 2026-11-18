@@ -1,5 +1,5 @@
 //! iOS・macOS 向けカメラのライブ映像実装（iOS: Issue #813、macOS: Issue #1066、親 #168）。`ios/fandhe_ios_camera_preview_stream.m`
-//! （`AVCaptureSession` + `AVCaptureVideoDataOutput`。`build.rs` が iOS ターゲットの feature `device` 有効時に
+//! （`AVCaptureSession` + `AVCaptureVideoDataOutput`。`build.rs` が iOS ターゲットで
 //! コンパイルする）を `extern "C"` 3 関数で呼び、`.m` からの通知・フレームは `#[no_mangle]` の受け口 3 つで
 //! 受ける。`driver` の iOS 経路（`platform_camera_preview`）が [`implementation`] を
 //! 呼ぶ。dispatch・共通コア画面・driver・trait 契約（`crate::contract`）は #812 の
@@ -126,7 +126,7 @@ mod imp {
     use crate::contract::PreviewSink;
     use crate::driver::{register, unregister};
 
-    // SAFETY: `ios/fandhe_ios_camera_preview_stream.m`（`build.rs` が iOS・macOS ターゲットの feature `device` 有効時に
+    // SAFETY: `ios/fandhe_ios_camera_preview_stream.m`（`build.rs` が iOS・macOS ターゲットで
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {

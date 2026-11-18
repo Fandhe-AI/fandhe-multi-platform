@@ -5,8 +5,8 @@
 //! （Web Share API）で共有シートを開いて結果を書き戻す。
 //!
 //! Web は `fandhe-device` の `Share` トレイトを通らない（`clipboard.rs`/`tts.rs` と同じ
-//! 理由。`fandhe-egui-proxy` の feature `device` は wasm32 に依存を持ち込まない設計、
-//! `crates/fandhe-egui-proxy/src/device.rs` 参照）。そのため本モジュールが DOM レンダラ側
+//! 理由。機能 crate の OS 実装は wasm32 を対象にしない設計（Web の実装は本クレート、consumer-app-structure.md §7）、
+//! consumer-app-structure.md §7 参照）。そのため本モジュールが DOM レンダラ側
 //! の対応実装にあたる。ただし入力検証だけは [`fandhe_cap_share_sheet::ShareRequest::new`]
 //! を共有する（`crates/fandhe-cap-share-sheet/src/driver.rs` と同じ検証の SSOT 方針）。
 //!

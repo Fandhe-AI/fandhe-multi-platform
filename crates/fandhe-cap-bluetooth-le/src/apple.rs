@@ -1,7 +1,7 @@
 //! iOS / macOS 向け BLE スキャン実装（Issue #1060 macOS・#1061 iOS）。
 //! 本 crate の `driver` の iOS / macOS 経路から呼ばれ、CoreBluetooth 実装
-//! （`apple/fandhe_apple_bluetooth_le.m`、`build.rs` が iOS / macOS の feature `device`
-//! 有効時にコンパイル・リンクする）を `unsafe extern "C"` 2 関数（[`present`] /
+//! （`apple/fandhe_apple_bluetooth_le.m`、`build.rs` が iOS / macOS で
+//! コンパイル・リンクする）を `unsafe extern "C"` 2 関数（[`present`] /
 //! [`stop`]）で呼ぶ。`unsafe` はこの呼び出しと `CStr::from_ptr` に閉じ `// SAFETY:` で
 //! 契約を明記する（`apple_speech_recognition.rs` と同型、coding-rust.md の FFI 例外規定）。
 //!
@@ -19,7 +19,7 @@ use crate::contract::BleDevice;
 use crate::{OBSERVED, error_from_apple_code, finish, rssi_from_apple};
 
 // SAFETY: `apple/fandhe_apple_bluetooth_le.m` が定義する C ABI（`build.rs` が iOS / macOS の
-// feature `device` 有効時にコンパイル・リンクする）。契約は `.m` ファイル冒頭コメント
+// コンパイル・リンクする）。契約は `.m` ファイル冒頭コメント
 // に集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {

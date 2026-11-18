@@ -3,8 +3,8 @@
 // 倍率・主画面か（配列の先頭）・名前（`localizedName`）を返す。個体識別子
 // （`CGDisplaySerialNumber` / EDID）は読まない。名前・値をログへ出さない。
 //
-// `crates/fandhe-egui-proxy/src/device/macos_multi_display.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `crates/fandhe-cap-multi-display/src/macos.rs` から C ABI 経由で呼ばれる。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_macos_multi_display_read(FandheScreenRaw *out, uint32_t cap, uint32_t *count) -> int32_t

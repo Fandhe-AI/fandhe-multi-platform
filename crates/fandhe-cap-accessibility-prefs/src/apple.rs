@@ -1,7 +1,7 @@
 //! macOS / iOS 向けアクセシビリティ設定実装（Issue #1308 が macOS、#1309 が iOS、親 #1132）。
 //! `device/accessibility_prefs.rs::implementation` の macOS 経路と、iOS 経路
 //! （`ios_accessibility_prefs.rs` 経由）から呼ばれ、`apple/fandhe_apple_accessibility_prefs.m`
-//! （`build.rs` が feature `device` 有効時にコンパイル）を C ABI で呼ぶ。
+//! （`build.rs` がコンパイル）を C ABI で呼ぶ。
 //! `unsafe` は引数なし・戻り値 int のみの FFI 1 箇所に閉じる。
 //!
 //! # packed 値の写像

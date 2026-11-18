@@ -63,6 +63,8 @@ else
   sign_args=("DEVELOPMENT_TEAM=${FANDHE_DEVELOPMENT_TEAM}" -allowProvisioningUpdates)
 fi
 
+# ウィジェット拡張の Info.plist・entitlements は home-widget の宣言から生成する（project.yml が gen を指す、Issue #1194）。
+"${repo_root}/scripts/build/gen-gallery.sh"
 echo "[build-macos-widget-host] xcodegen generate"
 xcodegen generate --spec "${apple_dir}/project.yml" --project "${apple_dir}" >/dev/null
 

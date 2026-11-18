@@ -1,20 +1,10 @@
-//! Phase 8（端末機能の型検証、親 #752 / Issue #746）: 端末機能（ローカル保存・HTTP・カメラ・
-//! 傾き検知）の抽象トレイトと desktop 向け共通実装を置くクレート。
+//! 機能 crate（`fandhe-cap-*`）が共有する、OS に触れない型・検証・定数・符号化を置くクレート
+//! （docs/architecture/consumer-app-structure.md §8。Phase 8 / Issue #746 で端末機能の土台として作り、
+//! 機能 crate への移行後は共有部品だけが残る。名前は #1215 で決める）。
 //!
-//! 依存方向は本クレート → `fandhe-core`（現時点では未使用）の一方向のみを許容し、`fandhe-core`
-//! から本クレートを参照することはない（coding-rust.md の二層アーキテクチャ原則）。
-//! 呼び出し元は `fandhe-egui-proxy` の feature `device`（既定 on）で、画面 ↔ 端末実装の
-//! 接続方法（`Box<dyn Storage>` 等をどう渡すか）は #747 以降の設計事項（本クレートは
-//! トレイトと同期実装の提供のみに責務を限定する）。
-//!
-//! Phase 8 が spec 要件化されなかった場合、本クレートと `fandhe-egui-proxy` 側の
-//! feature `device` を消せば元に戻せる構成にしている。切り離し手順は
-//! docs/architecture/device-feature-removal.md を参照。
-//!
-//! `#745`（StateStore の apply API + 完了キュー）は本クレートと並列で開発中のため、
-//! worker スレッド → mpsc → apply の配線はここでは行わない。各トレイトは
-//! `Send + Sync` なオブジェクトセーフの同期 API とし、非同期化・スレッド化は
-//! #745 の API が確定してから #747〜#749 側で行う。
+//! 呼び出し元は機能 crate と `fandhe-web-dom`。利用者は直接依存せず、共有型は機能 crate が再公開する。
+//! 依存方向は本クレート → `fandhe-core`（任意の feature `display-decode` のときだけ）の一方向で、
+//! `fandhe-core` から本クレートを参照することはない（coding-rust.md の二層アーキテクチャ原則）。
 #![forbid(unsafe_code)]
 
 /// カメラのライブ映像の縮小の部品（`downscale_packed`・`downscale_yuv420`・`preview_size`）だけ。`fandhe-cap-ar` と

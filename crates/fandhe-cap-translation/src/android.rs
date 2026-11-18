@@ -21,7 +21,7 @@
 //! OS 側の翻訳が走り切ること、端末ごとの翻訳サービスの有無による結果の違い。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `requestTranslation` を経た後でしか
-//! 呼ばれず、feature `device` 無効ビルドではその経路に到達しない（pedometer と同じ）。
+//! 呼ばれず、この crate を選ばないアプリではその経路に到達しない（pedometer と同じ）。
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};

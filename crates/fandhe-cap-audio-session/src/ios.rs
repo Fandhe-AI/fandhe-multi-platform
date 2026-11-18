@@ -1,6 +1,6 @@
 //! iOS 向け音声セッション実装（Issue #841、親 #172）。`driver.rs` の iOS 経路
 //! （`platform_audio_session`）から呼ばれ、`ios/fandhe_ios_audio_session.m`（`AVAudioSession`。`build.rs` が
-//! iOS 分岐で feature `device` 有効時にコンパイルする）を `unsafe extern "C"` で呼ぶ。`unsafe` は
+//! iOS 分岐でコンパイルする）を `unsafe extern "C"` で呼ぶ。`unsafe` は
 //! その呼び出しと受け口に閉じ `// SAFETY:` を付ける。契約は `crate::contract` のモジュール doc
 //! （方式・結果の種類・解放・守る範囲 / 守らない範囲）で、本ファイルは重複して書かない。
 //!

@@ -1,7 +1,7 @@
 //! macOS / iOS 向け連絡先選択実装（Issue #1220・#1221）。`crate::driver` の Apple 経路から呼ばれ、
 //! `apple/fandhe_apple_contact_picker.m`（macOS は `CNContactPicker`、iOS は
 //! `CNContactPickerViewController` で権限確認なし。
-//! `build.rs` が feature `device` 有効時のみコンパイル・リンクする）を
+//! `build.rs` がコンパイル・リンクする）を
 //! `unsafe extern "C"` 1 関数（[`present`]）で呼ぶ。
 //! `unsafe` はこの呼び出しと受け口に閉じ `// SAFETY:` で契約を明記する
 //! （`apple_biometric.rs` と同型、coding-rust.md の FFI 例外規定準拠）。

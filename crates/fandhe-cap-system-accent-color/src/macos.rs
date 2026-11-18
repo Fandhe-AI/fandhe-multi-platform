@@ -1,6 +1,6 @@
 //! macOS 向けシステムのアクセント色実装（Issue #421、親 #103）。
 //! `macos/fandhe_macos_system_accent_color.m`（`NSColor.controlAccentColor`、`build.rs` が macOS
-//! ターゲットの feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。
+//! ターゲットでコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。
 //! `unsafe` はこの呼び出しに閉じる。`driver.rs` の macOS 経路から呼ばれ、
 //! 契約は `crate::contract`。戻り値の写像は同モジュールの `rgb_from_code`（SSOT）。
 //!

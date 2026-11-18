@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ファイル画面に出る保存先の表示名（Issue #1020）。`FileProviderDocumentsProvider` が使う。
+     `fandhe_core::screens::file_provider_show::ROOT_TITLE` と一致させる。 -->
+<resources>
+    <string name="file_provider_root_title">Fandhe（この端末内のみ）</string>
+</resources>

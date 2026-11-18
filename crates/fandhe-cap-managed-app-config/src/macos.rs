@@ -1,6 +1,6 @@
 //! macOS 向け MDM 管理アプリ設定実装（Issue #944）。`macos/fandhe_macos_managed_app_config.m`
 //! （`CFPreferences` で固定 3 キーを読み、強制された値だけをワイヤ文字列にして返す。`build.rs` が
-//! macOS ターゲットの feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。
+//! macOS ターゲットでコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。
 //! `unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。`driver.rs` の
 //! macOS 経路から呼ばれ、契約は `crate::contract`。
 //!

@@ -7,9 +7,9 @@ import android.net.Uri;
 //
 // 呼び出し元: `UrlSchemeLifecycle`（非公開 provider。起動時と `onNewIntent` を共通層の `deliverIntents` で配る、#1325）。
 // 利用者の `MainActivity` には何も書かせない。
-// 呼び出し先: `crates/fandhe-cap-url-scheme/src/android.rs` の JNI 実体
-// （feature `device` 無効時の no-op は `crates/fandhe-gallery/src/lib.rs`）。JNI 署名はこの宣言・no-op スタブ・
-// Rust 実体の 3 か所で `(String) -> void` に一致させる。
+// 呼び出し先: `crates/fandhe-cap-url-scheme/src/android.rs` の JNI 実体。
+// JNI 署名はこの宣言と Rust 実体の 2 か所で `(String) -> void` に一致させる
+// （本 crate を選んだアプリにだけ入るので no-op スタブは要らない、#1194）。
 //
 // `ACTION_VIEW` のときだけ URL を Rust へ渡す（MAIN/LAUNCHER 起動は拒否件数に混ぜない）。他機能の経路は渡さない:
 //   - https の App Links は deep-link の受信箱へ（`DeepLinkLifecycle`）

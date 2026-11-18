@@ -1,7 +1,7 @@
 //! macOS / iOS 向け動画変換実装（Issue #1014 macOS、iOS は #1016 で `ios_video_transcode` 経由）。
 //! `driver` の macOS 経路と `ios_video_transcode`（#1016）から呼ばれ、`apple/fandhe_apple_video_transcode.m`
 //! （`AVAssetWriter` で元動画を書き、`AVAssetExportSession` で小さい MP4 へ書き出す。`build.rs` が
-//! feature `device` 有効時にコンパイル）を `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` は extern 宣言・
+//! コンパイル）を `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` は extern 宣言・
 //! 呼び出し・コールバックに閉じる（coding-rust.md の FFI 例外規定準拠）。`build.rs` のコンパイル条件・
 //! `device.rs` の mod cfg と同じ OS 集合に保つ。
 //!

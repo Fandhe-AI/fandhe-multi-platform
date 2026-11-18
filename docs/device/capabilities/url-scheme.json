@@ -17,7 +17,7 @@
       ],
       "detail": "できている（実機）",
       "implStatus": "実装済み・実機確認済み",
-      "impl": "crates/fandhe-cap-url-scheme/ios/fandhe_ios_url_scheme.m + crates/fandhe-platform-apple/ios/fandhe_ios_app_delegate.m + crates/fandhe-cap-url-scheme/src/apple.rs + crates/fandhe-cap-url-scheme/src/driver.rs + crates/fandhe-device/src/url_scheme.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue 旧#1217",
+      "impl": "crates/fandhe-cap-url-scheme/ios/fandhe_ios_url_scheme.m + crates/fandhe-platform-apple/ios/fandhe_ios_app_delegate.m + crates/fandhe-cap-url-scheme/src/apple.rs + crates/fandhe-cap-url-scheme/src/driver.rs + crates/fandhe-device/src/url_scheme.rs + crates/fandhe-cap-url-scheme/Cargo.toml（宣言）、Issue 旧#1217",
       "verified": true
     },
     "android": {

@@ -49,8 +49,7 @@ pub fn run(app: AndroidApp, build_app: crate::BuildAppFn) {
     // android-activity 0.6.1 の型定義参照）。`configChanges` で止められない再生成で `android_main`
     // が新しい `AndroidApp` で再度呼ばれた場合は毎回上書きする（古い破棄済み `Activity` を
     // 指したまま残さない。`set_android_app` doc 参照）。Issue #796 の `poll_soft_keyboard` も
-    // `device` feature 無効時（`android_app()` の cfg 撤廃済み）に本 static を必要とするため、
-    // `set_android_app` 呼び出し自体は feature に関わらず常に行う。
+    // 本 static を使う。
     set_android_app(app.clone());
 
     // TASK-17.2（REQ-17）/ Issue #715: `FANDHE_PROXY_APP=<名前>` で描画対象を切り替える
@@ -289,43 +288,6 @@ fn read_debug_proxy_app_property() -> String {
 #[cfg(not(feature = "debug-proxy-app"))]
 fn read_debug_proxy_app_property() -> String {
     String::new()
-}
-
-/// `device` feature 無効ビルド向けの `nativeOnUrlSchemeReceived` no-op フォールバック
-/// （Issue #1218）。`MainActivity.java` は feature を知らず `onCreate` / `onNewIntent` から
-/// 必ず呼ぶため、スタブが無いと feature 無効ビルドで `UnsatisfiedLinkError` になる。
-/// 引数の並びは Java 宣言・`device/android_url_scheme.rs` の実体と 3 か所で一致させる。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
-/// シンボル名は JNI 命名規約上の固定名（`nativeOnMotionChanged` と同じ根拠）。
-#[cfg(not(feature = "device"))]
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_MainActivity_nativeOnUrlSchemeReceived(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    _url: *mut core::ffi::c_void,
-) {
-}
-
-/// `device` feature 無効ビルド向けの `nativeOnDeepLinkReceived` no-op フォールバック
-/// （Issue #1279）。`MainActivity` が feature を知らず https の `ACTION_VIEW` で
-/// `DeepLinkHelper.deliver` を呼ぶため、スタブが無いと feature 無効ビルドで
-/// `UnsatisfiedLinkError` になる。署名は Java 宣言・`device/android_deep_link.rs` の実体と
-/// 3 か所で一致させる。
-///
-/// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` はこの 1 関数に閉じ、
-/// シンボル名は JNI 命名規約上の固定名（`nativeOnUrlSchemeReceived` と同じ根拠）。
-#[cfg(not(feature = "device"))]
-#[allow(unsafe_code)]
-#[no_mangle]
-extern "system" fn Java_com_fandhe_platform_DeepLinkHelper_nativeOnDeepLinkReceived(
-    _env: *mut core::ffi::c_void,
-    _class: *mut core::ffi::c_void,
-    _url: *mut core::ffi::c_void,
-) {
 }
 
 #[cfg(test)]

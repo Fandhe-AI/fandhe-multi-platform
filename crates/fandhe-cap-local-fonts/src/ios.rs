@@ -1,5 +1,5 @@
 //! iOS 向け OS 搭載フォント一覧実装（Issue #1377）。`ios/fandhe_ios_local_fonts.m`
-//! （UIKit `UIFont.familyNames`。`build.rs` が iOS 分岐で feature `device` 有効時にコンパイルする）を
+//! （UIKit `UIFont.familyNames`。`build.rs` が iOS 分岐でコンパイルする）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
 //! `fandhe-cap-local-fonts/src/driver.rs` の iOS 経路（`drive_sync`）から UI スレッドで呼ばれ、契約は
 //! `fandhe_cap_local_fonts`。バッファの解釈は macOS と共用の `families_from_nul_buffer`。
@@ -30,7 +30,7 @@ mod imp {
 
     use crate::driver::families_from_nul_buffer;
 
-    // SAFETY: `ios/fandhe_ios_local_fonts.m`（`build.rs` が iOS 分岐で feature `device` 有効時に
+    // SAFETY: `ios/fandhe_ios_local_fonts.m`（`build.rs` が iOS 分岐で
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {

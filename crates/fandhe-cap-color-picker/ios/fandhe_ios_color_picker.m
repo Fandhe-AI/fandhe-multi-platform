@@ -3,7 +3,7 @@
 // sRGB に直して 0xRRGGBB の整数で Rust へ通知する。
 //
 // `crates/fandhe-cap-color-picker/src/ios.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `compile_ios_color_picker()` が iOS 分岐・feature `device` 有効時にのみコンパイルする
+// `build.rs` の `compile_ios_color_picker()` が iOS 分岐でコンパイルする
 // （UIKit は既存のリンクで足りる）。
 //
 // 契約（pull 型。`macos/fandhe_macos_color_picker.m` と同型）:

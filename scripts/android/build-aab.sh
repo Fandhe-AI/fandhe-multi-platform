@@ -183,6 +183,7 @@ done
 # .aab へは要求 ABI のみが収載されるようにする（フェーズ 2 の rm -rf と
 # 二重の防御。Cursor Bugbot 指摘: stale ABI libs packaged into AAB）。
 abi_csv="$(IFS=,; echo "${abi_list[*]}")"
+fandhe_gen_gallery
 log "gradle -p ${gradle_project_dir} :app:bundleRelease -PfandheAndroidAbis=${abi_csv}"
 gradle -p "${gradle_project_dir}" :app:bundleRelease --console=plain \
   "-PfandheAndroidAbis=${abi_csv}"

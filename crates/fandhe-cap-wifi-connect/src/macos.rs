@@ -1,7 +1,7 @@
 //! macOS 向け「指定した Wi-Fi への接続」実装（Issue #791、親 #165）。
 //! `macos/fandhe_macos_wifi_connect.m`（CoreWLAN の directed scan と
 //! `associateToNetwork:password:error:`、CoreLocation の許可要求。`build.rs` が macOS 分岐で
-//! feature `device` 有効時にコンパイルし CoreWLAN をリンクする）を `unsafe extern "C"` 1 関数で呼ぶ。
+//! コンパイルし CoreWLAN をリンクする）を `unsafe extern "C"` 1 関数で呼ぶ。
 //! `unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。`driver` の macOS
 //! 経路からワーカースレッドで呼ばれ、契約は `crate::contract`。
 //!
@@ -46,7 +46,7 @@ fn decode_code(rc: i32) -> Result<(), WifiConnectError> {
 
 #[cfg(target_os = "macos")]
 mod ffi {
-    // SAFETY: `macos/fandhe_macos_wifi_connect.m`（`build.rs` が macOS 分岐で feature `device` 有効時に
+    // SAFETY: `macos/fandhe_macos_wifi_connect.m`（`build.rs` が macOS 分岐で
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {

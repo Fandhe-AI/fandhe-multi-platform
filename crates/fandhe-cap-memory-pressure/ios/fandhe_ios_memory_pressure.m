@@ -5,7 +5,7 @@
 // 権限の宣言は増やさない。
 //
 // `crates/fandhe-cap-memory-pressure/src/ios.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の iOS 分岐が feature `device` 有効時にのみコンパイルする。
+// `build.rs` の iOS 分岐でコンパイルする。
 //
 // 契約:
 //   fandhe_ios_memory_pressure_start(id) -> int32_t

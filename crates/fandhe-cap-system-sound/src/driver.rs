@@ -5,7 +5,7 @@
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約）。契約の SSOT は
 //! `crate::contract`。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる（`device.rs` 参照）。
+//! 非 wasm32 でのみコンパイル対象になる（`device.rs` 参照）。
 //!
 //! # スレッド
 //!

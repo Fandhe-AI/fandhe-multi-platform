@@ -1,5 +1,5 @@
 //! macOS 向けシステム音量実装（Issue #785）。`macos/fandhe_macos_volume_control.m`（Core Audio の
-//! `VirtualMainVolume` / `Mute`、`build.rs` が macOS ターゲットの feature `device` 有効時に
+//! `VirtualMainVolume` / `Mute`、`build.rs` が macOS ターゲットで
 //! コンパイルし CoreAudio・AudioToolbox をリンクする）を `unsafe extern "C"` 2 関数で呼ぶ。
 //! `unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。`driver` の
 //! macOS 経路（UI スレッドから同期）から呼ばれ、契約は `crate::contract`。

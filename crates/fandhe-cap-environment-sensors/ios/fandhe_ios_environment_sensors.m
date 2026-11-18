@@ -3,7 +3,7 @@
 // このファイルでは扱わない（Rust 側が `UnsupportedOnOs` を返す）。
 //
 // `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
-// feature `device` 有効時のみ `cc` コンパイルする（CoreMotion・UIKit は他の .m 用にリンク済み）。
+// `cc` でコンパイルする（CoreMotion・UIKit は他の .m 用にリンク済み）。
 //
 // 契約（気圧）:
 //   fandhe_ios_env_pressure_start() -> int32_t   0 = 成功（冪等。main 以外なら購読の開始は main へ非同期）、1 = 端末非搭載（シミュレータ）、
