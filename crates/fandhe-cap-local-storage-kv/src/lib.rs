@@ -26,7 +26,6 @@ mod error;
 mod ios;
 
 pub use contract::*;
-pub use driver::DeviceNoteStorage;
 // OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
 #[allow(unused_imports)]
 pub(crate) use driver::*;
