@@ -195,8 +195,9 @@ pub(crate) fn drive_with<S: 'static>(
 /// 連番 `request_id`（再生成で画面の `generation` が 1 から再開しても衝突しない）。
 ///
 /// 画面 effect と公開入口（[`begin_file_pick`] / [`poll_file_pick`]）が同じ slot を共有する。
-/// 持ち主（[`bridge::SCREEN_OWNER`]・[`bridge::PUBLIC_OWNER`]）で自分の分の要求を区別し、片方が進行中・結果未取得のとき
-/// 他方は置き換えず busy で断る。slot には変換前の生の結果（`FilePickerError`）を置き、画面へ渡すときに文言へ変換する。
+/// 持ち主（[`bridge::SCREEN_OWNER`]・[`bridge::PUBLIC_OWNER`]）で自分の分の要求を区別し、
+/// 進行中の要求は busy で断り、公開側の未取得の結果は守る。画面側の届いた未取得の結果は、公開入口の開始が捨てずに画面の受け取り待ちへ移し、画面はそのまま受け取る（`SlotOwner::begin_parking`）。
+/// slot には変換前の生の結果（`FilePickerError`）を置き、画面へ渡すときに文言へ変換する。
 ///
 /// テストでホストからも検証できるよう `cfg(test)` でもコンパイルする（OS 呼び出しは含まない）。
 #[cfg(any(test, target_os = "ios", target_os = "android"))]
@@ -230,9 +231,13 @@ pub(crate) mod bridge {
         SCREEN_OWNER.begin_keeping_foreign(&SLOT)
     }
 
-    /// 公開入口の要求を登録する。進行中、または結果が未取得の要求（画面側の分を含む）があれば `None`（busy）。
+    /// 公開入口の要求を登録する。進行中の要求と自分の未取得の結果があれば `None`（busy）。画面側の届いた未取得の結果は捨てずに
+    /// 画面の受け取り待ちへ移して始める（画面の effect が回らず取り出されないままでも詰まらず、生きている画面の結果も失わない）。
+    /// 移した結果は画面の poll がそのまま受け取り、受け取られない分は画面の次の開始で解放される
+    /// （残るのは最大 1 件で、結果のバイト列は上限 `MAX_FILE_BYTES`（8 MiB）まで。
+    /// 本番の reset は無く、解放の契機は画面の次の開始だけ）。
     pub(crate) fn begin_public() -> Option<u64> {
-        PUBLIC_OWNER.begin_excluding(&SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
+        PUBLIC_OWNER.begin_parking(&SLOT, &SCREEN_OWNER)
     }
 
     /// 公開入口の提示依頼が同期的に失敗したときに、登録を取り消す。
@@ -278,13 +283,15 @@ pub(crate) mod bridge {
     }
 
     /// 画面が観測する「自分の分の」要求と結果。持ち主が画面でない要求（公開入口の分）は見せず `None` にする
-    /// （画面が公開入口の要求を再生成後の復元と取り違えない）。失敗は画面へ渡す文言へ変換する。
+    /// （画面が公開入口の要求を再生成後の復元と取り違えない）。公開入口の開始で受け取り待ちへ移された自分の結果も見せる
+    /// （[`begin_public`]。照合と取得は slot の 1 回のロックで行う）。失敗は画面へ渡す文言へ変換する。
     pub(crate) fn screen_snapshot() -> Option<(u64, Option<super::MobileOutcome>)> {
-        let (request_id, ready) = SLOT.snapshot()?;
-        if request_id != SCREEN_OWNER.current() {
+        let mine = SCREEN_OWNER.current();
+        if mine == 0 {
             return None;
         }
-        Some((request_id, ready.map(|r| r.map_err(super::to_message))))
+        let ready = SLOT.snapshot_of(mine)?;
+        Some((mine, ready.map(|r| r.map_err(super::to_message))))
     }
 
     /// OS からの結果を `Arc` で包んでから置く（任意スレッド）。`request_id` 不一致・未登録（プロセス死後の再配送等）・
@@ -500,10 +507,17 @@ pub fn platform_file_picker() -> Result<&'static dyn crate::contract::FilePicker
 /// ファイル選択を OS へ依頼し、結果を [`poll_file_pick`] で受け取るための要求 id を返す（iOS・Android）。
 ///
 /// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。選択条件の引数は無い（画面経路と同じく 1 ファイル・
-/// 種類の絞り込みなし）。1 プロセスに 1 要求で、画面 effect と slot を共有するため、進行中・結果が未取得の要求
-/// （画面側の分を含む）があるうちは `Internal`（busy）で断る。画面 effect 側も、この入口の進行中・未取得の要求があれば
-/// 置き換えず処理中の失敗で終える。画面側の未取得の結果・進行中の要求が残る間も busy で断られる（画面状態が破棄されて
-/// effect が回らないと解消しない。lan-discovery と同じ構造）。依頼自体の失敗は `Err`（結果は届かない）。
+/// 種類の絞り込みなし）。1 プロセスに 1 要求で、画面 effect と slot を共有する。
+///
+/// - 進行中の要求は busy で断る。
+/// - 画面側の届いた未取得の結果があっても断らない（画面が描かれず取り出されないままでも詰まらない）。結果は捨てずに画面の受け取り待ちへ移し、
+///   画面はそのまま受け取る（結果が届いてから次フレームの poll までの間に始めても、画面の結果は失われない）。
+///   受け取られない分は画面の次の開始で解放される
+///   （残るのは最大 1 件で、結果のバイト列は上限 `MAX_FILE_BYTES`（8 MiB）まで。
+///   本番の reset は無く、解放の契機は画面の次の開始だけ）。
+/// - 自分の未取得の結果があれば `Internal`（busy）で断る。
+/// - 画面 effect 側も、この入口の進行中・未取得の要求があれば
+///   置き換えず処理中の失敗で終える。依頼自体の失敗は `Err`（結果は届かない）。
 ///
 /// デスクトップ（macOS・Windows）は同期で使える [`platform_file_picker`] の `pick()` を使うため、この入口は持たず
 /// `Unsupported` を返す。Linux 等も `Unsupported`。
@@ -906,6 +920,85 @@ mod bridge_tests {
         assert!(bridge::poll_public(public).is_none());
         // 取り出したあとは画面側が使える。
         assert!(bridge::begin_screen().is_some());
+        bridge::reset();
+    }
+
+    /// 画面の開始 → 結果の到着 → 公開入口の開始 → 画面の poll の順でも、画面は届いた結果をそのまま受け取り（lost にならない）、
+    /// 公開入口もその後に自分の結果を受け取れる。
+    #[test]
+    fn public_begin_parks_unpolled_screen_result_for_screen() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        bridge::SCREEN_OWNER.release(bridge::SCREEN_OWNER.current());
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::deliver(screen, Ok(Some(picked("a.txt")))));
+        // 画面が取り出さない結果で公開入口が詰まらない。
+        let public = bridge::begin_public().expect("画面の未取得の結果で詰まらない");
+        assert_ne!(public, screen);
+        // 受け取り待ちへ移した画面の id へ重ねて配送しても捨てられる。
+        assert!(!bridge::deliver(screen, Ok(Some(picked("b.txt")))));
+        // 画面は移された自分の結果をそのまま観測し、反映へ進む。
+        match next_action(PickPhase::Picking, bridge::screen_snapshot()) {
+            Action::Finish {
+                request_id,
+                outcome: Ok(Some(file)),
+            } => {
+                assert_eq!(request_id, screen);
+                assert_eq!(file.name, "a.txt");
+                bridge::clear(request_id);
+            }
+            other => panic!("画面の結果がそのまま届かない: {other:?}"),
+        }
+        assert!(bridge::screen_snapshot().is_none());
+        assert_eq!(bridge::SCREEN_OWNER.current(), 0);
+        // 公開入口の結果は画面へ渡らず、公開入口が受け取る。
+        assert!(bridge::deliver(public, Ok(None)));
+        assert!(matches!(bridge::poll_public(public), Some(Ok(None))));
+        bridge::reset();
+    }
+
+    /// 画面が受け取らないまま残った受け取り待ちの結果は、画面の次の開始で解放される。
+    #[test]
+    fn parked_screen_result_is_released_by_next_screen_begin() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        bridge::SCREEN_OWNER.release(bridge::SCREEN_OWNER.current());
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::deliver(screen, Ok(Some(picked("a.txt")))));
+        let public = bridge::begin_public().unwrap();
+        assert!(bridge::deliver(public, Ok(None)));
+        assert!(bridge::poll_public(public).is_some());
+        let next = bridge::begin_screen().expect("公開入口が受け取った後は開始できる");
+        assert!(bridge::SLOT.snapshot_of(screen).is_none());
+        assert!(matches!(bridge::screen_snapshot(), Some((id, None)) if id == next));
+        bridge::clear(next);
+        bridge::reset();
+    }
+
+    /// 画面の要求が進行中なら公開入口は busy で、画面の持ち主は変わらない。
+    #[test]
+    fn public_begin_is_busy_while_screen_request_is_in_flight() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        bridge::SCREEN_OWNER.release(bridge::SCREEN_OWNER.current());
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::begin_public().is_none());
+        assert_eq!(bridge::SCREEN_OWNER.current(), screen);
+        bridge::SCREEN_OWNER.release(screen);
+        bridge::reset();
+    }
+
+    /// 公開入口の届いた未取得の結果は、公開入口も画面も置き換えない。
+    #[test]
+    fn public_begin_keeps_unpolled_public_result() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let public = bridge::begin_public().unwrap();
+        assert!(bridge::deliver(public, Ok(None)));
+        assert!(bridge::begin_public().is_none());
+        assert!(bridge::begin_screen().is_none());
+        assert!(matches!(bridge::poll_public(public), Some(Ok(None))));
+        assert!(bridge::poll_public(public).is_none());
         bridge::reset();
     }
 

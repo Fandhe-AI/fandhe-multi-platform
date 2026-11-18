@@ -155,7 +155,8 @@ fn mobile_outcome(
 /// iOS / Android の OS コールバックとの橋渡し（pull 型、`fandhe_runtime::request_slot::RequestSlot` の facade。モジュール doc 参照）。
 ///
 /// 画面 effect と公開入口（[`begin_photo_pick`] / [`poll_photo_pick`]）が同じ slot を共有する。持ち主（[`bridge::SCREEN_OWNER`]・
-/// [`bridge::PUBLIC_OWNER`]）で自分の分の要求を区別し、片方が進行中・結果未取得のとき他方は置き換えず busy で断る。
+/// [`bridge::PUBLIC_OWNER`]）で自分の分の要求を区別し、
+/// 進行中の要求は busy で断り、公開側の未取得の結果は守る。画面側の届いた未取得の結果は、公開入口の開始が捨てずに画面の受け取り待ちへ移し、画面はそのまま受け取る（`SlotOwner::begin_parking`）。
 /// 画面の結果は復号確認済みの画素、公開入口の結果は [`validate_photo`] 済みの [`PickedPhoto`]（同期の [`PhotoPicker`] と同じ。
 /// 復号は保証しない）で、どちらを置くかは `deliver` が持ち主で決める。
 ///
@@ -195,9 +196,12 @@ pub(crate) mod bridge {
         SCREEN_OWNER.begin_keeping_foreign(&SLOT)
     }
 
-    /// 公開入口の要求を登録する。進行中、または結果が未取得の要求（画面側の分を含む）があれば `None`（busy）。
+    /// 公開入口の要求を登録する。進行中の要求と自分の未取得の結果があれば `None`（busy）。画面側の届いた未取得の結果は捨てずに
+    /// 画面の受け取り待ちへ移して始める（画面の effect が回らず取り出されないままでも詰まらず、生きている画面の結果も失わない）。
+    /// 移した結果は画面の poll がそのまま受け取り、受け取られない分は画面の次の開始か Android の reset で解放される
+    /// （残るのは最大 1 件で、結果の写真は上限 `MAX_PHOTO_BYTES`（8 MiB）まで）。
     pub(crate) fn begin_public() -> Option<u64> {
-        PUBLIC_OWNER.begin_excluding(&SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
+        PUBLIC_OWNER.begin_parking(&SLOT, &SCREEN_OWNER)
     }
 
     /// 公開入口の提示依頼が同期的に失敗したときに、登録を取り消す。
@@ -282,10 +286,17 @@ fn public_outcome(
 
 /// 写真選択を OS へ依頼し、結果を [`poll_photo_pick`] で受け取るための要求 id を返す（iOS・Android）。
 ///
-/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。画面 effect と slot を共有するため、進行中・
-/// 結果が未取得の要求（画面側の分を含む）があれば `Internal("photo_picker busy")` で断る。OS 側のピッカーが進行中のとき
-/// （[`discard_photo_pick`] で捨てた後を含む）も、OS の観測（Android は追跡中の要求、iOS は提示中のピッカー）で busy になる。
-/// 依頼自体の失敗は `Err`（結果は届かない）。
+/// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。画面 effect と slot を共有する。
+///
+/// - 進行中の要求は busy で断る。
+/// - 画面側の届いた未取得の結果があっても断らない（画面が描かれず取り出されないままでも詰まらない）。結果は捨てずに画面の受け取り待ちへ移し、
+///   画面はそのまま受け取る（結果が届いてから次フレームの poll までの間に始めても、画面の結果は失われない）。
+///   受け取られない分は画面の次の開始か Android の reset で解放される
+///   （残るのは最大 1 件で、結果の写真は上限 `MAX_PHOTO_BYTES`（8 MiB）まで）。
+/// - 自分の未取得の結果があれば `Internal("photo_picker busy")` で断る。
+/// - OS 側のピッカーが進行中のとき
+///   （[`discard_photo_pick`] で捨てた後を含む）も、OS の観測（Android は追跡中の要求、iOS は提示中のピッカー）で busy になる。
+///   依頼自体の失敗は `Err`（結果は届かない）。
 ///
 /// 結果の解放: 届く結果は [`validate_photo`] 済みのバイト列（上限 `MAX_PHOTO_BYTES`）だけで、fd・一時パスは届く前に解放済み。
 /// 取り出さない要求が slot に残ると次の要求も画面 effect の開始も busy で断られるため、不要な要求は [`discard_photo_pick`] で捨てる。
@@ -402,7 +413,9 @@ fn drive_mobile(state: &PhotoPickState, sender: &CompletionSender<PhotoPickState
         sender,
         |_| {},
         move |s: &mut PhotoPickState, outcome| {
-            // 既に `Idle` へ戻っている・別世代なら反映せず、結果だけ畳む。
+            // 既に `Idle` へ戻っていれば反映せず slot に残す
+            // （`false`。残った結果は公開入口の開始で画面の受け取り待ちへ移り、画面の次の開始で解放される）。
+            // 別世代は反映せず畳む。
             if s.phase == PickPhase::Idle {
                 return false;
             }
@@ -637,7 +650,90 @@ mod tests {
         g
     }
 
-    /// 公開入口の要求は画面と排他で、進行中も結果の未取得も画面側が落とさない。画面の要求も公開入口が置き換えない。
+    /// 起床を捨てるだけの waker（画面の poll を直接確かめるテスト用）。
+    struct PollWaker;
+    impl fandhe_runtime::RepaintWaker for PollWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
+    /// 画面の開始 → 結果の到着 → 公開入口の開始 → 画面の poll の順でも、画面は届いた結果をそのまま受け取り（lost にならない）、
+    /// 公開入口もその後に自分の結果を受け取れる。
+    #[test]
+    fn public_begin_parks_unpolled_screen_result_for_screen() {
+        let _g = lock();
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::deliver(screen, Ok(Some(file(png(8, 4))))));
+        let public = bridge::begin_public().expect("画面の未取得の結果で詰まらない");
+        assert_ne!(public, screen);
+        // 受け取り待ちへ移した画面の id へ重ねて配送しても捨てられる。
+        assert!(!bridge::deliver(screen, Ok(None)));
+        let (tx, rx) = std::sync::mpsc::channel();
+        let sender = fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(PollWaker));
+        fandhe_runtime::request_slot::poll_and_finish_owned(
+            &bridge::SLOT,
+            &bridge::SCREEN_OWNER,
+            &sender,
+            |_| panic!("待機にはならない"),
+            |s: &mut u8, o| {
+                assert!(matches!(&o, bridge::Outcome::Screen(Ok(Some(_)))));
+                *s = 7;
+                true
+            },
+            |_s: &mut u8| panic!("lost にならない"),
+        );
+        let mut state = 0u8;
+        rx.try_recv().expect("画面の結果が送られる")(&mut state);
+        assert_eq!(state, 7);
+        assert_eq!(bridge::SCREEN_OWNER.current(), 0);
+        assert!(bridge::SLOT.snapshot_of(screen).is_none());
+        // 公開入口の結果は画面へ渡らず、公開入口が受け取る。
+        assert!(bridge::deliver(public, Ok(Some(file(png(8, 4))))));
+        assert!(bridge::poll_public(public).is_some());
+        bridge::reset();
+    }
+
+    /// 画面が受け取らないまま残った受け取り待ちの結果は、画面の次の開始で解放される。
+    #[test]
+    fn parked_screen_result_is_released_by_next_screen_begin() {
+        let _g = lock();
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::deliver(screen, Ok(Some(file(png(8, 4))))));
+        let public = bridge::begin_public().unwrap();
+        assert!(bridge::deliver(public, Ok(Some(file(png(8, 4))))));
+        assert!(bridge::poll_public(public).is_some());
+        let next = bridge::begin_screen().expect("公開入口が受け取った後は開始できる");
+        assert!(bridge::SLOT.snapshot_of(screen).is_none());
+        assert_eq!(bridge::SCREEN_OWNER.current(), next);
+        bridge::SLOT.clear(next);
+        bridge::SCREEN_OWNER.release(next);
+        bridge::reset();
+    }
+
+    /// 画面の要求が進行中なら公開入口は busy で、画面の持ち主は変わらない。
+    #[test]
+    fn public_begin_is_busy_while_screen_request_is_in_flight() {
+        let _g = lock();
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::begin_public().is_none());
+        assert_eq!(bridge::SCREEN_OWNER.current(), screen);
+        bridge::reset();
+    }
+
+    /// 公開入口の届いた未取得の結果は、公開入口も画面も置き換えない。
+    #[test]
+    fn public_begin_keeps_unpolled_public_result() {
+        let _g = lock();
+        let public = bridge::begin_public().unwrap();
+        assert!(bridge::deliver(public, Ok(Some(file(png(8, 4))))));
+        assert!(bridge::begin_public().is_none());
+        assert!(bridge::begin_screen().is_none());
+        assert!(bridge::poll_public(public).is_some());
+        assert!(bridge::poll_public(public).is_none());
+        bridge::reset();
+    }
+
+    /// 公開入口の要求は画面と排他で、進行中も結果の未取得も画面側が落とさない。画面の進行中の要求も公開入口が置き換えない。
     #[test]
     fn public_request_is_exclusive_with_screen_and_polled_once() {
         let _g = lock();
