@@ -633,9 +633,15 @@ impl<S: 'static> EguiApp for ProxyApp<S> {
     /// （TTS の子プロセス等）を明示的に止めるためのもの（Issue #865 の codex-review P1 指摘）。
     /// 何を止めるかは端末機能の配線を持つ側（`fandhe-egui-proxy`）が登録する。
     fn on_exit(&mut self) {
-        if let Some((on_exit, _)) = TEARDOWN_HOOKS.get() {
-            on_exit();
-        }
+        run_exit_hook();
+    }
+}
+
+/// 登録済みの終了フック（[`set_teardown_hooks`] の `on_exit`）を呼ぶ。プロセス全体の端末資源を止めるため、
+/// 画面の切り替えでは呼ばず、ウィンドウを閉じる経路（`EguiApp::on_exit`）からだけ呼ぶ。
+pub(crate) fn run_exit_hook() {
+    if let Some((on_exit, _)) = TEARDOWN_HOOKS.get() {
+        on_exit();
     }
 }
 

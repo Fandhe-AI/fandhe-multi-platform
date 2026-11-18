@@ -69,3 +69,31 @@ fn on_exit_reaches_open_child() {
     EguiApp::on_exit(harness.state_mut());
     assert!(exited.load(Ordering::SeqCst));
 }
+
+/// 子を閉じて一覧へ戻った後に終了しても、終了フックが呼ばれる（Codex 指摘、PR #1393）。
+/// 終了フックはプロセスで 1 組だけ登録できるため、この結合テストのバイナリでは本テストだけが登録する。
+#[test]
+fn exit_hook_runs_after_returning_to_list() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    static EXITED: AtomicBool = AtomicBool::new(false);
+    fn on_exit() {
+        EXITED.store(true, Ordering::SeqCst);
+    }
+    fn on_drop() {}
+    fandhe_render_egui::app::set_teardown_hooks(on_exit, on_drop);
+
+    let ctx = egui::Context::default();
+    let menu = Menu::new(&ctx, "例").screen("サンプル", |ctx| Box::new(ProxyApp::new(ctx)));
+    let mut harness =
+        egui_kittest::Harness::new_state(|ctx, app: &mut Menu| EguiApp::update(app, ctx), menu);
+    harness.run();
+    harness.get_by_label("サンプル").click();
+    harness.run();
+    harness.get_by_label(BACK_LABEL).click();
+    harness.run();
+    // 一覧へ戻っただけでは終了フックを呼ばない。
+    assert!(!EXITED.load(Ordering::SeqCst));
+    EguiApp::on_exit(harness.state_mut());
+    assert!(EXITED.load(Ordering::SeqCst));
+}
