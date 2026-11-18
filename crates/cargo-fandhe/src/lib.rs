@@ -23,6 +23,6 @@ mod workspace;
 
 pub use declaration::{check_paths, parse, validate, Declaration, Problem};
 pub use merge::{merge, Merged};
-pub use native::{generate, generate_web, write, Generated};
+pub use native::{generate, generate_web, write, Generated, ANDROID_SKIPPED_NOTE};
 pub use scope::{verify_scope, ScopeReport};
 pub use workspace::check_workspace;

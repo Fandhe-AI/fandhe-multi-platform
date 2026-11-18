@@ -112,6 +112,9 @@ fn main() -> ExitCode {
                     g.gen_dir.display(),
                     g.files.len()
                 );
+                for note in &g.notes {
+                    eprintln!("{note}");
+                }
                 ExitCode::SUCCESS
             }
             Err(e) => report(vec![e]),
