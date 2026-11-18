@@ -34,7 +34,9 @@ mod android;
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 mod apple;
 mod contract;
-mod driver;
+/// 画面の状態型（`fandhe_core::screens`）とつなぐ effect ドライバ。カタログ（`fandhe-gallery`）が使い、
+/// 入口 crate `fandhe` からは再公開しない（consumer-app-structure.md §8.1）。
+pub mod driver;
 mod error;
 #[cfg(target_os = "ios")]
 mod ios;
@@ -49,5 +51,12 @@ const _: fn() -> std::sync::Arc<dyn fandhe_cap_network_status::NetworkStatus> =
     fandhe_cap_network_status::platform_network_status;
 
 pub use contract::*;
-pub use driver::*;
+#[cfg(target_os = "android")]
+pub use driver::reset_pending_tracking;
+pub use driver::{
+    begin_lan_discovery, platform_lan_discovery, poll_lan_discovery, stop_shared_discovery,
+};
+// OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
+#[allow(unused_imports)]
+pub(crate) use driver::*;
 pub use error::LanDiscoveryError;

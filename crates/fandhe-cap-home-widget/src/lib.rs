@@ -60,9 +60,12 @@ mod macos;
 
 use std::sync::Arc;
 
-mod driver;
-
-pub use driver::*;
+/// 画面の状態型（`fandhe_core::screens`）とつなぐ effect ドライバ。カタログ（`fandhe-gallery`）が使い、
+/// 入口 crate `fandhe` からは再公開しない（consumer-app-structure.md §8.1）。
+pub mod driver;
+// OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
+#[allow(unused_imports)]
+pub(crate) use driver::*;
 
 /// ホーム画面ウィジェットの失敗種別。保存値・パスを含めない固定の種別だけを持つ（`security.md` A09）。
 /// 画面に出る文言は従来の `HomeWidgetError` と同じ。

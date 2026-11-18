@@ -43,9 +43,12 @@ mod mailbox;
 
 use std::sync::Arc;
 
-mod driver;
-
-pub use driver::*;
+/// 画面の状態型（`fandhe_core::screens`）とつなぐ effect ドライバ。カタログ（`fandhe-gallery`）が使い、
+/// 入口 crate `fandhe` からは再公開しない（consumer-app-structure.md §8.1）。
+pub mod driver;
+// OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
+#[allow(unused_imports)]
+pub(crate) use driver::*;
 
 /// 画像 1 枚あたりの RGBA バイト数上限（メモリ枯渇防止・オーバーフロー対策、security.md A05）。
 /// Java 側 `CameraCaptureHelper.MAX_IMAGE_BYTES` と同値（片側を正にして手で合わせている既存の複製）。

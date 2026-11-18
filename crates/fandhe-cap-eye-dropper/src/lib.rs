@@ -24,7 +24,9 @@
 #![cfg_attr(not(target_os = "macos"), forbid(unsafe_code))]
 #![cfg_attr(target_os = "macos", deny(unsafe_code))]
 
-mod driver;
+/// 画面の状態型（`fandhe_core::screens`）とつなぐ effect ドライバ。カタログ（`fandhe-gallery`）が使い、
+/// 入口 crate `fandhe` からは再公開しない（consumer-app-structure.md §8.1）。
+pub mod driver;
 mod error;
 #[cfg(target_os = "macos")]
 mod macos;
@@ -34,7 +36,11 @@ mod web;
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 mod web_result;
 
-pub use driver::*;
+pub use driver::begin_eye_dropper;
+pub use driver::{discard_eye_dropper, platform_eye_dropper, poll_eye_dropper};
+// OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
+#[allow(unused_imports)]
+pub(crate) use driver::*;
 pub use error::EyeDropperError;
 // 契約の正本は fandhe-device に残し、利用者が直接依存しなくて済むよう再公開する。
 pub use fandhe_device::eye_dropper::{EyeDropper, PickedColor, UnsupportedEyeDropper};

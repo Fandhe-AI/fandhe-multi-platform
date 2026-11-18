@@ -33,11 +33,21 @@ mod android;
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 mod apple;
 mod contract;
-mod driver;
+/// 画面の状態型（`fandhe_core::screens`）とつなぐ effect ドライバ。カタログ（`fandhe-gallery`）が使い、
+/// 入口 crate `fandhe` からは再公開しない（consumer-app-structure.md §8.1）。
+pub mod driver;
 mod error;
 #[cfg(target_os = "windows")]
 mod windows;
 
 pub use contract::*;
-pub use driver::*;
+#[cfg(target_os = "android")]
+pub use driver::reset_pending_tracking;
+pub use driver::{
+    begin_speech_recognition, discard_speech_recognition, platform_speech_recognition,
+    poll_speech_recognition, request_stop_speech_recognition,
+};
+// OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
+#[allow(unused_imports)]
+pub(crate) use driver::*;
 pub use error::SpeechRecognitionError;

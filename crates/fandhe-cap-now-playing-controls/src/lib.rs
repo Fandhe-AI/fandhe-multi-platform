@@ -38,7 +38,12 @@ mod android;
 #[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
 mod apple;
 mod contract;
-mod driver;
+/// 画面の状態型（`fandhe_core::screens`）とつなぐ effect ドライバ。カタログ（`fandhe-gallery`）が使い、
+/// 入口 crate `fandhe` からは再公開しない（consumer-app-structure.md §8.1）。
+pub mod driver;
+// OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
+#[allow(unused_imports)]
+pub(crate) use driver::*;
 mod error;
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
@@ -48,5 +53,5 @@ mod ios;
 mod windows;
 
 pub use contract::*;
-pub use driver::*;
+pub use driver::{commands, platform_now_playing_controls, reset_pending_tracking, shutdown};
 pub use error::NowPlayingControlsError;

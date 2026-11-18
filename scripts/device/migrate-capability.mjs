@@ -470,7 +470,7 @@ function scaffold(R, id, stem, dry) {
   const unsafeAttr = renderUnsafeAttr([...unsafeOs].sort());
   writeFileSync(
     join(R, crate, "src/lib.rs"),
-    `//! ${id} の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。TODO: 役割・呼び出し元・守る範囲 / 守らない範囲を書く。\n//!\n//! 契約（\`contract\`）・失敗の種類（\`error\`）・effect ドライバ（\`driver\`）・OS 実装を 1 つに集める。\n//! 画面の状態型を参照してよいのは \`driver\` だけ。入口 \`pub fn platform_${stemOf(id)}()\` は状態型に依存しないため、\n//! フレームワークの外のアプリも使える。\n\n${unsafeAttr}\n\nmod contract;\nmod driver;\nmod error;\n${modLines.join("\n")}\n\npub use contract::*;\npub use driver::*;\npub use error::${pascalOf(id)}Error;\n`,
+    `//! ${id} の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。TODO: 役割・呼び出し元・守る範囲 / 守らない範囲を書く。\n//!\n//! 契約（\`contract\`）・失敗の種類（\`error\`）・effect ドライバ（\`driver\`）・OS 実装を 1 つに集める。\n//! 画面の状態型を参照してよいのは \`driver\` だけ。入口 \`pub fn platform_${stemOf(id)}()\` は状態型に依存しないため、\n//! フレームワークの外のアプリも使える。\n\n${unsafeAttr}\n\nmod contract;\n/// 画面の状態型とつなぐ effect ドライバ。入口 crate \`fandhe\` からは再公開しない（consumer-app-structure.md §8.1）。\npub mod driver;\nmod error;\n${modLines.join("\n")}\n\npub use contract::*;\npub use driver::platform_${stemOf(id)};\n// OS 実装が crate 直下の名前で使うドライバ内の共有の状態・関数。\n#[allow(unused_imports)]\npub(crate) use driver::*;\npub use error::${pascalOf(id)}Error;\n`,
   );
   sync(R);
   console.log("\n## 残件（手作業）");

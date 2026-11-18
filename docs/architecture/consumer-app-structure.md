@@ -190,7 +190,10 @@ graph TD
 - 画面の状態機械は `fandhe-core/src/screens/` に残します（`fandhe-web-dom` が同じ型を使うため。移行を挙動の変わらない移動に保ちます）
 - effect ドライバは機能 crate の `src/driver.rs` に置きます。`fandhe_core::screens` を参照してよいのは `driver.rs` だけです。
   契約と OS 実装は画面の状態型に依存させません
-- 入口 crate `fandhe`（#1199）からは契約だけを再公開し、ドライバは再公開しません
+- 入口 crate `fandhe`（#1199）からは契約だけを再公開し、ドライバは再公開しません。そのため機能 crate は、ドライバ（画面の状態型を
+  引数に取る effect と、その補助）を `pub mod driver` に置き、crate ルートからは再公開しません。crate ルートから出すのは契約と、
+  状態型に依存しない入口（`platform_<stem>()`・begin / poll / discard・`reset_pending_tracking`・`register`・`shutdown` など）だけです。
+  カタログ（`fandhe-gallery`）と Web の DOM 出力（`fandhe-web-dom`）は `fandhe_cap_<stem>::driver::…` を呼びます
 
 ### 8.2 汎用の機能と、フレームワークの外からの使い方
 

@@ -20,14 +20,18 @@
 
 #[cfg(target_os = "android")]
 mod android;
-mod driver;
+/// 画面の状態型（`fandhe_core::screens`）とつなぐ effect ドライバ。カタログ（`fandhe-gallery`）が使い、
+/// 入口 crate `fandhe` からは再公開しない（consumer-app-structure.md §8.1）。
+pub mod driver;
+// OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
+#[allow(unused_imports)]
+pub(crate) use driver::*;
 pub mod drop_session;
 #[cfg(target_os = "ios")]
 mod ios;
 
 #[cfg(target_os = "android")]
 pub use android::{reset_sessions, set_screen_active};
-pub use driver::*;
 // 契約（読み取りの検証・上限）の正本は fandhe-device に残し、利用者が直接依存しなくて済むよう再公開する。
 pub use fandhe_device::drag_drop::{
     DropError, MAX_DROP_FILES, MAX_FILE_BYTES, PickedFile, read_dropped, read_dropped_from,
