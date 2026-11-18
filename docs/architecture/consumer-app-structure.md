@@ -97,6 +97,11 @@ fn app(ctx: &fandhe::egui::Context) -> Box<dyn fandhe::app::ProxyAppDyn> {
   呼ぶ関数の網羅は `crates/fandhe/tests/features.rs` が機能 crate の crate ルートと突き合わせます
 - Android の `android_main` は `no_mangle` を伴うため、利用者の crate は Android で `forbid(unsafe_code)` にできません（`deny` にします）
 - `bin` だけのアプリ（iOS・デスクトップ）は `src/main.rs` に付けます。cdylib の無いアプリには `cargo fandhe gen` が Android の生成物を出しません
+- Swift 薄層を持つ機能（alarm・image-generation・live-activity・on-device-llm・translation）を iOS 向けに選ぶアプリは、
+  `.cargo/config.toml` の `[env]` に `IPHONEOS_DEPLOYMENT_TARGET = { value = "17.0", force = false }` を書きます。
+  cargo の `[env]` は依存先から引き継がれず、本体の設定は届きません。未設定だと rustc が最小 OS 10.0 でリンクし、
+  実機向けで `___chkstk_darwin` が解決できないため、機能 crate の `build.rs`（`fandhe-platform-apple` の `compile_swift`）が
+  直し方を添えて止めます（#1398）
 - 採らなかった案: 画面名と構築関数の表を入口へ渡す（従来の形。画面の名前を環境変数やビルド時の値で選ぶ必要が残る）、
   起動前の登録を利用者が書く口（属性の引数・フック）を設ける（機能ごとの手順を利用者が知る必要が残る）
 

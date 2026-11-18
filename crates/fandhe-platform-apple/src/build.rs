@@ -198,6 +198,36 @@ pub struct SwiftLib {
     pub tag: &'static str,
 }
 
+/// Swift 薄層をコンパイルする iOS の最小 OS（下の [`swift_target`] の triple と揃える）。
+/// `cargo-fandhe` が出す `Info.plist` の `MinimumOSVersion` も同じ値（Issue #1398）。
+const IOS_MIN_VERSION: &str = "17.0";
+
+/// iOS 向けリンクの最小 OS（`IPHONEOS_DEPLOYMENT_TARGET`）が Swift 薄層の最小 OS 以上かを確かめる。
+///
+/// rustc は未設定だと実機 10.0・シミュレータ 14.0 でリンクし、17.0 向けの Swift 薄層が参照する
+/// `___chkstk_darwin` が実機向けで解決できない。リンカのエラーからは原因を読み取れないため、
+/// build script の時点で直し方を添えて止める。cargo の `[env]` は依存先から引き継がれないので、
+/// 本体の `.cargo/config.toml` は利用者のアプリに届かない（Issue #1398）。
+fn check_ios_deployment_target(value: Option<&str>) -> Result<(), String> {
+    let min_major: u32 = IOS_MIN_VERSION
+        .split('.')
+        .next()
+        .and_then(|m| m.parse().ok())
+        .unwrap_or(u32::MAX);
+    let major = value.and_then(|v| v.trim().split('.').next()?.parse::<u32>().ok());
+    match major {
+        Some(m) if m >= min_major => Ok(()),
+        _ => Err(format!(
+            "iOS の最小 OS（IPHONEOS_DEPLOYMENT_TARGET）が {IOS_MIN_VERSION} 以上でない（現在: {}）。\
+             Swift 薄層は iOS {IOS_MIN_VERSION} 向けにコンパイルするため、このままでは実機向けのリンクが \
+             `___chkstk_darwin` の未解決で落ちる。アプリの `.cargo/config.toml` に \
+             `[env]` と `IPHONEOS_DEPLOYMENT_TARGET = {{ value = \"{IOS_MIN_VERSION}\", force = false }}` を書くか、\
+             環境変数で渡す",
+            value.unwrap_or("未設定")
+        )),
+    }
+}
+
 /// `TARGET` から Swift コンパイルに使う `(sdk, triple, lib_dir)` を引く。未対応なら `None`。
 fn swift_target(target: &str) -> Option<(&'static str, &'static str, &'static str)> {
     Some(match target {
@@ -259,6 +289,13 @@ pub fn compile_swift(spec: &SwiftLib) {
     let Some((sdk, triple, lib_dir)) = swift_target(&target) else {
         panic!("{tag}: 未対応のターゲット: {target}");
     };
+    if sdk != "macosx" {
+        println!("cargo:rerun-if-env-changed=IPHONEOS_DEPLOYMENT_TARGET");
+        let value = std::env::var("IPHONEOS_DEPLOYMENT_TARGET").ok();
+        if let Err(e) = check_ios_deployment_target(value.as_deref()) {
+            panic!("{tag}: {e}");
+        }
+    }
 
     let xcrun = |args: &[&str]| -> String {
         let out = Command::new("xcrun")
@@ -361,6 +398,17 @@ mod tests {
             swift_target("x86_64-apple-ios").unwrap().2,
             "iphonesimulator"
         );
+    }
+
+    #[test]
+    fn ios_の最小_os_は_17_以上だけを通す() {
+        assert!(check_ios_deployment_target(Some("17.0")).is_ok());
+        assert!(check_ios_deployment_target(Some("17")).is_ok());
+        assert!(check_ios_deployment_target(Some("18.2")).is_ok());
+        assert!(check_ios_deployment_target(None).is_err());
+        assert!(check_ios_deployment_target(Some("")).is_err());
+        assert!(check_ios_deployment_target(Some("16.4")).is_err());
+        assert!(check_ios_deployment_target(Some("abc")).is_err());
     }
 
     #[test]
