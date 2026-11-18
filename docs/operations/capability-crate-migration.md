@@ -769,3 +769,15 @@ PiP の切り替わりの口は #1327（§18）で決着していた。はじめ
 - `fandhe-egui-proxy` そのもの（各 OS の入口・ソフトキーボード・TV のフォーカス移動・計測用の入口・iOS の入力欄の橋渡し）の撤去。入口の置き場は入口 crate（#1199）と `#[fandhe::main]`（#1200）で決まるため、そちらで撤去する
 - 機能を 1 つも登録しない利用者アプリで `HostInsets` が取り付けられない制約（§18 の範囲外）。入口を生成する #1200 で扱う
 - 実機確認（人間担当。Android・iOS の生成物で組んだカタログの起動、macOS の許可プロンプト）
+
+## 29. ドライバを `driver` モジュールへ分ける（#1199 の前段）
+
+入口 crate `fandhe` が契約だけを再公開できるよう（consumer-app-structure.md §8.1）、全機能 crate のドライバを crate ルートから外した。
+
+| 項目 | 扱い |
+|------|------|
+| `lib.rs` | `mod driver;` + `pub use driver::*;` を `pub mod driver;` に改め、crate ルートには状態型に依存しない入口（`platform_<stem>()`・begin / poll / discard・`reset_pending_tracking`・`register`・`shutdown` など）だけを名前で再公開する。OS 限定の入口は定義と同じ `cfg` を付けて再公開する |
+| ドライバの見分け方 | `driver.rs` の公開項目のうち、シグネチャが `fandhe_core::screens` の型（または それを含む型の別名）を参照するもの。`CompletionSender<S>` を総称で受けるだけの入口はドライバに含めない |
+| 呼び出し側 | `fandhe-gallery` の registry・main と `fandhe-web-dom` は `fandhe_cap_<stem>::driver::…` を呼ぶ。他の機能 crate のドライバ補助を使う機能（geofence → location）も `driver::` 経由で参照する |
+| crate 内の参照 | OS 実装（`ios.rs`・`android.rs` 等）は `crate::<名前>` でドライバ内の共有状態・関数を参照しているため、全 crate で `#[allow(unused_imports)] pub(crate) use driver::*;` を置き、crate 内にだけ取り込む（公開範囲は変えない） |
+| 雛形 | `migrate-capability.mjs scaffold` の `lib.rs` も同じ形（`pub mod driver;` + `pub use driver::platform_<stem>;`）にした |

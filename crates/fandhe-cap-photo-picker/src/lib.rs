@@ -31,7 +31,9 @@ mod android;
 mod contract;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod desktop;
-mod driver;
+/// 画面の状態型（`fandhe_core::screens`）とつなぐ effect ドライバ。カタログ（`fandhe-gallery`）が使い、
+/// 入口 crate `fandhe` からは再公開しない（consumer-app-structure.md §8.1）。
+pub mod driver;
 mod error;
 #[cfg(target_os = "ios")]
 mod ios;
@@ -42,7 +44,13 @@ mod pending;
 pub use contract::*;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub use desktop::RfdPhotoPicker;
-pub use driver::*;
+pub use driver::begin_photo_pick;
+#[cfg(target_os = "android")]
+pub use driver::reset_pending_tracking;
+pub use driver::{discard_photo_pick, platform_photo_picker, poll_photo_pick};
+// OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
+#[allow(unused_imports)]
+pub(crate) use driver::*;
 pub use error::PhotoPickerError;
 #[cfg(target_os = "ios")]
 pub use ios::{IosPickDeliver, present_ios_photo_picker};

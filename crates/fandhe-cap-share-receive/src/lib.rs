@@ -82,9 +82,12 @@ pub use macos::register;
 
 use std::sync::{Mutex, MutexGuard};
 
-mod driver;
-
-pub use driver::*;
+/// 画面の状態型（`fandhe_core::screens`）とつなぐ effect ドライバ。カタログ（`fandhe-gallery`）が使い、
+/// 入口 crate `fandhe` からは再公開しない（consumer-app-structure.md §8.1）。
+pub mod driver;
+// OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
+#[allow(unused_imports)]
+pub(crate) use driver::*;
 
 /// 共有の受け取りの失敗種別。本文を含めない固定の種別だけを持つ（`security.md` A09）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]

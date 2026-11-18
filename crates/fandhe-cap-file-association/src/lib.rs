@@ -33,7 +33,9 @@ mod android;
 #[cfg_attr(target_os = "ios", allow(dead_code))]
 mod apple;
 mod contract;
-mod driver;
+/// 画面の状態型（`fandhe_core::screens`）とつなぐ effect ドライバ。カタログ（`fandhe-gallery`）が使い、
+/// 入口 crate `fandhe` からは再公開しない（consumer-app-structure.md §8.1）。
+pub mod driver;
 mod error;
 #[cfg(target_os = "ios")]
 mod ios;
@@ -43,7 +45,10 @@ pub mod windows;
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub use apple::register;
 pub use contract::*;
-pub use driver::*;
+pub use driver::platform_file_association;
+// OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
+#[allow(unused_imports)]
+pub(crate) use driver::*;
 pub use error::FileAssociationError;
 
 // `.m` が外部参照する `FandheScene*Notification`・delegate の登録関数は `fandhe-platform-apple` が定義する。

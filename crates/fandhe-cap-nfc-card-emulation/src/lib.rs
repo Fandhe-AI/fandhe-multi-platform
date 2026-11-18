@@ -60,9 +60,12 @@ mod android;
 
 use std::sync::{Arc, OnceLock};
 
-mod driver;
-
-pub use driver::*;
+/// 画面の状態型（`fandhe_core::screens`）とつなぐ effect ドライバ。カタログ（`fandhe-gallery`）が使い、
+/// 入口 crate `fandhe` からは再公開しない（consumer-app-structure.md §8.1）。
+pub mod driver;
+// OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
+#[allow(unused_imports)]
+pub(crate) use driver::*;
 
 /// 本アプリの HCE が応答する独自 AID（16 進）。`F0` + ASCII "FANDHE" + `01`（ISO/IEC 7816-4 の
 /// 独自範囲、5〜16 バイト）。

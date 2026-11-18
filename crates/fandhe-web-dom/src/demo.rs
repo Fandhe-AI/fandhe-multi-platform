@@ -757,7 +757,7 @@ pub fn mount_audio_devices_show_screen(root_id: &str) -> Result<(), JsValue> {
 }
 
 /// `root_id` が指す要素へ型サンプル「画面のスポイト」（Issue #763）をマウントする検証専用
-/// エントリポイント。`fandhe_cap_eye_dropper::eye_dropper_pick_effect` を effect として渡す。
+/// エントリポイント。`fandhe_cap_eye_dropper::driver::eye_dropper_pick_effect` を effect として渡す。
 /// 起動時には呼ばず、ボタン押下（ユーザー操作）の中で `EyeDropper.open()` が動く。
 ///
 /// 呼び出し元が渡す `root_id` の要素が見つからない場合はエラーを返す
@@ -771,7 +771,7 @@ pub fn mount_eye_dropper_screen(root_id: &str) -> Result<(), JsValue> {
         root,
         current_eye_dropper_screen(&initial_state),
         initial_state,
-        fandhe_cap_eye_dropper::eye_dropper_pick_effect,
+        fandhe_cap_eye_dropper::driver::eye_dropper_pick_effect,
     )
 }
 
@@ -1023,7 +1023,7 @@ pub fn mount_tsv_import_screen(root_id: &str) -> Result<(), JsValue> {
 }
 
 /// `root_id` が指す要素へ型サンプル「HTTP 取得（GET 限定）」（Issue #985）をマウントする
-/// 検証専用エントリポイント。`fandhe_cap_http_get::http_fetch_effect` を effect として
+/// 検証専用エントリポイント。`fandhe_cap_http_get::driver::http_fetch_effect` を effect として
 /// 渡すため、ブラウザの `fetch`（Fetch API）経由の GET 取得が動く。
 ///
 /// 画面は `current_screen(&HttpFetchState::default())`（= 要求なしの状態、「取得」
@@ -1043,7 +1043,7 @@ pub fn mount_http_fetch_screen(root_id: &str) -> Result<(), JsValue> {
         root,
         current_http_fetch_screen(&initial_state),
         initial_state,
-        fandhe_cap_http_get::http_fetch_effect,
+        fandhe_cap_http_get::driver::http_fetch_effect,
     )
 }
 

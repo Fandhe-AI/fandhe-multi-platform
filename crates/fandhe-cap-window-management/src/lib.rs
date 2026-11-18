@@ -17,7 +17,9 @@
 #![cfg_attr(any(target_os = "macos", target_os = "windows"), deny(unsafe_code))]
 
 mod contract;
-mod driver;
+/// 画面の状態型（`fandhe_core::screens`）とつなぐ effect ドライバ。カタログ（`fandhe-gallery`）が使い、
+/// 入口 crate `fandhe` からは再公開しない（consumer-app-structure.md §8.1）。
+pub mod driver;
 mod error;
 #[cfg(target_os = "macos")]
 mod macos;
@@ -26,5 +28,8 @@ mod macos;
 mod windows;
 
 pub use contract::*;
-pub use driver::*;
+pub use driver::platform_window_management;
+// OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
+#[allow(unused_imports)]
+pub(crate) use driver::*;
 pub use error::WindowManagementError;

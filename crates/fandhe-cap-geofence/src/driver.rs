@@ -31,6 +31,7 @@ use fandhe_core::screens::geofence_show::{
     EventView, GeofenceShowState, GeofenceView, RegionView, RegisterNotice,
 };
 
+use fandhe_cap_location::driver::to_failure_kind;
 #[cfg(any(
     target_os = "windows",
     target_os = "android",
@@ -40,7 +41,7 @@ use fandhe_core::screens::geofence_show::{
 use fandhe_cap_location::restart_location;
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 use fandhe_cap_location::start_apple_location_once;
-use fandhe_cap_location::{POLL_INTERVAL, shared_location_precise, to_failure_kind};
+use fandhe_cap_location::{POLL_INTERVAL, shared_location_precise};
 use fandhe_runtime::CompletionSender;
 
 /// 画面の状態型に依存しない入口。判定器そのもの（[`GeofenceTracker`]）を新しく作って返す
