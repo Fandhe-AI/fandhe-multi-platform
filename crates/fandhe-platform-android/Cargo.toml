@@ -34,5 +34,12 @@ gradle = [
     "androidx.activity:activity:1.8.0",
 ]
 
+# 描画の余白用の insets を、端末機能の有無によらず取り付ける非公開 provider（`HostInsetsLifecycle`、Issue #1200）。
+[[package.metadata.fandhe.android.components]]
+kind = "provider"
+name = "com.fandhe.platform.HostInsetsLifecycle"
+exported = false
+attributes = { authorities = "${applicationId}.fandhe.platform-android" }
+
 [lints]
 workspace = true
