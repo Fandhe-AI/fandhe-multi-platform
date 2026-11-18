@@ -1,5 +1,5 @@
 //! iOS 向け外部機器への再生実装（Issue #387。親 #99 の b-ios）。
-//! `device/media_cast.rs::platform_cast` の iOS 経路から呼ばれ、macOS と共用の
+//! 本 crate の `driver.rs::platform_media_cast` の iOS 経路から呼ばれ、macOS と共用の
 //! `crate::apple`（`apple/fandhe_apple_media_cast.m`、`AVRoutePickerView` + `AVAudioPlayer` +
 //! `AVAudioSession.currentRoute`）を返す。Linux ホストの `cargo test` では共用実装が無いため、関数と import は iOS 限定にしている。
 //!

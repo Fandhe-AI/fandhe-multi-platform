@@ -69,7 +69,7 @@ pub enum DropError {
 /// 共通部品）へ委譲する。
 ///
 /// 呼び出し元: `fandhe-cap-drag-drop` の `driver.rs`（macOS/Windows。egui
-/// `RawInput::dropped_files` が渡すパスをそのまま渡す）と `device/ios_drag_drop.rs`
+/// `RawInput::dropped_files` が渡すパスをそのまま渡す）と `fandhe-cap-drag-drop` の `ios.rs`
 /// （iOS、Issue #1015。`NSItemProvider` の `loadFileRepresentation...` completion が
 /// 渡す一時ファイルの絶対パスを渡す。この一時ファイルは completion が return すると
 /// OS が削除する契約のため、completion の中で同期に読み切る）。

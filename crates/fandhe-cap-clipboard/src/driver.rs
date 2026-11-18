@@ -118,7 +118,7 @@ fn drive(
     };
 
     // 受信側（ProxyApp）がドロップ済み（アプリ終了中）の送信失敗は無視してよい
-    // （coding-rust.md: panic を API 契約にしない、`device/tilt.rs` と同じ判断）。
+    // （coding-rust.md: panic を API 契約にしない、`fandhe-cap-tilt-motion` の `driver.rs` と同じ判断）。
     match request {
         ClipboardRequest::Copy(text) => {
             let result = clipboard.set_text(&text).map_err(to_message);

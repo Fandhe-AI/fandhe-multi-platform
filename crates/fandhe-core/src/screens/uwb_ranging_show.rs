@@ -5,7 +5,7 @@
 //! （`screens/mod.rs` の `pub mod uwb_ranging_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は
-//! `device/uwb_ranging.rs` が行い、[`apply_capability`] / [`apply_poll`] / [`apply_end`] /
+//! `fandhe-cap-uwb-ranging` の `driver.rs` が行い、[`apply_capability`] / [`apply_poll`] / [`apply_end`] /
 //! [`apply_failure`] で注入する。`fandhe_cap_uwb_ranging` の型は依存方向の都合でここへ写す。
 //!
 //! 嘘の距離を出さない: 距離は [`RangingView::Measured`] だけが持つ（センチメートルの `u32`）。

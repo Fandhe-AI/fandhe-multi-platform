@@ -1,4 +1,4 @@
-//! iOS 向け動画の撮影実装（親 #169、Issue #822）。`device/video_capture.rs` の iOS 経路（`platform`）から
+//! iOS 向け動画の撮影実装（親 #169、Issue #822）。本 crate の `driver.rs` の iOS 経路（`platform_video_capture`）から
 //! [`implementation`] が呼ばれ、`ios/fandhe_ios_video_capture.m`（`UIImagePickerController` の動画モード。
 //! `build.rs` がコンパイルして CoreMedia をリンクする）を `unsafe extern "C"` で
 //! 呼ぶ。`unsafe` はこの FFI 宣言と受け口に閉じ、各所に `// SAFETY:` を書く（coding-rust.md の FFI 例外規定）。

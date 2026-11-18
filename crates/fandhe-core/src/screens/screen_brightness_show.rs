@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面ファイルの
 //! 置き場」節の制約どおり）。OS への要求・読み戻しは 機能 crate の effect ドライバ
-//! （`device/screen_brightness.rs`）が [`take_request`] で要求を取り、[`mark_applying`] →
+//! （`fandhe-cap-screen-brightness` の `driver.rs`）が [`take_request`] で要求を取り、[`mark_applying`] →
 //! [`finish`] / [`apply_read`] で結果を注入する（`wake_lock_toggle` と同型）。
 //!
 //! # 嘘の成功を避ける

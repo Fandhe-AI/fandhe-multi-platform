@@ -12,7 +12,7 @@
 //! ドロップはユーザーの操作そのもの（要求 → OS 応答の往復が無い）であるため、
 //! `file_pick`/`tsv_import` のような世代番号（`generation`）は持たない。1 フレームに
 //! 1 度しか状態を進められない push 型のイベント（egui-winit がドロップ一覧を
-//! `take` で消費する）なので、二重発火の心配が無い（`device/drag_drop.rs`
+//! `take` で消費する）なので、二重発火の心配が無い（`fandhe-cap-drag-drop` の `driver.rs`
 //! モジュール doc 参照）。
 //!
 //! # 成功・部分失敗・0 件・キャンセルを混同しない理由
@@ -68,7 +68,7 @@ pub struct DragDropState {
     /// 失敗理由（`TextRole::Error` で表示）。成功・キャンセル時は空文字列。
     pub error: String,
     /// 直近に開始したバックグラウンド読み取りの世代番号（契約表 2「並行性・
-    /// 世代」）。`device/drag_drop.rs::drive` がドロップのたびに
+    /// 世代」）。`fandhe-cap-drag-drop` の `driver.rs::drive` がドロップのたびに
     /// [`begin_drop_read`] で確定させ、読み取り完了時に [`is_current_generation`]
     /// で照合する。一致しなければ、後続のドロップに上書きされた古い結果として
     /// 読み取り結果を捨てる（読み取りを別スレッドへ逃がしたことで生じる
@@ -83,7 +83,7 @@ pub struct DragDropState {
 }
 
 /// ホバー開始（ドラッグ中のファイルがウィンドウ上に入ってきた）を反映する。
-/// 呼び出し元: `device/drag_drop.rs` の effect ドライバ（`RawInput::hovered_files`
+/// 呼び出し元: `fandhe-cap-drag-drop` の `driver.rs` の effect ドライバ（`RawInput::hovered_files`
 /// が空でなく、直前は `hovering == false` だったフレーム）。
 pub fn begin_hover(state: &mut DragDropState) {
     state.hovering = true;
@@ -115,7 +115,7 @@ pub fn cancel_hover(state: &mut DragDropState) {
 }
 
 /// バックグラウンド読み取りを開始する世代番号を確定する。呼び出し元
-/// `device/drag_drop.rs::drive` は、ワーカースレッドを起動する前にこの結果を
+/// `fandhe-cap-drag-drop` の `driver.rs::drive` は、ワーカースレッドを起動する前にこの結果を
 /// 完了クロージャ経由で `state.generation` へ同期的に書き込む（ワーカー起動と
 /// 世代確定の間に別のドロップが割り込んでも、両者が同じ番号を払い出さない
 /// ようにするため）。読み取り本体を UI スレッドから追い出したことで生じる
@@ -130,8 +130,8 @@ pub fn next_generation(state: &DragDropState) -> u64 {
 ///
 /// `hovering` もここで即座に `false` へ倒す（codex 指摘 #1018 対応）。
 /// 倒さないと、ドロップ直後の次フレームでは egui-winit のホバー一覧が既に
-/// 空（`device/drag_drop.rs` モジュール doc の 0.33.3 挙動）なのに
-/// `state.hovering` はまだ `true` のままになり、`device/drag_drop.rs::drive`
+/// 空（`fandhe-cap-drag-drop` の `driver.rs` モジュール doc の 0.33.3 挙動）なのに
+/// `state.hovering` はまだ `true` のままになり、`fandhe-cap-drag-drop` の `driver.rs::drive`
 /// の「hovering=false かつ state.hovering=true」分岐が発火して
 /// [`cancel_hover`] が呼ばれる。バックグラウンド読み取りが終わるまでの間、
 /// 本来ドロップ結果が出るはずの画面に「ドロップを取り消しました」が
@@ -170,7 +170,7 @@ pub fn finish_drop(state: &mut DragDropState, items: Vec<DropItem>) {
     finish_drop_with_overflow(state, items, 0);
 }
 
-/// [`finish_drop`] の本体。`overflow` は `device/drag_drop.rs::read_all` が
+/// [`finish_drop`] の本体。`overflow` は `fandhe-cap-drag-drop` の `driver.rs::read_all` が
 /// 上限超過分を 1 件の集約 [`DropItem`] へまとめた際の実件数（集約 1 件は
 /// 既に `items` に含まれているため、そのまま合算すると集約行の 1 件分が
 /// 二重計上される。`overflow` から 1 を引いた分だけ上乗せする）。総件数・
@@ -374,7 +374,7 @@ mod tests {
 
     #[test]
     fn stale_generation_is_detected_after_newer_drop_begins() {
-        // `device/drag_drop.rs::drive` は、ワーカースレッドの読み取り完了時に
+        // `fandhe-cap-drag-drop` の `driver.rs::drive` は、ワーカースレッドの読み取り完了時に
         // この照合で古い世代（後続のドロップに上書きされた分）の結果を捨てる
         // （契約表 2、codex 指摘 #1018 対応）。
         let mut state = DragDropState::default();

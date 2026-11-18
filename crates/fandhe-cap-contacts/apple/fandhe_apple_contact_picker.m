@@ -12,7 +12,7 @@
 //        code 表: 0 = 選択（name は NUL 終端 UTF-8。空文字列もありうる）、1 = キャンセル、
 //        2 = 権限拒否、3 = 提示失敗。name は code 0 のときだけ非 NULL で、呼び出しの間だけ
 //        有効（Rust 側が呼び出し中にコピーする）。コード → 結果の写像は Rust 側
-//        `device/contact_pick.rs::outcome_from_code` に一本化する（`.m` 側で二重に写像しない）。
+//        本 crate の `driver.rs::outcome_from_code` に一本化する（`.m` 側で二重に写像しない）。
 //
 // 権限: `CNContactPicker`（popover）が TCC を要するかは公式文書に明記がないため安全側に倒し、
 // 提示前に `authorizationStatusForEntityType:` を読む（読むだけでは許可ダイアログは出ない）。

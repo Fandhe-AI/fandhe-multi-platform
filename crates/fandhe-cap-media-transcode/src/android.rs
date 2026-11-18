@@ -1,5 +1,5 @@
 //! Android 向け動画・音声の変換実装（Issue #314、親 #91 の b-android）。
-//! `device/media_transcode.rs::platform` の Android 経路から、ドライバのワーカースレッド
+//! 本 crate の `driver.rs::platform_media_transcode` の Android 経路から、ドライバのワーカースレッド
 //! （`media-transcode`）で呼ばれ、`MediaTranscodeHelper.transcode`（static）を同期 JNI で 1 回呼ぶ。
 //! Java 側は `MediaTranscodeHelper`（`MediaCodec` の AAC エンコーダ + `MediaMuxer` の MPEG-4）。
 //! Java から Rust への native コールバックは無いので、JNI 署名の照合先は Java のみ。
@@ -14,7 +14,7 @@
 //!
 //! 期限は呼び出しに渡す残り時間で、Java が単調時計で確かめて中断する（資源を解放してから 1 を返す）。
 //! 変換は短いため背景遷移では中断しない。Activity の作り直しでは Rust 側の保留記録を
-//! `device/media_transcode.rs::reset_pending_tracking` が捨てる（要求 id は単調に増えるので、
+//! 本 crate の `driver.rs::reset_pending_tracking` が捨てる（要求 id は単調に増えるので、
 //! 古い要求の後始末が新しい要求を消すことはない）。
 //!
 //! 守る範囲: 失敗を成功値へ畳まないこと・資源の解放・FFI に渡す長さの上限。

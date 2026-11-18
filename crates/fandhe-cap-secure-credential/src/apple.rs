@@ -1,4 +1,4 @@
-//! iOS / macOS 向け資格情報保存実装（Issue #922・#924）。`device/secure_credential.rs`
+//! iOS / macOS 向け資格情報保存実装（Issue #922・#924）。本 crate の `driver.rs`
 //! の iOS/macOS 経路から呼ばれ、`crate::contract::SecureCredential` を
 //! Keychain Services（`apple/fandhe_apple_secure_credential.m`、`build.rs` が iOS・
 //! macOS 双方のターゲットでコンパイル・リンクする）で

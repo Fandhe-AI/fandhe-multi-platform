@@ -8,7 +8,7 @@
 //! 同型、`lib.rs` の iOS/macOS `deny(unsafe_code)` 緩和・coding-rust.md の FFI
 //! 例外規定準拠）。
 //!
-//! **pull 型**（push 通知ではない）: `device/windows.rs::WindowsGamepad` と
+//! **pull 型**（push 通知ではない）: 本 crate の `windows.rs::WindowsGamepad` と
 //! 同じく状態を一切キャッシュせず、`read()` のたびに `.m` 側の現在値を読み直す
 //! （設計判断は `.m` ファイル冒頭コメント参照）。
 //!

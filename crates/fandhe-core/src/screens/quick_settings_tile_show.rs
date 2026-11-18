@@ -6,7 +6,7 @@
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。回数の読み出しは
 //! `fandhe_device::quick_settings_tile`、結果を本モジュールへ注入するのは 機能 crate の
-//! effect ドライバ（`device/quick_settings_tile.rs`）の責務。ドライバは読み出しを高々 1 件に
+//! effect ドライバ（`fandhe-cap-quick-settings-tile` の `driver.rs`）の責務。ドライバは読み出しを高々 1 件に
 //! 絞り、世代番号つきで [`finish_read`] へ届ける。
 //!
 //! 全対象 OS（macOS・Android）分の状態・定数・文言を本モジュールで持つ。本機能には操作ボタンが

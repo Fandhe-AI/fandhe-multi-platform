@@ -1,4 +1,4 @@
-//! Windows 向け生体認証実装（Issue #907）。`device/biometric_auth.rs` の Windows 経路
+//! Windows 向け生体認証実装（Issue #907）。本 crate の `driver.rs` の Windows 経路
 //! から呼ばれ、WinRT `UserConsentVerifier`（Windows Hello）を
 //! `IUserConsentVerifierInterop`（`Win32_System_WinRT`）経由でウィンドウ束縛して呼ぶ
 //! （`fandhe-cap-share-sheet/src/windows.rs` と同じ「子プロセス方式は自分のウィンドウを持てず使えないため、
@@ -20,7 +20,7 @@
 //! （UI スレッドをブロックしない）。完了はスレッドプール側スレッドで届くため、結果は
 //! `crate::driver::bridge::deliver`（`Mutex` 保護）へ置くだけにし、画面への反映は
 //! `biometric_auth::drive_callback` の毎フレームポーリングに任せる
-//! （`device/share.rs` の `.m` 側コールバックと同じ構造）。
+//! （`fandhe-cap-share-sheet` の `driver.rs` の `.m` 側コールバックと同じ構造）。
 //!
 //! `IAsyncOperation` は完了ハンドラが呼ばれる前にドロップされないよう、
 //! プロセス全体の [`HELD`] へ保持する（次回 [`present`] で前回分を置き換える）。
@@ -57,7 +57,7 @@ use crate::driver::{bridge, outcome_from_verification};
 type Held = (u64, IAsyncOperation<UserConsentVerificationResult>);
 static HELD: Mutex<Option<Held>> = Mutex::new(None);
 
-/// `device/biometric_auth.rs` の Windows 経路から呼ばれる。`request_id` は
+/// 本 crate の `driver.rs` の Windows 経路から呼ばれる。`request_id` は
 /// `crate::driver::bridge::begin` が払い出したプロセス内一意な ID
 /// （`bridge::deliver` の照合キー）。同期的に失敗した場合は `Err` を返し、
 /// 呼び出し元が `bridge::deliver` する（完了ハンドラは二度と呼ばれないため）。

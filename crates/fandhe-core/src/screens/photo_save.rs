@@ -2,7 +2,7 @@
 //! 説明文と「画像を 1 枚保存」ボタンだけの 1 画面。`FANDHE_PROXY_APP=photo_save` で選ばれ、
 //! `crates/fandhe-gallery/src/screens/registry.rs` の `effect` 区画から呼ばれる
 //! （`screens/mod.rs` の `pub mod photo_save;` と対）。入力欄を持たないのは、保存する画像を
-//! effect ドライバ（`device/photo_save.rs`）が自前で生成するため（OS 固有の操作 UI も無い）。
+//! effect ドライバ（`fandhe-cap-photo-library` の `driver.rs`）が自前で生成するため（OS 固有の操作 UI も無い）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`
 //! 「新規画面ファイルの置き場」節の制約どおり）。PNG の検査と OS 呼び出しは effect ドライバが

@@ -1,4 +1,4 @@
-//! Windows 向け外部機器への再生（Issue #388、親 #99 の windows 子）。`device/media_cast.rs::platform_cast` の
+//! Windows 向け外部機器への再生（Issue #388、親 #99 の windows 子）。本 crate の `driver.rs::platform_media_cast` の
 //! Windows 経路から呼ばれ、契約（SSOT）は `crate::contract`。
 //! 実行時に生成した WAV を WinRT `MediaPlayer`（メモリ上の `InMemoryRandomAccessStream`、ループ）で鳴らし、
 //! アプリのボタンから OS の `CastingDevicePicker` を出して Miracast・DLNA・Bluetooth の受信機へ送る。

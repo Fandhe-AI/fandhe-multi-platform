@@ -12,7 +12,7 @@
 //! `LAContext.evaluatePolicy`（macOS/iOS）・`BiometricPrompt.AuthenticationCallback`
 //! （Android）・`UserConsentVerifier`（Windows、`IAsyncOperation` の完了ハンドラ）は
 //! いずれも reply が非同期に届くため、`BiometricAuth` トレイトを通さずコアの状態機械へ
-//! 直接書き戻す（`device/share.rs` と同型）。[`bridge`] は `fandhe-runtime/src/request_slot.rs::
+//! 直接書き戻す（`fandhe-cap-share-sheet` の `driver.rs` と同型）。[`bridge`] は `fandhe-runtime/src/request_slot.rs::
 //! RequestSlot` の facade で、`CompletionSender` も画面の `generation` も保持しない
 //! pull 型: OS 側コールバックは結果を置くだけで、画面への反映は毎フレーム
 //! [`drive_callback`] が **その時点の** `sender`/`state` を使って行う
@@ -48,7 +48,7 @@ const UNAVAILABLE: &str = "この環境では生体認証を使えません";
 
 /// `BiometricAuthError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
 /// それ以外は `Display` の文言をそのまま転送する
-/// （`device/share.rs::to_message` と同じ方針）。
+/// （`fandhe-cap-share-sheet` の `driver.rs::to_message` と同じ方針）。
 fn to_message(e: BiometricAuthError) -> String {
     match e {
         BiometricAuthError::Unsupported => UNAVAILABLE.to_string(),
@@ -149,7 +149,7 @@ pub(crate) fn outcome_from_reply(
 /// （macOS ホスト・Linux CI runner 上の `cargo test`/clippy でも失敗系を
 /// 検証できるようにする。呼ばれない環境では `dead_code` にならないよう pub(crate)
 /// のまま外へ公開する。呼び出し元が存在しない非 Windows ターゲットでは
-/// `dead_code` を許容する（`device/share.rs::cancel_due` と同じ ponytail 方針:
+/// `dead_code` を許容する（`fandhe-cap-share-sheet` の `driver.rs::cancel_due` と同じ ponytail 方針:
 /// 全ターゲットでテストするためだけに `cfg` を割らない）。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub(crate) fn outcome_from_verification(
@@ -230,7 +230,7 @@ pub(crate) mod bridge {
 
 /// OS へ提示を依頼する（Apple 系は `crate::apple::present`、Android は
 /// `android::request_biometric`）。戻り値は「提示依頼を受理できたか」（`false` は
-/// 呼び出し元が `Err(Internal("biometric present"))` として畳む、`device/share.rs::present`
+/// 呼び出し元が `Err(Internal("biometric present"))` として畳む、`fandhe-cap-share-sheet` の `driver.rs::present`
 /// と同型）。Windows は戻り値が `Result`（`crate::windows::present`）のため本関数には
 /// 含めず、[`drive_callback`] 内で別途 `cfg(target_os = "windows")` 分岐として呼ぶ。
 #[cfg(target_os = "android")]
@@ -244,7 +244,7 @@ fn present(request_id: u64, reason: &str) -> bool {
 }
 
 /// macOS/iOS/Android/Windows 経路の認証 effect ドライバ本体
-/// （`device/share.rs::drive_callback` と同型）。
+/// （`fandhe-cap-share-sheet` の `driver.rs::drive_callback` と同型）。
 #[cfg(any(
     target_os = "macos",
     target_os = "ios",
@@ -294,7 +294,7 @@ fn drive_callback(state: &BiometricCheckState, sender: &CompletionSender<Biometr
         move |s: &mut BiometricCheckState, outcome| {
             // 反映できる状態か（`Idle` へ既に戻っていないか）を確かめてから
             // `finish_auth` し、反映できたときだけ `true` を返す（`RequestSlot` 側が
-            // それを見て `clear` する）（`device/share.rs` の「キュー投入成功 ≠ 反映」
+            // それを見て `clear` する）（`fandhe-cap-share-sheet` の `driver.rs` の「キュー投入成功 ≠ 反映」
             // 対策と同じ判断）。
             if s.phase != AuthPhase::Idle {
                 finish_auth(s, generation, outcome);
@@ -476,7 +476,7 @@ pub fn reset_pending_tracking() {
 /// 呼び出し元（`android.rs::Java_..._nativeOnBiometricResult`）は Android にのみ
 /// 存在する（`lib.rs` の `mod android` cfg 参照）ため、それ以外のターゲット（例:
 /// Linux CI runner 上の clippy）では本関数も未使用になり `dead_code` で
-/// `-D warnings` に落ちる。`device/share.rs::cancel_due` と同じ理由で
+/// `-D warnings` に落ちる。`fandhe-cap-share-sheet` の `driver.rs::cancel_due` と同じ理由で
 /// `cfg_attr(allow(dead_code))` を付け、host（macOS/Windows/Linux）上でも
 /// `cargo test` で写像表を検証できるようにする。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]

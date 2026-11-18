@@ -1,5 +1,5 @@
 //! Windows 向けアクセシビリティ設定実装（Issue #1308、親 #1132）。
-//! `device/accessibility_prefs.rs::implementation` の Windows 経路から呼ばれ、WinRT
+//! 本 crate の `driver.rs::platform_accessibility_prefs` の Windows 経路から呼ばれ、WinRT
 //! `UISettings.AnimationsEnabled` と `AccessibilitySettings.HighContrast` を UI スレッドで
 //! 同期に読む（1 秒に 1 回。変化通知は購読しない）。
 //!

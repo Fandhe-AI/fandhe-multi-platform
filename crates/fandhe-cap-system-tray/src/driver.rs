@@ -2,7 +2,7 @@
 //! `fandhe_core::screens::system_tray`（端末依存ゼロ）の `pending` 要求を観測し、
 //! `crate::contract::SystemTray` で OS へアイコンの表示 / 非表示を依頼して
 //! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
-//! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`device/notification.rs` と同型）。
+//! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`fandhe-cap-notification` の `driver.rs` と同型）。
 //!
 //! 非 wasm32 でのみコンパイル対象になる
 //! （`device.rs` モジュール doc と同じ理由）。

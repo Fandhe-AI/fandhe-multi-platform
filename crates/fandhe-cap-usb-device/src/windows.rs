@@ -1,4 +1,4 @@
-//! Windows 向け USB 機器一覧実装（Issue #506、親 #112）。`device/usb_device.rs::
+//! Windows 向け USB 機器一覧実装（Issue #506、親 #112）。本 crate の `driver.rs::
 //! platform_usb_device` の Windows 経路から UI スレッドで同期に 1 回呼ばれる。契約の SSOT は
 //! `crate::contract`。
 //!

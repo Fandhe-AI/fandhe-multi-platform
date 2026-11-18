@@ -251,7 +251,7 @@ fn into_drop_item(item: DroppedItem) -> DropItem {
 }
 
 /// GUI（`egui::Context`）に依存しない純粋な分岐部分。`hovering`/`dropped` を
-/// 引数で受け取ることで、`device/tilt.rs::drive` や dynamic-type の `drive` と
+/// 引数で受け取ることで、`fandhe-cap-tilt-motion` の `driver.rs::drive` や dynamic-type の `drive` と
 /// 同様プラットフォーム cfg 抜きでテストできるようにしている。
 ///
 /// 評価順序が重要: ドロップされたフレームでは egui-winit が既にホバー一覧を
@@ -399,7 +399,7 @@ fn display_name(path: Option<&std::path::Path>) -> String {
         .unwrap_or_else(|| "（名前なし）".to_string())
 }
 
-/// Android の JNI 受け口（`device/android.rs::nativeOnDragDropItem`）が fd から得た
+/// Android の JNI 受け口（本 crate の `android.rs` の `nativeOnDragDropItem`）が fd から得た
 /// 結果を [`DroppedItem`] へ変換する、FFI を含まない純粋な分岐部分（ホストの `cargo test`
 /// で検証できるようにする切り出し、`ios_drag_drop.rs::build_item` と同じ方針）。
 ///
@@ -412,7 +412,7 @@ fn display_name(path: Option<&std::path::Path>) -> String {
 ///   成功へ丸めず読めない扱いにする（契約表 6「嘘の成功」）
 ///
 /// 読み取り（[`read_dropped_from`]）は本関数の中で行う。呼び出し元
-/// （`device/android.rs::nativeOnDragDropItem`）がロックの外（`crate::drop_session::item`
+/// （本 crate の `android.rs` の `nativeOnDragDropItem`）がロックの外（`crate::drop_session::item`
 /// 呼び出し前）で本関数を呼ぶ契約（`drop_session.rs` モジュール doc「判定と更新は同じ
 /// ロックの内側」参照。ロック保持中に I/O を行わない）。
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -720,7 +720,7 @@ mod tests {
     }
 
     /// レビュー指摘（Issue #1018 High）再発防止: ドロップ直後の次フレームは
-    /// 既にホバー一覧が空（`device/drag_drop.rs` モジュール doc の
+    /// 既にホバー一覧が空（本 crate の `driver.rs` モジュール doc の
     /// egui-winit 0.33.3 挙動）になる。読み取りワーカーがまだ完了していない
     /// 間にこのフレームが来ても、`begin_drop_read` が世代確定と同時に
     /// `state.hovering` を `false` へ倒し済みなら `drive` の「hovering=false

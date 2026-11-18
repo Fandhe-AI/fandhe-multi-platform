@@ -1,11 +1,11 @@
-//! request/response 型端末機能（`device/share.rs` / `device/biometric_auth.rs` /
+//! request/response 型端末機能（`fandhe-cap-share-sheet` の `driver.rs` / `fandhe-cap-biometric-auth` の `driver.rs` /
 //! `fandhe-cap-file-picker` の `driver.rs`）共通の「要求 1 件の追跡」（pull 型 bridge、Issue #943 /
 //! 親 #941）。3 機能がそれぞれ逐語コピーしていた `Mutex<Option<Pending>>` +
 //! `AtomicU64` 採番 + `snapshot`/`clear`/`reset` をここへ一本化する。
 //!
 //! [`RequestSlot`] は `CompletionSender` も画面の `generation` も保持しない
 //! pull 型: OS 側コールバックは結果を置くだけで、画面への反映は毎フレームの
-//! effect ドライバが **その時点の** `sender`/`state` で行う（`device/share.rs`
+//! effect ドライバが **その時点の** `sender`/`state` で行う（`fandhe-cap-share-sheet` の `driver.rs`
 //! モジュール doc の「pull 型」節と同じ考え方）。各機能は `bridge` facade で
 //! `RequestSlot<機能固有の Outcome>` を static に 1 個持ち、OS 側コールバックとの
 //! 変換（`to_outcome`）は facade 側に残す（`RequestSlot` は変換済みの値を

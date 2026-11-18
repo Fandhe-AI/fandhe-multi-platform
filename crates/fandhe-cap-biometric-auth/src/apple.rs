@@ -1,6 +1,6 @@
 //! iOS / macOS 向け生体認証実装（Issue #906 macOS・#908 iOS。`LAContext` は macOS と
 //! 同一 API のため、iOS 側は提示 VC を要求せず同じ経路で完了する）。
-//! `device/biometric_auth.rs` の macOS/iOS 経路から呼ばれ、`LocalAuthentication`
+//! 本 crate の `driver.rs` の macOS/iOS 経路から呼ばれ、`LocalAuthentication`
 //! （`LAContext`）実装（`apple/fandhe_apple_biometric.m`、`build.rs` が iOS 全体・
 //! macOS でコンパイル・リンクする）を `unsafe extern "C"`
 //! 1 関数（[`present`]）で呼ぶ。`unsafe` はこの呼び出し 1 箇所に閉じ `// SAFETY:` で
@@ -9,7 +9,7 @@
 //! `.m` 側の reply コールバックから [`fandhe_rust_biometric_outcome`]（本モジュールが
 //! 公開する `extern "C"` 関数）が呼ばれ、`crate::driver::bridge` へ結果を push
 //! する（pull 型、`apple_share.rs::fandhe_rust_share_outcome` と同じ橋渡し方式）。
-//! `LAError` の生コード → 結果の写像は `device/biometric_auth.rs::outcome_from_reply`
+//! `LAError` の生コード → 結果の写像は 本 crate の `driver.rs::outcome_from_reply`
 //! （iOS/macOS 共通の SSOT）に一本化する。
 //!
 //! 認証結果以外の情報（生体データ・識別子）をログへ出力しない（security.md A09）。
@@ -26,7 +26,7 @@ unsafe extern "C" {
 }
 
 /// `.m` 側の `fandhe_apple_biometric_authenticate` を呼び、生体認証 UI の提示を依頼する
-/// （`device/biometric_auth.rs` の macOS/iOS 経路から呼ばれる契約）。`request_id` は
+/// （本 crate の `driver.rs` の macOS/iOS 経路から呼ばれる契約）。`request_id` は
 /// `crate::driver::bridge::begin` が払い出したプロセス内一意な ID（画面の
 /// `generation` ではない、`apple_share.rs::present` と同じ設計）。
 ///
@@ -50,7 +50,7 @@ pub(crate) fn present(request_id: u64, reason: &str) -> bool {
 }
 
 /// `.m` 側 reply コールバックから届く結果（`success`/`la_code`）の解釈
-/// （`device/biometric_auth.rs::outcome_from_reply`、iOS/macOS 共通の表）へ委譲する。
+/// （本 crate の `driver.rs::outcome_from_reply`、iOS/macOS 共通の表）へ委譲する。
 /// `.m` 側の `LAContext.evaluatePolicy` reply ブロックから呼ばれる `extern "C"` 関数。
 /// 結果を [`crate::driver::bridge`] へ push する（pull 型、
 /// `apple_share.rs::fandhe_rust_share_outcome` と同じ橋渡し方式）。

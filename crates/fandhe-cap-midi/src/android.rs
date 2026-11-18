@@ -1,4 +1,4 @@
-//! Android 向け MIDI 入力実装（Issue #1400、親 #1137）。`device/midi.rs::platform_midi` の
+//! Android 向け MIDI 入力実装（Issue #1400、親 #1137）。本 crate の `driver.rs::platform_midi` の
 //! Android 経路から呼ばれ、`MidiManager` が見せる出力ポートの受信バイト列を
 //! `crate::contract::MidiParser` でノートへ組み立てて sink へ流す。Java 側は `MidiHelper`。
 //!

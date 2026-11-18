@@ -34,7 +34,7 @@ static atomic_flag g_capture_in_flight = ATOMIC_FLAG_INIT;
 
 // delegate/completion が一切呼ばれないまま停止する経路（Bugbot 指摘: 提示失敗時に
 // dispatch_semaphore_wait が無期限ブロックし続ける）への最終防衛線。Android 側
-// `CaptureMailbox` の待ち上限（`device/android.rs` の `CAPTURE_TIMEOUT`）と同値に揃える。
+// `CaptureMailbox` の待ち上限（本 crate の `src/android.rs` の `CAPTURE_TIMEOUT`）と同値に揃える。
 static const int64_t kFandheCameraCaptureTimeoutSeconds = 300;
 
 // `UIImagePickerControllerDelegate` を実装し、結果を `__block` 変数へ橋渡しする。

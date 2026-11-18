@@ -9,7 +9,7 @@
 //! `NSSharingServicePicker`（macOS）/ `UIActivityViewController`（iOS）/
 //! `Intent.createChooser`（Android）/ `DataTransferManager`（Windows）はいずれも
 //! delegate・コールバック型（提示 → 結果を非同期通知）のため、`Share` トレイトを
-//! 通さずコアの状態機械へ直接書き戻す（`device/file_pick.rs` の iOS/Android 経路と
+//! 通さずコアの状態機械へ直接書き戻す（`fandhe-cap-file-picker` の `driver.rs` の iOS/Android 経路と
 //! 同型）。[`bridge`] は `fandhe-runtime/src/request_slot.rs::RequestSlot` の facade で、
 //! `CompletionSender` も画面の `generation` も保持しない pull 型: OS 側コールバックは
 //! 結果を置くだけで、画面への反映は毎フレーム [`drive_callback`] が **その時点の**
@@ -50,7 +50,7 @@ const UNAVAILABLE: &str = "この環境では共有シートを使えません";
 
 /// `ShareSheetError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
 /// それ以外は `Display` の文言をそのまま転送する
-/// （`device/file_pick.rs::to_message` と同じ方針）。
+/// （`fandhe-cap-file-picker` の `driver.rs::to_message` と同じ方針）。
 fn to_message(e: ShareSheetError) -> String {
     match e {
         ShareSheetError::Unsupported => UNAVAILABLE.to_string(),
@@ -271,7 +271,7 @@ fn drive_callback(state: &ShareTextState, sender: &CompletionSender<ShareTextSta
         move |s: &mut ShareTextState, outcome| {
             // 反映できる状態か（`Idle` へ既に戻っていないか）を確かめてから
             // `finish_share` し、反映できたときだけ `true` を返す（`RequestSlot` 側が
-            // それを見て `clear` する）（`device/file_pick.rs` の「キュー投入成功 ≠
+            // それを見て `clear` する）（`fandhe-cap-file-picker` の `driver.rs` の「キュー投入成功 ≠
             // 反映」対策と同じ判断）。
             if s.phase != SharePhase::Idle {
                 finish_share(s, generation, outcome);

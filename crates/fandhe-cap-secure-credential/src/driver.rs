@@ -3,7 +3,7 @@
 //! `crate::contract::SecureCredential` で OS のセキュアストアを
 //! 保存・読み出し・削除して `CompletionSender` 経由で結果を返す（`crate::screens::
 //! registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、
-//! `device/clipboard.rs` と同型）。
+//! `fandhe-cap-clipboard` の `driver.rs` と同型）。
 //!
 //! 非 wasm32 でのみコンパイル対象になる
 //! （`device.rs` モジュール doc と同じ理由）。

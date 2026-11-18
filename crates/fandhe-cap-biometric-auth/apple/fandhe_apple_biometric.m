@@ -18,7 +18,7 @@
 //     -> Rust 側（`apple_biometric.rs`）が公開する `extern "C"` 関数。`success` は
 //        `LAContext.evaluatePolicy` reply の `success` をそのまま渡し、`la_code` は
 //        `error.code`（`success` が真のときは 0）をそのまま渡す。結果コード表への
-//        写像は Rust 側 `device/biometric_auth.rs::outcome_from_reply` に一本化する
+//        写像は Rust 側 本 crate の `driver.rs::outcome_from_reply` に一本化する
 //        （`.m` 側で二重に写像しない、実装計画の設計判断 3）。
 //
 // ポリシーは `LAPolicyDeviceOwnerAuthenticationWithBiometrics` 固定でパスコードへの

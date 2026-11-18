@@ -4,7 +4,7 @@
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod compass_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は
-//! `device/compass.rs`（Web は `fandhe-web-dom`）が行い、[`apply_reading`] / [`apply_failure`] で
+//! `fandhe-cap-compass-heading` の `driver.rs`（Web は `fandhe-web-dom`）が行い、[`apply_reading`] / [`apply_failure`] で
 //! 注入する。`fandhe_device::compass` の型と、度の丸め・8 方位の判定は依存方向の都合でここへ写す。
 //!
 //! 嘘の方位を出さない: 初期・待機・取得中・失敗・非対応は度を持たない（[`CompassView::Live`] だけが持つ）。

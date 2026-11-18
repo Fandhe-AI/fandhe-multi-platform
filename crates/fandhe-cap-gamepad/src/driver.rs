@@ -39,7 +39,7 @@ use fandhe_runtime::CompletionSender;
 const MAX_DT: f32 = 0.1;
 /// `LAST_TICK` が未初期化（起動直後の 1 フレーム目）のときに使う既定 dt（60fps 相当）。
 const DEFAULT_DT: f32 = 1.0 / 60.0;
-/// 「傾き無し」とみなす閾値（`device/tilt.rs::TILT_EPSILON` と同じ考え方）。
+/// 「傾き無し」とみなす閾値（`fandhe-cap-tilt-motion` の `driver.rs::TILT_EPSILON` と同じ考え方）。
 const STICK_EPSILON: f32 = 0.02;
 /// 押下中ボタン名の区切り文字。
 const LABEL_SEPARATOR: &str = "、";
@@ -51,7 +51,7 @@ const LABEL_SEPARATOR: &str = "、";
 /// スティック中央化・押下解除で送信をスキップした後に再描画予約を切ると、次に
 /// `ProxyApp::update` が呼ばれる機会（他の UI 入力）が無い限りポーリングが止まり、
 /// 以後スティックを動かしても・未接続からコントローラを接続しても検知できない
-/// （codex-review 指摘 P1・Cursor Bugbot 指摘 High、PR #937）。`device/tilt.rs::
+/// （codex-review 指摘 P1・Cursor Bugbot 指摘 High、PR #937）。`fandhe-cap-tilt-motion` の `driver.rs::
 /// IOS_IDLE_POLL_INTERVAL` と同じ考え方で、スキップ中も定期的に起こし直す。
 /// ponytail: 固定間隔のポーリング。取りこぼし（最大この間隔分の反応遅延）が要件上
 /// 問題になった場合は、`Windows.Gaming.Input`/`GCControllerDidConnectNotification`
@@ -62,7 +62,7 @@ const IDLE_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis
 /// 常に非対応を返す実装（Windows/iOS/macOS/Android 以外の cfg 分岐、`location.rs` の
 /// `UNSUPPORTED_PUSHED` 相当の判断をここでは実装自体で表現する）。それらのビルドでは
 /// `platform_gamepad()` の cfg 分岐から参照されないため `dead_code` を許可する
-/// （`device/tilt.rs::GRAVITY_EARTH` と同じ判断）。
+/// （`fandhe-cap-tilt-motion` の `driver.rs::GRAVITY_EARTH` と同じ判断）。
 #[cfg_attr(
     any(
         target_os = "windows",
@@ -107,12 +107,12 @@ pub fn platform_gamepad() -> Box<dyn Gamepad> {
     }
 }
 
-/// 直近の `gamepad_show_effect` 呼び出し時刻（dt 実測用、`device/tilt.rs::LAST_TICK`
+/// 直近の `gamepad_show_effect` 呼び出し時刻（dt 実測用、`fandhe-cap-tilt-motion` の `driver.rs::LAST_TICK`
 /// と同じ役割）。
 static LAST_TICK: Mutex<Option<Instant>> = Mutex::new(None);
 
 /// 前回呼び出しからの経過秒数を実測し、`[0.0, MAX_DT]` へクランプして返す
-/// （`device/tilt.rs::measure_dt` と同型）。
+/// （`fandhe-cap-tilt-motion` の `driver.rs::measure_dt` と同型）。
 fn measure_dt() -> f32 {
     let mut last = LAST_TICK
         .lock()
@@ -164,7 +164,7 @@ fn alt_frame(state: &GamepadShowState, view: GamepadView) -> (GamepadView, f32, 
 }
 
 /// 傾き 0 かつ静止中・表示状態も押下も変化が無ければ完了送信をスキップしてよいかを
-/// 判定する純関数（`device/tilt.rs::can_skip_send` と同じ考え方。egui を無駄に
+/// 判定する純関数（`fandhe-cap-tilt-motion` の `driver.rs::can_skip_send` と同じ考え方。egui を無駄に
 /// 再描画させないため）。
 fn can_skip_send(
     state: &GamepadShowState,
@@ -183,7 +183,7 @@ fn can_skip_send(
 /// `gamepad` から次フレームの入力を決め、変化があれば [`apply_connected`]/
 /// [`apply_disconnected`]/[`apply_unsupported`] のいずれかを適用する完了を送る
 /// （テストから `cfg` 抜きで検証できるよう `gamepad_show_effect` 本体から切り出す、
-/// `device/tilt.rs::drive` と同型）。
+/// `fandhe-cap-tilt-motion` の `driver.rs::drive` と同型）。
 fn drive(
     state: &GamepadShowState,
     sender: &CompletionSender<GamepadShowState>,
@@ -205,7 +205,7 @@ fn drive(
     let phys_y = if y.abs() <= STICK_EPSILON { 0.0 } else { y };
 
     // 受信側（ProxyApp）がドロップ済み（アプリ終了中）の送信失敗は無視してよい
-    // （coding-rust.md: panic を API 契約にしない、`device/tilt.rs` と同じ判断）。
+    // （coding-rust.md: panic を API 契約にしない、`fandhe-cap-tilt-motion` の `driver.rs` と同じ判断）。
     let _ = sender.send(Box::new(move |s: &mut GamepadShowState| match view {
         GamepadView::Connected => apply_connected(s, phys_x, phys_y, pressed, dt),
         GamepadView::DisconnectedAlt => apply_disconnected(s, dt),

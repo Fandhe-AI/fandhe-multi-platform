@@ -4,7 +4,7 @@
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod motion_raw_sensors_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は
-//! `device/motion_raw_sensors.rs` が行い、[`apply_reading`] / [`apply_failure`] で注入する。
+//! `fandhe-cap-motion-raw-sensors` の `driver.rs` が行い、[`apply_reading`] / [`apply_failure`] で注入する。
 //! 状態・定数・文言は全対象 OS 分をここで定義し、後続の OS 実装（#899〜#902）は画面を触らない。
 //! OS 固有の操作 UI は置かない。Web の `requestPermission()` も「開始」と同じ同期区間で呼ぶため
 //! 専用ボタンは要らない。

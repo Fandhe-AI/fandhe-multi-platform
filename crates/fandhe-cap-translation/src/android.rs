@@ -218,7 +218,7 @@ extern "system" fn Java_com_fandhe_platform_TranslationHelper_nativeOnTranslatio
     }
 }
 
-/// Android の `TextTranslator` 実装を返す（`device/translation.rs` の dispatch から呼ばれる）。
+/// Android の `TextTranslator` 実装を返す（本 crate の `driver.rs` の dispatch から呼ばれる）。
 #[cfg(target_os = "android")]
 pub(crate) fn implementation() -> Arc<dyn TextTranslator> {
     Arc::new(AndroidTextTranslator)

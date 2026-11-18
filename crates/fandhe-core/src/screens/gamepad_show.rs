@@ -173,7 +173,7 @@ fn apply_alt_frame(state: &mut GamepadShowState, dt: f32) {
 }
 
 /// 玉が静止中か（`fandhe_cap_gamepad` が「傾き 0 かつ静止中は完了送信を
-/// スキップする」判定に使う、`device/tilt.rs::can_skip_send` と同じ考え方）。
+/// スキップする」判定に使う、`fandhe-cap-tilt-motion` の `driver.rs::can_skip_send` と同じ考え方）。
 pub fn is_at_rest(state: &GamepadShowState) -> bool {
     tilt_ball::is_at_rest(&state.ball)
 }

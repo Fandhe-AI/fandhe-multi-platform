@@ -1,4 +1,4 @@
-//! Windows 向け資格情報保存実装（Issue #923）。`device/secure_credential.rs` の
+//! Windows 向け資格情報保存実装（Issue #923）。本 crate の `driver.rs` の
 //! Windows 経路から呼ばれ、`crate::contract::SecureCredential` を
 //! WinRT `Windows.Security.Credentials.PasswordVault`（Credential Locker）で
 //! 実装する。macOS 実装（`apple_secure_credential.rs`、Keychain FFI）と異なり
