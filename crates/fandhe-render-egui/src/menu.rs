@@ -2,7 +2,8 @@
 //!
 //! 利用者が `ProxyAppDyn` を自前で実装しなくても、複数画面のアプリを組めるようにする。
 //! 別リポジトリの最小アプリ（#1177）が手で書いていたメニューを、入口 crate `fandhe` から使える部品にした。
-//! 子画面は選んだときに作り、メニューへ戻ると捨てる（画面の状態は持ち越さない）。
+//! 子画面は選んだときに作り、メニューへ戻ると捨てる（画面の状態は持ち越さない）。子の画面が処理しなかった
+//! 戻る操作（Esc・Android の戻る）でも一覧へ戻り、終了処理（`on_exit`）は表示中の子へ渡す。
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -71,6 +72,11 @@ impl EguiApp for Menu {
     fn update(&mut self, ctx: &egui::Context) {
         if let Some(child) = self.child.as_mut() {
             child.update(ctx);
+            // 子の画面が処理しなかった戻る操作（Esc・Android の戻る）でも一覧へ戻る。
+            if child.take_unhandled_back() {
+                self.child = None;
+                return;
+            }
             let top = self.inset_margin(ctx).top as f32;
             let mut back = false;
             egui::Area::new(egui::Id::new("fandhe_menu_back"))
@@ -88,15 +94,25 @@ impl EguiApp for Menu {
         egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
             ui.heading(&self.title);
             ui.add_space(12.0);
-            for (index, (label, _)) in self.screens.iter().enumerate() {
-                let button = egui::Button::new(label.as_str());
-                if ui.add_sized([ui.available_width(), 48.0], button).clicked() {
-                    picked = Some(index);
+            // 画面数に上限が無いため、収まらない分はスクロールで選べるようにする。
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                for (index, (label, _)) in self.screens.iter().enumerate() {
+                    let button = egui::Button::new(label.as_str());
+                    if ui.add_sized([ui.available_width(), 48.0], button).clicked() {
+                        picked = Some(index);
+                    }
                 }
-            }
+            });
         });
         if let Some(index) = picked {
             self.open(index);
+        }
+    }
+
+    /// 表示中の子の終了処理を呼ぶ（`ProxyApp::on_exit` は static に持つ端末資源を止める契約のため）。
+    fn on_exit(&mut self) {
+        if let Some(child) = self.child.as_mut() {
+            child.on_exit();
         }
     }
 }

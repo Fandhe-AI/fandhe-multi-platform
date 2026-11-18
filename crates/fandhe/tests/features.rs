@@ -30,7 +30,12 @@ fn every_capability_crate_has_a_feature_and_reexport() {
                 ),
             ),
             (&lib, format!("feature = \"{id}\"")),
-            (&lib, format!("\npub use fandhe_cap_{stem} as {stem};\n")),
+            (
+                &lib,
+                format!(
+                    "\npub mod {stem} {{\n    pub use fandhe_cap_{stem}::*;\n    #[allow(dead_code, hidden_glob_reexports)]\n    mod driver {{}}\n}}\n"
+                ),
+            ),
         ];
         for (text, needle) in checks {
             if !text.contains(&needle) {

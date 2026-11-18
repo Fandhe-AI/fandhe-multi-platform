@@ -30,7 +30,7 @@ crates.io では、公開する crate の通常依存も公開が要るためで
 
 | crate | 役割 | 公開 | 由来・担当 issue |
 |-------|------|------|-----------------|
-| `fandhe` | 入口。機能は optional 依存の feature で選ぶ。feature 名は対応表の id で、`fandhe::<stem>` に機能 crate の crate ルート（契約と状態型に依存しない入口）を出す。画面の組み立てと複数画面の切り替えは `fandhe::app`（`ProxyApp`・`Menu`）。web が n-a で wasm32 をコンパイルできない web-auth-session は wasm32 では出さない | する | #1199 |
+| `fandhe` | 入口。機能は optional 依存の feature で選ぶ。feature 名は対応表の id で、`fandhe::<stem>` に機能 crate の crate ルート（契約と状態型に依存しない入口）を出し、`driver` は覆い隠して届かなくする。画面の組み立てと複数画面の切り替えは `fandhe::app`（`ProxyApp`・`Menu`）。web が n-a で wasm32 をコンパイルできない web-auth-session は wasm32 では出さない | する | #1199 |
 | `#[fandhe::main]` 用の proc-macro crate（`fandhe-macros`、名前は仮） | 各 OS の入口を生成。proc-macro は別 crate が必須 | する | #1200 |
 | `cargo-fandhe` | Rust 製 CLI（`gen`・`run`・`build`） | する | #1176・#1201 |
 | `fandhe-core` | UI DSL・状態管理 | する | 既存 |

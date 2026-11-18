@@ -17,6 +17,13 @@
 //!
 //! 依存の向きは本 crate → 機能 crate・`fandhe-render-egui` → `fandhe-runtime` → `fandhe-core` の一方向。
 //!
+//! 機能ごとのモジュールは機能 crate の crate ルートを glob で再公開し、同名の非公開モジュール `driver` で
+//! 機能 crate の `driver` を覆い隠す（glob より明示の定義が優先される）。次の例は feature の有無によらずコンパイルできない。
+//!
+//! ```compile_fail,E0603
+//! use fandhe::clipboard::driver;
+//! ```
+//!
 //! 次の例は feature `clipboard` が無いとコンパイルできない（`tests/feature_gate.rs` が feature なしで確かめる）。
 //!
 #![cfg_attr(feature = "clipboard", doc = "```no_run")]
@@ -44,287 +51,855 @@ pub mod app {
 pub use egui;
 
 #[cfg(feature = "accessibility-prefs")]
-pub use fandhe_cap_accessibility_prefs as accessibility_prefs;
+pub mod accessibility_prefs {
+    pub use fandhe_cap_accessibility_prefs::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "activity-recognition")]
-pub use fandhe_cap_activity_recognition as activity_recognition;
+pub mod activity_recognition {
+    pub use fandhe_cap_activity_recognition::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "alarm")]
-pub use fandhe_cap_alarm as alarm;
+pub mod alarm {
+    pub use fandhe_cap_alarm::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "app-attest")]
-pub use fandhe_cap_app_attest as app_attest;
+pub mod app_attest {
+    pub use fandhe_cap_app_attest::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "app-badge")]
-pub use fandhe_cap_app_badge as app_badge;
+pub mod app_badge {
+    pub use fandhe_cap_app_badge::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "app-lifecycle")]
-pub use fandhe_cap_app_lifecycle as app_lifecycle;
+pub mod app_lifecycle {
+    pub use fandhe_cap_app_lifecycle::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "app-progress-attention")]
-pub use fandhe_cap_app_progress_attention as app_progress_attention;
+pub mod app_progress_attention {
+    pub use fandhe_cap_app_progress_attention::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "app-shortcuts")]
-pub use fandhe_cap_app_shortcuts as app_shortcuts;
+pub mod app_shortcuts {
+    pub use fandhe_cap_app_shortcuts::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "ar")]
-pub use fandhe_cap_ar as ar;
+pub mod ar {
+    pub use fandhe_cap_ar::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "audio-devices")]
-pub use fandhe_cap_audio_devices as audio_devices;
+pub mod audio_devices {
+    pub use fandhe_cap_audio_devices::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "audio-session")]
-pub use fandhe_cap_audio_session as audio_session;
+pub mod audio_session {
+    pub use fandhe_cap_audio_session::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "autofill-otp")]
-pub use fandhe_cap_autofill_otp as autofill_otp;
+pub mod autofill_otp {
+    pub use fandhe_cap_autofill_otp::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "background-download")]
-pub use fandhe_cap_background_download as background_download;
+pub mod background_download {
+    pub use fandhe_cap_background_download::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "background-task")]
-pub use fandhe_cap_background_task as background_task;
+pub mod background_task {
+    pub use fandhe_cap_background_task::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "background-upload")]
-pub use fandhe_cap_background_upload as background_upload;
+pub mod background_upload {
+    pub use fandhe_cap_background_upload::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "barcode-scan")]
-pub use fandhe_cap_barcode_scan as barcode_scan;
+pub mod barcode_scan {
+    pub use fandhe_cap_barcode_scan::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "biometric-auth")]
-pub use fandhe_cap_biometric_auth as biometric_auth;
+pub mod biometric_auth {
+    pub use fandhe_cap_biometric_auth::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "ble-peripheral")]
-pub use fandhe_cap_ble_peripheral as ble_peripheral;
+pub mod ble_peripheral {
+    pub use fandhe_cap_ble_peripheral::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "bluetooth-classic")]
-pub use fandhe_cap_bluetooth_classic as bluetooth_classic;
+pub mod bluetooth_classic {
+    pub use fandhe_cap_bluetooth_classic::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "bluetooth-le")]
-pub use fandhe_cap_bluetooth_le as bluetooth_le;
+pub mod bluetooth_le {
+    pub use fandhe_cap_bluetooth_le::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "calendar")]
-pub use fandhe_cap_calendar as calendar;
+pub mod calendar {
+    pub use fandhe_cap_calendar::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "call-ui")]
-pub use fandhe_cap_call_ui as call_ui;
+pub mod call_ui {
+    pub use fandhe_cap_call_ui::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "camera-capture")]
-pub use fandhe_cap_camera_capture as camera_capture;
+pub mod camera_capture {
+    pub use fandhe_cap_camera_capture::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "camera-preview-stream")]
-pub use fandhe_cap_camera_preview_stream as camera_preview_stream;
+pub mod camera_preview_stream {
+    pub use fandhe_cap_camera_preview_stream::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "capture-protection")]
-pub use fandhe_cap_capture_protection as capture_protection;
+pub mod capture_protection {
+    pub use fandhe_cap_capture_protection::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "car-display")]
-pub use fandhe_cap_car_display as car_display;
+pub mod car_display {
+    pub use fandhe_cap_car_display::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "clipboard")]
-pub use fandhe_cap_clipboard as clipboard;
+pub mod clipboard {
+    pub use fandhe_cap_clipboard::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "color-picker")]
-pub use fandhe_cap_color_picker as color_picker;
+pub mod color_picker {
+    pub use fandhe_cap_color_picker::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "companion-device")]
-pub use fandhe_cap_companion_device as companion_device;
+pub mod companion_device {
+    pub use fandhe_cap_companion_device::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "compass-heading")]
-pub use fandhe_cap_compass_heading as compass_heading;
+pub mod compass_heading {
+    pub use fandhe_cap_compass_heading::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "compose-mail-sms")]
-pub use fandhe_cap_compose_mail_sms as compose_mail_sms;
+pub mod compose_mail_sms {
+    pub use fandhe_cap_compose_mail_sms::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "contacts")]
-pub use fandhe_cap_contacts as contacts;
+pub mod contacts {
+    pub use fandhe_cap_contacts::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "deep-link")]
-pub use fandhe_cap_deep_link as deep_link;
+pub mod deep_link {
+    pub use fandhe_cap_deep_link::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "device-identifier")]
-pub use fandhe_cap_device_identifier as device_identifier;
+pub mod device_identifier {
+    pub use fandhe_cap_device_identifier::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "device-info")]
-pub use fandhe_cap_device_info as device_info;
+pub mod device_info {
+    pub use fandhe_cap_device_info::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "digital-credentials")]
-pub use fandhe_cap_digital_credentials as digital_credentials;
+pub mod digital_credentials {
+    pub use fandhe_cap_digital_credentials::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "display-refresh-hdr")]
-pub use fandhe_cap_display_refresh_hdr as display_refresh_hdr;
+pub mod display_refresh_hdr {
+    pub use fandhe_cap_display_refresh_hdr::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "document-scan")]
-pub use fandhe_cap_document_scan as document_scan;
+pub mod document_scan {
+    pub use fandhe_cap_document_scan::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "drag-drop")]
-pub use fandhe_cap_drag_drop as drag_drop;
+pub mod drag_drop {
+    pub use fandhe_cap_drag_drop::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "dynamic-type")]
-pub use fandhe_cap_dynamic_type as dynamic_type;
+pub mod dynamic_type {
+    pub use fandhe_cap_dynamic_type::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "environment-sensors")]
-pub use fandhe_cap_environment_sensors as environment_sensors;
+pub mod environment_sensors {
+    pub use fandhe_cap_environment_sensors::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "external-app-launch")]
-pub use fandhe_cap_external_app_launch as external_app_launch;
+pub mod external_app_launch {
+    pub use fandhe_cap_external_app_launch::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "eye-dropper")]
-pub use fandhe_cap_eye_dropper as eye_dropper;
+pub mod eye_dropper {
+    pub use fandhe_cap_eye_dropper::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "file-association")]
-pub use fandhe_cap_file_association as file_association;
+pub mod file_association {
+    pub use fandhe_cap_file_association::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "file-picker")]
-pub use fandhe_cap_file_picker as file_picker;
+pub mod file_picker {
+    pub use fandhe_cap_file_picker::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "file-preview")]
-pub use fandhe_cap_file_preview as file_preview;
+pub mod file_preview {
+    pub use fandhe_cap_file_preview::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "file-provider")]
-pub use fandhe_cap_file_provider as file_provider;
+pub mod file_provider {
+    pub use fandhe_cap_file_provider::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "file-watch")]
-pub use fandhe_cap_file_watch as file_watch;
+pub mod file_watch {
+    pub use fandhe_cap_file_watch::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "flashlight")]
-pub use fandhe_cap_flashlight as flashlight;
+pub mod flashlight {
+    pub use fandhe_cap_flashlight::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "focus-mode-status")]
-pub use fandhe_cap_focus_mode_status as focus_mode_status;
+pub mod focus_mode_status {
+    pub use fandhe_cap_focus_mode_status::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "foldable-posture")]
-pub use fandhe_cap_foldable_posture as foldable_posture;
+pub mod foldable_posture {
+    pub use fandhe_cap_foldable_posture::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "fullscreen-immersive")]
-pub use fandhe_cap_fullscreen_immersive as fullscreen_immersive;
+pub mod fullscreen_immersive {
+    pub use fandhe_cap_fullscreen_immersive::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "gamepad")]
-pub use fandhe_cap_gamepad as gamepad;
+pub mod gamepad {
+    pub use fandhe_cap_gamepad::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "geocoding-search")]
-pub use fandhe_cap_geocoding_search as geocoding_search;
+pub mod geocoding_search {
+    pub use fandhe_cap_geocoding_search::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "geofence")]
-pub use fandhe_cap_geofence as geofence;
+pub mod geofence {
+    pub use fandhe_cap_geofence::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "global-hotkey")]
-pub use fandhe_cap_global_hotkey as global_hotkey;
+pub mod global_hotkey {
+    pub use fandhe_cap_global_hotkey::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "haptics")]
-pub use fandhe_cap_haptics as haptics;
+pub mod haptics {
+    pub use fandhe_cap_haptics::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "health-data")]
-pub use fandhe_cap_health_data as health_data;
+pub mod health_data {
+    pub use fandhe_cap_health_data::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "home-widget")]
-pub use fandhe_cap_home_widget as home_widget;
+pub mod home_widget {
+    pub use fandhe_cap_home_widget::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "http-get")]
-pub use fandhe_cap_http_get as http_get;
+pub mod http_get {
+    pub use fandhe_cap_http_get::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "human-presence")]
-pub use fandhe_cap_human_presence as human_presence;
+pub mod human_presence {
+    pub use fandhe_cap_human_presence::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "image-generation")]
-pub use fandhe_cap_image_generation as image_generation;
+pub mod image_generation {
+    pub use fandhe_cap_image_generation::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "image-recognition")]
-pub use fandhe_cap_image_recognition as image_recognition;
+pub mod image_recognition {
+    pub use fandhe_cap_image_recognition::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "in-app-browser")]
-pub use fandhe_cap_in_app_browser as in_app_browser;
+pub mod in_app_browser {
+    pub use fandhe_cap_in_app_browser::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "in-app-review")]
-pub use fandhe_cap_in_app_review as in_app_review;
+pub mod in_app_review {
+    pub use fandhe_cap_in_app_review::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "lan-discovery")]
-pub use fandhe_cap_lan_discovery as lan_discovery;
+pub mod lan_discovery {
+    pub use fandhe_cap_lan_discovery::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "launch-at-login")]
-pub use fandhe_cap_launch_at_login as launch_at_login;
+pub mod launch_at_login {
+    pub use fandhe_cap_launch_at_login::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "live-activity")]
-pub use fandhe_cap_live_activity as live_activity;
+pub mod live_activity {
+    pub use fandhe_cap_live_activity::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "local-fonts")]
-pub use fandhe_cap_local_fonts as local_fonts;
+pub mod local_fonts {
+    pub use fandhe_cap_local_fonts::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "local-peer-connect")]
-pub use fandhe_cap_local_peer_connect as local_peer_connect;
+pub mod local_peer_connect {
+    pub use fandhe_cap_local_peer_connect::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "local-storage-kv")]
-pub use fandhe_cap_local_storage_kv as local_storage_kv;
+pub mod local_storage_kv {
+    pub use fandhe_cap_local_storage_kv::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "location")]
-pub use fandhe_cap_location as location;
+pub mod location {
+    pub use fandhe_cap_location::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "managed-app-config")]
-pub use fandhe_cap_managed_app_config as managed_app_config;
+pub mod managed_app_config {
+    pub use fandhe_cap_managed_app_config::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "map-view")]
-pub use fandhe_cap_map_view as map_view;
+pub mod map_view {
+    pub use fandhe_cap_map_view::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "media-cast")]
-pub use fandhe_cap_media_cast as media_cast;
+pub mod media_cast {
+    pub use fandhe_cap_media_cast::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "media-playback")]
-pub use fandhe_cap_media_playback as media_playback;
+pub mod media_playback {
+    pub use fandhe_cap_media_playback::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "media-transcode")]
-pub use fandhe_cap_media_transcode as media_transcode;
+pub mod media_transcode {
+    pub use fandhe_cap_media_transcode::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "memory-pressure")]
-pub use fandhe_cap_memory_pressure as memory_pressure;
+pub mod memory_pressure {
+    pub use fandhe_cap_memory_pressure::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "mic-record")]
-pub use fandhe_cap_mic_record as mic_record;
+pub mod mic_record {
+    pub use fandhe_cap_mic_record::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "midi")]
-pub use fandhe_cap_midi as midi;
+pub mod midi {
+    pub use fandhe_cap_midi::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "ml-inference")]
-pub use fandhe_cap_ml_inference as ml_inference;
+pub mod ml_inference {
+    pub use fandhe_cap_ml_inference::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "motion-raw-sensors")]
-pub use fandhe_cap_motion_raw_sensors as motion_raw_sensors;
+pub mod motion_raw_sensors {
+    pub use fandhe_cap_motion_raw_sensors::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "multi-display")]
-pub use fandhe_cap_multi_display as multi_display;
+pub mod multi_display {
+    pub use fandhe_cap_multi_display::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "music-library")]
-pub use fandhe_cap_music_library as music_library;
+pub mod music_library {
+    pub use fandhe_cap_music_library::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "network-status")]
-pub use fandhe_cap_network_status as network_status;
+pub mod network_status {
+    pub use fandhe_cap_network_status::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "nfc")]
-pub use fandhe_cap_nfc as nfc;
+pub mod nfc {
+    pub use fandhe_cap_nfc::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "nfc-card-emulation")]
-pub use fandhe_cap_nfc_card_emulation as nfc_card_emulation;
+pub mod nfc_card_emulation {
+    pub use fandhe_cap_nfc_card_emulation::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "nlp")]
-pub use fandhe_cap_nlp as nlp;
+pub mod nlp {
+    pub use fandhe_cap_nlp::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "notification")]
-pub use fandhe_cap_notification as notification;
+pub mod notification {
+    pub use fandhe_cap_notification::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "now-playing-controls")]
-pub use fandhe_cap_now_playing_controls as now_playing_controls;
+pub mod now_playing_controls {
+    pub use fandhe_cap_now_playing_controls::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "on-device-llm")]
-pub use fandhe_cap_on_device_llm as on_device_llm;
+pub mod on_device_llm {
+    pub use fandhe_cap_on_device_llm::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "open-in-shell")]
-pub use fandhe_cap_open_in_shell as open_in_shell;
+pub mod open_in_shell {
+    pub use fandhe_cap_open_in_shell::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "open-system-settings")]
-pub use fandhe_cap_open_system_settings as open_system_settings;
+pub mod open_system_settings {
+    pub use fandhe_cap_open_system_settings::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "passkey-signin")]
-pub use fandhe_cap_passkey_signin as passkey_signin;
+pub mod passkey_signin {
+    pub use fandhe_cap_passkey_signin::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "payment-request")]
-pub use fandhe_cap_payment_request as payment_request;
+pub mod payment_request {
+    pub use fandhe_cap_payment_request::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "pdf-viewer")]
-pub use fandhe_cap_pdf_viewer as pdf_viewer;
+pub mod pdf_viewer {
+    pub use fandhe_cap_pdf_viewer::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "pedometer")]
-pub use fandhe_cap_pedometer as pedometer;
+pub mod pedometer {
+    pub use fandhe_cap_pedometer::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "pen-stylus")]
-pub use fandhe_cap_pen_stylus as pen_stylus;
+pub mod pen_stylus {
+    pub use fandhe_cap_pen_stylus::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "per-app-language")]
-pub use fandhe_cap_per_app_language as per_app_language;
+pub mod per_app_language {
+    pub use fandhe_cap_per_app_language::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "photo-library")]
-pub use fandhe_cap_photo_library as photo_library;
+pub mod photo_library {
+    pub use fandhe_cap_photo_library::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "photo-picker")]
-pub use fandhe_cap_photo_picker as photo_picker;
+pub mod photo_picker {
+    pub use fandhe_cap_photo_picker::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "picture-in-picture")]
-pub use fandhe_cap_picture_in_picture as picture_in_picture;
+pub mod picture_in_picture {
+    pub use fandhe_cap_picture_in_picture::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "power-state")]
-pub use fandhe_cap_power_state as power_state;
+pub mod power_state {
+    pub use fandhe_cap_power_state::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "print")]
-pub use fandhe_cap_print as print;
+pub mod print {
+    pub use fandhe_cap_print::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "quick-settings-tile")]
-pub use fandhe_cap_quick_settings_tile as quick_settings_tile;
+pub mod quick_settings_tile {
+    pub use fandhe_cap_quick_settings_tile::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "radio-control")]
-pub use fandhe_cap_radio_control as radio_control;
+pub mod radio_control {
+    pub use fandhe_cap_radio_control::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "recent-documents")]
-pub use fandhe_cap_recent_documents as recent_documents;
+pub mod recent_documents {
+    pub use fandhe_cap_recent_documents::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "removable-storage")]
-pub use fandhe_cap_removable_storage as removable_storage;
+pub mod removable_storage {
+    pub use fandhe_cap_removable_storage::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "safe-area-insets")]
-pub use fandhe_cap_safe_area_insets as safe_area_insets;
+pub mod safe_area_insets {
+    pub use fandhe_cap_safe_area_insets::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "scanner-devices")]
-pub use fandhe_cap_scanner_devices as scanner_devices;
+pub mod scanner_devices {
+    pub use fandhe_cap_scanner_devices::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "screen-brightness")]
-pub use fandhe_cap_screen_brightness as screen_brightness;
+pub mod screen_brightness {
+    pub use fandhe_cap_screen_brightness::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "screen-capture")]
-pub use fandhe_cap_screen_capture as screen_capture;
+pub mod screen_capture {
+    pub use fandhe_cap_screen_capture::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "screen-orientation")]
-pub use fandhe_cap_screen_orientation as screen_orientation;
+pub mod screen_orientation {
+    pub use fandhe_cap_screen_orientation::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "screen-wake-lock")]
-pub use fandhe_cap_screen_wake_lock as screen_wake_lock;
+pub mod screen_wake_lock {
+    pub use fandhe_cap_screen_wake_lock::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "secure-credential")]
-pub use fandhe_cap_secure_credential as secure_credential;
+pub mod secure_credential {
+    pub use fandhe_cap_secure_credential::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "serial-port")]
-pub use fandhe_cap_serial_port as serial_port;
+pub mod serial_port {
+    pub use fandhe_cap_serial_port::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "share-receive")]
-pub use fandhe_cap_share_receive as share_receive;
+pub mod share_receive {
+    pub use fandhe_cap_share_receive::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "share-sheet")]
-pub use fandhe_cap_share_sheet as share_sheet;
+pub mod share_sheet {
+    pub use fandhe_cap_share_sheet::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "sleep-lock-events")]
-pub use fandhe_cap_sleep_lock_events as sleep_lock_events;
+pub mod sleep_lock_events {
+    pub use fandhe_cap_sleep_lock_events::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "smart-home")]
-pub use fandhe_cap_smart_home as smart_home;
+pub mod smart_home {
+    pub use fandhe_cap_smart_home::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "sound-classification")]
-pub use fandhe_cap_sound_classification as sound_classification;
+pub mod sound_classification {
+    pub use fandhe_cap_sound_classification::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "speech-recognition")]
-pub use fandhe_cap_speech_recognition as speech_recognition;
+pub mod speech_recognition {
+    pub use fandhe_cap_speech_recognition::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "spell-check")]
-pub use fandhe_cap_spell_check as spell_check;
+pub mod spell_check {
+    pub use fandhe_cap_spell_check::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "spotlight-index")]
-pub use fandhe_cap_spotlight_index as spotlight_index;
+pub mod spotlight_index {
+    pub use fandhe_cap_spotlight_index::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "system-accent-color")]
-pub use fandhe_cap_system_accent_color as system_accent_color;
+pub mod system_accent_color {
+    pub use fandhe_cap_system_accent_color::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "system-sound")]
-pub use fandhe_cap_system_sound as system_sound;
+pub mod system_sound {
+    pub use fandhe_cap_system_sound::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "system-tray")]
-pub use fandhe_cap_system_tray as system_tray;
+pub mod system_tray {
+    pub use fandhe_cap_system_tray::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "tilt-motion")]
-pub use fandhe_cap_tilt_motion as tilt_motion;
+pub mod tilt_motion {
+    pub use fandhe_cap_tilt_motion::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "translation")]
-pub use fandhe_cap_translation as translation;
+pub mod translation {
+    pub use fandhe_cap_translation::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "tts")]
-pub use fandhe_cap_tts as tts;
+pub mod tts {
+    pub use fandhe_cap_tts::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "url-scheme")]
-pub use fandhe_cap_url_scheme as url_scheme;
+pub mod url_scheme {
+    pub use fandhe_cap_url_scheme::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "usb-device")]
-pub use fandhe_cap_usb_device as usb_device;
+pub mod usb_device {
+    pub use fandhe_cap_usb_device::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "user-idle")]
-pub use fandhe_cap_user_idle as user_idle;
+pub mod user_idle {
+    pub use fandhe_cap_user_idle::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "uwb-ranging")]
-pub use fandhe_cap_uwb_ranging as uwb_ranging;
+pub mod uwb_ranging {
+    pub use fandhe_cap_uwb_ranging::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "video-capture")]
-pub use fandhe_cap_video_capture as video_capture;
+pub mod video_capture {
+    pub use fandhe_cap_video_capture::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "video-transcode")]
-pub use fandhe_cap_video_transcode as video_transcode;
+pub mod video_transcode {
+    pub use fandhe_cap_video_transcode::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "volume-control")]
-pub use fandhe_cap_volume_control as volume_control;
+pub mod volume_control {
+    pub use fandhe_cap_volume_control::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "wallpaper-set")]
-pub use fandhe_cap_wallpaper_set as wallpaper_set;
+pub mod wallpaper_set {
+    pub use fandhe_cap_wallpaper_set::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 // web は対応表で n-a。機能 crate が wasm32 でコンパイルできないため、wasm32 では出さない（Cargo.toml 参照）。
 #[cfg(all(feature = "web-auth-session", not(target_arch = "wasm32")))]
-pub use fandhe_cap_web_auth_session as web_auth_session;
+pub mod web_auth_session {
+    pub use fandhe_cap_web_auth_session::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "wifi-connect")]
-pub use fandhe_cap_wifi_connect as wifi_connect;
+pub mod wifi_connect {
+    pub use fandhe_cap_wifi_connect::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "wifi-info")]
-pub use fandhe_cap_wifi_info as wifi_info;
+pub mod wifi_info {
+    pub use fandhe_cap_wifi_info::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
 #[cfg(feature = "window-management")]
-pub use fandhe_cap_window_management as window_management;
+pub mod window_management {
+    pub use fandhe_cap_window_management::*;
+    #[allow(dead_code, hidden_glob_reexports)]
+    mod driver {}
+}
