@@ -307,8 +307,10 @@ targets:
         INFOPLIST_FILE: ../../crates/fandhe-gallery/gen/ios/extensions/FandheLiveActivity/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.iosapp.liveactivity
         PRODUCT_NAME: FandheLiveActivity
+        # 版は本体（gen の Info.plist。crate の version）と一致させる。scripts/ios/build-simulator-app.sh が
+        # 本体の値を xcodebuild のビルド設定で上書きする。ここは Xcode から直接開いたときの既定値。
         MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        CURRENT_PROJECT_VERSION: "0.1.0"
         CODE_SIGN_STYLE: Automatic
 
 # 署名チーム（DEVELOPMENT_TEAM）注入について:

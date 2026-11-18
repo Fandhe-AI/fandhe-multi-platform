@@ -201,8 +201,22 @@ build_live_activity_extension() {
   echo "[build-simulator-app] ライブアクティビティ拡張をビルド（ARCHS=${archs}）"
   xcodegen generate --spec "${repo_root}/platforms/apple/project.yml" --project "${repo_root}/platforms/apple" >/dev/null
   rm -rf "${live_activity_build_dir}"
+  # 埋め込む拡張の版（CFBundleShortVersionString・CFBundleVersion）は本体と一致させる（Apple のバンドル要件）。
+  # 本体の Info.plist は gen が crate の version から作るため、その値を xcodebuild のビルド設定で拡張へ渡す（#1194）。
+  local versions marketing_version build_version
+  versions="$(python3 - "${info_plist_src}" <<'PYEOF'
+import plistlib
+import sys
+
+with open(sys.argv[1], "rb") as f:
+    p = plistlib.load(f)
+print(p["CFBundleShortVersionString"], p["CFBundleVersion"])
+PYEOF
+  )"
+  read -r marketing_version build_version <<<"${versions}"
   xcodebuild -project "${repo_root}/platforms/apple/Fandhe.xcodeproj" -target FandheLiveActivity \
     -sdk iphonesimulator -configuration Release CODE_SIGNING_ALLOWED=NO "ARCHS=${archs}" \
+    "MARKETING_VERSION=${marketing_version}" "CURRENT_PROJECT_VERSION=${build_version}" \
     "SYMROOT=${live_activity_build_dir}/build" "OBJROOT=${live_activity_build_dir}/obj" build >/dev/null
   if [[ ! -d "${live_activity_appex}" ]]; then
     echo "[build-simulator-app] エラー: 拡張の成果物が見つからない: ${live_activity_appex}" >&2
