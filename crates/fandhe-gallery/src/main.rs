@@ -43,11 +43,12 @@ fn main() -> Result<(), fandhe_render_egui::LaunchError> {
 }
 
 /// コールドスタート計測（iOS）。ログ出力後もアプリを続け、終了は OS のライフサイクルに任せる。
+/// 計測の起点は起動前の登録・終了処理の登録の後（移行前の `ios::run` と同じ位置。計測結果の比較可能性を保つ）。
 #[cfg(all(target_os = "ios", feature = "cold-start-probe"))]
 fn main() -> Result<(), fandhe_render_egui::LaunchError> {
-    let start = std::time::Instant::now();
     fandhe::__private::before_launch();
     fandhe::__private::register_teardown_hooks();
+    let start = std::time::Instant::now();
     fandhe_render_egui::launch::run_ios("fandhe-gallery", move |lc| {
         fandhe_runtime::set_repaint_waker(std::sync::Arc::new(
             fandhe_render_egui::app::EguiWaker::new(lc.egui_ctx().clone()),
