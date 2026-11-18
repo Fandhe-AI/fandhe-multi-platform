@@ -7,7 +7,7 @@
 //! `windows`）を 1 つに集める。macOS・iOS・Android・Windows は結果が非同期に届く pull 型の bridge（`RequestSlot`）で受け、
 //! `MicRecorder` トレイトを通らない（入口 [`platform_mic_record`] は `Unsupported` 固定の同期実装を返し、成功を偽装しない）。
 //! 画面の状態型に依存しない非同期の入口は [`begin_mic_record`]（開始）・[`request_stop_mic_record`]（停止要求）・[`poll_mic_record`]（結果を 1 度だけ取得）・[`discard_mic_record`]（取り出さない要求を捨てる）。
-//! 画面 effect と同じ slot を共有し、進行中は busy。公開側の未取得の結果は守り、画面側の届いた未取得の結果は公開入口が置き換える。画面の状態型を参照してよいのは `driver` だけ。
+//! 画面 effect と同じ slot を共有し、進行中は busy。公開側の未取得の結果は守り、画面側の届いた未取得の結果は公開入口の開始が捨てずに画面の受け取り待ちへ移す（画面はそのまま受け取る）。画面の状態型を参照してよいのは `driver` だけ。
 //!
 //! 呼び出し元は最終成果物（`fandhe-gallery`）の画面レジストリ（`mic_record_effect`）と、画面状態が再生成で初期化される構成の
 //! [`reset_pending_tracking`]（Android、任意）。保留中の要求の回収（再生成の引き継ぎ・終了時の中断）は Java 側がこの crate 内で完結する。

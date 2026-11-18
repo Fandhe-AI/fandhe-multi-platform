@@ -156,7 +156,7 @@ fn mobile_outcome(
 ///
 /// 画面 effect と公開入口（[`begin_photo_pick`] / [`poll_photo_pick`]）が同じ slot を共有する。持ち主（[`bridge::SCREEN_OWNER`]・
 /// [`bridge::PUBLIC_OWNER`]）で自分の分の要求を区別し、
-/// 進行中の要求は busy で断り、公開側の未取得の結果は守る。画面側の届いた未取得の結果は公開入口が置き換え、置き換えられた画面は lost の失敗になる（成功にはならない）。
+/// 進行中の要求は busy で断り、公開側の未取得の結果は守る。画面側の届いた未取得の結果は、公開入口の開始が捨てずに画面の受け取り待ちへ移し、画面はそのまま受け取る（`SlotOwner::begin_parking`）。
 /// 画面の結果は復号確認済みの画素、公開入口の結果は [`validate_photo`] 済みの [`PickedPhoto`]（同期の [`PhotoPicker`] と同じ。
 /// 復号は保証しない）で、どちらを置くかは `deliver` が持ち主で決める。
 ///
@@ -196,10 +196,11 @@ pub(crate) mod bridge {
         SCREEN_OWNER.begin_keeping_foreign(&SLOT)
     }
 
-    /// 公開入口の要求を登録する。進行中の要求と自分の未取得の結果があれば `None`（busy）。画面側の届いた未取得の結果は置き換える
-    /// （画面の effect が回らず取り出されないままでも公開入口が詰まらないため。置き換えられた画面の poll は lost の失敗になる。結果の到着から poll までの間に呼ばれても置き換え、画面の本物の成功結果が lost の失敗として報告される。成功には化けない）。
+    /// 公開入口の要求を登録する。進行中の要求と自分の未取得の結果があれば `None`（busy）。画面側の届いた未取得の結果は捨てずに
+    /// 画面の受け取り待ちへ移して始める（画面の effect が回らず取り出されないままでも詰まらず、生きている画面の結果も失わない）。
+    /// 移した結果は画面の poll がそのまま受け取り、受け取られない分は画面の次の開始か Android の resetで解放される（残るのは最大 1 件）。
     pub(crate) fn begin_public() -> Option<u64> {
-        PUBLIC_OWNER.begin_excluding(&SLOT, &[&PUBLIC_OWNER])
+        PUBLIC_OWNER.begin_parking(&SLOT, &SCREEN_OWNER)
     }
 
     /// 公開入口の提示依頼が同期的に失敗したときに、登録を取り消す。
@@ -287,8 +288,8 @@ fn public_outcome(
 /// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。画面 effect と slot を共有する。
 ///
 /// - 進行中の要求は busy で断る。
-/// - 画面側の届いた未取得の結果は公開入口が置き換える（画面が描かれず取り出されないままでも詰まらない）。置き換えられた画面が後で poll すると lost の失敗になり、成功にはならない。
-///   結果が届いてから次フレームの poll までの間に公開入口を始めた場合も、画面の本物の成功結果が置き換えで lost の失敗として報告される（失敗側に倒れ、成功には化けない）。
+/// - 画面側の届いた未取得の結果があっても断らない（画面が描かれず取り出されないままでも詰まらない）。結果は捨てずに画面の受け取り待ちへ移し、
+///   画面はそのまま受け取る（結果が届いてから次フレームの poll までの間に始めても、画面の結果は失われない）。受け取られない分は画面の次の開始か Android の resetで解放される（残るのは最大 1 件）。
 /// - 自分の未取得の結果があれば `Internal("photo_picker busy")` で断る。
 /// - OS 側のピッカーが進行中のとき
 ///   （[`discard_photo_pick`] で捨てた後を含む）も、OS の観測（Android は追跡中の要求、iOS は提示中のピッカー）で busy になる。
@@ -409,7 +410,7 @@ fn drive_mobile(state: &PhotoPickState, sender: &CompletionSender<PhotoPickState
         sender,
         |_| {},
         move |s: &mut PhotoPickState, outcome| {
-            // 既に `Idle` へ戻っていれば反映せず slot に残す（`false`。残った結果は公開入口・画面の次の開始が置き換える）。別世代は反映せず畳む。
+            // 既に `Idle` へ戻っていれば反映せず slot に残す（`false`。残った結果は公開入口の開始で画面の受け取り待ちへ移り、画面の次の開始で解放される）。別世代は反映せず畳む。
             if s.phase == PickPhase::Idle {
                 return false;
             }
@@ -644,38 +645,63 @@ mod tests {
         g
     }
 
-    /// 起床を捨てるだけの waker（置き去り画面の poll を直接確かめるテスト用）。
-    struct LostWaker;
-    impl fandhe_runtime::RepaintWaker for LostWaker {
+    /// 起床を捨てるだけの waker（画面の poll を直接確かめるテスト用）。
+    struct PollWaker;
+    impl fandhe_runtime::RepaintWaker for PollWaker {
         fn wake(&self) {}
         fn wake_after(&self, _delay: std::time::Duration) {}
     }
 
-    /// 画面の届いた未取得の結果は公開入口が置き換え、置き換えられた画面が後で poll すると lost の失敗になる（成功値は反映されない）。
+    /// 画面の開始 → 結果の到着 → 公開入口の開始 → 画面の poll の順でも、画面は届いた結果をそのまま受け取り（lost にならない）、
+    /// 公開入口もその後に自分の結果を受け取れる。
     #[test]
-    fn public_begin_replaces_unpolled_screen_result_and_screen_poll_is_lost() {
+    fn public_begin_parks_unpolled_screen_result_for_screen() {
         let _g = lock();
         let screen = bridge::begin_screen().unwrap();
         assert!(bridge::deliver(screen, Ok(Some(file(png(8, 4))))));
-        let public = bridge::begin_public().expect("画面の取り出されない結果で詰まらない");
+        let public = bridge::begin_public().expect("画面の未取得の結果で詰まらない");
         assert_ne!(public, screen);
-        // 古い画面の id への配送は捨てられる。
-        assert!(!bridge::deliver(screen, Ok(Some(file(png(8, 4))))));
+        // 受け取り待ちへ移した画面の id へ重ねて配送しても捨てられる。
+        assert!(!bridge::deliver(screen, Ok(None)));
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(LostWaker));
+        let sender = fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(PollWaker));
         fandhe_runtime::request_slot::poll_and_finish_owned(
             &bridge::SLOT,
             &bridge::SCREEN_OWNER,
             &sender,
             |_| panic!("待機にはならない"),
-            |_s: &mut u8, _o| panic!("成功値は反映されない"),
-            |s: &mut u8| *s = 9,
+            |s: &mut u8, o| {
+                assert!(matches!(&o, bridge::Outcome::Screen(Ok(Some(_)))));
+                *s = 7;
+                true
+            },
+            |_s: &mut u8| panic!("lost にならない"),
         );
         let mut state = 0u8;
-        rx.try_recv().expect("on_lost が送られる")(&mut state);
-        assert_eq!(state, 9);
+        rx.try_recv().expect("画面の結果が送られる")(&mut state);
+        assert_eq!(state, 7);
         assert_eq!(bridge::SCREEN_OWNER.current(), 0);
-        assert!(rx.try_recv().is_err());
+        assert!(bridge::SLOT.snapshot_of(screen).is_none());
+        // 公開入口の結果は画面へ渡らず、公開入口が受け取る。
+        assert!(bridge::deliver(public, Ok(Some(file(png(8, 4))))));
+        assert!(bridge::poll_public(public).is_some());
+        bridge::reset();
+    }
+
+    /// 画面が受け取らないまま残った受け取り待ちの結果は、画面の次の開始で解放される。
+    #[test]
+    fn parked_screen_result_is_released_by_next_screen_begin() {
+        let _g = lock();
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::deliver(screen, Ok(Some(file(png(8, 4))))));
+        let public = bridge::begin_public().unwrap();
+        assert!(bridge::deliver(public, Ok(Some(file(png(8, 4))))));
+        assert!(bridge::poll_public(public).is_some());
+        let next = bridge::begin_screen().expect("公開入口が受け取った後は開始できる");
+        assert!(bridge::SLOT.snapshot_of(screen).is_none());
+        assert_eq!(bridge::SCREEN_OWNER.current(), next);
+        bridge::SLOT.clear(next);
+        bridge::SCREEN_OWNER.release(next);
         bridge::reset();
     }
 
@@ -702,7 +728,7 @@ mod tests {
         bridge::reset();
     }
 
-    /// 公開入口の要求は画面と排他で、進行中も結果の未取得も画面側が落とさない。画面の要求も公開入口が置き換えない。
+    /// 公開入口の要求は画面と排他で、進行中も結果の未取得も画面側が落とさない。画面の進行中の要求も公開入口が置き換えない。
     #[test]
     fn public_request_is_exclusive_with_screen_and_polled_once() {
         let _g = lock();

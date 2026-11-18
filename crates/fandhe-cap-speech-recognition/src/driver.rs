@@ -287,12 +287,11 @@ pub(crate) mod bridge {
         SCREEN_OWNER.begin_keeping_foreign(&SLOT)
     }
 
-    /// 公開入口の開始（進行中の要求と、自分の未取得の結果は置き換えない。画面側の届いた結果は置き換える）。
-    /// 画面の effect が回らず結果が取り出されないままでも、公開入口が busy のまま残らないため。
-    /// 置き換えられた画面が後で poll すると lost の失敗になる（`poll_and_finish_owned`）。
-    /// 結果の到着から poll までの間に呼ばれても置き換え、画面の本物の成功結果が lost の失敗として報告される（成功には化けない）。
+    /// 公開入口の開始（進行中の要求と、自分の未取得の結果は置き換えない）。画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移す。
+    /// 画面の effect が回らず結果が取り出されないままでも公開入口が busy のまま残らず、生きている画面の結果も失わないため。
+    /// 移した結果は画面の poll（`poll_and_finish_owned`）がそのまま受け取り、受け取られない分は画面の次の開始か Android の resetで解放される（残るのは最大 1 件）。
     pub(crate) fn begin_public() -> Option<u64> {
-        PUBLIC_OWNER.begin_excluding(&SLOT, &[&PUBLIC_OWNER])
+        PUBLIC_OWNER.begin_parking(&SLOT, &SCREEN_OWNER)
     }
 
     /// 実際にネイティブ側の聞き取りが開始した request_id（`0` は「まだ未開始」の
@@ -486,7 +485,7 @@ fn drive_callback(state: &SpeechRecognizeState, sender: &CompletionSender<Speech
                 false
             }
         },
-        // 自分の要求が置き換わった・reset で失われた。待ち続けず失敗で終える（Idle なら何もしない）。
+        // 自分の要求が受け口にも受け取り待ちにも無い（reset で失われた）。待ち続けず失敗で終える（Idle なら何もしない）。
         move |s: &mut SpeechRecognizeState| {
             if s.phase != ListenPhase::Idle {
                 let message =
@@ -596,8 +595,8 @@ fn clamp_max_listen(d: std::time::Duration) -> Result<std::time::Duration, Speec
 /// 上限（30 秒）を超える分は上限へ丸める。1 プロセスに 1 要求で、画面 effect と slot を共有する。
 ///
 /// - 進行中の要求は busy で断る。
-/// - 画面側の届いた未取得の結果は公開入口が置き換える（画面が描かれず取り出されないままでも詰まらない）。置き換えられた画面が後で poll すると lost の失敗になり、成功にはならない。
-///   結果が届いてから次フレームの poll までの間に公開入口を始めた場合も、画面の本物の成功結果が置き換えで lost の失敗として報告される（失敗側に倒れ、成功には化けない）。
+/// - 画面側の届いた未取得の結果があっても断らない（画面が描かれず取り出されないままでも詰まらない）。結果は捨てずに画面の受け取り待ちへ移し、
+///   画面はそのまま受け取る（結果が届いてから次フレームの poll までの間に始めても、画面の結果は失われない）。受け取られない分は画面の次の開始か Android の resetで解放される（残るのは最大 1 件）。
 /// - 自分の未取得の結果があるうちは `Internal`（busy）で断る。
 /// - 画面 effect 側も、この入口の進行中・未取得の
 ///   要求があれば置き換えず処理中の失敗で終える。依頼自体の失敗は `Err`（結果は届かない）。権限の確認は OS が行い、拒否は結果に
@@ -1116,42 +1115,77 @@ mod tests {
         bridge::reset();
     }
 
-    /// 起床を捨てるだけの waker（置き去り画面の poll を直接確かめるテスト用）。
+    /// 起床を捨てるだけの waker（画面の poll を直接確かめるテスト用）。
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
-    struct LostWaker;
+    struct PollWaker;
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
-    impl fandhe_runtime::RepaintWaker for LostWaker {
+    impl fandhe_runtime::RepaintWaker for PollWaker {
         fn wake(&self) {}
         fn wake_after(&self, _delay: std::time::Duration) {}
     }
 
-    /// 画面の届いた未取得の結果は公開入口が置き換え、置き換えられた画面が後で poll すると lost の失敗になる（成功値は反映されない）。
+    /// 画面の開始 → 結果の到着 → 公開入口の開始 → 画面の poll の順でも、画面は届いた結果をそのまま受け取り（lost にならない）、
+    /// 公開入口もその後に自分の結果を受け取れる。
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
     #[test]
-    fn public_begin_replaces_unpolled_screen_result_and_screen_poll_is_lost() {
+    fn public_begin_parks_unpolled_screen_result_for_screen() {
         let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         bridge::reset();
         let screen = bridge::begin_screen().unwrap();
-        assert!(bridge::deliver(screen, error_from_code(4)));
-        let public = bridge::begin_public().expect("画面の取り出されない結果で詰まらない");
+        assert!(bridge::deliver(
+            screen,
+            Ok(crate::contract::SpeechOutcome::Recognized("a".to_string()))
+        ));
+        let public = bridge::begin_public().expect("画面の未取得の結果で詰まらない");
         assert_ne!(public, screen);
-        // 古い画面の id への配送は捨てられる。
+        // 受け取り待ちへ移した画面の id へ重ねて配送しても捨てられる。
         assert!(!bridge::deliver(screen, error_from_code(4)));
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(LostWaker));
+        let sender = fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(PollWaker));
         fandhe_runtime::request_slot::poll_and_finish_owned(
             &bridge::SLOT,
             &bridge::SCREEN_OWNER,
             &sender,
             |_| panic!("待機にはならない"),
-            |_s: &mut u8, _o| panic!("成功値は反映されない"),
-            |s: &mut u8| *s = 9,
+            |s: &mut u8, o| {
+                assert!(
+                    matches!(&o, Ok(crate::contract::SpeechOutcome::Recognized(t)) if t == "a")
+                );
+                *s = 7;
+                true
+            },
+            |_s: &mut u8| panic!("lost にならない"),
         );
         let mut state = 0u8;
-        rx.try_recv().expect("on_lost が送られる")(&mut state);
-        assert_eq!(state, 9);
+        rx.try_recv().expect("画面の結果が送られる")(&mut state);
+        assert_eq!(state, 7);
         assert_eq!(bridge::SCREEN_OWNER.current(), 0);
-        assert!(rx.try_recv().is_err());
+        assert!(bridge::SLOT.snapshot_of(screen).is_none());
+        // 公開入口の結果は画面へ渡らず、公開入口が受け取る。
+        assert!(bridge::deliver(public, error_from_code(4)));
+        assert!(poll_speech_recognition(public).is_some());
+        bridge::reset();
+    }
+
+    /// 画面が受け取らないまま残った受け取り待ちの結果は、画面の次の開始で解放される。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
+    #[test]
+    fn parked_screen_result_is_released_by_next_screen_begin() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::deliver(
+            screen,
+            Ok(crate::contract::SpeechOutcome::Recognized("a".to_string()))
+        ));
+        let public = bridge::begin_public().unwrap();
+        assert!(bridge::deliver(public, error_from_code(4)));
+        assert!(poll_speech_recognition(public).is_some());
+        let next = bridge::begin_screen().expect("公開入口が受け取った後は開始できる");
+        assert!(bridge::SLOT.snapshot_of(screen).is_none());
+        assert_eq!(bridge::SCREEN_OWNER.current(), next);
+        bridge::SLOT.clear(next);
+        bridge::SCREEN_OWNER.release(next);
         bridge::reset();
     }
 

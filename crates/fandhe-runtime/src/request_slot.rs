@@ -28,6 +28,13 @@ struct Pending<O> {
     ready: Option<O>,
 }
 
+/// slot の中身。`current` は受け口の要求 1 件、`parked` は公開入口の開始で受け口から移した「画面の受け取り待ち」の結果
+/// （[`SlotOwner::begin_parking`] だけが置く。それ以外の入口しか使わない機能では常に `None`）。両方を 1 つのロックで守る。
+struct Inner<O> {
+    current: Option<Pending<O>>,
+    parked: Option<Pending<O>>,
+}
+
 /// 1 機能ぶんの「要求 1 件の追跡」。`O` は画面へ反映する完了結果の型
 /// （機能ごとの facade が `to_outcome` 変換済みの値を渡す）。
 ///
@@ -35,7 +42,7 @@ struct Pending<O> {
 /// カウンタにまとめない: OS 側（Java の `static long` 等）が見る request_id の
 /// 系列を機能をまたいで変えないため（既存 3 実装の挙動を保つ）。
 pub struct RequestSlot<O> {
-    pending: Mutex<Option<Pending<O>>>,
+    pending: Mutex<Inner<O>>,
     /// 0 は「未要求」の番兵として使わない（既存 3 実装と同じ）。
     next_request_id: AtomicU64,
 }
@@ -45,19 +52,22 @@ impl<O> RequestSlot<O> {
     #[allow(clippy::new_without_default)]
     pub const fn new() -> Self {
         Self {
-            pending: Mutex::new(None),
+            pending: Mutex::new(Inner {
+                current: None,
+                parked: None,
+            }),
             next_request_id: AtomicU64::new(1),
         }
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, Option<Pending<O>>> {
+    fn lock(&self) -> std::sync::MutexGuard<'_, Inner<O>> {
         self.pending.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     /// 提示直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
     pub fn begin(&self) -> u64 {
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
-        *self.lock() = Some(Pending {
+        self.lock().current = Some(Pending {
             request_id,
             ready: None,
         });
@@ -73,7 +83,7 @@ impl<O> RequestSlot<O> {
     pub fn begin_with(&self, request_id: u64) {
         self.next_request_id
             .fetch_max(request_id.saturating_add(1), Ordering::Relaxed);
-        *self.lock() = Some(Pending {
+        self.lock().current = Some(Pending {
             request_id,
             ready: None,
         });
@@ -88,7 +98,7 @@ impl<O> RequestSlot<O> {
     /// [`RequestSlot::try_begin`] に加え、結果が届いて未取得の要求の id が `keep` を満たすときも `None`
     /// （その結果の持ち主がまだ取り出していないため、置き換えて落とさない）。判定と登録は同じロックで行う。
     pub fn try_begin_unless(&self, keep: impl FnOnce(u64) -> bool) -> Option<u64> {
-        self.register_unless(|id, in_flight| in_flight || keep(id), |_| {})
+        self.register_unless(|id, in_flight| in_flight || keep(id), |_| false, None)
     }
 
     /// 登録済みの要求の id が `foreign` を満たす（他の持ち主の要求）ときだけ `None`、それ以外は置き換えて登録する。
@@ -96,37 +106,65 @@ impl<O> RequestSlot<O> {
     /// 他の持ち主の進行中の要求・未取得の結果を落とさず、自分の再要求は前の要求を置き換える型に使う。
     /// 判定と登録は同じロックで行う。
     pub fn begin_unless_foreign(&self, foreign: impl FnOnce(u64) -> bool) -> Option<u64> {
-        self.register_unless(|id, _| foreign(id), |_| {})
+        self.register_unless(|id, _| foreign(id), |_| false, None)
     }
 
     /// 登録済みの要求（id・進行中か）が `refuse` を満たせば `None`、満たさなければ採番して登録し、
-    /// 同じロックの内側で `mark` に新しい id を渡す。[`SlotOwner`] は `mark` で持ち主の印を付けるので、
-    /// 登録から印付けまでの間に相手方が判定して、印の無い要求として置き換えることが起きない。
+    /// 同じロックの内側で `owner` に持ち主の印を付ける。登録から印付けまでの間に相手方が判定して、印の無い要求として
+    /// 置き換えることが起きない。
+    ///
+    /// 置き換える要求の結果が届いていて `park` を満たせば、捨てずに受け取り待ち（`parked`）へ移す（前の受け取り待ちは捨てる）。
+    /// `owner` の前の印が受け取り待ちの id なら、その持ち主はもう取り出さないので捨てる（画面の次の開始での解放）。
+    /// 捨てる結果は `O` の `Drop` が後始末する。ロックの外で落とすよう戻り値の外へ出してから落とす。
     fn register_unless(
         &self,
         refuse: impl FnOnce(u64, bool) -> bool,
-        mark: impl FnOnce(u64),
+        park: impl FnOnce(u64) -> bool,
+        owner: Option<&SlotOwner>,
     ) -> Option<u64> {
-        let mut pending = self.lock();
-        if let Some(p) = pending.as_ref()
+        let mut evicted: [Option<Pending<O>>; 2] = [None, None];
+        let mut inner = self.lock();
+        if let Some(p) = inner.current.as_ref()
             && refuse(p.request_id, p.ready.is_none())
         {
             return None;
         }
+        if let Some(o) = owner
+            && inner
+                .parked
+                .as_ref()
+                .is_some_and(|p| p.request_id == o.current())
+        {
+            evicted[0] = inner.parked.take();
+        }
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
-        *pending = Some(Pending {
+        let old = inner.current.replace(Pending {
             request_id,
             ready: None,
         });
-        mark(request_id);
+        match old {
+            Some(p) if p.ready.is_some() && park(p.request_id) => {
+                evicted[1] = inner.parked.replace(p);
+            }
+            other => evicted[1] = other,
+        }
+        if let Some(o) = owner {
+            o.mark(request_id);
+        }
+        drop(inner);
+        drop(evicted);
         Some(request_id)
     }
 
     /// OS からの結果を置く（任意スレッド）。`request_id` 不一致・未登録（プロセス死後の
     /// 再配送等）・既に結果あり（重複通知）は捨てて `false`。
     pub fn deliver(&self, request_id: u64, outcome: O) -> bool {
-        let mut pending = self.lock();
-        let Some(p) = pending.as_mut().filter(|p| p.request_id == request_id) else {
+        let mut inner = self.lock();
+        let Some(p) = inner
+            .current
+            .as_mut()
+            .filter(|p| p.request_id == request_id)
+        else {
             return false;
         };
         if p.ready.is_some() {
@@ -142,53 +180,88 @@ impl<O> RequestSlot<O> {
         O: Clone,
     {
         self.lock()
+            .current
             .as_ref()
             .map(|p| (p.request_id, p.ready.clone()))
+    }
+
+    /// `request_id` の要求を、受け口と受け取り待ち（[`SlotOwner::begin_parking`] が移した分）の両方から探す。
+    /// 見つからなければ `None`、進行中なら `Some(None)`、結果が届いていれば `Some(Some(結果のクローン))`。
+    /// 画面の持ち主が自分の id で観測する（[`poll_and_finish_owned`] 等）。照合と取得は同じロックで行う。
+    pub fn snapshot_of(&self, request_id: u64) -> Option<Option<O>>
+    where
+        O: Clone,
+    {
+        let inner = self.lock();
+        [inner.current.as_ref(), inner.parked.as_ref()]
+            .into_iter()
+            .flatten()
+            .find(|p| p.request_id == request_id)
+            .map(|p| p.ready.clone())
     }
 
     /// `request_id` が現在の要求で結果が届いていれば、照合と取り出しと消去を同じロックで行って結果を返す。
     /// 同じ id を複数スレッドが呼んでも、取り出せるのは 1 つだけ（`snapshot` + `clear` の 2 段では両方が取れてしまう）。
     pub fn take_ready(&self, request_id: u64) -> Option<O> {
-        let mut pending = self.lock();
-        if pending
+        let mut inner = self.lock();
+        if inner
+            .current
             .as_ref()
             .is_some_and(|p| p.request_id == request_id && p.ready.is_some())
         {
-            return pending.take().and_then(|p| p.ready);
+            return inner.current.take().and_then(|p| p.ready);
         }
         None
     }
 
-    /// 完了クロージャが画面へ反映できたときだけ呼ぶ。`request_id` が現在の要求と
-    /// 一致するときのみ消す。
+    /// 完了クロージャが画面へ反映できたときだけ呼ぶ。`request_id` が現在の要求、または受け取り待ち
+    /// （[`SlotOwner::begin_parking`] が移した分）と一致するときのみ消す。
     pub fn clear(&self, request_id: u64) {
-        let mut pending = self.lock();
-        if pending.as_ref().is_some_and(|p| p.request_id == request_id) {
-            *pending = None;
-        }
+        let mut inner = self.lock();
+        let removed = if inner
+            .current
+            .as_ref()
+            .is_some_and(|p| p.request_id == request_id)
+        {
+            inner.current.take()
+        } else if inner
+            .parked
+            .as_ref()
+            .is_some_and(|p| p.request_id == request_id)
+        {
+            inner.parked.take()
+        } else {
+            None
+        };
+        drop(inner);
+        drop(removed);
     }
 
     /// 期限切れの確定用。`request_id` が現在の要求で、かつ結果が未着のときだけ消して `true`。
     /// 判定と除去を同じロック内で行い、`snapshot` 後に `deliver` が着地した結果を消さない
     /// （`false` なら呼び出し側は失敗を確定せず、後続の `poll_and_finish` に任せる）。
     pub fn clear_if_pending(&self, request_id: u64) -> bool {
-        let mut pending = self.lock();
-        if pending
+        let mut inner = self.lock();
+        if inner
+            .current
             .as_ref()
             .is_some_and(|p| p.request_id == request_id && p.ready.is_none())
         {
-            *pending = None;
+            inner.current = None;
             return true;
         }
         false
     }
 
-    /// 照合なしで丸ごと捨てる。Android の Activity 再生成直後に呼ぶ想定
+    /// 照合なしで丸ごと捨てる（受け取り待ちの結果も捨てる。機能の破棄での解放）。Android の Activity 再生成直後に呼ぶ想定
     /// （`biometric_auth::reset_pending_tracking` の唯一の呼び出し元、PR #917 の
     /// codex-review 指摘由来）。share / file_pick は呼ばない（既存挙動を変えない）。
     #[cfg_attr(not(target_os = "android"), allow(dead_code))]
     pub fn reset(&self) {
-        *self.lock() = None;
+        let mut inner = self.lock();
+        let removed = (inner.current.take(), inner.parked.take());
+        drop(inner);
+        drop(removed);
     }
 }
 
@@ -236,7 +309,7 @@ impl SlotOwner {
     /// 進行中の要求が無いときだけ登録して `request_id` を返し、自分の分として覚える。
     /// 先行（公開入口・別の画面要求）が進行中なら `None`（置き換えない）。呼び出し側は画面へ「処理中」の失敗を返す。
     pub fn begin<O>(&self, slot: &RequestSlot<O>) -> Option<u64> {
-        slot.register_unless(|_, in_flight| in_flight, |id| self.mark(id))
+        slot.register_unless(|_, in_flight| in_flight, |_| false, Some(self))
     }
 
     /// 持ち主の印を付ける。登録と同じ slot のロックの内側から呼ぶ（[`RequestSlot::register_unless`]）。
@@ -249,7 +322,8 @@ impl SlotOwner {
     pub fn begin_excluding<O>(&self, slot: &RequestSlot<O>, others: &[&SlotOwner]) -> Option<u64> {
         slot.register_unless(
             |id, in_flight| in_flight || others.iter().any(|o| o.current() == id),
-            |id| self.mark(id),
+            |_| false,
+            Some(self),
         )
     }
 
@@ -259,7 +333,8 @@ impl SlotOwner {
     pub fn begin_replacing<O>(&self, slot: &RequestSlot<O>, foreign: &[&SlotOwner]) -> Option<u64> {
         slot.register_unless(
             |id, _| foreign.iter().any(|o| o.current() == id),
-            |id| self.mark(id),
+            |_| false,
+            Some(self),
         )
     }
 
@@ -268,7 +343,23 @@ impl SlotOwner {
     pub fn begin_keeping_foreign<O>(&self, slot: &RequestSlot<O>) -> Option<u64> {
         slot.register_unless(
             |id, in_flight| in_flight || id != self.current(),
-            |id| self.mark(id),
+            |_| false,
+            Some(self),
+        )
+    }
+
+    /// 公開入口の登録に使う。進行中の要求と、自分の届いた未取得の結果があれば `None`（busy）。
+    /// `screen` の届いた未取得の結果は捨てずに受け取り待ちへ移してから登録する（画面が受け取らないまま残っても詰まらず、
+    /// 生きている画面の結果も失わせない）。画面は [`poll_and_finish_owned`] / [`RequestSlot::snapshot_of`] で移された結果を
+    /// そのまま受け取る。持ち主のいない届いた結果は置き換えて捨てる。判定・退避・登録は同じロックで行う。
+    ///
+    /// 受け取り待ちは 1 件まで（次に移すときは前の分を捨てる）。`screen` の次の登録（`begin*`）か
+    /// [`RequestSlot::reset`] で解放される。画面が二度と来なければ最大 1 件ぶんの結果が残る（上限のある天井）。
+    pub fn begin_parking<O>(&self, slot: &RequestSlot<O>, screen: &SlotOwner) -> Option<u64> {
+        slot.register_unless(
+            |id, in_flight| in_flight || id == self.current(),
+            |id| id == screen.current(),
+            Some(self),
         )
     }
 
@@ -298,8 +389,9 @@ impl Default for SlotOwner {
 }
 
 /// [`poll_and_finish`] の自分の分だけ版。`owner` の id が slot の現在の要求のときだけ結果を取って反映する。
-/// 自分の分が無ければ何もしない。slot の要求が別の id に置き換わっていた、または slot が空になっていた
-/// （Activity 再生成の `reset` 等で自分の要求は失われた）ときは、印を外して `on_lost` を送り、失敗を確定させる。
+/// 公開入口の開始で受け取り待ちへ移された自分の結果（[`SlotOwner::begin_parking`]）も同じく受け取る。
+/// 自分の分が無ければ何もしない。自分の要求が受け口にも受け取り待ちにも無い
+/// （Activity 再生成の `reset` 等で失われた）ときは、印を外して `on_lost` を送り、失敗を確定させる。
 pub fn poll_and_finish_owned<S: 'static, O: Clone + Send + 'static>(
     slot: &'static RequestSlot<O>,
     owner: &'static SlotOwner,
@@ -314,9 +406,10 @@ pub fn poll_and_finish_owned<S: 'static, O: Clone + Send + 'static>(
     }
     // 所有者の照合と結果の取得は 1 回の snapshot で行う（別々に取ると、間に公開入口の別要求へ置き換わった結果を画面へ渡しうる）。
     // 完了の反映と同じフレームで観測し直しても、`on_lost` は世代照合で捨てられる（`finish_*` は完了済みの画面を変えない）。
-    let (request_id, ready) = match slot.snapshot() {
-        Some((id, ready)) if id == mine => (id, ready),
-        _ => {
+    let request_id = mine;
+    let ready = match slot.snapshot_of(mine) {
+        Some(ready) => ready,
+        None => {
             owner.release(mine);
             let _ = sender.send(Box::new(on_lost));
             return;
@@ -656,6 +749,100 @@ mod tests {
         assert_eq!(OWNER.current(), mine);
         assert_ne!(mine, public);
         SLOT.reset();
+    }
+
+    /// 解放を数える結果（受け取り待ちの解放で `Drop` の後始末が走ることを確かめる）。
+    #[derive(Clone)]
+    struct Counted(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+    impl Drop for Counted {
+        fn drop(&mut self) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    /// 画面の開始 → 結果の到着 → 公開入口の開始 → 画面の poll の順でも、画面は届いた結果をそのまま受け取り、
+    /// 公開入口はその後に自分の結果を受け取れる。
+    #[test]
+    fn begin_parking_hands_unpolled_screen_result_to_screen() {
+        static SLOT: RequestSlot<u8> = RequestSlot::new();
+        static SCREEN: SlotOwner = SlotOwner::new();
+        static PUBLIC: SlotOwner = SlotOwner::new();
+        let (sender, rx) = sender_with_channel();
+        let screen = SCREEN.begin_keeping_foreign(&SLOT).expect("空き");
+        // 進行中は busy。
+        assert!(PUBLIC.begin_parking(&SLOT, &SCREEN).is_none());
+        assert!(SLOT.deliver(screen, 7));
+        let public = PUBLIC
+            .begin_parking(&SLOT, &SCREEN)
+            .expect("画面の未取得の結果で詰まらない");
+        assert_ne!(public, screen);
+        // 受け取り待ちへ移した結果へ重ねて配送しても捨てられる。
+        assert!(!SLOT.deliver(screen, 8));
+        poll_and_finish_owned(
+            &SLOT,
+            &SCREEN,
+            &sender,
+            |_| panic!("待機にはならない"),
+            |s: &mut u8, o| {
+                *s = o;
+                true
+            },
+            |_s| panic!("lost にならない"),
+        );
+        let mut state = 0u8;
+        rx.try_recv().expect("結果が送られる")(&mut state);
+        assert_eq!(state, 7);
+        assert_eq!(SCREEN.current(), 0);
+        assert_eq!(SLOT.snapshot_of(screen), None);
+        // 公開入口は自分の要求のまま進み、結果を受け取れる。
+        assert!(SLOT.deliver(public, 3));
+        assert_eq!(SLOT.take_ready(public), Some(3));
+        SLOT.reset();
+    }
+
+    /// 受け取り待ちの結果は、画面の次の開始と reset で解放される（`Drop` の後始末が走る）。
+    #[test]
+    fn parked_result_is_released_by_next_screen_begin_and_reset() {
+        let drops = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let slot: RequestSlot<Counted> = RequestSlot::new();
+        let (screen, public) = (SlotOwner::new(), SlotOwner::new());
+        let first = screen.begin_keeping_foreign(&slot).unwrap();
+        assert!(slot.deliver(first, Counted(drops.clone())));
+        let p = public.begin_parking(&slot, &screen).unwrap();
+        assert_eq!(drops.load(Ordering::SeqCst), 0, "移しただけでは捨てない");
+        // 公開入口の進行中は画面が開始できず、受け取り待ちも残る。
+        assert!(screen.begin_keeping_foreign(&slot).is_none());
+        assert!(slot.deliver(p, Counted(drops.clone())));
+        drop(slot.take_ready(p));
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+        // 画面の次の開始で受け取り待ちを解放する。
+        let second = screen.begin_keeping_foreign(&slot).unwrap();
+        assert_eq!(drops.load(Ordering::SeqCst), 2);
+        assert!(slot.snapshot_of(first).is_none());
+        // reset でも解放する。
+        assert!(slot.deliver(second, Counted(drops.clone())));
+        public.begin_parking(&slot, &screen).unwrap();
+        slot.reset();
+        assert_eq!(drops.load(Ordering::SeqCst), 3);
+        assert!(slot.snapshot_of(second).is_none());
+    }
+
+    /// 公開入口の届いた未取得の結果は、公開入口の再開始も画面の開始も置き換えない。持ち主のいない結果は置き換える。
+    #[test]
+    fn begin_parking_keeps_own_unpolled_result_and_replaces_orphan() {
+        let slot: RequestSlot<u8> = RequestSlot::new();
+        let (screen, public) = (SlotOwner::new(), SlotOwner::new());
+        let p = public.begin_parking(&slot, &screen).unwrap();
+        assert!(slot.deliver(p, 1));
+        assert!(public.begin_parking(&slot, &screen).is_none());
+        assert!(screen.begin_keeping_foreign(&slot).is_none());
+        assert_eq!(slot.take_ready(p), Some(1));
+        public.release(p);
+        // 持ち主のいない届いた結果は受け取り待ちへ移さず置き換える。
+        let orphan = slot.begin();
+        assert!(slot.deliver(orphan, 2));
+        public.begin_parking(&slot, &screen).unwrap();
+        assert_eq!(slot.snapshot_of(orphan), None);
     }
 
     #[test]
