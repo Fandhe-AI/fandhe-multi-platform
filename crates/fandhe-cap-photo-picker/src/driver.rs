@@ -198,7 +198,8 @@ pub(crate) mod bridge {
 
     /// 公開入口の要求を登録する。進行中の要求と自分の未取得の結果があれば `None`（busy）。画面側の届いた未取得の結果は捨てずに
     /// 画面の受け取り待ちへ移して始める（画面の effect が回らず取り出されないままでも詰まらず、生きている画面の結果も失わない）。
-    /// 移した結果は画面の poll がそのまま受け取り、受け取られない分は画面の次の開始か Android の resetで解放される（残るのは最大 1 件）。
+    /// 移した結果は画面の poll がそのまま受け取り、受け取られない分は画面の次の開始か Android の reset で解放される
+    /// （残るのは最大 1 件で、結果の写真は上限 `MAX_PHOTO_BYTES`（8 MiB）まで）。
     pub(crate) fn begin_public() -> Option<u64> {
         PUBLIC_OWNER.begin_parking(&SLOT, &SCREEN_OWNER)
     }
@@ -289,7 +290,9 @@ fn public_outcome(
 ///
 /// - 進行中の要求は busy で断る。
 /// - 画面側の届いた未取得の結果があっても断らない（画面が描かれず取り出されないままでも詰まらない）。結果は捨てずに画面の受け取り待ちへ移し、
-///   画面はそのまま受け取る（結果が届いてから次フレームの poll までの間に始めても、画面の結果は失われない）。受け取られない分は画面の次の開始か Android の resetで解放される（残るのは最大 1 件）。
+///   画面はそのまま受け取る（結果が届いてから次フレームの poll までの間に始めても、画面の結果は失われない）。
+///   受け取られない分は画面の次の開始か Android の reset で解放される
+///   （残るのは最大 1 件で、結果の写真は上限 `MAX_PHOTO_BYTES`（8 MiB）まで）。
 /// - 自分の未取得の結果があれば `Internal("photo_picker busy")` で断る。
 /// - OS 側のピッカーが進行中のとき
 ///   （[`discard_photo_pick`] で捨てた後を含む）も、OS の観測（Android は追跡中の要求、iOS は提示中のピッカー）で busy になる。
@@ -410,7 +413,9 @@ fn drive_mobile(state: &PhotoPickState, sender: &CompletionSender<PhotoPickState
         sender,
         |_| {},
         move |s: &mut PhotoPickState, outcome| {
-            // 既に `Idle` へ戻っていれば反映せず slot に残す（`false`。残った結果は公開入口の開始で画面の受け取り待ちへ移り、画面の次の開始で解放される）。別世代は反映せず畳む。
+            // 既に `Idle` へ戻っていれば反映せず slot に残す
+            // （`false`。残った結果は公開入口の開始で画面の受け取り待ちへ移り、画面の次の開始で解放される）。
+            // 別世代は反映せず畳む。
             if s.phase == PickPhase::Idle {
                 return false;
             }
