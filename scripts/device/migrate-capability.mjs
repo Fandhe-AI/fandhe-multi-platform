@@ -7,7 +7,7 @@
  *   node scripts/device/migrate-capability.mjs inventory <id> [--module <stem>]   移す対象と参照を表示する（読み取りのみ）
  *   node scripts/device/migrate-capability.mjs scaffold <id> [--module <stem>] [--dry-run]
  *                                                                                  git mv で機能 crate を作り、機械的に直せる記述を直す
- *   node scripts/device/migrate-capability.mjs sync [--check]                      gallery の feature・依存と build.gradle.kts の srcDirs を
+ *   node scripts/device/migrate-capability.mjs sync [--check]                      gallery の機能 crate の依存と build.gradle.kts の srcDirs を
  *                                                                                  `crates/fandhe-cap-*` から書き直す（冪等）。--check は書かずに、
  *                                                                                  目印ブロックのずれと公開入口 `pub fn platform_<stem>()` の欠けを検査する
  *
@@ -263,9 +263,7 @@ export function replaceBlock(text, n, makeLines) {
   throw new Error(`${n + 1} 番目の目印 "${BEGIN}" が見つからない`);
 }
 
-export const featureLines = (ids) => (ind) => ids.map((id) => `${ind}"dep:fandhe-cap-${id}",`);
-export const depLines = (ids) => (ind) =>
-  ids.map((id) => `${ind}fandhe-cap-${id} = { path = "../fandhe-cap-${id}", optional = true }`);
+export const depLines = (ids) => (ind) => ids.map((id) => `${ind}fandhe-cap-${id} = { path = "../fandhe-cap-${id}" }`);
 export const gradleLines = (caps) => (ind) =>
   caps.flatMap(({ id, java, res }) => [
     ...(java ? [`${ind}@Suppress("DEPRECATION")`, `${ind}java.srcDirs("../../../crates/fandhe-cap-${id}/android/java")`] : []),
@@ -336,7 +334,7 @@ function sync(R, check = false) {
   const caps = listCaps(R);
   const ids = caps.map((c) => c.id);
   const edits = [
-    ["crates/fandhe-gallery/Cargo.toml", (t) => replaceBlock(replaceBlock(t, 0, featureLines(ids)), 1, depLines(ids))],
+    ["crates/fandhe-gallery/Cargo.toml", (t) => replaceBlock(t, 0, depLines(ids))],
     ["platforms/android/app/build.gradle.kts", (t) => replaceBlock(t, 0, gradleLines(caps))],
   ];
   let ok = true;

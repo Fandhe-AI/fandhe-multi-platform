@@ -47,10 +47,9 @@
 /// （`docs/ai/SCHEMA.md`「新規画面ファイルの置き場と `mod` 追加の作法」参照）。
 ///
 /// 各行には `#[cfg(...)]` 等の属性を 0 個以上付けられる（Issue #746）。
-/// device 画面（#747〜#749）は `#[cfg(all(feature = "device", not(target_arch = "wasm32")))]`
-/// を行頭に付けて登録し（`fandhe-device` への依存自体が native 分岐にしか無いため、
-/// feature `device` 単独では wasm32 ビルドが壊れる。`Cargo.toml` の
-/// `fandhe-device` 依存コメント参照）、条件不成立のビルドではその行自体が存在しない
+/// 端末機能の画面は `#[cfg(not(target_arch = "wasm32"))]`
+/// を行頭に付けて登録し（機能 crate への依存が native 分岐にしか無いため。Web の実装は
+/// `fandhe-web-dom` 側）、条件不成立のビルドではその行自体が存在しない
 /// ものとして扱われる（`registered_names`・`build_app` のどちらにも現れない）。
 /// 非 `nav` 行は `$(#[$attr])* "名前" => ...`、`nav` 行は
 /// `nav $(#[$nav_attr])* "名前" => ...`（属性は `nav` キーワードの後）、`init` 行は
@@ -184,84 +183,84 @@ mod tests {
 
     /// `effect` 区画（Issue #749）で登録した camera_capture 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn camera_capture_is_registered() {
         assert!(registered_names().contains(&"camera_capture"));
     }
 
     /// `effect` 区画（Issue #830）で登録した tilt_ball 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn tilt_ball_is_registered() {
         assert!(registered_names().contains(&"tilt_ball"));
     }
 
     /// `effect` 区画（Issue #872）で登録した file_pick 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn file_pick_is_registered() {
         assert!(registered_names().contains(&"file_pick"));
     }
 
     /// `effect` 区画（Issue #888）で登録した location_show 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn location_show_is_registered() {
         assert!(registered_names().contains(&"location_show"));
     }
 
     /// `effect` 区画（Issue #1057）で登録した geofence_show 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn geofence_show_is_registered() {
         assert!(registered_names().contains(&"geofence_show"));
     }
 
     /// `effect` 区画（Issue #897）で登録した share_text 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn share_text_is_registered() {
         assert!(registered_names().contains(&"share_text"));
     }
 
     /// `effect` 区画（Issue #922）で登録した credential_vault 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn credential_vault_is_registered() {
         assert!(registered_names().contains(&"credential_vault"));
     }
 
     /// `effect` 区画（Issue #954）で登録した mic_record 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn mic_record_is_registered() {
         assert!(registered_names().contains(&"mic_record"));
     }
 
     /// `effect` 区画（Issue #1335）で登録した screen_capture 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn screen_capture_is_registered() {
         assert!(registered_names().contains(&"screen_capture"));
     }
 
     /// `effect` 区画（Issue #980）で登録した tsv_import 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn tsv_import_is_registered() {
         assert!(registered_names().contains(&"tsv_import"));
     }
 
     /// `effect` 区画（Issue #1004）で登録した notification_send 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn notification_send_is_registered() {
         assert!(registered_names().contains(&"notification_send"));
     }
 
     /// `effect` 区画（Issue #1014）で登録した drag_drop 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn drag_drop_is_registered() {
         assert!(registered_names().contains(&"drag_drop"));
     }
@@ -269,77 +268,77 @@ mod tests {
     /// `effect` 区画（Issue #1024）で登録した speech_recognize 画面が現れることを
     /// 検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn speech_recognize_is_registered() {
         assert!(registered_names().contains(&"speech_recognize"));
     }
 
     /// `effect` 区画（Issue #1060）で登録した ble_scan 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn ble_scan_is_registered() {
         assert!(registered_names().contains(&"ble_scan"));
     }
 
     /// `effect` 区画（Issue #1039）で登録した system_tray 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn system_tray_is_registered() {
         assert!(registered_names().contains(&"system_tray"));
     }
 
     /// `effect` 区画（Issue #1043）で登録した background-task 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn background_task_is_registered() {
         assert!(registered_names().contains(&"background-task"));
     }
 
     /// `effect` 区画（Issue #1215）で登録した url_scheme_show 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn url_scheme_show_is_registered() {
         assert!(registered_names().contains(&"url_scheme_show"));
     }
 
     /// `effect` 区画（Issue #416）で登録した file_association_show 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn file_association_show_is_registered() {
         assert!(registered_names().contains(&"file_association_show"));
     }
 
     /// `effect` 区画（Issue #1065）で登録した home_widget_show 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn home_widget_show_is_registered() {
         assert!(registered_names().contains(&"home_widget_show"));
     }
 
     /// `effect` 区画（Issue #1116）で登録した car_display_show 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn car_display_show_is_registered() {
         assert!(registered_names().contains(&"car_display_show"));
     }
 
     /// `effect` 区画（Issue #1278）で登録した deep_link_show 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn deep_link_show_is_registered() {
         assert!(registered_names().contains(&"deep_link_show"));
     }
 
     /// `effect` 区画（Issue #1128）で登録した nfc_card_emulation_show 画面が現れることを検証する。
     #[test]
-    #[cfg(all(feature = "device", not(target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn nfc_card_emulation_show_is_registered() {
         assert!(registered_names().contains(&"nfc_card_emulation_show"));
     }
 
     /// マクロが各行の `#[cfg(...)]` 属性を透過することを検証する（Issue #746）。
     /// device 画面（#747〜#749）は
-    /// `#[cfg(all(feature = "device", not(target_arch = "wasm32")))]` を行頭に付けて
+    /// `#[cfg(not(target_arch = "wasm32"))]` を行頭に付けて
     /// 登録する。
     #[allow(dead_code)] // マクロが生成する `build_app` はこのテストでは呼ばない
     mod gated {

@@ -9,158 +9,9 @@ repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
 publish = false
 
 # 計測・デバッグ用の feature は、すべて `fandhe-egui-proxy` の同名 feature へ転送する
-# （入口の切替は egui-proxy の `ios.rs`・`frame_metrics.rs` が持つ）。既定は `device` のみで、
-# `debug-proxy-app`（画面切替の setprop 経路）・`frame-metrics`・`cold-start-probe` は既定 off のまま
+# （入口の切替は egui-proxy の `ios.rs`・`frame_metrics.rs` が持つ）。どれも既定 off のまま
 # ストア提出物に混ざらない（security.md A05）。
 [features]
-default = ["device"]
-device = [
-  "fandhe-egui-proxy/device",
-  # BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
-  "dep:fandhe-cap-accessibility-prefs",
-  "dep:fandhe-cap-activity-recognition",
-  "dep:fandhe-cap-alarm",
-  "dep:fandhe-cap-app-attest",
-  "dep:fandhe-cap-app-badge",
-  "dep:fandhe-cap-app-lifecycle",
-  "dep:fandhe-cap-app-progress-attention",
-  "dep:fandhe-cap-app-shortcuts",
-  "dep:fandhe-cap-ar",
-  "dep:fandhe-cap-audio-devices",
-  "dep:fandhe-cap-audio-session",
-  "dep:fandhe-cap-autofill-otp",
-  "dep:fandhe-cap-background-download",
-  "dep:fandhe-cap-background-task",
-  "dep:fandhe-cap-background-upload",
-  "dep:fandhe-cap-barcode-scan",
-  "dep:fandhe-cap-biometric-auth",
-  "dep:fandhe-cap-ble-peripheral",
-  "dep:fandhe-cap-bluetooth-classic",
-  "dep:fandhe-cap-bluetooth-le",
-  "dep:fandhe-cap-calendar",
-  "dep:fandhe-cap-call-ui",
-  "dep:fandhe-cap-camera-capture",
-  "dep:fandhe-cap-camera-preview-stream",
-  "dep:fandhe-cap-capture-protection",
-  "dep:fandhe-cap-car-display",
-  "dep:fandhe-cap-clipboard",
-  "dep:fandhe-cap-color-picker",
-  "dep:fandhe-cap-companion-device",
-  "dep:fandhe-cap-compass-heading",
-  "dep:fandhe-cap-compose-mail-sms",
-  "dep:fandhe-cap-contacts",
-  "dep:fandhe-cap-deep-link",
-  "dep:fandhe-cap-device-identifier",
-  "dep:fandhe-cap-device-info",
-  "dep:fandhe-cap-digital-credentials",
-  "dep:fandhe-cap-display-refresh-hdr",
-  "dep:fandhe-cap-document-scan",
-  "dep:fandhe-cap-drag-drop",
-  "dep:fandhe-cap-dynamic-type",
-  "dep:fandhe-cap-environment-sensors",
-  "dep:fandhe-cap-external-app-launch",
-  "dep:fandhe-cap-eye-dropper",
-  "dep:fandhe-cap-file-association",
-  "dep:fandhe-cap-file-picker",
-  "dep:fandhe-cap-file-preview",
-  "dep:fandhe-cap-file-provider",
-  "dep:fandhe-cap-file-watch",
-  "dep:fandhe-cap-flashlight",
-  "dep:fandhe-cap-focus-mode-status",
-  "dep:fandhe-cap-foldable-posture",
-  "dep:fandhe-cap-fullscreen-immersive",
-  "dep:fandhe-cap-gamepad",
-  "dep:fandhe-cap-geocoding-search",
-  "dep:fandhe-cap-geofence",
-  "dep:fandhe-cap-global-hotkey",
-  "dep:fandhe-cap-haptics",
-  "dep:fandhe-cap-health-data",
-  "dep:fandhe-cap-home-widget",
-  "dep:fandhe-cap-http-get",
-  "dep:fandhe-cap-human-presence",
-  "dep:fandhe-cap-image-generation",
-  "dep:fandhe-cap-image-recognition",
-  "dep:fandhe-cap-in-app-browser",
-  "dep:fandhe-cap-in-app-review",
-  "dep:fandhe-cap-lan-discovery",
-  "dep:fandhe-cap-launch-at-login",
-  "dep:fandhe-cap-live-activity",
-  "dep:fandhe-cap-local-fonts",
-  "dep:fandhe-cap-local-peer-connect",
-  "dep:fandhe-cap-local-storage-kv",
-  "dep:fandhe-cap-location",
-  "dep:fandhe-cap-managed-app-config",
-  "dep:fandhe-cap-map-view",
-  "dep:fandhe-cap-media-cast",
-  "dep:fandhe-cap-media-playback",
-  "dep:fandhe-cap-media-transcode",
-  "dep:fandhe-cap-memory-pressure",
-  "dep:fandhe-cap-mic-record",
-  "dep:fandhe-cap-midi",
-  "dep:fandhe-cap-ml-inference",
-  "dep:fandhe-cap-motion-raw-sensors",
-  "dep:fandhe-cap-multi-display",
-  "dep:fandhe-cap-music-library",
-  "dep:fandhe-cap-network-status",
-  "dep:fandhe-cap-nfc",
-  "dep:fandhe-cap-nfc-card-emulation",
-  "dep:fandhe-cap-nlp",
-  "dep:fandhe-cap-notification",
-  "dep:fandhe-cap-now-playing-controls",
-  "dep:fandhe-cap-on-device-llm",
-  "dep:fandhe-cap-open-in-shell",
-  "dep:fandhe-cap-open-system-settings",
-  "dep:fandhe-cap-passkey-signin",
-  "dep:fandhe-cap-payment-request",
-  "dep:fandhe-cap-pdf-viewer",
-  "dep:fandhe-cap-pedometer",
-  "dep:fandhe-cap-pen-stylus",
-  "dep:fandhe-cap-per-app-language",
-  "dep:fandhe-cap-photo-library",
-  "dep:fandhe-cap-photo-picker",
-  "dep:fandhe-cap-picture-in-picture",
-  "dep:fandhe-cap-power-state",
-  "dep:fandhe-cap-print",
-  "dep:fandhe-cap-quick-settings-tile",
-  "dep:fandhe-cap-radio-control",
-  "dep:fandhe-cap-recent-documents",
-  "dep:fandhe-cap-removable-storage",
-  "dep:fandhe-cap-safe-area-insets",
-  "dep:fandhe-cap-scanner-devices",
-  "dep:fandhe-cap-screen-brightness",
-  "dep:fandhe-cap-screen-capture",
-  "dep:fandhe-cap-screen-orientation",
-  "dep:fandhe-cap-screen-wake-lock",
-  "dep:fandhe-cap-secure-credential",
-  "dep:fandhe-cap-serial-port",
-  "dep:fandhe-cap-share-receive",
-  "dep:fandhe-cap-share-sheet",
-  "dep:fandhe-cap-sleep-lock-events",
-  "dep:fandhe-cap-smart-home",
-  "dep:fandhe-cap-sound-classification",
-  "dep:fandhe-cap-speech-recognition",
-  "dep:fandhe-cap-spell-check",
-  "dep:fandhe-cap-spotlight-index",
-  "dep:fandhe-cap-system-accent-color",
-  "dep:fandhe-cap-system-sound",
-  "dep:fandhe-cap-system-tray",
-  "dep:fandhe-cap-tilt-motion",
-  "dep:fandhe-cap-translation",
-  "dep:fandhe-cap-tts",
-  "dep:fandhe-cap-url-scheme",
-  "dep:fandhe-cap-usb-device",
-  "dep:fandhe-cap-user-idle",
-  "dep:fandhe-cap-uwb-ranging",
-  "dep:fandhe-cap-video-capture",
-  "dep:fandhe-cap-video-transcode",
-  "dep:fandhe-cap-volume-control",
-  "dep:fandhe-cap-wallpaper-set",
-  "dep:fandhe-cap-web-auth-session",
-  "dep:fandhe-cap-wifi-connect",
-  "dep:fandhe-cap-wifi-info",
-  "dep:fandhe-cap-window-management",
-  # END fandhe-cap
-]
 frame-metrics = ["fandhe-egui-proxy/frame-metrics"]
 cold-start-probe = ["fandhe-egui-proxy/cold-start-probe"]
 debug-proxy-app = ["fandhe-egui-proxy/debug-proxy-app"]
@@ -220,158 +71,158 @@ fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"
 
 [dependencies]
 fandhe-core = { path = "../fandhe-core" }
-fandhe-egui-proxy = { path = "../fandhe-egui-proxy", default-features = false }
+fandhe-egui-proxy = { path = "../fandhe-egui-proxy" }
 fandhe-render-egui = { path = "../fandhe-render-egui" }
 # `audio_play` の effect の合成（media-playback → now-playing-controls、registry.rs）が `CompletionSender` を受ける。
 fandhe-runtime = { path = "../fandhe-runtime" }
 egui = { workspace = true }
 
-# 機能 crate（1 機能 1 crate、docs/architecture/consumer-app-structure.md §5）。feature `device` のときだけ
+# 機能 crate（1 機能 1 crate、docs/architecture/consumer-app-structure.md §5）。カタログは全機能を常に載せ、
 # 画面の effect ドライバとして使う。wasm32 の Web 実装は `fandhe-web-dom` 側のため入れない。
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
-fandhe-cap-accessibility-prefs = { path = "../fandhe-cap-accessibility-prefs", optional = true }
-fandhe-cap-activity-recognition = { path = "../fandhe-cap-activity-recognition", optional = true }
-fandhe-cap-alarm = { path = "../fandhe-cap-alarm", optional = true }
-fandhe-cap-app-attest = { path = "../fandhe-cap-app-attest", optional = true }
-fandhe-cap-app-badge = { path = "../fandhe-cap-app-badge", optional = true }
-fandhe-cap-app-lifecycle = { path = "../fandhe-cap-app-lifecycle", optional = true }
-fandhe-cap-app-progress-attention = { path = "../fandhe-cap-app-progress-attention", optional = true }
-fandhe-cap-app-shortcuts = { path = "../fandhe-cap-app-shortcuts", optional = true }
-fandhe-cap-ar = { path = "../fandhe-cap-ar", optional = true }
-fandhe-cap-audio-devices = { path = "../fandhe-cap-audio-devices", optional = true }
-fandhe-cap-audio-session = { path = "../fandhe-cap-audio-session", optional = true }
-fandhe-cap-autofill-otp = { path = "../fandhe-cap-autofill-otp", optional = true }
-fandhe-cap-background-download = { path = "../fandhe-cap-background-download", optional = true }
-fandhe-cap-background-task = { path = "../fandhe-cap-background-task", optional = true }
-fandhe-cap-background-upload = { path = "../fandhe-cap-background-upload", optional = true }
-fandhe-cap-barcode-scan = { path = "../fandhe-cap-barcode-scan", optional = true }
-fandhe-cap-biometric-auth = { path = "../fandhe-cap-biometric-auth", optional = true }
-fandhe-cap-ble-peripheral = { path = "../fandhe-cap-ble-peripheral", optional = true }
-fandhe-cap-bluetooth-classic = { path = "../fandhe-cap-bluetooth-classic", optional = true }
-fandhe-cap-bluetooth-le = { path = "../fandhe-cap-bluetooth-le", optional = true }
-fandhe-cap-calendar = { path = "../fandhe-cap-calendar", optional = true }
-fandhe-cap-call-ui = { path = "../fandhe-cap-call-ui", optional = true }
-fandhe-cap-camera-capture = { path = "../fandhe-cap-camera-capture", optional = true }
-fandhe-cap-camera-preview-stream = { path = "../fandhe-cap-camera-preview-stream", optional = true }
-fandhe-cap-capture-protection = { path = "../fandhe-cap-capture-protection", optional = true }
-fandhe-cap-car-display = { path = "../fandhe-cap-car-display", optional = true }
-fandhe-cap-clipboard = { path = "../fandhe-cap-clipboard", optional = true }
-fandhe-cap-color-picker = { path = "../fandhe-cap-color-picker", optional = true }
-fandhe-cap-companion-device = { path = "../fandhe-cap-companion-device", optional = true }
-fandhe-cap-compass-heading = { path = "../fandhe-cap-compass-heading", optional = true }
-fandhe-cap-compose-mail-sms = { path = "../fandhe-cap-compose-mail-sms", optional = true }
-fandhe-cap-contacts = { path = "../fandhe-cap-contacts", optional = true }
-fandhe-cap-deep-link = { path = "../fandhe-cap-deep-link", optional = true }
-fandhe-cap-device-identifier = { path = "../fandhe-cap-device-identifier", optional = true }
-fandhe-cap-device-info = { path = "../fandhe-cap-device-info", optional = true }
-fandhe-cap-digital-credentials = { path = "../fandhe-cap-digital-credentials", optional = true }
-fandhe-cap-display-refresh-hdr = { path = "../fandhe-cap-display-refresh-hdr", optional = true }
-fandhe-cap-document-scan = { path = "../fandhe-cap-document-scan", optional = true }
-fandhe-cap-drag-drop = { path = "../fandhe-cap-drag-drop", optional = true }
-fandhe-cap-dynamic-type = { path = "../fandhe-cap-dynamic-type", optional = true }
-fandhe-cap-environment-sensors = { path = "../fandhe-cap-environment-sensors", optional = true }
-fandhe-cap-external-app-launch = { path = "../fandhe-cap-external-app-launch", optional = true }
-fandhe-cap-eye-dropper = { path = "../fandhe-cap-eye-dropper", optional = true }
-fandhe-cap-file-association = { path = "../fandhe-cap-file-association", optional = true }
-fandhe-cap-file-picker = { path = "../fandhe-cap-file-picker", optional = true }
-fandhe-cap-file-preview = { path = "../fandhe-cap-file-preview", optional = true }
-fandhe-cap-file-provider = { path = "../fandhe-cap-file-provider", optional = true }
-fandhe-cap-file-watch = { path = "../fandhe-cap-file-watch", optional = true }
-fandhe-cap-flashlight = { path = "../fandhe-cap-flashlight", optional = true }
-fandhe-cap-focus-mode-status = { path = "../fandhe-cap-focus-mode-status", optional = true }
-fandhe-cap-foldable-posture = { path = "../fandhe-cap-foldable-posture", optional = true }
-fandhe-cap-fullscreen-immersive = { path = "../fandhe-cap-fullscreen-immersive", optional = true }
-fandhe-cap-gamepad = { path = "../fandhe-cap-gamepad", optional = true }
-fandhe-cap-geocoding-search = { path = "../fandhe-cap-geocoding-search", optional = true }
-fandhe-cap-geofence = { path = "../fandhe-cap-geofence", optional = true }
-fandhe-cap-global-hotkey = { path = "../fandhe-cap-global-hotkey", optional = true }
-fandhe-cap-haptics = { path = "../fandhe-cap-haptics", optional = true }
-fandhe-cap-health-data = { path = "../fandhe-cap-health-data", optional = true }
-fandhe-cap-home-widget = { path = "../fandhe-cap-home-widget", optional = true }
-fandhe-cap-http-get = { path = "../fandhe-cap-http-get", optional = true }
-fandhe-cap-human-presence = { path = "../fandhe-cap-human-presence", optional = true }
-fandhe-cap-image-generation = { path = "../fandhe-cap-image-generation", optional = true }
-fandhe-cap-image-recognition = { path = "../fandhe-cap-image-recognition", optional = true }
-fandhe-cap-in-app-browser = { path = "../fandhe-cap-in-app-browser", optional = true }
-fandhe-cap-in-app-review = { path = "../fandhe-cap-in-app-review", optional = true }
-fandhe-cap-lan-discovery = { path = "../fandhe-cap-lan-discovery", optional = true }
-fandhe-cap-launch-at-login = { path = "../fandhe-cap-launch-at-login", optional = true }
-fandhe-cap-live-activity = { path = "../fandhe-cap-live-activity", optional = true }
-fandhe-cap-local-fonts = { path = "../fandhe-cap-local-fonts", optional = true }
-fandhe-cap-local-peer-connect = { path = "../fandhe-cap-local-peer-connect", optional = true }
-fandhe-cap-local-storage-kv = { path = "../fandhe-cap-local-storage-kv", optional = true }
-fandhe-cap-location = { path = "../fandhe-cap-location", optional = true }
-fandhe-cap-managed-app-config = { path = "../fandhe-cap-managed-app-config", optional = true }
-fandhe-cap-map-view = { path = "../fandhe-cap-map-view", optional = true }
-fandhe-cap-media-cast = { path = "../fandhe-cap-media-cast", optional = true }
-fandhe-cap-media-playback = { path = "../fandhe-cap-media-playback", optional = true }
-fandhe-cap-media-transcode = { path = "../fandhe-cap-media-transcode", optional = true }
-fandhe-cap-memory-pressure = { path = "../fandhe-cap-memory-pressure", optional = true }
-fandhe-cap-mic-record = { path = "../fandhe-cap-mic-record", optional = true }
-fandhe-cap-midi = { path = "../fandhe-cap-midi", optional = true }
-fandhe-cap-ml-inference = { path = "../fandhe-cap-ml-inference", optional = true }
-fandhe-cap-motion-raw-sensors = { path = "../fandhe-cap-motion-raw-sensors", optional = true }
-fandhe-cap-multi-display = { path = "../fandhe-cap-multi-display", optional = true }
-fandhe-cap-music-library = { path = "../fandhe-cap-music-library", optional = true }
-fandhe-cap-network-status = { path = "../fandhe-cap-network-status", optional = true }
-fandhe-cap-nfc = { path = "../fandhe-cap-nfc", optional = true }
-fandhe-cap-nfc-card-emulation = { path = "../fandhe-cap-nfc-card-emulation", optional = true }
-fandhe-cap-nlp = { path = "../fandhe-cap-nlp", optional = true }
-fandhe-cap-notification = { path = "../fandhe-cap-notification", optional = true }
-fandhe-cap-now-playing-controls = { path = "../fandhe-cap-now-playing-controls", optional = true }
-fandhe-cap-on-device-llm = { path = "../fandhe-cap-on-device-llm", optional = true }
-fandhe-cap-open-in-shell = { path = "../fandhe-cap-open-in-shell", optional = true }
-fandhe-cap-open-system-settings = { path = "../fandhe-cap-open-system-settings", optional = true }
-fandhe-cap-passkey-signin = { path = "../fandhe-cap-passkey-signin", optional = true }
-fandhe-cap-payment-request = { path = "../fandhe-cap-payment-request", optional = true }
-fandhe-cap-pdf-viewer = { path = "../fandhe-cap-pdf-viewer", optional = true }
-fandhe-cap-pedometer = { path = "../fandhe-cap-pedometer", optional = true }
-fandhe-cap-pen-stylus = { path = "../fandhe-cap-pen-stylus", optional = true }
-fandhe-cap-per-app-language = { path = "../fandhe-cap-per-app-language", optional = true }
-fandhe-cap-photo-library = { path = "../fandhe-cap-photo-library", optional = true }
-fandhe-cap-photo-picker = { path = "../fandhe-cap-photo-picker", optional = true }
-fandhe-cap-picture-in-picture = { path = "../fandhe-cap-picture-in-picture", optional = true }
-fandhe-cap-power-state = { path = "../fandhe-cap-power-state", optional = true }
-fandhe-cap-print = { path = "../fandhe-cap-print", optional = true }
-fandhe-cap-quick-settings-tile = { path = "../fandhe-cap-quick-settings-tile", optional = true }
-fandhe-cap-radio-control = { path = "../fandhe-cap-radio-control", optional = true }
-fandhe-cap-recent-documents = { path = "../fandhe-cap-recent-documents", optional = true }
-fandhe-cap-removable-storage = { path = "../fandhe-cap-removable-storage", optional = true }
-fandhe-cap-safe-area-insets = { path = "../fandhe-cap-safe-area-insets", optional = true }
-fandhe-cap-scanner-devices = { path = "../fandhe-cap-scanner-devices", optional = true }
-fandhe-cap-screen-brightness = { path = "../fandhe-cap-screen-brightness", optional = true }
-fandhe-cap-screen-capture = { path = "../fandhe-cap-screen-capture", optional = true }
-fandhe-cap-screen-orientation = { path = "../fandhe-cap-screen-orientation", optional = true }
-fandhe-cap-screen-wake-lock = { path = "../fandhe-cap-screen-wake-lock", optional = true }
-fandhe-cap-secure-credential = { path = "../fandhe-cap-secure-credential", optional = true }
-fandhe-cap-serial-port = { path = "../fandhe-cap-serial-port", optional = true }
-fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive", optional = true }
-fandhe-cap-share-sheet = { path = "../fandhe-cap-share-sheet", optional = true }
-fandhe-cap-sleep-lock-events = { path = "../fandhe-cap-sleep-lock-events", optional = true }
-fandhe-cap-smart-home = { path = "../fandhe-cap-smart-home", optional = true }
-fandhe-cap-sound-classification = { path = "../fandhe-cap-sound-classification", optional = true }
-fandhe-cap-speech-recognition = { path = "../fandhe-cap-speech-recognition", optional = true }
-fandhe-cap-spell-check = { path = "../fandhe-cap-spell-check", optional = true }
-fandhe-cap-spotlight-index = { path = "../fandhe-cap-spotlight-index", optional = true }
-fandhe-cap-system-accent-color = { path = "../fandhe-cap-system-accent-color", optional = true }
-fandhe-cap-system-sound = { path = "../fandhe-cap-system-sound", optional = true }
-fandhe-cap-system-tray = { path = "../fandhe-cap-system-tray", optional = true }
-fandhe-cap-tilt-motion = { path = "../fandhe-cap-tilt-motion", optional = true }
-fandhe-cap-translation = { path = "../fandhe-cap-translation", optional = true }
-fandhe-cap-tts = { path = "../fandhe-cap-tts", optional = true }
-fandhe-cap-url-scheme = { path = "../fandhe-cap-url-scheme", optional = true }
-fandhe-cap-usb-device = { path = "../fandhe-cap-usb-device", optional = true }
-fandhe-cap-user-idle = { path = "../fandhe-cap-user-idle", optional = true }
-fandhe-cap-uwb-ranging = { path = "../fandhe-cap-uwb-ranging", optional = true }
-fandhe-cap-video-capture = { path = "../fandhe-cap-video-capture", optional = true }
-fandhe-cap-video-transcode = { path = "../fandhe-cap-video-transcode", optional = true }
-fandhe-cap-volume-control = { path = "../fandhe-cap-volume-control", optional = true }
-fandhe-cap-wallpaper-set = { path = "../fandhe-cap-wallpaper-set", optional = true }
-fandhe-cap-web-auth-session = { path = "../fandhe-cap-web-auth-session", optional = true }
-fandhe-cap-wifi-connect = { path = "../fandhe-cap-wifi-connect", optional = true }
-fandhe-cap-wifi-info = { path = "../fandhe-cap-wifi-info", optional = true }
-fandhe-cap-window-management = { path = "../fandhe-cap-window-management", optional = true }
+fandhe-cap-accessibility-prefs = { path = "../fandhe-cap-accessibility-prefs" }
+fandhe-cap-activity-recognition = { path = "../fandhe-cap-activity-recognition" }
+fandhe-cap-alarm = { path = "../fandhe-cap-alarm" }
+fandhe-cap-app-attest = { path = "../fandhe-cap-app-attest" }
+fandhe-cap-app-badge = { path = "../fandhe-cap-app-badge" }
+fandhe-cap-app-lifecycle = { path = "../fandhe-cap-app-lifecycle" }
+fandhe-cap-app-progress-attention = { path = "../fandhe-cap-app-progress-attention" }
+fandhe-cap-app-shortcuts = { path = "../fandhe-cap-app-shortcuts" }
+fandhe-cap-ar = { path = "../fandhe-cap-ar" }
+fandhe-cap-audio-devices = { path = "../fandhe-cap-audio-devices" }
+fandhe-cap-audio-session = { path = "../fandhe-cap-audio-session" }
+fandhe-cap-autofill-otp = { path = "../fandhe-cap-autofill-otp" }
+fandhe-cap-background-download = { path = "../fandhe-cap-background-download" }
+fandhe-cap-background-task = { path = "../fandhe-cap-background-task" }
+fandhe-cap-background-upload = { path = "../fandhe-cap-background-upload" }
+fandhe-cap-barcode-scan = { path = "../fandhe-cap-barcode-scan" }
+fandhe-cap-biometric-auth = { path = "../fandhe-cap-biometric-auth" }
+fandhe-cap-ble-peripheral = { path = "../fandhe-cap-ble-peripheral" }
+fandhe-cap-bluetooth-classic = { path = "../fandhe-cap-bluetooth-classic" }
+fandhe-cap-bluetooth-le = { path = "../fandhe-cap-bluetooth-le" }
+fandhe-cap-calendar = { path = "../fandhe-cap-calendar" }
+fandhe-cap-call-ui = { path = "../fandhe-cap-call-ui" }
+fandhe-cap-camera-capture = { path = "../fandhe-cap-camera-capture" }
+fandhe-cap-camera-preview-stream = { path = "../fandhe-cap-camera-preview-stream" }
+fandhe-cap-capture-protection = { path = "../fandhe-cap-capture-protection" }
+fandhe-cap-car-display = { path = "../fandhe-cap-car-display" }
+fandhe-cap-clipboard = { path = "../fandhe-cap-clipboard" }
+fandhe-cap-color-picker = { path = "../fandhe-cap-color-picker" }
+fandhe-cap-companion-device = { path = "../fandhe-cap-companion-device" }
+fandhe-cap-compass-heading = { path = "../fandhe-cap-compass-heading" }
+fandhe-cap-compose-mail-sms = { path = "../fandhe-cap-compose-mail-sms" }
+fandhe-cap-contacts = { path = "../fandhe-cap-contacts" }
+fandhe-cap-deep-link = { path = "../fandhe-cap-deep-link" }
+fandhe-cap-device-identifier = { path = "../fandhe-cap-device-identifier" }
+fandhe-cap-device-info = { path = "../fandhe-cap-device-info" }
+fandhe-cap-digital-credentials = { path = "../fandhe-cap-digital-credentials" }
+fandhe-cap-display-refresh-hdr = { path = "../fandhe-cap-display-refresh-hdr" }
+fandhe-cap-document-scan = { path = "../fandhe-cap-document-scan" }
+fandhe-cap-drag-drop = { path = "../fandhe-cap-drag-drop" }
+fandhe-cap-dynamic-type = { path = "../fandhe-cap-dynamic-type" }
+fandhe-cap-environment-sensors = { path = "../fandhe-cap-environment-sensors" }
+fandhe-cap-external-app-launch = { path = "../fandhe-cap-external-app-launch" }
+fandhe-cap-eye-dropper = { path = "../fandhe-cap-eye-dropper" }
+fandhe-cap-file-association = { path = "../fandhe-cap-file-association" }
+fandhe-cap-file-picker = { path = "../fandhe-cap-file-picker" }
+fandhe-cap-file-preview = { path = "../fandhe-cap-file-preview" }
+fandhe-cap-file-provider = { path = "../fandhe-cap-file-provider" }
+fandhe-cap-file-watch = { path = "../fandhe-cap-file-watch" }
+fandhe-cap-flashlight = { path = "../fandhe-cap-flashlight" }
+fandhe-cap-focus-mode-status = { path = "../fandhe-cap-focus-mode-status" }
+fandhe-cap-foldable-posture = { path = "../fandhe-cap-foldable-posture" }
+fandhe-cap-fullscreen-immersive = { path = "../fandhe-cap-fullscreen-immersive" }
+fandhe-cap-gamepad = { path = "../fandhe-cap-gamepad" }
+fandhe-cap-geocoding-search = { path = "../fandhe-cap-geocoding-search" }
+fandhe-cap-geofence = { path = "../fandhe-cap-geofence" }
+fandhe-cap-global-hotkey = { path = "../fandhe-cap-global-hotkey" }
+fandhe-cap-haptics = { path = "../fandhe-cap-haptics" }
+fandhe-cap-health-data = { path = "../fandhe-cap-health-data" }
+fandhe-cap-home-widget = { path = "../fandhe-cap-home-widget" }
+fandhe-cap-http-get = { path = "../fandhe-cap-http-get" }
+fandhe-cap-human-presence = { path = "../fandhe-cap-human-presence" }
+fandhe-cap-image-generation = { path = "../fandhe-cap-image-generation" }
+fandhe-cap-image-recognition = { path = "../fandhe-cap-image-recognition" }
+fandhe-cap-in-app-browser = { path = "../fandhe-cap-in-app-browser" }
+fandhe-cap-in-app-review = { path = "../fandhe-cap-in-app-review" }
+fandhe-cap-lan-discovery = { path = "../fandhe-cap-lan-discovery" }
+fandhe-cap-launch-at-login = { path = "../fandhe-cap-launch-at-login" }
+fandhe-cap-live-activity = { path = "../fandhe-cap-live-activity" }
+fandhe-cap-local-fonts = { path = "../fandhe-cap-local-fonts" }
+fandhe-cap-local-peer-connect = { path = "../fandhe-cap-local-peer-connect" }
+fandhe-cap-local-storage-kv = { path = "../fandhe-cap-local-storage-kv" }
+fandhe-cap-location = { path = "../fandhe-cap-location" }
+fandhe-cap-managed-app-config = { path = "../fandhe-cap-managed-app-config" }
+fandhe-cap-map-view = { path = "../fandhe-cap-map-view" }
+fandhe-cap-media-cast = { path = "../fandhe-cap-media-cast" }
+fandhe-cap-media-playback = { path = "../fandhe-cap-media-playback" }
+fandhe-cap-media-transcode = { path = "../fandhe-cap-media-transcode" }
+fandhe-cap-memory-pressure = { path = "../fandhe-cap-memory-pressure" }
+fandhe-cap-mic-record = { path = "../fandhe-cap-mic-record" }
+fandhe-cap-midi = { path = "../fandhe-cap-midi" }
+fandhe-cap-ml-inference = { path = "../fandhe-cap-ml-inference" }
+fandhe-cap-motion-raw-sensors = { path = "../fandhe-cap-motion-raw-sensors" }
+fandhe-cap-multi-display = { path = "../fandhe-cap-multi-display" }
+fandhe-cap-music-library = { path = "../fandhe-cap-music-library" }
+fandhe-cap-network-status = { path = "../fandhe-cap-network-status" }
+fandhe-cap-nfc = { path = "../fandhe-cap-nfc" }
+fandhe-cap-nfc-card-emulation = { path = "../fandhe-cap-nfc-card-emulation" }
+fandhe-cap-nlp = { path = "../fandhe-cap-nlp" }
+fandhe-cap-notification = { path = "../fandhe-cap-notification" }
+fandhe-cap-now-playing-controls = { path = "../fandhe-cap-now-playing-controls" }
+fandhe-cap-on-device-llm = { path = "../fandhe-cap-on-device-llm" }
+fandhe-cap-open-in-shell = { path = "../fandhe-cap-open-in-shell" }
+fandhe-cap-open-system-settings = { path = "../fandhe-cap-open-system-settings" }
+fandhe-cap-passkey-signin = { path = "../fandhe-cap-passkey-signin" }
+fandhe-cap-payment-request = { path = "../fandhe-cap-payment-request" }
+fandhe-cap-pdf-viewer = { path = "../fandhe-cap-pdf-viewer" }
+fandhe-cap-pedometer = { path = "../fandhe-cap-pedometer" }
+fandhe-cap-pen-stylus = { path = "../fandhe-cap-pen-stylus" }
+fandhe-cap-per-app-language = { path = "../fandhe-cap-per-app-language" }
+fandhe-cap-photo-library = { path = "../fandhe-cap-photo-library" }
+fandhe-cap-photo-picker = { path = "../fandhe-cap-photo-picker" }
+fandhe-cap-picture-in-picture = { path = "../fandhe-cap-picture-in-picture" }
+fandhe-cap-power-state = { path = "../fandhe-cap-power-state" }
+fandhe-cap-print = { path = "../fandhe-cap-print" }
+fandhe-cap-quick-settings-tile = { path = "../fandhe-cap-quick-settings-tile" }
+fandhe-cap-radio-control = { path = "../fandhe-cap-radio-control" }
+fandhe-cap-recent-documents = { path = "../fandhe-cap-recent-documents" }
+fandhe-cap-removable-storage = { path = "../fandhe-cap-removable-storage" }
+fandhe-cap-safe-area-insets = { path = "../fandhe-cap-safe-area-insets" }
+fandhe-cap-scanner-devices = { path = "../fandhe-cap-scanner-devices" }
+fandhe-cap-screen-brightness = { path = "../fandhe-cap-screen-brightness" }
+fandhe-cap-screen-capture = { path = "../fandhe-cap-screen-capture" }
+fandhe-cap-screen-orientation = { path = "../fandhe-cap-screen-orientation" }
+fandhe-cap-screen-wake-lock = { path = "../fandhe-cap-screen-wake-lock" }
+fandhe-cap-secure-credential = { path = "../fandhe-cap-secure-credential" }
+fandhe-cap-serial-port = { path = "../fandhe-cap-serial-port" }
+fandhe-cap-share-receive = { path = "../fandhe-cap-share-receive" }
+fandhe-cap-share-sheet = { path = "../fandhe-cap-share-sheet" }
+fandhe-cap-sleep-lock-events = { path = "../fandhe-cap-sleep-lock-events" }
+fandhe-cap-smart-home = { path = "../fandhe-cap-smart-home" }
+fandhe-cap-sound-classification = { path = "../fandhe-cap-sound-classification" }
+fandhe-cap-speech-recognition = { path = "../fandhe-cap-speech-recognition" }
+fandhe-cap-spell-check = { path = "../fandhe-cap-spell-check" }
+fandhe-cap-spotlight-index = { path = "../fandhe-cap-spotlight-index" }
+fandhe-cap-system-accent-color = { path = "../fandhe-cap-system-accent-color" }
+fandhe-cap-system-sound = { path = "../fandhe-cap-system-sound" }
+fandhe-cap-system-tray = { path = "../fandhe-cap-system-tray" }
+fandhe-cap-tilt-motion = { path = "../fandhe-cap-tilt-motion" }
+fandhe-cap-translation = { path = "../fandhe-cap-translation" }
+fandhe-cap-tts = { path = "../fandhe-cap-tts" }
+fandhe-cap-url-scheme = { path = "../fandhe-cap-url-scheme" }
+fandhe-cap-usb-device = { path = "../fandhe-cap-usb-device" }
+fandhe-cap-user-idle = { path = "../fandhe-cap-user-idle" }
+fandhe-cap-uwb-ranging = { path = "../fandhe-cap-uwb-ranging" }
+fandhe-cap-video-capture = { path = "../fandhe-cap-video-capture" }
+fandhe-cap-video-transcode = { path = "../fandhe-cap-video-transcode" }
+fandhe-cap-volume-control = { path = "../fandhe-cap-volume-control" }
+fandhe-cap-wallpaper-set = { path = "../fandhe-cap-wallpaper-set" }
+fandhe-cap-web-auth-session = { path = "../fandhe-cap-web-auth-session" }
+fandhe-cap-wifi-connect = { path = "../fandhe-cap-wifi-connect" }
+fandhe-cap-wifi-info = { path = "../fandhe-cap-wifi-info" }
+fandhe-cap-window-management = { path = "../fandhe-cap-window-management" }
 # END fandhe-cap
 
 # Windows の共通層。起動時にメインウィンドウの HWND を控える（端末機能の有無によらない起動の定型、TASK-21.4 / #1184）。

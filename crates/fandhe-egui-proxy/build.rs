@@ -51,10 +51,6 @@ fn build() {
 /// macOS ターゲット向けビルド（Issue #889・#897）。macOS の ObjC は機能 crate（`fandhe-cap-*`）の `build.rs` が持つため、
 /// ここに残るのは実行体への `Info.plist` の埋め込みだけ。
 fn build_macos() {
-    if std::env::var("CARGO_FEATURE_DEVICE").is_err() {
-        return;
-    }
-
     // 素の実行体（`fandhe-gallery` の bin）へ `macos/Info.plist`
     // （`CFBundleIdentifier` + `NSLocationUsageDescription`）を埋め込む。macOS 10.15+
     // は Info.plist を持たない実行体に CoreLocation の許可プロンプトを一切出さない
