@@ -2980,6 +2980,7 @@ dependencies = [
 name = "fandhe-gallery"
 version = "0.1.0"
 dependencies = [
+ "cargo-fandhe",
  "egui",
  "fandhe-cap-accessibility-prefs",
  "fandhe-cap-activity-recognition",

@@ -30,13 +30,18 @@ name = "fandhe-gallery-desktop"
 path = "src/main.rs"
 
 # `cargo fandhe gen`（#1176）の入力。説明文は利用者（このアプリ）が書く。機能 crate は文言の既定値を持たない。
-# 現行の手書き設定（Info.plist 等）との二重管理は、設定を生成へ切り替える #1194 までの間だけ。
-# 文言は現行の `FandheIosApp/Resources/Info.plist` と同じ（一致は cargo-fandhe の tests/gen.rs が保証）。
+# 各 OS の設定（Android の Manifest・iOS / macOS の Info.plist・entitlements）は、この欄と機能 crate の宣言から
+# 生成したものだけを使う（#1194）。macOS は `build.rs` が生成して実行体へ埋め込む。
 [package.metadata.fandhe-app]
 app-group-prefix = "com.fandhe"
 
 [package.metadata.fandhe-app.ios]
 bundle-id = "com.fandhe.iosapp"
+display-name = "Fandhe"
+# 対応する言語（per-app-language の選択肢。Android は platforms/android の res/xml/locale_config.xml）。
+localizations = ["ja", "en"]
+# LAN 内の確認用サーバーへの接続（HTTP 取得・背景ダウンロードの動作確認）。
+allows-local-networking = true
 
 [package.metadata.fandhe-app.ios.usage-descriptions]
 NSCameraUsageDescription = "型サンプル「カメラ撮影」「AR 表示」「書類スキャン」「動画の撮影」「カメラのライブ映像」「接続した機器からの取り込み」の動作確認に使います"
@@ -54,8 +59,14 @@ NSLocationWhenInUseUsageDescription = "型サンプル「位置情報」の動�
 NSAppleMusicUsageDescription = "型サンプル「音楽ライブラリ」の動作確認に使います"
 NSPhotoLibraryAddUsageDescription = "型サンプル「写真の保存」の動作確認に使います"
 
+# 素の実行体（非バンドル）でも TCC の許可プロンプトが出るよう、`build.rs` が確定値の Info.plist を埋め込む。
+[package.metadata.fandhe-app.macos]
+bundle-id = "com.fandhe.egui-proxy-desktop"
+localizations = ["ja", "en"]
+allows-local-networking = true
+
 [package.metadata.fandhe-app.macos.usage-descriptions]
-NSLocationUsageDescription = "型サンプル「Wi-Fi 情報」「Wi-Fi への接続」で、接続先の Wi-Fi 名を読むために使います"
+NSLocationUsageDescription = "型サンプル「位置情報」「Wi-Fi 情報」「指定した Wi-Fi への接続」の動作確認に使います"
 NSCalendarsWriteOnlyAccessUsageDescription = "型サンプル「予定の追加」の動作確認に使います"
 NSMicrophoneUsageDescription = "型サンプル「マイク録音」の動作確認に使います"
 NSSpeechRecognitionUsageDescription = "型サンプル「音声認識」の動作確認に使います"
@@ -66,8 +77,10 @@ NSAppleMusicUsageDescription = "型サンプル「音楽ライブラリ」の動
 NSPhotoLibraryAddUsageDescription = "型サンプル「写真の保存」の動作確認に使います"
 
 [build-dependencies]
-# Apple のリンク指定（弱リンク・rpath・Info.plist 埋め込み）を `fandhe-egui-proxy` から受け取って出し直す。
+# Apple のリンク指定（弱リンク・rpath）を `fandhe-egui-proxy` と機能 crate から受け取って出し直す。
 fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+# macOS の実行体へ埋め込む Info.plist を宣言から生成する（`build.rs`、#1194）。
+cargo-fandhe = { path = "../cargo-fandhe" }
 
 [dependencies]
 fandhe-core = { path = "../fandhe-core" }

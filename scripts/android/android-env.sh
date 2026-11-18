@@ -36,8 +36,7 @@ export PATH="${JAVA_HOME}/bin:${GRADLE_HOME}/bin:${ANDROID_HOME}/cmdline-tools/l
 # platforms/android の Gradle を呼ぶ前に実行する（生成物が無いと build.gradle.kts が止める）。
 FANDHE_REPO_ROOT_ANDROID_ENV="$(cd -- "${SCRIPT_DIR_ANDROID_ENV}/../.." >/dev/null 2>&1 && pwd -P)"
 fandhe_gen_gallery() {
-  cargo run --manifest-path "${FANDHE_REPO_ROOT_ANDROID_ENV}/Cargo.toml" -q -p cargo-fandhe -- \
-    fandhe gen --manifest-path "${FANDHE_REPO_ROOT_ANDROID_ENV}/crates/fandhe-gallery/Cargo.toml"
+  "${FANDHE_REPO_ROOT_ANDROID_ENV}/scripts/build/gen-gallery.sh"
 }
 
 unset SCRIPT_DIR_ANDROID_ENV

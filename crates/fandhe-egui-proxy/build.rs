@@ -13,14 +13,13 @@
 //!   責務のため、本 crate に残す。
 //! - 端末機能の ObjC は機能 crate（`fandhe-cap-*`）の `build.rs` が持つ。`src/device/` は撤去した（Issue #1355）。
 //! - framework は `.m` / Swift ごとに自己完結して宣言する（他の単位のリンクに頼らない）。
-//! - macOS の `Info.plist` 埋め込み（`-sectcreate`）は最終実行体の設定。`fandhe-gallery` へ転送する。
-//! - Swift 薄層の弱リンク・`-rpath`・clang_rt・`-sectcreate` は `rustc-link-arg` では依存元へ伝わらない。
+//! - macOS の `Info.plist` 埋め込み（`-sectcreate`）は最終実行体の設定のため、`fandhe-gallery` の `build.rs` が
+//!   生成物から行う（#1194）。
+//! - Swift 薄層の弱リンク・`-rpath`・clang_rt は `rustc-link-arg` では依存元へ伝わらない。
 //!   最終成果物は `fandhe-gallery` へ移ったため、`links` メタデータで転送し、gallery の `build.rs` が
 //!   出し直す（`fandhe-platform-apple` の `build` モジュール doc 参照）。
 
-use fandhe_platform_apple::build::{
-    bin_link_arg, compile_objc, export_link_args, target_is_ios, target_is_macos,
-};
+use fandhe_platform_apple::build::{compile_objc, export_link_args, target_is_ios};
 
 fn main() {
     build();
@@ -29,10 +28,6 @@ fn main() {
 }
 
 fn build() {
-    if target_is_macos() {
-        build_macos();
-        return;
-    }
     if !target_is_ios() {
         return;
     }
@@ -46,20 +41,4 @@ fn build() {
     }
 
     // 端末機能の ObjC（写真選択・文字認識・バーコード読み取りを含む）は機能 crate（`fandhe-cap-*`）の `build.rs` が持つ（Issue #1355）。
-}
-
-/// macOS ターゲット向けビルド（Issue #889・#897）。macOS の ObjC は機能 crate（`fandhe-cap-*`）の `build.rs` が持つため、
-/// ここに残るのは実行体への `Info.plist` の埋め込みだけ。
-fn build_macos() {
-    // 素の実行体（`fandhe-gallery` の bin）へ `macos/Info.plist`
-    // （`CFBundleIdentifier` + `NSLocationUsageDescription`）を埋め込む。macOS 10.15+
-    // は Info.plist を持たない実行体に CoreLocation の許可プロンプトを一切出さない
-    // ため（CoreLocationCLI の既知要件、実装計画 §3.2）。最終実行体は `fandhe-gallery` へ移ったので、
-    // 本 crate は bin 専用の指定として記録するだけにし、gallery の `build.rs` が
-    // `import_link_args` で `rustc-link-arg-bins` に出し直す（テスト実行体・rlib には影響しない）。
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
-    println!("cargo:rerun-if-changed=macos/Info.plist");
-    bin_link_arg(&format!(
-        "-Wl,-sectcreate,__TEXT,__info_plist,{manifest_dir}/macos/Info.plist"
-    ));
 }

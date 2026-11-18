@@ -110,7 +110,10 @@ case "${skip_sign}" in
     ;;
 esac
 
-info_plist_src="${repo_root}/platforms/apple/FandheIosApp/Resources/Info.plist"
+# Info.plist は機能 crate の宣言とアプリ設定から生成する（手書きを持たない、Issue #1194。
+# バンドルへの配置は scripts/ios/stage-info-plist.sh）。ライブアクティビティ拡張の Info.plist も同じ生成物。
+"${repo_root}/scripts/build/gen-gallery.sh"
+info_plist_src="${repo_root}/crates/fandhe-gallery/gen/ios/Info.plist"
 # FANDHE_IOS_OUT_DIR は build-and-sign.sh（CLI）からの委譲時に --output-dir を
 # 一致させるための注入点（Issue #486）。単体実行時は既定値のまま従来どおり。
 out_dir="${FANDHE_IOS_OUT_DIR:-${repo_root}/target/ios-sim}"
@@ -278,8 +281,7 @@ phase_bundle() {
   rm -rf "${app_dir}"
   mkdir -p "${app_dir}"
   cp "${built_binary}" "${app_dir}/${app_name}"
-  cp "${info_plist_src}" "${app_dir}/Info.plist"
-  cp "${info_plist_src%/*}/PrivacyInfo.xcprivacy" "${app_dir}/PrivacyInfo.xcprivacy"
+  "${repo_root}/scripts/ios/stage-info-plist.sh" "${app_dir}" "${app_name}"
 
   if [[ -z "${injected_binary}" ]]; then
     if [[ ! -d "${live_activity_appex}" ]]; then

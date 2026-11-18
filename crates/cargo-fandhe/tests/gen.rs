@@ -1,7 +1,7 @@
 //! `cargo fandhe gen` の生成物のテスト（Issue #1176）。
 //!
-//! 1. カタログアプリ（fandhe-gallery）の 5 機能分の生成結果を、現行の手書き設定と比べる
-//!    （寿命: 設定を生成へ切り替える #1194 で、比べる相手ごと撤去する）。
+//! 1. カタログアプリ（fandhe-gallery）の生成結果が、全機能の宣言とアプリ設定どおりで、殻（platforms/）に
+//!    手書きの宣言が残っていないことを確かめる（各 OS の設定は生成物だけを使う、#1194）。
 //! 2. 一時 workspace で実際の cargo を通し、宣言・入力の不正の拒否と到達判定（他 member の feature の
 //!    混入なし・対象 OS に限った依存）を確かめる。
 
@@ -10,16 +10,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use cargo_fandhe::declaration::{Component, IntentData, IntentFilter, MetaData};
-use cargo_fandhe::{check_workspace, generate, generate_web, Declaration};
+use cargo_fandhe::{check_workspace, generate, generate_web};
 use serde_json::Value;
-
-const IDS: [&str; 5] = [
-    "camera-capture",
-    "document-scan",
-    "nfc-card-emulation",
-    "share-receive",
-    "home-widget",
-];
 
 fn repo(rel: &str) -> String {
     fs::read_to_string(
@@ -37,15 +29,6 @@ fn gallery() -> &'static BTreeMap<String, String> {
         let m = Path::new(env!("CARGO_MANIFEST_DIR")).join("../fandhe-gallery/Cargo.toml");
         generate(Some(&m)).unwrap_or_else(|e| panic!("{e:?}")).files
     })
-}
-
-fn real_decls() -> Vec<Declaration> {
-    let m = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.toml");
-    check_workspace(Some(&m))
-        .unwrap()
-        .into_iter()
-        .filter(|d| IDS.contains(&d.id.as_str()))
-        .collect()
 }
 
 // ---- XML の読み取り（テスト用の簡易版）----
@@ -193,7 +176,9 @@ fn android_shell_has_no_hand_written_declarations() {
         .collect();
     assert_eq!(kinds, BTreeSet::from(["manifest", "application"]));
     let kts = repo("platforms/android/app/build.gradle.kts");
-    assert!(kts.contains("gen/android/fandhe.gradle") && kts.contains("apply(from = fandheGradle)"));
+    assert!(
+        kts.contains("gen/android/fandhe.gradle") && kts.contains("apply(from = fandheGradle)")
+    );
     for l in kts.lines().filter(|l| !l.trim_start().starts_with("//")) {
         assert!(!l.contains("implementation("), "{l}");
         assert!(!l.contains("srcDirs(") || l.contains("jniLibs"), "{l}");
@@ -210,7 +195,8 @@ fn android_manifest_overlay_covers_all_declarations() {
     for a in decls.iter().filter_map(|d| d.android.as_ref()) {
         for p in &a.permissions {
             assert!(
-                gen.iter().any(|(k, m)| k == "uses-permission" && m["name"] == p.name),
+                gen.iter()
+                    .any(|(k, m)| k == "uses-permission" && m["name"] == p.name),
                 "{}",
                 p.name
             );
@@ -277,13 +263,17 @@ fn application_meta_data_matches_declarations() {
     let mut n = 0;
     for d in check_workspace(Some(&m)).unwrap() {
         for md in d.android.iter().flat_map(|a| &a.application_meta_data) {
-            let g = find(&gen, &md.name).unwrap_or_else(|| panic!("{} が生成されていない", md.name));
+            let g =
+                find(&gen, &md.name).unwrap_or_else(|| panic!("{} が生成されていない", md.name));
             assert_eq!(g.get("value"), md.value.as_ref(), "{}", md.name);
             assert_eq!(g.get("resource"), md.resource.as_ref(), "{}", md.name);
             n += 1;
         }
     }
-    assert_eq!(n, 4, "car-display の 2 件・payment-request の 1 件・managed-app-config の 1 件");
+    assert_eq!(
+        n, 4,
+        "car-display の 2 件・payment-request の 1 件・managed-app-config の 1 件"
+    );
 }
 
 /// `fandhe.gradle` の `java.srcDirs += [...]` などの引用符内を取り出す。
@@ -307,7 +297,10 @@ const GRADLE_VERSION_KEYS: &[(&str, &str)] = &[
     ("androidx.core:core", "ANDROIDX_CORE_VERSION"),
     ("androidx.activity:activity", "ANDROIDX_ACTIVITY_VERSION"),
     ("androidx.biometric:biometric", "BIOMETRIC_VERSION"),
-    ("androidx.security:security-crypto", "SECURITY_CRYPTO_VERSION"),
+    (
+        "androidx.security:security-crypto",
+        "SECURITY_CRYPTO_VERSION",
+    ),
     ("androidx.work:work-runtime", "WORK_RUNTIME_VERSION"),
     ("androidx.browser:browser", "ANDROIDX_BROWSER_VERSION"),
     ("androidx.window:window", "WINDOW_VERSION"),
@@ -315,9 +308,18 @@ const GRADLE_VERSION_KEYS: &[(&str, &str)] = &[
     ("androidx.car.app:app", "CAR_APP_VERSION"),
     ("com.google.guava:guava", "GUAVA_VERSION"),
     ("androidx.credentials:credentials", "CREDENTIALS_VERSION"),
-    ("androidx.credentials:credentials-play-services-auth", "CREDENTIALS_VERSION"),
-    ("com.google.android.gms:play-services-location", "PLAY_SERVICES_LOCATION_VERSION"),
-    ("com.google.android.gms:play-services-wallet", "PLAY_SERVICES_WALLET_VERSION"),
+    (
+        "androidx.credentials:credentials-play-services-auth",
+        "CREDENTIALS_VERSION",
+    ),
+    (
+        "com.google.android.gms:play-services-location",
+        "PLAY_SERVICES_LOCATION_VERSION",
+    ),
+    (
+        "com.google.android.gms:play-services-wallet",
+        "PLAY_SERVICES_WALLET_VERSION",
+    ),
     (
         "com.google.android.gms:play-services-mlkit-document-scanner",
         "PLAY_SERVICES_MLKIT_DOCUMENT_SCANNER_VERSION",
@@ -355,7 +357,9 @@ fn gradle_srcdirs_and_dependency_versions() {
         let (_, key) = GRADLE_VERSION_KEYS
             .iter()
             .find(|(k, _)| *k == ga)
-            .unwrap_or_else(|| panic!("{ga} の版の選定根拠（versions.env の鍵）が GRADLE_VERSION_KEYS にない"));
+            .unwrap_or_else(|| {
+                panic!("{ga} の版の選定根拠（versions.env の鍵）が GRADLE_VERSION_KEYS にない")
+            });
         assert!(
             env.lines().any(|l| l == format!("{key}=\"{ver}\"")),
             "{key}={ver} が versions.env にない"
@@ -399,67 +403,58 @@ fn plist_array(plist: &str, key: &str) -> String {
     body.split_whitespace().collect()
 }
 
+/// iOS の殻の確定値（Xcode を通さない組み立てでもそのまま使える）とアプリ全体の値（#1194）。
 #[test]
-fn ios_shell_values_match_current_info_plist() {
+fn ios_shell_values_and_app_keys() {
     let gen = &gallery()["ios/Info.plist"];
-    let cur = repo("platforms/apple/FandheIosApp/Resources/Info.plist");
     assert!(!gen.contains("$("), "Xcode 変数が残っている");
-    assert_eq!(
-        plist_string(gen, "MinimumOSVersion"),
-        plist_string(&cur, "MinimumOSVersion")
-    );
     // 最低対応版は .cargo/config.toml の IPHONEOS_DEPLOYMENT_TARGET とも揃える。
+    assert_eq!(plist_string(gen, "MinimumOSVersion"), "17.0");
     assert!(repo(".cargo/config.toml").contains(&format!(
         "IPHONEOS_DEPLOYMENT_TARGET = {{ value = \"{}\"",
         plist_string(gen, "MinimumOSVersion")
     )));
     assert_eq!(
         plist_array(gen, "UIDeviceFamily"),
-        plist_array(&cur, "UIDeviceFamily")
+        "<integer>1</integer><integer>2</integer>"
     );
     assert!(gen.contains("<key>UILaunchScreen</key>"));
-    assert_eq!(
-        plist_string(gen, "CFBundleIdentifier"),
-        plist_string(&cur, "CFBundleIdentifier")
-    );
+    assert_eq!(plist_string(gen, "CFBundleIdentifier"), "com.fandhe.iosapp");
     assert_eq!(
         plist_string(gen, "CFBundleExecutable"),
         "fandhe-gallery-desktop"
     );
     assert!(!gen.contains("CFBundleSupportedPlatforms"));
-}
-
-/// `UIApplicationSceneManifest` の部分（コメントを除いた plist から、次の同階層キーの手前まで）。
-fn scene_manifest(plist: &str) -> String {
-    let p = strip_comments(plist);
-    let body = p
-        .split("<key>UIApplicationSceneManifest</key>")
+    // アプリ全体の値（gallery の `fandhe-app.ios`）。
+    assert_eq!(plist_string(gen, "CFBundleDisplayName"), "Fandhe");
+    assert_eq!(
+        plist_array(gen, "CFBundleLocalizations"),
+        "<string>ja</string><string>en</string>"
+    );
+    let ats = gen
+        .split("<key>NSAppTransportSecurity</key>")
         .nth(1)
         .unwrap();
-    // 子の dict が閉じるまで（入れ子の深さで数える）。
-    let mut depth = 0;
-    let mut end = 0;
-    for (i, _) in body.match_indices(['<']) {
-        let t = &body[i..];
-        if t.starts_with("<dict>") {
-            depth += 1;
-        } else if t.starts_with("</dict>") {
-            depth -= 1;
-            if depth == 0 {
-                end = i;
-                break;
-            }
-        }
-    }
-    body[..end].split_whitespace().collect()
+    assert!(ats
+        .trim_start()
+        .starts_with("<dict>\n\t\t<key>NSAllowsLocalNetworking</key>\n\t\t<true/>"));
 }
 
 #[test]
-fn ios_scene_manifest_matches_current_info_plist_and_shim() {
-    // 無いと実機で起動直後に終了する（#1292）。本体と同じ構成を、選んだ機能に関係なく出す。
+fn ios_scene_manifest_names_the_shim_delegate() {
+    // 無いと実機で起動直後に終了する（#1292）。選んだ機能に関係なく出す。
     let gen = &gallery()["ios/Info.plist"];
-    let cur = repo("platforms/apple/FandheIosApp/Resources/Info.plist");
-    assert_eq!(scene_manifest(gen), scene_manifest(&cur));
+    let scene = gen
+        .split("<key>UIApplicationSceneManifest</key>")
+        .nth(1)
+        .unwrap();
+    for k in [
+        "UIApplicationSupportsMultipleScenes",
+        "UIWindowSceneSessionRoleApplication",
+        "UIWindowSceneSessionRoleExternalDisplayNonInteractive",
+    ] {
+        assert!(scene.contains(&format!("<key>{k}</key>")), "{k}");
+    }
     // 名指す delegate は .m が実装している。
     let m = repo("crates/fandhe-platform-apple/ios/fandhe_ios_scene.m");
     assert!(m.contains("@implementation FandheSceneDelegate"));
@@ -467,83 +462,86 @@ fn ios_scene_manifest_matches_current_info_plist_and_shim() {
 }
 
 #[test]
-fn ios_usage_description_matches_current_info_plist() {
-    let gen = &gallery()["ios/Info.plist"];
-    let cur = repo("platforms/apple/FandheIosApp/Resources/Info.plist");
-    // 生成側に出た説明文は、現行の Info.plist と一字一句同じ。選んだ機能の分だけが出る（宣言の数は
-    // gallery の `fandhe-app.ios.usage-descriptions` と `cargo fandhe gen` が突き合わせる）。
-    let keys: Vec<_> = plist_keys(gen)
-        .into_iter()
-        .filter(|k| k.ends_with("UsageDescription"))
-        .collect();
-    assert!(!keys.is_empty(), "UsageDescription が生成されていない");
-    for key in keys {
-        assert_eq!(plist_string(gen, &key), plist_string(&cur, &key), "{key}");
+fn usage_descriptions_come_from_the_app_config() {
+    // 生成側に出た説明文は、gallery の `fandhe-app.<os>.usage-descriptions` の文言そのもの。
+    // 選んだ機能が要求するキーだけが出る（欠けは gen がエラーにする）。
+    let toml = repo("crates/fandhe-gallery/Cargo.toml");
+    for os in ["ios", "macos"] {
+        let gen = &gallery()[&format!("{os}/Info.plist")];
+        let keys: Vec<_> = plist_keys(gen)
+            .into_iter()
+            .filter(|k| k.ends_with("UsageDescription"))
+            .collect();
+        assert!(
+            !keys.is_empty(),
+            "{os}: UsageDescription が生成されていない"
+        );
+        let section = toml
+            .split(&format!(
+                "[package.metadata.fandhe-app.{os}.usage-descriptions]"
+            ))
+            .nth(1)
+            .unwrap();
+        for key in keys {
+            let line = format!("{key} = \"{}\"", plist_string(gen, &key));
+            assert!(section.lines().any(|l| l == line), "{os}: {key}");
+        }
     }
 }
 
+/// macOS は `fandhe-app.macos.bundle-id` があるので、本体の Info.plist を確定値で出す。
+/// gallery の `build.rs` がこれを素の実行体へ埋め込み、`scripts/apple/bundle-macos-url-scheme.sh` が .app へ入れる。
 #[test]
-fn macos_services_and_widget_extension_match_current_settings() {
-    // NSServices: bundle-macos-url-scheme.sh の plutil -json 引数（`\"` と `$exe` を戻す）と比較する。
-    let sh = repo("scripts/apple/bundle-macos-url-scheme.sh");
-    let line = sh
-        .lines()
-        .find(|l| l.contains("\\\"NSMessage\\\""))
-        .expect("NSServices の行がない");
-    let json_text = line
-        .trim()
-        .trim_start_matches('"')
-        .trim_end_matches("\" \"$plist\"")
-        .replace("\\\"", "\"")
-        .replace("$exe", "$(EXECUTABLE_NAME)");
-    let want: Value = serde_json::from_str(&json_text).unwrap();
-    fn leaves(v: &Value, keys: &mut Vec<String>, strs: &mut Vec<String>) {
-        match v {
-            Value::String(s) => strs.push(s.clone()),
-            Value::Array(a) => a.iter().for_each(|x| leaves(x, keys, strs)),
-            Value::Object(m) => m.iter().for_each(|(k, x)| {
-                keys.push(k.clone());
-                leaves(x, keys, strs);
-            }),
-            _ => {}
-        }
-    }
-    let (mut keys, mut strs) = (vec![], vec![]);
-    leaves(&want, &mut keys, &mut strs);
-    // 生成した plist の NSServices 以降の key と string が、JSON の key と string の多重集合と一致する。
+fn macos_main_plist_is_concrete_and_widget_extension_keeps_xcode_variables() {
     let plist = &gallery()["macos/Info.plist"];
-    let svc = plist.split("<key>NSServices</key>").nth(1).unwrap();
-    let svc = svc.split("</plist>").next().unwrap();
-    // 生成物はキー名の昇順で並ぶため、`NSServices` より後ろに usage description（`NSSpeechRecognitionUsageDescription` など）が
-    // 続くことがある。それらは NSServices の値ではないので、最初の usage description の手前で切る。
-    let svc = svc
-        .split("<key>NSSpeechRecognitionUsageDescription</key>")
-        .next()
-        .unwrap();
-    for k in &keys {
-        assert!(svc.contains(&format!("<key>{k}</key>")), "{k}");
-    }
-    for s in &strs {
-        assert!(svc.contains(&format!("<string>{s}</string>")), "{s}");
-    }
-    assert_eq!(svc.matches("<key>").count(), keys.len());
-    assert_eq!(svc.matches("<string>").count(), strs.len());
+    assert!(!plist.contains("$("), "{plist}");
+    assert_eq!(
+        plist_string(plist, "CFBundleIdentifier"),
+        "com.fandhe.egui-proxy-desktop"
+    );
+    assert_eq!(
+        plist_string(plist, "CFBundleExecutable"),
+        "fandhe-gallery-desktop"
+    );
+    // サービスメニュー（share-receive）の NSPortName は実行体名へ置き換わり、CFBundleName と揃う。
+    assert_eq!(plist_string(plist, "NSPortName"), "fandhe-gallery-desktop");
+    assert_eq!(
+        plist_string(plist, "CFBundleName"),
+        "fandhe-gallery-desktop"
+    );
+    assert_eq!(plist_string(plist, "NSMessage"), "receiveSharedText");
+    assert!(plist.contains("<key>NSAllowsLocalNetworking</key>"));
 
-    // Widget 拡張の Info.plist と entitlements。
+    // Widget 拡張は Xcode（platforms/apple/project.yml）が組むので、署名時の変数を残す。
     let dir = "macos/extensions/FandheTextWidget";
     let gi = &gallery()[&format!("{dir}/Info.plist")];
-    let ci = repo("platforms/apple/FandheTextWidget/Resources/Info.plist");
-    for k in ["FandheAppGroupIdentifier", "NSExtensionPointIdentifier"] {
-        assert_eq!(plist_string(gi, k), plist_string(&ci, k), "{k}");
-    }
+    assert_eq!(
+        plist_string(gi, "FandheAppGroupIdentifier"),
+        "$(TeamIdentifierPrefix)com.fandhe.widget"
+    );
+    assert_eq!(
+        plist_string(gi, "NSExtensionPointIdentifier"),
+        "com.apple.widgetkit-extension"
+    );
     let ge = &gallery()[&format!("{dir}/FandheTextWidget.entitlements")];
-    let ce = repo("platforms/apple/FandheTextWidget/Resources/FandheTextWidget.entitlements");
-    assert_eq!(plist_keys(ge), plist_keys(&ce));
+    assert_eq!(
+        plist_keys(ge),
+        BTreeSet::from([
+            "com.apple.security.app-sandbox".to_string(),
+            "com.apple.security.application-groups".to_string()
+        ])
+    );
     assert_eq!(
         plist_string(ge, "com.apple.security.application-groups"),
-        plist_string(&ce, "com.apple.security.application-groups")
+        "$(TeamIdentifierPrefix)com.fandhe.widget"
     );
-    assert!(ge.contains("<true/>") && ce.contains("<true/>"));
+    // project.yml の拡張は生成物を指す。
+    let yml = repo("platforms/apple/project.yml");
+    assert!(yml
+        .contains("../../crates/fandhe-gallery/gen/macos/extensions/FandheTextWidget/Info.plist"));
+    assert!(yml
+        .contains("../../crates/fandhe-gallery/gen/ios/extensions/FandheLiveActivity/Info.plist"));
+    assert!(yml.contains("../../crates/fandhe-gallery/gen/ios/App.entitlements"));
 }
 
 #[test]

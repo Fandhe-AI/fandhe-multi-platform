@@ -291,17 +291,9 @@ mod tests {
         assert!(rx.recv_timeout(Duration::from_millis(200)).is_err());
     }
 
-    /// iOS の Info.plist の静的項目と `Cargo.toml` の宣言が画面の定数とずれていないこと。
+    /// `Cargo.toml` の宣言（`cargo fandhe gen` が iOS の Info.plist の静的項目へ反映する元）が画面の定数とずれていないこと。
     #[test]
-    fn info_plist_matches_screen_constants() {
-        let plist = include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../platforms/apple/FandheIosApp/Resources/Info.plist"
-        ));
-        assert!(plist.contains("<key>UIApplicationShortcutItems</key>"));
-        assert!(plist.contains(&format!("<string>{SHORTCUT_URL}</string>")));
-        assert!(plist.contains(&format!("<string>{SHORTCUT_TITLE}</string>")));
-        // `Cargo.toml` の宣言（cargo fandhe が Info.plist へ反映する元）も同じ値。
+    fn declaration_matches_screen_constants() {
         let manifest = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
         assert!(manifest.contains(&format!("\"{SHORTCUT_URL}\"")));
         assert!(manifest.contains(&format!("\"{SHORTCUT_TITLE}\"")));
