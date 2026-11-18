@@ -558,12 +558,6 @@ mod tests {
         );
     }
 
-    #[test]
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    fn pick_folder_is_unsupported_off_desktop() {
-        assert!(matches!(pick_folder(), Err(PickError::Unsupported(_))));
-    }
-
     /// テスト用の最小限のシェル引用（一時ファイルパスは英数字・`-`・`_`・`/` のみで
     /// 構成されるため、単純なシングルクォート囲みで十分）。
     #[cfg(unix)]

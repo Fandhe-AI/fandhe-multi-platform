@@ -445,6 +445,16 @@ fn pick_folder() -> Result<Option<std::path::PathBuf>, FileWatchError> {
 
 #[cfg(test)]
 mod tests {
+    /// フォルダ選択は macOS・Windows 以外で `Unsupported`（成功にも別種の失敗にもしない）。#1194 で `fandhe-device` から移した。
+    #[test]
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    fn pick_folder_is_unsupported_off_desktop() {
+        assert!(matches!(
+            super::pick_folder(),
+            Err(crate::error::FileWatchError::Unsupported)
+        ));
+    }
+
     /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
     struct NoopWaker;
     impl fandhe_runtime::RepaintWaker for NoopWaker {
