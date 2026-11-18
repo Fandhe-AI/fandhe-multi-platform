@@ -4,7 +4,7 @@
 // `apple/*.m` ではなく `macos/` に置く、`fandhe_macos_url_scheme.m` と同じ判断）。
 //
 // `crates/fandhe-cap-power-state/src/macos.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルし、IOKit をリンクする。
+// `build.rs` がコンパイルし、IOKit をリンクする。
 //
 // 契約:
 //   fandhe_macos_power_state_read(FandhePowerStateRaw *out) -> int32_t

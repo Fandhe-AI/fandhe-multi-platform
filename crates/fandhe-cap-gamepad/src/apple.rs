@@ -49,7 +49,7 @@ const KNOWN_BUTTONS_MASK: u16 = BUTTON_A
     | BUTTON_VIEW;
 
 // SAFETY: `apple/fandhe_apple_gamepad.m` が定義する C ABI（`build.rs` が iOS・macOS
-// 両ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は `.m`
+// 両ターゲットでコンパイル・リンクする）。契約は `.m`
 // ファイル冒頭コメントおよび下記 `AppleGamepad::read` 実装のコメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {

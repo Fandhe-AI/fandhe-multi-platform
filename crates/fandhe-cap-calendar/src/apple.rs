@@ -1,7 +1,7 @@
 //! macOS / iOS 向け予定追加実装（Issue #1224・#1225）。`driver.rs` の
 //! iOS / macOS 経路から呼ばれ、
 //! EventKit 実装（`apple/fandhe_apple_calendar.m`、`build.rs` が
-//! feature `device` 有効時のみコンパイル・リンクする。iOS は main queue で
+//! コンパイル・リンクする。iOS は main queue で
 //! `EKEventEditViewController` を提示する）を `unsafe extern "C"` 1 関数
 //! （[`present`]）で呼ぶ。`unsafe` はこの呼び出し 1 箇所に閉じ `// SAFETY:` で契約を明記する
 //! （`apple_biometric.rs` と同型、coding-rust.md の FFI 例外規定準拠）。

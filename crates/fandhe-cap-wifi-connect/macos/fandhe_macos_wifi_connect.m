@@ -4,7 +4,7 @@
 // 失敗したときだけ電源・許可を読み直して理由を分ける。SSID・パスワード・NSError はログに出さない。
 //
 // `crates/fandhe-cap-wifi-connect/src/macos.rs` から C ABI 経由で呼ばれる。`build.rs` の
-// `build_macos()` が feature `device` 有効時にのみコンパイルし、CoreWLAN をリンクする
+// `build.rs` がコンパイルし、CoreWLAN をリンクする
 // （CoreLocation は `fandhe_apple_location.m` のコンパイルでリンク済み）。権限宣言は
 // `macos/Info.plist` の `NSLocationUsageDescription`（Rust のテスト実行体には埋め込まれないため、
 // テストから実物は呼ばない）。

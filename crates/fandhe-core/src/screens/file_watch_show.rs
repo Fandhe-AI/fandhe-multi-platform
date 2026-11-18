@@ -159,7 +159,7 @@ pub struct OpRequest {
     pub kind: OpKind,
 }
 
-/// 失敗の種別（`fandhe_device::DeviceError` から写す責務は effect 側）。
+/// 失敗の種別（機能 crate の失敗型から写す責務は effect 側）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WatchFailure {
     /// 非対応。

@@ -1,5 +1,5 @@
 //! iOS 向けバッジ設定実装（Issue #1361）。`UNUserNotificationCenter.setBadgeCount`
-//! （`ios/fandhe_ios_app_badge.m`、`build.rs` が iOS 分岐の feature `device` 有効時にコンパイル）
+//! （`ios/fandhe_ios_app_badge.m`、`build.rs` が iOS 分岐でコンパイル）
 //! を `unsafe extern "C"` 1 関数で呼ぶ。`fandhe-cap-app-badge/src/driver.rs` の iOS 経路（`begin_set`）から
 //! 呼ばれ、dispatch・共通コア画面は #1360 で確定済みで触らない。契約は
 //! `fandhe_cap_app_badge` を参照。

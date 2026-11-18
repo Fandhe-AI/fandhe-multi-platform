@@ -2,8 +2,8 @@
 // iOS 実装（Issue #899、`UIActivityViewController`）。iOS / macOS 共用ファイル
 // （`fandhe_apple_location.m` と同じ判断）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_share.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が iOS 全体・macOS ターゲット（feature `device` 有効時）で `cc`
+// `crates/fandhe-cap-share-sheet/src/apple.rs` から C ABI 経由で呼ばれる。
+// `build.rs` が iOS 全体・macOS ターゲットで `cc`
 // コンパイルする。macOS は AppKit を、iOS は UIKit をリンクする。
 //
 // 契約（pull 型。`fandhe_apple_location.m` と同型、coding-rust.md の FFI 例外規定）:

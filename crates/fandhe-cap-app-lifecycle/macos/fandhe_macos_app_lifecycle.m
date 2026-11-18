@@ -5,7 +5,7 @@
 // 凍結（App Nap）の通知は無い。権限の宣言は増やさない。
 //
 // `crates/fandhe-cap-app-lifecycle/src/macos.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_macos_app_lifecycle_start(id) -> int32_t

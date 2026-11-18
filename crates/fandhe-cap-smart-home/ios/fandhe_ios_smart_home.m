@@ -3,7 +3,7 @@
 // 機器の操作・状態の読み取り・家の追加はしない。家・機器の名前と NSError はログに出さない。
 //
 // `crates/fandhe-cap-smart-home/src/ios.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の iOS 分岐が feature `device` 有効時にのみコンパイルし、HomeKit をリンクする。
+// `build.rs` の iOS 分岐でコンパイルし、HomeKit をリンクする。
 // 権限宣言は `platforms/apple/FandheIosApp/Resources/Info.plist` の `NSHomeKitUsageDescription`
 // （無いと初回の HomeKit 利用でクラッシュする）と、同ターゲットの entitlement `com.apple.developer.homekit`。
 //

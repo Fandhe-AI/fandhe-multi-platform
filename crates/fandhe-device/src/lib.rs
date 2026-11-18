@@ -1,20 +1,10 @@
-//! Phase 8（端末機能の型検証、親 #752 / Issue #746）: 端末機能（ローカル保存・HTTP・カメラ・
-//! 傾き検知）の抽象トレイトと desktop 向け共通実装を置くクレート。
+//! 機能 crate（`fandhe-cap-*`）が共有する、OS に触れない型・検証・定数・符号化を置くクレート
+//! （docs/architecture/consumer-app-structure.md §8。Phase 8 / Issue #746 で端末機能の土台として作り、
+//! 機能 crate への移行後は共有部品だけが残る。名前は #1215 で決める）。
 //!
-//! 依存方向は本クレート → `fandhe-core`（現時点では未使用）の一方向のみを許容し、`fandhe-core`
-//! から本クレートを参照することはない（coding-rust.md の二層アーキテクチャ原則）。
-//! 呼び出し元は `fandhe-egui-proxy` の feature `device`（既定 on）で、画面 ↔ 端末実装の
-//! 接続方法（`Box<dyn Storage>` 等をどう渡すか）は #747 以降の設計事項（本クレートは
-//! トレイトと同期実装の提供のみに責務を限定する）。
-//!
-//! Phase 8 が spec 要件化されなかった場合、本クレートと `fandhe-egui-proxy` 側の
-//! feature `device` を消せば元に戻せる構成にしている。切り離し手順は
-//! docs/architecture/device-feature-removal.md を参照。
-//!
-//! `#745`（StateStore の apply API + 完了キュー）は本クレートと並列で開発中のため、
-//! worker スレッド → mpsc → apply の配線はここでは行わない。各トレイトは
-//! `Send + Sync` なオブジェクトセーフの同期 API とし、非同期化・スレッド化は
-//! #745 の API が確定してから #747〜#749 側で行う。
+//! 呼び出し元は機能 crate と `fandhe-web-dom`。利用者は直接依存せず、共有型は機能 crate が再公開する。
+//! 依存方向は本クレート → `fandhe-core`（任意の feature `display-decode` のときだけ）の一方向で、
+//! `fandhe-core` から本クレートを参照することはない（coding-rust.md の二層アーキテクチャ原則）。
 #![forbid(unsafe_code)]
 
 /// カメラのライブ映像の縮小の部品（`downscale_packed`・`downscale_yuv420`・`preview_size`）だけ。`fandhe-cap-ar` と
@@ -53,59 +43,8 @@ pub mod wifi_info;
 
 use std::path::PathBuf;
 
-/// 端末機能共通のエラー型。呼び出し元（画面・プラットフォームレイヤ）に実装詳細
-/// （ファイルシステムの内部構造・URL の生文字列全体）を漏らさないよう、
-/// メッセージには key 名やスキーム名程度に留める（security.md A09 ログ出力の方針）。
-#[derive(Debug, thiserror::Error)]
-pub enum DeviceError {
-    /// ファイル読み書きが失敗した（`storage` モジュール）。
-    #[error("入出力エラー: {0}")]
-    Io(#[from] std::io::Error),
-    /// `storage::Storage` に渡された key が許可文字集合・パストラバーサル制約に違反する。
-    #[error("不正な key: {0}")]
-    InvalidKey(String),
-    /// `http` モジュールの通信・許可 URL 検証・応答上限超過などの失敗。
-    #[error("HTTP エラー: {0}")]
-    Http(String),
-    /// 撮影画像のサイズが許容範囲外（0 または上限超過）。カメラ撮影は機能 crate `fandhe-cap-camera-capture` が自前の `CameraError` で返し、本バリアントは他機能（地図・PDF 等）の画像で使う。
-    #[error("画像サイズが不正または大きすぎます: {0}x{1}")]
-    InvalidImageSize(u32, u32),
-    /// 現在のプラットフォームでは該当機能を提供できない（例: `FsStorage::desktop_default` の
-    /// ホームディレクトリ取得不可）。
-    #[error("このプラットフォームでは未対応です: {0}")]
-    Unsupported(&'static str),
-    /// 端末側の権限設定でアクセスが拒否された（Issue #749。desktop の `DummyCamera` は
-    /// 常に成功するため到達しないが、Android/iOS の実カメラ実装（#750/#751）が
-    /// `Intent`/`UIImagePickerController` の権限拒否コールバックから返す想定の
-    /// バリアント）。第 1 引数は機能名（`"camera"` 等、内部識別子のみで端末固有情報は含めない）。
-    #[error("権限が拒否されました: {0}")]
-    PermissionDenied(&'static str),
-    /// ユーザーが端末側の選択 UI を能動的にキャンセルした（正常系。#751。
-    /// iOS の `UIImagePickerController` のキャンセル、Android の Intent
-    /// `RESULT_CANCELED`（#750）が返す想定のバリアント。第 1 引数は機能名
-    /// （`"camera"` 等、内部識別子のみ）。
-    #[error("操作がキャンセルされました: {0}")]
-    Cancelled(&'static str),
-    /// 端末機能自体は利用可能だが、今回の呼び出しが一時的な内部要因で失敗した
-    /// （PR #791 レビュー指摘: iOS の `fandhe_ios_camera_capture` コード 4 —
-    /// presenter 不在・エンコード失敗・二重呼び出し等。`Unsupported`（機種として
-    /// 非対応）と混同すると「カメラなし端末」という誤った案内になるため区別する。
-    /// 第 1 引数は機能名（`"camera"` 等、内部識別子のみ）で、呼び出し元は
-    /// `CaptureFailure::Other` 相当の汎用失敗表示へフォールバックする想定）。
-    #[error("内部エラーが発生しました: {0}")]
-    Internal(&'static str),
-    /// 端末機能へ渡した入力が契約違反（読み上げ `Tts::speak` に渡したテキストの NUL
-    /// 混入等）。第 1 引数は機能名（`"tts text"` 等、内部識別子のみ）。
-    #[error("入力が不正です: {0}")]
-    InvalidInput(&'static str),
-    /// 端末側で機能そのものが無効化されている（OS 設定で位置情報サービスが
-    /// OFF 等）。`Unsupported`（この機種・OS では非対応）とも `Internal`
-    /// （一時的な内部要因）とも意味が異なるため区別する（`location` モジュール
-    /// doc の対応表参照、Issue #888）。第 1 引数は機能名（`"location"` 等、
-    /// 内部識別子のみ）。
-    #[error("端末側で機能が無効化されています: {0}")]
-    Disabled(&'static str),
-}
+// エラー型は共有しない（consumer-app-structure.md §8）。各モジュールが使うバリアントだけを持つ
+// （`file_picker::PickError`・`storage::StorageError`・`http::UrlRejected` など。旧 `DeviceError` は #1194 で撤去）。
 
 /// カメラ実装が返す静止画（RGBA・行優先・パディングなし）。
 ///

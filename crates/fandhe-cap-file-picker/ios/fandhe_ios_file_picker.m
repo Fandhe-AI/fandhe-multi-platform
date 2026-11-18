@@ -38,6 +38,10 @@
 // ブロックしない。選択時の読み取り（Rust 側 `read_picked`）は dispatch_async(global)
 // の別スレッドへ逃がし、main を長時間塞がない。
 //
+// 完了通知を失う経路のうちシーンの切断は、`UISceneDidDisconnectNotification` の観測で失敗（code 2）として 1 度だけ確定する
+// （画面の effect が `Picking` のまま止まらない）。提示が捨てられてコールバックが来ない稀な場合と、提示先のシーンが特定できない場合は観測できず、確定しない。
+// 切断でピッカーが delegate を呼ばずに消える挙動自体が、公式文書で確認されておらず実機で未確認。
+//
 // 進行中かどうかは OS の観測（提示中の picker が実際に提示されているか）で決める。推測タイマーのフラグは持たない:
 // 画面 effect も公開入口（`begin_file_pick`）も同じこの入口を通るため、Rust 側が slot を捨てた（`discard_file_pick`）後でも、
 // 選択画面が残っている間の新しい要求はここで busy（code 3）にする。
@@ -148,9 +152,57 @@ extern void fandhe_rust_file_picker_outcome(uint64_t requestId, int32_t code,
 
 @end
 
+// 提示したシーン（weak）。シーンの切断（`UISceneDidDisconnectNotification`）が、その要求の完了通知を失った観測になる。
+// 提示の直前に記録し、`g_activePicker` を nil にする箇所ですべて nil にする。main queue からのみ読み書きする。
+static __weak UIScene *g_activeScene = nil;
+// 切断通知の購読トークン。強参照で持ち続けないと observer が解放されて購読が無効になる。main queue からのみ触る。
+static id _Nullable g_sceneDisconnectToken = nil;
+
+// シーンの切断で、完了通知を失った要求を失敗（code 2）で 1 度だけ確定する（main queue）。
+// 切断されるとピッカーは delegate を呼ばずに消え、画面の effect が `Picking` のまま止まる、という挙動は公式文書で確認されておらず実機で未確認。
+// OS の観測で確定するので推測のタイマーは持たない。
+// 提示したシーンが記録でき、それが切断されたときだけ確定する。提示先が特定できない（記録が nil）ときは、iPad のマルチウィンドウで
+// 無関係な別シーンが閉じただけで正しい選択を落とさないよう、切断では確定しない（観測できない天井）。
+// 正しい選択は先に `g_retainedDelegate` が nil になっているので何もしない。確定後に遅れて届いた通知は Rust 側が消費済みの id として捨てる。
+static void FandheFilePickerFailOnSceneDisconnect(UIScene *disconnected) {
+    id stale = g_retainedDelegate;
+    if (stale == nil) {
+        return;
+    }
+    UIScene *active = g_activeScene;
+    if (active == nil || active != disconnected) {
+        return;
+    }
+    UIDocumentPickerViewController *picker = g_activePicker;
+    picker.presentationController.delegate = nil;
+    g_retainedDelegate = nil;
+    g_activePicker = nil;
+    g_activeScene = nil;
+    fandhe_rust_file_picker_outcome((((FandheFilePickerDelegate *)stale).requestId), 2, NULL, 0);
+}
+
+// 切断通知の購読を 1 度だけ登録する（main queue）。
+static void FandheFilePickerObserveSceneDisconnect(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+      g_sceneDisconnectToken = [NSNotificationCenter.defaultCenter
+          addObserverForName:UISceneDidDisconnectNotification
+                      object:nil
+                       queue:NSOperationQueue.mainQueue
+                  usingBlock:^(NSNotification *note) {
+                    @autoreleasepool {
+                        if ([note.object isKindOfClass:UIScene.class]) {
+                            FandheFilePickerFailOnSceneDisconnect((UIScene *)note.object);
+                        }
+                    }
+                  }];
+    });
+}
+
 int32_t fandhe_ios_file_picker_pick(uint64_t requestId) {
     dispatch_async(dispatch_get_main_queue(), ^{
       @autoreleasepool {
+        FandheFilePickerObserveSceneDisconnect();
         // 進行中の選択画面（提示中、または dismiss のアニメーション中の picker）があれば、重ねて提示せず busy を返す。
         // 判定は delegate の有無ではなく OS の観測（picker の提示状態）で行う: 完了通知で delegate を解放した直後も、
         // picker は dismiss が終わるまで提示中のままで、その上へ present すると失敗してコールバックが来ない。
@@ -160,9 +212,10 @@ int32_t fandhe_ios_file_picker_pick(uint64_t requestId) {
             fandhe_rust_file_picker_outcome(requestId, 3, NULL, 0);
             return;
         }
-        // delegate だけ残っていれば、完了通知を失った残り（シーン破棄等）なので解放して続ける。
+        // delegate だけ残っていれば、完了通知を失った残り（シーン破棄等。シーン切断で消える挙動自体は実機未確認）なので解放して続ける。
         g_retainedDelegate = nil;
         g_activePicker = nil;
+        g_activeScene = nil;
         UIViewController *top = FandheTopmostViewController();
         // `top.view.window == nil` は `presentViewController` がデリゲートを
         // 一切呼ばずに失敗する既知の失敗系（`fandhe_ios_camera.m` と同じ）。
@@ -194,14 +247,13 @@ int32_t fandhe_ios_file_picker_pick(uint64_t requestId) {
         picker.presentationController.delegate = delegate;
         g_retainedDelegate = delegate;
         g_activePicker = picker;
+        g_activeScene = top.view.window.windowScene;
 
         // ponytail: 提示直前の判定のみで成否を決め、`presentViewController:` の
-        // completion やモーダル遷移中の再判定は持たない（旧実装より単純化。
-        // 既知の天井: 別モーダルの提示/解除と競合した稀なケースでは提示が
-        // 失敗してもコールバックが来ず `Picking` のまま残り得る。固定タイムアウトは
-        // 掛けない方針のため、`Picking` のまま留まる — `fandhe-web-dom::file_picker`
-        // の `cancel` 非対応ブラウザと同じ割り切り）。実機で恒久的な滞留の報告が
-        // 出たら見直す。
+        // completion やモーダル遷移中の再判定は持たない。既知の天井: 別モーダルの
+        // 提示/解除と競合した稀なケースで提示が失敗してもコールバックが来ず、シーンも
+        // 接続されたままなら `Picking` のまま残り得る（観測できる OS の通知が無い。固定タイムアウトは掛けない）。
+        // シーンの切断は `FandheFilePickerFailOnSceneDisconnect` が失敗（code 2）で確定する。
         [top presentViewController:picker animated:YES completion:nil];
       }
     });

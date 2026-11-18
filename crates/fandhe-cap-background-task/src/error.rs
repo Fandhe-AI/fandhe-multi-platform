@@ -16,21 +16,18 @@ pub enum BackgroundTaskError {
     /// `DeviceError::Disabled` に相当する。端末側（OS の設定）でバックグラウンド実行が無効なとき。呼び出し側が固定の識別子を渡す。
     #[error("端末側で機能が無効化されています: {0}")]
     Disabled(&'static str),
-    /// 実行記録の保存層（`Storage`）の失敗。`DeviceError` の文言（キー不正・入出力など）をそのまま転送する
+    /// 実行記録の保存層（`Storage`）の失敗。`StorageError` の文言（キー不正・入出力など）をそのまま転送する
     /// （OS の内部構造は出さず `Display` の文言だけ）。
     #[error("{0}")]
     Storage(String),
 }
 
-impl From<fandhe_device::DeviceError> for BackgroundTaskError {
-    /// `Storage` の失敗を種別ごとに写す。固定識別子を持つものは同じ種別へ、それ以外は文言を転送する。
-    fn from(e: fandhe_device::DeviceError) -> Self {
-        use fandhe_device::DeviceError;
+impl From<fandhe_device::storage::StorageError> for BackgroundTaskError {
+    /// `Storage` の失敗を写す。未対応は同じ種別へ、それ以外（キー不正・入出力）は文言を転送する。
+    fn from(e: fandhe_device::storage::StorageError) -> Self {
+        use fandhe_device::storage::StorageError;
         match e {
-            DeviceError::Unsupported(s) => Self::Unsupported(s),
-            DeviceError::PermissionDenied(s) => Self::PermissionDenied(s),
-            DeviceError::Internal(s) => Self::Internal(s),
-            DeviceError::Disabled(s) => Self::Disabled(s),
+            StorageError::Unsupported(s) => Self::Unsupported(s),
             other => Self::Storage(other.to_string()),
         }
     }

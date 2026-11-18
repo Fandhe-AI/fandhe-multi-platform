@@ -165,22 +165,17 @@ targets:
       - path: FandheIosApp/Sources/FandheIosApp
     settings:
       base:
-        GENERATE_INFOPLIST_FILE: NO
-        # 既存の Resources/Info.plist（scripts/ios/build-simulator-app.sh が参照する
-        # ものと同一ファイル）をそのまま流用する。CFBundleIdentifier は
-        # com.fandhe.iosapp で一致済み。
-        # 注意（Issue #27）: この Info.plist の UIApplicationSceneManifest は
-        # FandheSceneDelegate（Rust バイナリ側の fandhe_ios_scene.m）を指す。本ターゲットの
-        # バイナリには同クラスが無いため、このホストはプロファイル生成専用で、起動しない
-        # （実機・シミュレータで動かすのは Rust/winit バンドルのみ）。
-        INFOPLIST_FILE: FandheIosApp/Resources/Info.plist
+        # プロファイル生成専用で起動しないため、Info.plist は Xcode の既定を使う（Rust/winit バンドルの
+        # Info.plist は `cargo fandhe gen` の出力で、scripts/ios/* が .app へ入れる。Issue #1194）。
+        GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.iosapp
         PRODUCT_NAME: FandheIosApp
         CODE_SIGN_STYLE: Automatic
         # Issue #1080: HomeKit capability（`com.apple.developer.homekit`）をプロファイル生成用に
         # 足す。実機署名は従来どおり、プロファイルから entitlements を抜き出して Rust/winit の
-        # バンドルへ付ける手順のまま。
-        CODE_SIGN_ENTITLEMENTS: FandheIosApp/Resources/FandheIosApp.entitlements
+        # バンドルへ付ける手順のまま。entitlements は機能 crate の宣言から生成する
+        # （scripts/build/gen-gallery.sh を xcodegen の前に実行する、Issue #1194）。
+        CODE_SIGN_ENTITLEMENTS: ../../crates/fandhe-gallery/gen/ios/App.entitlements
 
   FandheWatchApp:
     type: application
@@ -285,10 +280,13 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: NO
-        INFOPLIST_FILE: FandheTextWidget/Resources/Info.plist
-        CODE_SIGN_ENTITLEMENTS: FandheTextWidget/Resources/FandheTextWidget.entitlements
+        # Info.plist・entitlements は home-widget の宣言から生成する（scripts/build/gen-gallery.sh、Issue #1194）。
+        INFOPLIST_FILE: ../../crates/fandhe-gallery/gen/macos/extensions/FandheTextWidget/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ../../crates/fandhe-gallery/gen/macos/extensions/FandheTextWidget/FandheTextWidget.entitlements
         PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.widgethost.text
         PRODUCT_NAME: FandheTextWidget
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
         CODE_SIGN_STYLE: Automatic
 
   # Issue #295: ライブアクティビティの Widget Extension（iOS）。Rust/winit の手組みバンドル
@@ -305,9 +303,12 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: NO
-        INFOPLIST_FILE: FandheLiveActivity/Resources/Info.plist
+        # Info.plist は live-activity の宣言から生成する（scripts/build/gen-gallery.sh、Issue #1194）。
+        INFOPLIST_FILE: ../../crates/fandhe-gallery/gen/ios/extensions/FandheLiveActivity/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.fandhe.iosapp.liveactivity
         PRODUCT_NAME: FandheLiveActivity
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
         CODE_SIGN_STYLE: Automatic
 
 # 署名チーム（DEVELOPMENT_TEAM）注入について:

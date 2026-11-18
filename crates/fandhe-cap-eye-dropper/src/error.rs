@@ -1,8 +1,8 @@
-//! eye-dropper の失敗の種類。`RequestSlot` は結果に `Clone` を要るが、契約側の `DeviceError` は `Clone` ではないため、
-//! 機能 crate ごとに持つ（Issue #1183・#1359）。表示文言は `DeviceError` と同じ書き出しで、OS の文言・拾った色は持たない
+//! eye-dropper の失敗の種類。`RequestSlot` は結果に `Clone` を要るが、契約側の旧 `DeviceError` は `Clone` ではなかったため、
+//! 機能 crate ごとに持つ（Issue #1183・#1359）。表示文言は旧 `DeviceError` と同じ書き出しで、OS の文言・拾った色は持たない
 //! （ログ・`Debug` に出さない契約）。
 
-use fandhe_device::DeviceError;
+use fandhe_device::eye_dropper::PickColorError;
 
 /// eye-dropper の失敗。使うバリアントだけを持つ。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -25,12 +25,11 @@ impl EyeDropperError {
         not(any(target_os = "macos", target_arch = "wasm32", test)),
         allow(dead_code)
     )]
-    pub(crate) fn from_device(e: DeviceError) -> Self {
+    pub(crate) fn from_device(e: PickColorError) -> Self {
         match e {
-            DeviceError::Cancelled(_) => Self::Cancelled,
-            DeviceError::Unsupported(_) => Self::Unsupported,
-            DeviceError::Internal(s) => Self::Internal(s),
-            _ => Self::Internal("eye_dropper"),
+            PickColorError::Cancelled(_) => Self::Cancelled,
+            PickColorError::Unsupported(_) => Self::Unsupported,
+            PickColorError::Internal(s) => Self::Internal(s),
         }
     }
 }
@@ -58,20 +57,16 @@ mod tests {
     #[test]
     fn from_device_maps_kinds_and_never_succeeds() {
         assert_eq!(
-            EyeDropperError::from_device(DeviceError::Cancelled("x")),
+            EyeDropperError::from_device(PickColorError::Cancelled("x")),
             EyeDropperError::Cancelled
         );
         assert_eq!(
-            EyeDropperError::from_device(DeviceError::Unsupported("x")),
+            EyeDropperError::from_device(PickColorError::Unsupported("x")),
             EyeDropperError::Unsupported
         );
         assert_eq!(
-            EyeDropperError::from_device(DeviceError::Internal("y")),
+            EyeDropperError::from_device(PickColorError::Internal("y")),
             EyeDropperError::Internal("y")
-        );
-        assert_eq!(
-            EyeDropperError::from_device(DeviceError::PermissionDenied("x")),
-            EyeDropperError::Internal("eye_dropper")
         );
     }
 }

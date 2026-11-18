@@ -1,6 +1,6 @@
 //! macOS / iOS 向け端末内 LLM 実装（Issue #345 macOS、Issue #346 iOS）。
 //! `fandhe-cap-on-device-llm/src/driver.rs` の macOS 経路と iOS 経路（`ios_on_device_llm` 経由）から呼ばれ、`apple/fandhe_apple_on_device_llm.swift`
-//! （FoundationModels。`build.rs` が feature `device` 有効時に swiftc で静的ライブラリ化）を
+//! （FoundationModels。`build.rs` が swiftc で静的ライブラリ化）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出し 1 か所に閉じる
 //! （coding-rust.md の FFI 例外規定準拠）。`build.rs` のコンパイル条件・`device.rs` の mod cfg と
 //! 同じ OS 集合に保つ。
@@ -17,7 +17,7 @@ use crate::contract::{
 use crate::error::OnDeviceLlmError;
 
 // SAFETY: `apple/fandhe_apple_on_device_llm.swift` が `@_cdecl` で定義する C ABI（`build.rs` が
-// macOS ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は swift 冒頭コメントに集約する。
+// macOS ターゲットでコンパイル・リンクする）。契約は swift 冒頭コメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {
     fn fandhe_apple_on_device_llm_respond(

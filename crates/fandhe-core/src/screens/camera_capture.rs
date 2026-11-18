@@ -13,8 +13,8 @@
 //! 状態の巻き戻しを防ぐ。
 //!
 //! `fandhe-core` は端末依存ゼロを維持するため、実カメラアクセス（`fandhe-device` の
-//! `Camera` トレイト呼び出し）はここでは行わない。`crates/fandhe-egui-proxy/src/device/
-//! camera_capture.rs` が `fandhe_device::camera::Camera` を呼び、結果をこのモジュールの
+//! `Camera` トレイト呼び出し）はここでは行わない。`crates/fandhe-cap-camera-capture/src/driver.rs` が
+//! OS のカメラを呼び、結果をこのモジュールの
 //! 型（`Thumbnail` / `CaptureFailure`）へ変換して `CompletionSender` 経由で反映する
 //! （依存方向はプロキシ → コアの一方向、coding-rust.md 準拠）。
 //!
@@ -108,11 +108,11 @@ pub fn thumbnail_from_rgba(width: u32, height: u32, rgba: &[u8]) -> Option<Thumb
     })
 }
 
-/// 撮影失敗の理由。端末非依存（`fandhe_device::DeviceError` からの変換は
-/// `crates/fandhe-egui-proxy/src/device/camera_capture.rs` の責務）。
+/// 撮影失敗の理由。端末非依存（機能 crate の失敗型 `CameraError` からの変換は
+/// `crates/fandhe-cap-camera-capture/src/driver.rs` の責務）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CaptureFailure {
-    /// カメラの権限が拒否された（`fandhe_device::DeviceError::PermissionDenied`）。
+    /// カメラの権限が拒否された（`CameraError::PermissionDenied`）。
     PermissionDenied,
     /// この環境ではカメラを利用できない（`DeviceError::Unsupported` 等）。
     Unsupported,
@@ -166,8 +166,7 @@ pub fn mark_capturing(state: &mut CameraCaptureState) {
 /// ユーザーによる撮影キャンセルを反映する。`Capturing` 以外で届いた場合は無視する
 /// （`finish_capture` と同じ順序契約）。`CaptureFailure` を経由させず `Idle` へ戻す
 /// （`UIImagePickerController` 等のキャンセルは正常なユーザー操作であり、失敗として
-/// 表示すべきではない。呼び出し元は `crates/fandhe-egui-proxy/src/device/
-/// camera_capture.rs` の `spawn_capture`、PR #791 レビュー指摘対応）。
+/// 表示すべきではない。呼び出し元は `crates/fandhe-cap-camera-capture/src/driver.rs`、PR #791 レビュー指摘対応）。
 pub fn cancel_capture(state: &mut CameraCaptureState) {
     if matches!(state.phase, CapturePhase::Capturing) {
         state.phase = CapturePhase::Idle;
@@ -191,7 +190,7 @@ pub fn status_text(state: &CameraCaptureState) -> String {
     match &state.phase {
         // Web（`getUserMedia`）・Android/iOS（`fandhe-device::camera::Camera` の実装）は
         // 実カメラへアクセスするが、macOS/Windows/Linux は引き続き `DummyCamera`
-        // （固定の市松模様画像）を使う（`fandhe-egui-proxy/src/device/camera_capture.rs`
+        // （固定の市松模様画像）を使う（`fandhe-cap-camera-capture/src/driver.rs`
         // の `platform_camera_capture` 参照）。`state` はどの実装が動いているかを知らない
         // （共通コアはプラットフォーム固有クレートへ依存しない、coding-rust.md
         // 「クレート構成」節）ため、実カメラ/ダミーの両方に当てはまる表現にする

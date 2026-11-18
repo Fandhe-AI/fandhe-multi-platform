@@ -96,12 +96,11 @@ pub fn receive(
     allowed_host: &str,
     now_ms: u64,
 ) -> Result<(), DeepLinkError> {
-    // `UrlInbox` は `fandhe-device` の `DeviceError` で検査を受ける。検査の失敗は固定の識別子だけを持つ
-    // `InvalidInput` で、機能の失敗型（同じ識別子）へ写し直す。
+    // `UrlInbox` は `fandhe-device` の `InvalidUrl` で検査を受ける。検査の失敗は固定の識別子だけを持ち、
+    // 機能の失敗型（同じ識別子）へ写し直す。
     inbox
         .receive_with(bytes, LABEL, now_ms, |s| {
-            validate_url(s, allowed_host)
-                .map_err(|_| fandhe_device::DeviceError::InvalidInput(LABEL))
+            validate_url(s, allowed_host).map_err(|_| fandhe_device::url_scheme::InvalidUrl(LABEL))
         })
         .map_err(|_| DeepLinkError::InvalidInput(LABEL))
 }

@@ -13,7 +13,7 @@
 //! への応答に時間がかかり期限を超えた場合の「未取得」表示。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `requestPedometerRead` を経た後でしか
-//! 呼ばれず、feature `device` 無効ビルドではその経路に到達しない（mic-record / BLE と同じ）。
+//! 呼ばれず、この crate を選ばないアプリではその経路に到達しない（mic-record / BLE と同じ）。
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};

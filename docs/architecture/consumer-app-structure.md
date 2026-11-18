@@ -10,8 +10,8 @@
 - 本書を入れた時点で `crates/` は未移行です。構造の実装は #1155 配下の後続 issue で進めます（`fandhe-gallery` は #1165 で追加済み）
 - 本書より古い文書と食い違う場合は、本書を正とします
 - 古い文書の「独自レンダラ」は、第 2 バックエンドの候補と読み替えます
-- #1194 までは旧構造（`feature device`、手書きの設定、`fandhe-egui-proxy/src/device/`）が併存します。
-  併存そのものは欠陥として扱いません
+- 旧構造（`feature device`、手書きの設定、`fandhe-egui-proxy/src/device/`）は #1194 で撤去しました。
+  `fandhe-egui-proxy` に残る各 OS の入口は、入口 crate（#1199）と `#[fandhe::main]`（#1200）で撤去します
 
 ## 2. 決定の要約
 
@@ -40,12 +40,12 @@ crates.io では、公開する crate の通常依存も公開が要るためで
 | `fandhe-platform-android` / `-apple` / `-windows` / `-web` | 機能をまたいで共有する OS 層。`-windows` は HWND の保持と COM 初期化ガードだけを持ち、`windows` crate の feature は共通層が最小限（`Win32_Foundation`・`Win32_System_Com`）、各機能 crate が自分の分を宣言する | する | #1166・#1168・#1184・#1185 |
 | `fandhe-cap-<id>` | 1 機能 1 crate。OS 別実装・ObjC・Java・`build.rs`・宣言を同居 | する | #1170〜#1174、第 5 Phase |
 | `fandhe-web-dom` | Web の DOM 出力 | する | 既存 |
-| `fandhe-gallery` | 全機能を載せるカタログ（実機確認用）。画面の登録と各 OS の最終成果物（デスクトップ・iOS の bin、Android・Web の cdylib）を持つ。#1194 までは端末機能を `fandhe-egui-proxy` に依存する | しない | #1165（追加済み） |
+| `fandhe-gallery` | 全機能を載せるカタログ（実機確認用）。画面の登録と各 OS の最終成果物（デスクトップ・iOS の bin、Android・Web の cdylib）を持つ。各 OS の設定は `cargo fandhe gen` の出力だけを使う（#1194）。各 OS の入口は #1200 までは `fandhe-egui-proxy` を使う | しない | #1165（追加済み） |
 | `fandhe-prototype` | 検証用プロトタイプ | しない | 既存 |
 | `fandhe-winit-ime` | 入口から到達しない。第 2 バックエンド着手時に判断 | しない | 既存 |
 | `fandhe-swiftui-bridge` | watchOS / visionOS 用。入口から到達しない | しない | 既存 |
-| `fandhe-egui-proxy` | 上記へ分解して消す | 消滅 | #1164〜#1168・#1194 |
-| `fandhe-device` | 機能 crate へ移した後に残る、OS に触れない共有の型・検証・定数・符号化（宣言は持たない）。縮小して残す。名前は #1215 で決める。残りの整理は #1194 | する（機能 crate の通常依存になるため） | #1183・#1194 |
+| `fandhe-egui-proxy` | 上記へ分解して消す。端末機能の配線と一括切り替えは撤去済み（#1355・#1194）で、各 OS の入口・ソフトキーボード・TV のフォーカス移動・計測用の入口が残る | 消滅 | #1164〜#1168・#1194・#1199・#1200 |
+| `fandhe-device` | 機能 crate へ移した後に残る、OS に触れない共有の型・検証・定数・符号化（宣言は持たない）。縮小して残す（共通エラー型の撤去と OS ダイアログの移動は #1194 で済んだ）。名前は #1215 で決める | する（機能 crate の通常依存になるため） | #1183・#1194 |
 
 依存は `fandhe-core` へ向かう一方向です。
 
@@ -178,7 +178,12 @@ graph TD
 | OS 層の定型（JNI・main thread・再描画・保存先の解決） | `fandhe-platform-<os>`・`fandhe-runtime` |
 
 - 利用者は `fandhe-device` に直接依存しません。使うのは機能 crate で、共有型は機能 crate が再公開します
-- `fandhe-device` は `forbid(unsafe_code)` を保ち、OS API を呼びません。`DeviceError` の削除と残ったモジュールの整理は #1194 です
+- `fandhe-device` は `forbid(unsafe_code)` を保ち、OS の API（Cocoa・Win32・JNI 等）を呼びません。Windows の標準ダイアログを
+  PowerShell の子プロセスで開く組み立てと実行（`std::process`）は、ファイル選択・写真選択・フォルダ監視が共有し、非 Windows でも
+  試験できるためここに置きます。macOS のフォルダ選択（`NSOpenPanel`）は使う機能 crate（`fandhe-cap-file-watch`）が持ちます
+- 共通のエラー型は持ちません。各モジュールが使うバリアントだけの型（`file_picker::PickError`・`storage::StorageError`・
+  `http::UrlRejected`・`url_scheme::InvalidUrl`・`eye_dropper::PickColorError`・`photo_library::InvalidPng`）を返し、
+  機能 crate が自分の失敗型へ写します（旧 `DeviceError` は #1194 で撤去）
 
 ### 8.1 画面と effect ドライバの置き場
 
@@ -194,6 +199,23 @@ graph TD
   フレームワークの外のアプリはこれを使い、effect は自分の状態型で書きます（実例: `fandhe-cap-device-identifier`）。
   `<stem>` は対応表の id の `-` を `_` にした名前で、別名は認めません。
   公開の有無は `node scripts/device/migrate-capability.mjs sync --check` が検査します
+- OS がコールバック型で結果が非同期に届くため、同期の `platform_<stem>()` では実機能に届かない OS がある機能は、
+  その OS 向けに begin / poll / discard 型の非同期の入口も crate ルートから公開します。
+  前例は `fandhe-cap-file-picker` の `begin_file_pick` / `poll_file_pick` / `discard_file_pick` です。
+  同期の `platform_<stem>()` はその OS で `Unsupported` のままにします（成功を偽装しません）。
+  非同期の入口は次を満たします。実装の形は `docs/operations/capability-crate-migration.md` の
+  「begin / poll / discard 型の公開入口」の行を参照します
+  - 画面 effect と同じ要求の受け口を共有し、どちらかが進行中なら他方は busy で断ります（画面との排他）。
+    公開側の届いた未取得の結果は画面から守ります。画面側の届いた未取得の結果は、画面が受け取らないまま
+    （破棄・描画停止）残りうるため、公開入口の begin は受け口を空けて始めます。空けるときは結果を捨てず、
+    画面の受け取り待ちへ移します。画面は移された結果をそのまま受け取ります（生きている画面の結果を失わせません）。
+    受け取られない分は、画面の次の開始か機能の破棄で解放します（一時ファイルなどの資源を含む）
+  - 結果は要求ごとに 1 回だけ届けます
+  - 結果が届かないまま失われた要求は、失敗として 1 回だけ知らせます
+  - discard は Rust 側の記録だけを捨てます。遅れて届いた結果は id で照合して捨て、新しい要求へ結びつけません
+  - OS 側でまだ進行中なら、次の begin を OS の観測で busy にします
+- 次の機能は非同期の入口を要しません。同期の入口が OS の完了まで待って実結果を返せる機能と、
+  実機能に届く経路がどこにもない OS（対応表で `no` や保留のもの。`Unsupported` 固定）です
 - 保存先の解決（Android の `data_dir`・iOS の `documents_dir`・デスクトップの既定）は `fandhe-cap-local-storage-kv` が持ちます。
   他機能は「OS 機能を実際に使う」場合として依存します
 

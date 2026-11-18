@@ -5,7 +5,7 @@
 //! getUserMedia` + `MediaRecorder` で録音して結果を書き戻す。
 //!
 //! Web は `fandhe-device` の `MicRecorder` トレイトを通らない（`location.rs`/`share.rs` と
-//! 同じ理由。`fandhe-egui-proxy` の feature `device` は wasm32 に依存を持ち込まない設計、
+//! 同じ理由。機能 crate の OS 実装は wasm32 を対象にしない設計（Web の実装は本クレート、consumer-app-structure.md §7）、
 //! `fandhe_cap_mic_record` の `contract` の doc の「対応不可プラットフォーム」節参照）。
 //! そのため本モジュールが DOM レンダラ側の対応実装にあたる。ただし録音結果の不変条件
 //! （0 バイト禁止・`duration_ms == 0` 禁止・[`fandhe_cap_mic_record::MAX_RECORDING_BYTES`]

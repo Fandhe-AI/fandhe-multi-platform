@@ -1,5 +1,5 @@
 //! macOS 向け外部ストレージの着脱の実装（Issue #858、親 #175）。`macos/fandhe_macos_removable_storage.m`
-//! （NSWorkspace の通知センターと `mountedVolumeURLs`。`build.rs` が macOS 分岐で feature `device` 有効時に
+//! （NSWorkspace の通知センターと `mountedVolumeURLs`。`build.rs` が macOS 分岐で
 //! コンパイルする）を `unsafe extern "C"` 3 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で
 //! 契約を明記する。`driver.rs` の macOS 経路から UI スレッドで呼ばれ、契約は
 //! `crate::contract`。
@@ -103,7 +103,7 @@ fn from_raw(raw: &Raw) -> Result<Vec<Volume>, RemovableStorageError> {
 mod ffi {
     use super::Raw;
 
-    // SAFETY: `macos/fandhe_macos_removable_storage.m`（`build.rs` が macOS 分岐で feature `device` 有効時に
+    // SAFETY: `macos/fandhe_macos_removable_storage.m`（`build.rs` が macOS 分岐で
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {

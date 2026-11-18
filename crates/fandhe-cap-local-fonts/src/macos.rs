@@ -1,5 +1,5 @@
 //! macOS 向け OS 搭載フォント一覧実装（Issue #1376）。`macos/fandhe_macos_local_fonts.m`
-//! （`NSFontManager.availableFontFamilies`。`build.rs` が macOS 分岐で feature `device` 有効時に
+//! （`NSFontManager.availableFontFamilies`。`build.rs` が macOS 分岐で
 //! コンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で
 //! 契約を明記する。`fandhe-cap-local-fonts/src/driver.rs` の macOS 経路（`drive_sync`）から UI スレッドで呼ばれ、
 //! 契約は `fandhe_cap_local_fonts`。
@@ -27,7 +27,7 @@ use crate::error::LocalFontsError;
 
 #[cfg(target_os = "macos")]
 mod ffi {
-    // SAFETY: `macos/fandhe_macos_local_fonts.m`（`build.rs` が macOS 分岐で feature `device` 有効時に
+    // SAFETY: `macos/fandhe_macos_local_fonts.m`（`build.rs` が macOS 分岐で
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {

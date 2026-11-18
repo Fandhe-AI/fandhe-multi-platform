@@ -4,7 +4,7 @@
 // 見るのは application ロールの scene だけで、外部画面の scene は捨てる。権限の宣言は増やさない。
 //
 // `crates/fandhe-cap-app-lifecycle/src/ios.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の iOS 分岐が feature `device` 有効時にのみコンパイルする。
+// `build.rs` の iOS 分岐でコンパイルする。
 //
 // 契約:
 //   fandhe_ios_app_lifecycle_start(id) -> int32_t

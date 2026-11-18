@@ -19,7 +19,7 @@
 //! （通知を cancel）。旧インスタンスの結果は id 照合で捨てられる。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `submit` を経た後でしか呼ばれず、
-//! feature `device` 無効ビルドではその経路に到達しない（app-badge と同じ）。
+//! この crate を選ばないアプリではその経路に到達しない（app-badge と同じ）。
 
 use std::sync::Arc;
 

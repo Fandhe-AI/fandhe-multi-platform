@@ -4,7 +4,7 @@
 //! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`device/notification.rs` と同型）。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
+//! 非 wasm32 でのみコンパイル対象になる
 //! （`device.rs` モジュール doc と同じ理由）。
 //!
 //! # `show`/`hide` を別スレッドへ逃がす理由（P1 是正、PR #1041 codex 指摘）

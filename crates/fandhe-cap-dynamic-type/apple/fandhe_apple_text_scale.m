@@ -5,8 +5,8 @@
 // `fandhe_apple_biometric.m`/`fandhe_apple_location.m` と揃え、`build.rs` の
 // `compile_apple_*` 群に相乗りできる形にしておく想定。実際の呼び出しは iOS 分岐からのみ）。
 //
-// `crates/fandhe-egui-proxy/src/device/ios.rs`（`IosTextScale`）から C ABI 経由で
-// 呼ばれる。`build.rs` が iOS ターゲット・feature `device` 有効時のみ `cc` コンパイル
+// `crates/fandhe-cap-dynamic-type/src/ios.rs`から C ABI 経由で
+// 呼ばれる。`build.rs` が iOS ターゲットで `cc` コンパイル
 // する（macOS 分岐からは呼ばない。UIKit は macOS ではリンクされていないため）。
 //
 // 契約（`ios.rs` のコメントと対、`fandhe_ios_motion.m` と同型の pull・同期 out 引数）:

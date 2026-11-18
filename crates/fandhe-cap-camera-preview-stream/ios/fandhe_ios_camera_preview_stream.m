@@ -8,7 +8,7 @@
 // フレームを受け、`videoZoomFactor` でズームする。
 //
 // `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS・macOS 分岐の
-// feature `device` 有効時のみ `cc` コンパイルする（AVFoundation / CoreMedia / CoreVideo をリンク）。
+// `cc` でコンパイルする（AVFoundation / CoreMedia / CoreVideo をリンク）。
 // 契約の SSOT は `crate::contract`。
 //
 // 契約（Rust → .m）:

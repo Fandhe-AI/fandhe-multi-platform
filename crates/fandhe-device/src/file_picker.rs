@@ -4,14 +4,17 @@
 //! 他の機能（写真選択 `photo_picker`・ドラッグ & ドロップ・ファイル関連付け・フォルダ監視・Web）も使う部品だけで、
 //! `fandhe-device` から機能 crate へは依存しない（`docs/operations/capability-crate-migration.md` §7）。
 //!
-//! - 選択結果 [`PickedFile`] と上限 [`MAX_FILE_BYTES`]（5 OS 共通の唯一の定数）。超過は `Err(DeviceError::InvalidInput)`、読み取り失敗は
-//!   `Err(DeviceError::Internal)`
+//! - 選択結果 [`PickedFile`] と上限 [`MAX_FILE_BYTES`]（5 OS 共通の唯一の定数）。超過は `Err(PickError::InvalidInput)`、読み取り失敗は
+//!   `Err(PickError::Internal)`
 //! - 読み取り: [`read_picked`]（iOS: サンドボックス tmp コピーのパス）・[`read_picked_from`]（Android: SAF の fd を `OwnedFd` で借用した
 //!   `File`。`/proc/self/fd/N` の再 open は pipe 型プロバイダで権限再確認に失敗するため使わない）。EOF・読み取り失敗・上限判定の SSOT
 //! - OS の受け口が共有する安全な受け取り: [`picked_from_path_bytes`]（iOS の「結果コード + 一時コピーのパス」）・
 //!   [`picked_from_document`]（Android の「結果コード + fd の `File` + 表示名」）。ポインタ・fd を包む `unsafe` は各呼び出し元に 1 か所ずつ残す
 //! - 表示名の検証 [`sanitize_picked_name`]、Windows の PowerShell ダイアログの起動と結果の写像（[`windows_pick_command`]・
-//!   [`run_windows_pick`]・[`PickCommand`]）、フォルダ選択 [`pick_folder`]、二重表示を防ぐ [`BusyGuard`]
+//!   [`run_windows_pick`]・[`PickCommand`]・フォルダ選択の [`windows_folder_command`]）、二重表示を防ぐ [`BusyGuard`]
+//! - OS の UI API（Cocoa・Win32 等）は呼ばない。Windows の標準ダイアログは PowerShell の子プロセスで開く組み立てと実行
+//!   （`std::process`）で、非 Windows でも `/bin/sh` を差して 3 値の写像を試験できる。macOS のフォルダ選択（`NSOpenPanel`）は
+//!   `fandhe-cap-file-watch` が持つ（#1194）
 //!
 //! ファイルパスは返さない・表示しない・ログに出さない（モバイル/Web ではパス自体が無意味であり、返り値に含めると呼び出し元が
 //! うっかり表示してしまう）。Web はパスを持たない（DOM の `File` を読む）ため [`MAX_FILE_BYTES`] と 3 値の結果契約のみを共有する。
@@ -22,7 +25,20 @@ use std::path::{Path, PathBuf};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::DeviceError;
+/// ファイル選択・写真選択の部品の失敗（`DeviceError` の後継、#1194）。使うバリアントだけを持つ。
+/// 表示文言は旧 `DeviceError` と同じ書き出しにする（機能 crate の失敗型が写すときの互換）。
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum PickError {
+    /// 上限超過など入力が契約外（`&'static str` は固定の識別子で、パス・内容を含めない）。
+    #[error("入力が不正です: {0}")]
+    InvalidInput(&'static str),
+    /// 読み取り・変換・子プロセスの失敗。
+    #[error("内部エラーが発生しました: {0}")]
+    Internal(&'static str),
+    /// この OS では提供しない。
+    #[error("このプラットフォームでは未対応です: {0}")]
+    Unsupported(&'static str),
+}
 
 /// 1 ファイルあたりの上限（5 OS 共通の唯一の定数）。超過は `InvalidInput`。
 pub const MAX_FILE_BYTES: usize = 8 * 1024 * 1024;
@@ -54,15 +70,15 @@ pub struct PickedFile {
 /// iOS 橋渡し（[`picked_from_path_bytes`] 経由。`asCopy:YES` のサンドボックス tmp コピーのパス）。
 /// パスを開けない橋渡し（Android の SAF fd）は [`read_picked_from`] を直接使う。
 /// OS 側で読み取りを再実装しないこと（EOF・読み取り失敗・上限判定の SSOT をここに置く。
-/// モジュール doc 参照）。パスは `DeviceError` に含めない（ログ・エラー非表示の契約は維持）。
-pub fn read_picked(path: &Path, max: usize) -> Result<PickedFile, DeviceError> {
+/// モジュール doc 参照）。パスは `PickError` に含めない（ログ・エラー非表示の契約は維持）。
+pub fn read_picked(path: &Path, max: usize) -> Result<PickedFile, PickError> {
     let name = path
         .file_name()
-        .ok_or(DeviceError::Internal("file_picker name"))?
+        .ok_or(PickError::Internal("file_picker name"))?
         .to_string_lossy()
         .into_owned();
 
-    let file = File::open(path).map_err(|_| DeviceError::Internal("file_picker read"))?;
+    let file = File::open(path).map_err(|_| PickError::Internal("file_picker read"))?;
     read_picked_from(file, name, max)
 }
 
@@ -81,18 +97,18 @@ pub fn read_picked_from(
     mut reader: impl Read,
     name: String,
     max: usize,
-) -> Result<PickedFile, DeviceError> {
+) -> Result<PickedFile, PickError> {
     if name.is_empty() || name.contains('\0') {
-        return Err(DeviceError::Internal("file_picker name"));
+        return Err(PickError::Internal("file_picker name"));
     }
 
     let mut bytes = Vec::new();
     (&mut reader)
         .take(max as u64 + 1)
         .read_to_end(&mut bytes)
-        .map_err(|_| DeviceError::Internal("file_picker read"))?;
+        .map_err(|_| PickError::Internal("file_picker read"))?;
     if bytes.len() > max {
-        return Err(DeviceError::InvalidInput("file_picker size"));
+        return Err(PickError::InvalidInput("file_picker size"));
     }
 
     Ok(PickedFile { name, bytes })
@@ -112,15 +128,15 @@ pub fn picked_from_path_bytes(
     code: i32,
     path: Option<&[u8]>,
     what: &'static str,
-) -> Result<Option<PickedFile>, DeviceError> {
+) -> Result<Option<PickedFile>, PickError> {
     match code {
         0 => {
-            let path = path.ok_or(DeviceError::Internal(what))?;
-            let path = std::str::from_utf8(path).map_err(|_| DeviceError::Internal(what))?;
+            let path = path.ok_or(PickError::Internal(what))?;
+            let path = std::str::from_utf8(path).map_err(|_| PickError::Internal(what))?;
             read_picked(Path::new(path), MAX_FILE_BYTES).map(Some)
         }
         1 => Ok(None),
-        _ => Err(DeviceError::Internal(what)),
+        _ => Err(PickError::Internal(what)),
     }
 }
 
@@ -136,15 +152,15 @@ pub fn picked_from_document(
     code: i32,
     file: Option<File>,
     raw_name: Option<&str>,
-) -> Result<Option<PickedFile>, DeviceError> {
+) -> Result<Option<PickedFile>, PickError> {
     match code {
         1 => return Ok(None),
         0 => {}
-        _ => return Err(DeviceError::Internal("file_picker")),
+        _ => return Err(PickError::Internal("file_picker")),
     }
-    let file = file.ok_or(DeviceError::Internal("file_picker"))?;
-    let raw_name = raw_name.ok_or(DeviceError::Internal("file_picker"))?;
-    let name = sanitize_picked_name(raw_name).ok_or(DeviceError::Internal("file_picker"))?;
+    let file = file.ok_or(PickError::Internal("file_picker"))?;
+    let raw_name = raw_name.ok_or(PickError::Internal("file_picker"))?;
+    let name = sanitize_picked_name(raw_name).ok_or(PickError::Internal("file_picker"))?;
     read_picked_from(file, name, MAX_FILE_BYTES).map(Some)
 }
 
@@ -235,10 +251,7 @@ pub fn windows_pick_command(filter: Option<&'static str>) -> PickCommand {
 /// （モジュール doc の契約）。OS 判定を経ないため、テストから `/bin/sh -c` を
 /// 注入して 3 値すべてを実プロセスで再現できる（tts の `run_command` と同じ手法）。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub fn run_windows_pick(
-    command: PickCommand,
-    max: usize,
-) -> Result<Option<PickedFile>, DeviceError> {
+pub fn run_windows_pick(command: PickCommand, max: usize) -> Result<Option<PickedFile>, PickError> {
     match run_windows_dialog(command)? {
         Some(path) => read_picked(Path::new(&path), max).map(Some),
         None => Ok(None),
@@ -246,11 +259,11 @@ pub fn run_windows_pick(
 }
 
 /// ダイアログ用 PowerShell を起動し、標準出力のパス文字列を返す共通部
-/// （ファイル選択 [`run_windows_pick`] とフォルダ選択 [`pick_folder`] が共有する）。
+/// （ファイル選択 [`run_windows_pick`] と、フォルダ監視（`fandhe-cap-file-watch`）のフォルダ選択が共有する）。
 /// 終了コード 0 = 選択（`Some`）、[`WINDOWS_PICK_CANCELLED_EXIT`] = キャンセル（`None`）、
 /// それ以外・空の標準出力 = `Err`。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub(crate) fn run_windows_dialog(command: PickCommand) -> Result<Option<String>, DeviceError> {
+pub fn run_windows_dialog(command: PickCommand) -> Result<Option<String>, PickError> {
     let mut cmd = std::process::Command::new(&command.program);
     cmd.args(&command.args);
     #[cfg(windows)]
@@ -263,19 +276,19 @@ pub(crate) fn run_windows_dialog(command: PickCommand) -> Result<Option<String>,
 
     let output = cmd
         .output()
-        .map_err(|_| DeviceError::Internal("file_picker spawn"))?;
+        .map_err(|_| PickError::Internal("file_picker spawn"))?;
 
     match output.status.code() {
         Some(0) => {
             if output.stdout.is_empty() {
-                return Err(DeviceError::Internal("file_picker empty path"));
+                return Err(PickError::Internal("file_picker empty path"));
             }
             // BOM は上記のとおり出さない設定だが、環境差で混入しても別パスにならないよう外す。
             let path = String::from_utf8_lossy(&output.stdout)
                 .trim_start_matches('\u{feff}')
                 .to_owned();
             if path.is_empty() {
-                return Err(DeviceError::Internal("file_picker empty path"));
+                return Err(PickError::Internal("file_picker empty path"));
             }
             Ok(Some(path))
         }
@@ -283,7 +296,7 @@ pub(crate) fn run_windows_dialog(command: PickCommand) -> Result<Option<String>,
         // 異常終了・シグナル終了（`code()` が `None`）はすべて失敗として扱う。
         // stderr は固定スクリプトが例外メッセージのみを書く経路のため、パス等の
         // 秘匿情報を含まない（security.md A09 と同じ判断、tts と同型）。
-        _ => Err(DeviceError::Internal("file_picker dialog failed")),
+        _ => Err(PickError::Internal("file_picker dialog failed")),
     }
 }
 
@@ -312,31 +325,10 @@ try {
 
 /// Windows のフォルダ選択コマンド。`powershell.exe` は絶対パスで起動する。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub(crate) fn windows_folder_command() -> PickCommand {
+pub fn windows_folder_command() -> PickCommand {
     let mut command = windows_pick_command(None);
     command.args[3] = WINDOWS_FOLDER_SCRIPT.to_string();
     command
-}
-
-/// フォルダ選択ダイアログを 1 回開く（file-watch の「選んだフォルダ」用、Issue #37）。
-///
-/// 結果は 3 値: 選択 `Ok(Some(path))` / キャンセル `Ok(None)` / 失敗 `Err`。固定タイムアウトは
-/// 掛けない。macOS の `NSOpenPanel` はメインスレッド必須のため、UI スレッドから同期で呼ぶ。
-/// macOS・Windows 以外は `Err(Unsupported)`。返したパスは呼び出し元（egui-proxy のドライバ）が
-/// 保持し、コアの画面状態へは渡さない（表示はフォルダ名のみ）。
-pub fn pick_folder() -> Result<Option<PathBuf>, DeviceError> {
-    #[cfg(target_os = "macos")]
-    {
-        Ok(rfd::FileDialog::new().pick_folder())
-    }
-    #[cfg(target_os = "windows")]
-    {
-        run_windows_dialog(windows_folder_command()).map(|o| o.map(PathBuf::from))
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    {
-        Err(DeviceError::Unsupported("folder_picker"))
-    }
 }
 
 /// busy を必ず戻す小さなガード（early return・panic のどちらの経路でも Drop で戻る）。
@@ -385,7 +377,7 @@ mod tests {
     fn read_picked_rejects_file_over_limit() {
         let path = write_temp_file(b"0123456789");
         let err = read_picked(&path, 5).unwrap_err();
-        assert!(matches!(err, DeviceError::InvalidInput(_)));
+        assert!(matches!(err, PickError::InvalidInput(_)));
         let _ = std::fs::remove_file(&path);
     }
 
@@ -393,7 +385,7 @@ mod tests {
     fn read_picked_fails_for_missing_path() {
         let path = std::env::temp_dir().join("fandhe-file-picker-test-does-not-exist");
         let err = read_picked(&path, MAX_FILE_BYTES).unwrap_err();
-        assert!(matches!(err, DeviceError::Internal(_)));
+        assert!(matches!(err, PickError::Internal(_)));
     }
 
     #[test]
@@ -416,14 +408,14 @@ mod tests {
             5,
         )
         .unwrap_err();
-        assert!(matches!(err, DeviceError::InvalidInput(_)));
+        assert!(matches!(err, PickError::InvalidInput(_)));
     }
 
     #[test]
     fn read_picked_from_rejects_empty_name() {
         let err = read_picked_from(std::io::Cursor::new(b"hello".to_vec()), String::new(), 10)
             .unwrap_err();
-        assert!(matches!(err, DeviceError::Internal(_)));
+        assert!(matches!(err, PickError::Internal(_)));
     }
 
     #[test]
@@ -509,20 +501,14 @@ mod tests {
         // codex-review P1 指摘の再発防止: COM 初期化失敗等（キャンセル専用コード
         // 以外の非ゼロ）はキャンセルへ化けさせず `Err` にする。
         let result = run_windows_pick(shell_pick_command("exit 1"), MAX_FILE_BYTES);
-        assert!(
-            matches!(result, Err(DeviceError::Internal(_))),
-            "{result:?}"
-        );
+        assert!(matches!(result, Err(PickError::Internal(_))), "{result:?}");
     }
 
     #[test]
     #[cfg(unix)]
     fn run_windows_pick_returns_internal_error_on_empty_stdout_success() {
         let result = run_windows_pick(shell_pick_command("exit 0"), MAX_FILE_BYTES);
-        assert!(
-            matches!(result, Err(DeviceError::Internal(_))),
-            "{result:?}"
-        );
+        assert!(matches!(result, Err(PickError::Internal(_))), "{result:?}");
     }
 
     #[test]
@@ -542,16 +528,16 @@ mod tests {
         ));
         assert!(matches!(
             run_windows_dialog(shell_pick_command("exit 1")),
-            Err(DeviceError::Internal(_))
+            Err(PickError::Internal(_))
         ));
         assert!(matches!(
             run_windows_dialog(shell_pick_command("exit 0")),
-            Err(DeviceError::Internal(_))
+            Err(PickError::Internal(_))
         ));
         // BOM のみの出力はパスが空なので失敗。
         assert!(matches!(
             run_windows_dialog(shell_pick_command("printf '\\357\\273\\277'")),
-            Err(DeviceError::Internal(_))
+            Err(PickError::Internal(_))
         ));
     }
 
@@ -575,7 +561,7 @@ mod tests {
     #[test]
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     fn pick_folder_is_unsupported_off_desktop() {
-        assert!(matches!(pick_folder(), Err(DeviceError::Unsupported(_))));
+        assert!(matches!(pick_folder(), Err(PickError::Unsupported(_))));
     }
 
     /// テスト用の最小限のシェル引用（一時ファイルパスは英数字・`-`・`_`・`/` のみで
@@ -647,11 +633,11 @@ mod picked_from_tests {
         assert!(matches!(picked_from_path_bytes(1, None, "x"), Ok(None)));
         assert!(matches!(
             picked_from_path_bytes(2, None, "x"),
-            Err(DeviceError::Internal("x"))
+            Err(PickError::Internal("x"))
         ));
         assert!(matches!(
             picked_from_path_bytes(-1, Some(b"/nonexistent"), "x"),
-            Err(DeviceError::Internal("x"))
+            Err(PickError::Internal("x"))
         ));
     }
 
@@ -660,11 +646,11 @@ mod picked_from_tests {
         // 契約違反（0 なのにパスが無い）と UTF-8 破損は成功にしない。
         assert!(matches!(
             picked_from_path_bytes(0, None, "what"),
-            Err(DeviceError::Internal("what"))
+            Err(PickError::Internal("what"))
         ));
         assert!(matches!(
             picked_from_path_bytes(0, Some(&[0xff, 0xfe]), "what"),
-            Err(DeviceError::Internal("what"))
+            Err(PickError::Internal("what"))
         ));
     }
 
@@ -684,7 +670,7 @@ mod picked_from_tests {
         assert!(matches!(picked_from_document(1, None, None), Ok(None)));
         assert!(matches!(
             picked_from_document(2, None, Some("a.txt")),
-            Err(DeviceError::Internal("file_picker"))
+            Err(PickError::Internal("file_picker"))
         ));
     }
 
@@ -694,17 +680,17 @@ mod picked_from_tests {
         // fd が取れていない。
         assert!(matches!(
             picked_from_document(0, None, Some("a.txt")),
-            Err(DeviceError::Internal("file_picker"))
+            Err(PickError::Internal("file_picker"))
         ));
         // 名前が無い・不正（空）は、読み取りに進まず失敗にする。
         assert!(matches!(
             picked_from_document(0, Some(file), None),
-            Err(DeviceError::Internal("file_picker"))
+            Err(PickError::Internal("file_picker"))
         ));
         let file = File::open(&path).expect("開ける");
         assert!(matches!(
             picked_from_document(0, Some(file), Some("a/")),
-            Err(DeviceError::Internal("file_picker"))
+            Err(PickError::Internal("file_picker"))
         ));
         let _ = std::fs::remove_file(&path);
     }
@@ -724,7 +710,7 @@ mod picked_from_tests {
     fn document_selected_over_limit_is_invalid_input() {
         let (path, file) = temp_file_with(&vec![0u8; MAX_FILE_BYTES + 1]);
         let err = picked_from_document(0, Some(file), Some("big.bin")).unwrap_err();
-        assert!(matches!(err, DeviceError::InvalidInput(_)));
+        assert!(matches!(err, PickError::InvalidInput(_)));
         let _ = std::fs::remove_file(&path);
     }
 }

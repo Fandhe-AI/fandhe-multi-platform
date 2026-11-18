@@ -73,6 +73,10 @@ if [[ ! -f "${xcframework_info_plist}" ]]; then
   echo "[generate-xcodeproj] 初回は 'bash scripts/apple/build-bridge-xcframework.sh' を先に実行してください（binaryTarget がパッケージグラフに現れません）。" >&2
 fi
 
+# project.yml の FandheIosApp の entitlements・FandheTextWidget と FandheLiveActivity の Info.plist / entitlements は
+# cargo fandhe gen の出力を指す（#1194）。生成してからプロジェクトを作る（無いとそれらのターゲットのビルドが失敗する）。
+echo "[generate-xcodeproj] scripts/build/gen-gallery.sh"
+"${repo_root}/scripts/build/gen-gallery.sh"
 echo "[generate-xcodeproj] xcodegen generate --spec ${spec_file}"
 xcodegen generate --spec "${spec_file}" --project "${apple_dir}"
 

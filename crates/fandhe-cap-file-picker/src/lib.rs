@@ -3,13 +3,13 @@
 //! tsv-parse は同じ選択経路（`driver` の `PickHooks`・`bridge`）を使って TSV を読み込む画面の effect（`tsv_import_effect`）で、
 //! 2 つの id が選択経路を共有するため 1 つの crate にまとめた（宣言の `id` は file-picker。対応表の `impl` は両方ともこの crate を指す）。
 //!
-//! 契約（`contract`）・失敗の種類（`error`）・effect ドライバ（`driver`・`tsv_import`）・OS 実装（macOS・Windows は `desktop`、
-//! iOS は `ios`、Android は `android`）を 1 つに集める。画面の状態型を参照してよいのは `driver`・`tsv_import` だけ。
+//! 契約（`contract`）・失敗の種類（`error`）・effect ドライバ（`driver`）・OS 実装（macOS・Windows は `desktop`、
+//! iOS は `ios`、Android は `android`）を 1 つに集める。画面の状態型を参照してよいのは `driver` だけ。
 //! 画面の状態型に依存しない入口は 2 つある。
 //! 1 つは同期の [`platform_file_picker`]。全ターゲットで公開し、macOS・Windows はダイアログを開いて結果を返し、iOS・Android は `Unsupported` を返す。
 //! もう 1 つは iOS・Android 向けの非同期の [`begin_file_pick`]（開始）・[`poll_file_pick`]（結果を 1 度だけ取得）・
 //! [`discard_file_pick`]（取り出さない要求を捨てる）。
-//! 非同期の入口は画面 effect と同じ slot を共有し、片方が進行中・未取得なら他方は `Internal`（busy）で断る。他の機能（写真選択・ドラッグ & ドロップ・ファイル関連付け・フォルダ監視）も
+//! 非同期の入口は画面 effect と同じ slot を共有し、進行中は busy。公開側の未取得の結果は守り、画面側の届いた未取得の結果は公開入口の開始が捨てずに画面の受け取り待ちへ移す（画面はそのまま受け取る）。他の機能（写真選択・ドラッグ & ドロップ・ファイル関連付け・フォルダ監視）も
 //! 使う部品（`PickedFile`・読み取り・受け取りの検証・Windows のダイアログ起動）は `fandhe-device::file_picker` に残り、この crate は
 //! それを再公開して使う（`docs/operations/capability-crate-migration.md` §7）。
 //!
@@ -39,11 +39,9 @@ mod driver;
 mod error;
 #[cfg(target_os = "ios")]
 mod ios;
-mod tsv_import;
 
 pub use contract::*;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub use desktop::RfdFilePicker;
 pub use driver::*;
 pub use error::FilePickerError;
-pub use tsv_import::tsv_import_effect;

@@ -1,6 +1,6 @@
 //! iOS 向け MDM 管理アプリ設定実装（Issue #945）。`ios/fandhe_ios_managed_app_config.m`
 //! （`NSUserDefaults` の `com.apple.configuration.managed` 辞書から固定 3 キーを読み、ワイヤ文字列にして
-//! 返す。`build.rs` が iOS ターゲットの feature `device` 有効時にコンパイルする）を
+//! 返す。`build.rs` が iOS ターゲットでコンパイルする）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
 //! `driver.rs` の iOS 経路から呼ばれ、契約は `crate::contract`。
 //!

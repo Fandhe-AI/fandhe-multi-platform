@@ -42,7 +42,7 @@
 //! id・画素・例外の内容・OS のエラー文言はログ・エラーに出さない。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `start` を経た後でしか呼ばれず、
-//! feature `device` が無効のビルドではその経路に届かない（sleep_lock_events と同じ根拠）。
+//! この crate を選ばないアプリではその経路に届かない（sleep_lock_events と同じ根拠）。
 
 use std::sync::Arc;
 

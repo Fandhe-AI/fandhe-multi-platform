@@ -7,9 +7,8 @@
 //! 渡す。受け口 [`INBOX`] はプロセス全体の static で、UI ができる前（コールドスタート）に
 //! 届いた分もここに溜まる。検査・保持は共通層 [`ShareInbox`] に
 //! 一本化し、本モジュールは JNI の橋渡しだけを持つ。本文は秘密値を含みうるためログへ出さない。
-//! feature `device` 無効ビルド向けの no-op は `fandhe-egui-proxy` の `android.rs` に置く
-//! （`ShareReceiveLifecycle` が `deliver` を無条件に呼ぶため、本 crate がリンクされない構成でも
-//! `UnsatisfiedLinkError` にしない）。
+//! no-op スタブは置かない: `ShareReceiveLifecycle`（本 crate の Java）は、本 crate を選んだアプリにだけ
+//! `cargo fandhe gen` の srcDirs で入るため、Java の native 宣言と Rust の実体は必ず一緒にリンクされる（#1194）。
 
 use crate::{ShareInbox, ShareReceive, ShareReceiveError, ShareSnapshot};
 

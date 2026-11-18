@@ -1,6 +1,6 @@
 //! iOS 向けジャイロ・磁気・線形加速度の生値実装（Issue #900、親 #180）。
 //! `ios/fandhe_ios_motion_raw_sensors.m`（CoreMotion `CMMotionManager`、`build.rs` が iOS ターゲットの
-//! feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 3 関数で呼ぶ。#898 のスタブを
+//! コンパイルする）を `unsafe extern "C"` 3 関数で呼ぶ。#898 のスタブを
 //! 置き換えたもので、dispatch（本 crate の `driver`）・共通コア画面・trait 契約
 //! （`crate::contract`）は変えない。
 //!

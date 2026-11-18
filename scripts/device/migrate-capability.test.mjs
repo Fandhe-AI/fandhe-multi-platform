@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   checkId, stemOf, pascalOf, moveTargets, rewriteSource, usedErrorVariants, unmappedVariants,
-  renderErrorRs, replaceBlock, featureLines, gradleLines, renderUnsafeAttr, renderBuildRs, unsafeOsesOf,
+  renderErrorRs, replaceBlock, depLines, renderUnsafeAttr, renderBuildRs, unsafeOsesOf,
   strErrorVariants, rewriteEdition2024, stripRustLiterals, refPatterns, missingEntry,
 } from "./migrate-capability.mjs";
 
@@ -69,22 +69,14 @@ test("バリアントの抽出と未写像の検出", () => {
 
 test("replaceBlock: 目印の間だけ書き直し、冪等で、目印が無ければ失敗", () => {
   const t = "a\n  # BEGIN fandhe-cap\n  old\n  # END fandhe-cap\nb\n  # BEGIN fandhe-cap\n  # END fandhe-cap";
-  const once = replaceBlock(t, 0, featureLines(["a", "b"]));
+  const once = replaceBlock(t, 0, depLines(["a", "b"]));
   assert.equal(
     once,
-    'a\n  # BEGIN fandhe-cap\n  "dep:fandhe-cap-a",\n  "dep:fandhe-cap-b",\n  # END fandhe-cap\nb\n  # BEGIN fandhe-cap\n  # END fandhe-cap',
+    'a\n  # BEGIN fandhe-cap\n  fandhe-cap-a = { path = "../fandhe-cap-a" }\n  fandhe-cap-b = { path = "../fandhe-cap-b" }\n  # END fandhe-cap\nb\n  # BEGIN fandhe-cap\n  # END fandhe-cap',
   );
-  assert.equal(replaceBlock(once, 0, featureLines(["a", "b"])), once);
-  assert.throws(() => replaceBlock("no markers", 0, featureLines([])));
-  assert.throws(() => replaceBlock(t, 2, featureLines([])));
-});
-
-test("gradleLines: java と res がある分だけ出す", () => {
-  const l = gradleLines([{ id: "a", java: true, res: false }, { id: "b", java: false, res: true }])("");
-  assert.deepEqual(l.filter((x) => x.includes("srcDirs")), [
-    'java.srcDirs("../../../crates/fandhe-cap-a/android/java")',
-    'res.srcDirs("../../../crates/fandhe-cap-b/android/res")',
-  ]);
+  assert.equal(replaceBlock(once, 0, depLines(["a", "b"])), once);
+  assert.throws(() => replaceBlock("no markers", 0, depLines([])));
+  assert.throws(() => replaceBlock(t, 2, depLines([])));
 });
 
 test("rewriteSource: --module で id と違う stem の契約パスも書き換える", () => {

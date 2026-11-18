@@ -1,6 +1,6 @@
 //! macOS 向け Wi-Fi 情報実装（Issue #514、親 #111）。`macos/fandhe_macos_wifi_info.m`
-//! （CoreWLAN `CWWiFiClient` + CoreLocation の許可判定。`build.rs` が macOS 分岐で feature `device`
-//! 有効時にコンパイルし CoreWLAN をリンクする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` は
+//! （CoreWLAN `CWWiFiClient` + CoreLocation の許可判定。`build.rs` が macOS 分岐で
+//! コンパイルし CoreWLAN をリンクする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` は
 //! この呼び出しに閉じ `// SAFETY:` で契約を明記する。`driver` の macOS 経路から
 //! ワーカースレッドで呼ばれ、契約は `crate::contract`。
 //!
@@ -86,7 +86,7 @@ fn net_from_raw(raw: &RawNet) -> WifiNetwork {
 mod ffi {
     use super::{NEARBY_CAP, RawNet};
 
-    // SAFETY: `macos/fandhe_macos_wifi_info.m`（`build.rs` が macOS 分岐で feature `device` 有効時に
+    // SAFETY: `macos/fandhe_macos_wifi_info.m`（`build.rs` が macOS 分岐で
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {

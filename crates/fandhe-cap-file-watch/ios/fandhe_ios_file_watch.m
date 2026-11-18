@@ -3,8 +3,8 @@
 // Rust へ返す。どのファイルが変わったかは読まない（Rust 側が再走査して差分を取る）。パス・ファイル名・
 // errno はログに出さない。権限の宣言は増やさない（アプリのサンドボックス内の作業フォルダ）。
 //
-// `crates/fandhe-egui-proxy/src/device/ios_file_watch.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の iOS 分岐が feature `device` 有効時にのみコンパイルする。
+// `crates/fandhe-cap-file-watch/src/ios.rs` から C ABI 経由で呼ばれる。
+// `build.rs` の iOS 分岐でコンパイルする。
 //
 // 契約:
 //   fandhe_ios_file_watch_start(id, path) -> int32_t

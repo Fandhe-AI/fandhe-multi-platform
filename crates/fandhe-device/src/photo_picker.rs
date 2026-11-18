@@ -61,7 +61,7 @@
 //! - 選ばれた画像の中身・ファイル名・パスはログに出さない。複数プロセス・複数タブでの
 //!   同時操作と、OS 側で非同期に確定する選択との時間差は扱わない
 
-use crate::DeviceError;
+use crate::file_picker::PickError;
 
 /// 1 枚あたりのバイト数上限。読み取り側（`file_picker::read_picked_from`）と値をずらさないため
 /// `file_picker::MAX_FILE_BYTES` を参照する（SSOT）。超過は `InvalidInput`。
@@ -122,14 +122,14 @@ fn sniff_format(b: &[u8]) -> Option<ImageFormat> {
 /// `Internal`、上限超過は `InvalidInput`。各 OS 実装が結果を返す直前に必ず通す。`Ok` は
 /// 「復号できる」ことを意味しない（例: JPEG のヘッダー 3 バイトだけでも通る）。成功表示の前に
 /// 橋渡し層が復号を確かめる。
-pub fn validate_photo(bytes: Vec<u8>) -> Result<PickedPhoto, DeviceError> {
+pub fn validate_photo(bytes: Vec<u8>) -> Result<PickedPhoto, PickError> {
     if bytes.is_empty() {
-        return Err(DeviceError::Internal("photo_picker empty"));
+        return Err(PickError::Internal("photo_picker empty"));
     }
     if bytes.len() > MAX_PHOTO_BYTES {
-        return Err(DeviceError::InvalidInput("photo_picker size"));
+        return Err(PickError::InvalidInput("photo_picker size"));
     }
-    let format = sniff_format(&bytes).ok_or(DeviceError::Internal("photo_picker format"))?;
+    let format = sniff_format(&bytes).ok_or(PickError::Internal("photo_picker format"))?;
     Ok(PickedPhoto { bytes, format })
 }
 
@@ -208,11 +208,11 @@ pub fn dimensions_within_limits(width: u32, height: u32) -> bool {
 /// OS（OCR・バーコード読み取り）へ画像を渡す前に、ヘッダーだけで辺・画素数を検査する（圧縮爆弾対策）。
 /// 上限超過は `InvalidInput("photo_picker size")`、ヘッダーを読めない画像は `Internal("photo_picker header")`
 /// （切り詰めて成功にしない）。文字認識とバーコード読み取りの両方が使う、OS に触れない検証。
-pub fn precheck_dimensions(photo: &PickedPhoto) -> Result<(), DeviceError> {
+pub fn precheck_dimensions(photo: &PickedPhoto) -> Result<(), PickError> {
     match image_dimensions(photo) {
         Some((w, h)) if dimensions_within_limits(w, h) => Ok(()),
-        Some(_) => Err(DeviceError::InvalidInput("photo_picker size")),
-        None => Err(DeviceError::Internal("photo_picker header")),
+        Some(_) => Err(PickError::InvalidInput("photo_picker size")),
+        None => Err(PickError::Internal("photo_picker header")),
     }
 }
 
@@ -326,7 +326,7 @@ mod tests {
     fn rejects_empty_as_internal() {
         assert!(matches!(
             validate_photo(Vec::new()),
-            Err(DeviceError::Internal(_))
+            Err(PickError::Internal(_))
         ));
     }
 
@@ -334,12 +334,12 @@ mod tests {
     fn rejects_unknown_format_as_internal() {
         assert!(matches!(
             validate_photo(b"not an image".to_vec()),
-            Err(DeviceError::Internal(_))
+            Err(PickError::Internal(_))
         ));
         // RIFF だが WEBP ではない（WAV 等）。
         assert!(matches!(
             validate_photo(b"RIFF\0\0\0\0WAVEfmt ".to_vec()),
-            Err(DeviceError::Internal(_))
+            Err(PickError::Internal(_))
         ));
     }
 
@@ -349,7 +349,7 @@ mod tests {
         big.resize(MAX_PHOTO_BYTES + 1, 0);
         assert!(matches!(
             validate_photo(big),
-            Err(DeviceError::InvalidInput(_))
+            Err(PickError::InvalidInput(_))
         ));
     }
 
@@ -391,7 +391,7 @@ mod tests {
         let r = precheck_dimensions(&png_with_size(1, MAX_PHOTO_SIDE + 1));
         assert!(matches!(
             r,
-            Err(DeviceError::InvalidInput("photo_picker size"))
+            Err(PickError::InvalidInput("photo_picker size"))
         ));
     }
 
@@ -400,10 +400,7 @@ mod tests {
         // IHDR を欠く PNG（先頭マジックだけ）はヘッダーを読めない。
         let p = validate_photo(vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]).unwrap();
         let r = precheck_dimensions(&p);
-        assert!(matches!(
-            r,
-            Err(DeviceError::Internal("photo_picker header"))
-        ));
+        assert!(matches!(r, Err(PickError::Internal("photo_picker header"))));
     }
 }
 

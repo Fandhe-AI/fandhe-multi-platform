@@ -5,9 +5,29 @@
 //! から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
 //! 画面の状態型を参照してよいのは本モジュールだけ（契約は `crate::contract`）。
+//!
+//! wasm32 では、同名の `http_fetch_effect`（`fandhe_platform_web::Applier` 版）が `crate::web::fetch_once`
+//! （状態型に依存しない fetch の口）を呼んで結果を書き戻す。画面の状態の観測と反映だけを本モジュールが持つ。
+//!
+//! # 二重起動防止（wasm32）
+//!
+//! `Applier::apply` は effect 実行中（`state` が借用中）の同期呼び出しをマイクロタスクへ退避する。
+//! `Requested` を見たらまず `spawn_local` へ丸ごと逃がし、その中で `apply` により「`Requested` のままか」を
+//! 確認しつつ `mark_loading` を適用する。`spawn_local` のタスク実行時には元の `render_once` は終わっており
+//! `state` の借用は外れているため、`apply` は同期的に実行され `Rc<Cell<bool>>` へ成否を記録できる。
+//! これが `true` のときだけ `fetch` を始めるので、同じ `Requested` を複数回の再描画で観測しても二重取得しない
+//! （`Requested` → `Loading` 二段階契約、device-bridge-contracts.md 2 節）。
+//!
+//! # 画面の固定（wasm32、他 Web 画面と同じ既知の制約）
+//!
+//! `mount` は `Screen<S>` の再構築に対応しないため、`current_screen(&HttpFetchState::default())`
+//! （「取得」ボタン）で固定する。`Failed` 時の「再試行」ボタンは表示されないが、「取得」の `start_fetch` は
+//! `Failed` からも `Requested` へ進むため、`Failed` の表示のまま再度「取得」を押せば再試行できる。
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::contract::{Http, UreqHttp};
 use fandhe_core::screens::http_fetch::{FetchPhase, HttpFetchState, finish_fetch, mark_loading};
+#[cfg(not(target_arch = "wasm32"))]
 use fandhe_runtime::CompletionSender;
 
 /// ローカル検証用ダミー API の URL（受入 2: `node scripts/web/serve-brotli.mjs`
@@ -17,6 +37,7 @@ use fandhe_runtime::CompletionSender;
 /// `screens.rs` の `FANDHE_PROXY_APP`（画面切り替え）と同じ `option_env!` 方式を使うのは、
 /// rustc がこの環境変数への依存をコンパイル成果物に記録し、値を変えれば再ビルドが
 /// 走るようになるため（build.rs で `cargo:rerun-if-env-changed` を書く必要がない）。
+#[cfg(not(target_arch = "wasm32"))]
 const ITEMS_URL: &str = match option_env!("FANDHE_ITEMS_URL") {
     Some(url) => url,
     None => "http://127.0.0.1:8787/items.json",
@@ -24,6 +45,7 @@ const ITEMS_URL: &str = match option_env!("FANDHE_ITEMS_URL") {
 
 /// 取得に使う共通の `Http` 実装（[`UreqHttp`]）を返す。ネイティブのみ（Web は `web.rs` が fetch を使う）。
 /// 状態型に依存しない入口（consumer-app-structure.md §8.2）。フレームワークの外のアプリも、自分の状態型の effect から使える。
+#[cfg(not(target_arch = "wasm32"))]
 pub fn platform_http_get() -> Box<dyn Http> {
     Box::new(UreqHttp::new())
 }
@@ -37,6 +59,7 @@ pub fn platform_http_get() -> Box<dyn Http> {
 // 無名 const（`_`）の初期化式を到達可能グラフに含めないため、実際には使われていても
 // 誤検出される（コンパイル時アサーション定石のよくある制約）。テストからも呼ぶため
 // 完全な未使用ではない。
+#[cfg(not(target_arch = "wasm32"))]
 #[allow(dead_code)]
 const fn is_plain_http_url(url: &str) -> bool {
     let bytes = url.as_bytes();
@@ -70,6 +93,7 @@ const fn is_plain_http_url(url: &str) -> bool {
 // 実機ビルドを進めず即座に失敗させる。ここでは構文のみ検証し、接続先ホストの
 // 信頼境界（ループバック・私設 IP 限定）は `crate::contract::UreqHttp::get` が
 // 実行時に担う。
+#[cfg(not(target_arch = "wasm32"))]
 const _: () = assert!(
     is_plain_http_url(ITEMS_URL),
     "FANDHE_ITEMS_URL は http://<host>... 形式のみ許容（ビルド時検証、Issue #660）"
@@ -80,6 +104,7 @@ const _: () = assert!(
 /// `crate::contract::parse_items` に委譲する（Issue #985、二重管理を避ける SSOT 方針）。
 /// エラーメッセージに応答本文・URL 全体は含めない（security.md A09 ログ方針、
 /// `DeviceError` の踏襲）。
+#[cfg(not(target_arch = "wasm32"))]
 pub fn fetch_items(http: &dyn Http, url: &str) -> Result<Vec<String>, String> {
     let body = http.get(url).map_err(|err| err.to_string())?;
     crate::contract::parse_items(&body)
@@ -90,6 +115,7 @@ pub fn fetch_items(http: &dyn Http, url: &str) -> Result<Vec<String>, String> {
 /// 別スレッドで実取得 → `finish_fetch` の完了を送る。`url` を引数化しているのは
 /// テストがローカルサーバーの実ポートへ差し替えられるようにするため
 /// （固定 `ITEMS_URL` へは [`http_fetch_effect`] からのみ渡す）。
+#[cfg(not(target_arch = "wasm32"))]
 fn spawn_fetch(state: &HttpFetchState, sender: &CompletionSender<HttpFetchState>, url: &str) {
     if state.phase != FetchPhase::Requested {
         return;
@@ -109,11 +135,50 @@ fn spawn_fetch(state: &HttpFetchState, sender: &CompletionSender<HttpFetchState>
 }
 
 /// `registry.rs` の `effect` 区画から `http_fetch` 画面用に配線される effect ドライバ。
+#[cfg(not(target_arch = "wasm32"))]
 pub fn http_fetch_effect(state: &HttpFetchState, sender: &CompletionSender<HttpFetchState>) {
     spawn_fetch(state, sender, ITEMS_URL);
 }
 
-#[cfg(test)]
+/// `mount_with_effect` へ渡す effect（wasm32 版）。`http_fetch` 画面の取得要求を処理する。
+///
+/// `Requested` 以外では何もしない（`mount` の「effect フック」節の契約）。fetch 本体は
+/// `crate::web::fetch_once`（状態型に依存しない口）。二重起動防止はモジュール doc 参照。
+#[cfg(target_arch = "wasm32")]
+pub fn http_fetch_effect(
+    state: &HttpFetchState,
+    applier: &fandhe_platform_web::Applier<HttpFetchState>,
+) {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    if state.phase != FetchPhase::Requested {
+        return;
+    }
+
+    let applier = applier.clone();
+    wasm_bindgen_futures::spawn_local(async move {
+        let started = Rc::new(Cell::new(false));
+        {
+            let started = started.clone();
+            applier.apply(move |s: &mut HttpFetchState| {
+                if s.phase == FetchPhase::Requested {
+                    mark_loading(s);
+                    started.set(true);
+                }
+            });
+        }
+        if !started.get() {
+            // 別のタスクが先に mark_loading 済み（二重起動防止が働いた）。
+            return;
+        }
+
+        let result = crate::web::fetch_once().await;
+        applier.apply(move |s| finish_fetch(s, result));
+    });
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
     use crate::error::HttpGetError;

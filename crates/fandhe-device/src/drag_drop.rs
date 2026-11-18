@@ -7,7 +7,7 @@
 //! 「要求 → 応答」の往復を経ないユーザー操作そのもの（ウィンドウへ落とした瞬間に
 //! 中身が確定する）であり、`FilePicker` トレイトのような「1 回呼ぶとダイアログが
 //! 開く」抽象は不要。世代番号・`RequestSlot`・ワーカースレッドも要らない
-//! （`crates/fandhe-egui-proxy/src/device/drag_drop.rs` が winit のイベントを
+//! （`crates/fandhe-cap-drag-drop/src/driver.rs` が egui のイベントを
 //! そのまま UI スレッドで同期処理する、モジュール doc 参照）。
 //!
 //! # 契約（各実装・呼び出し元が守る不変条件）
@@ -104,7 +104,7 @@ pub fn read_dropped(path: &Path) -> Result<PickedFile, DropError> {
 /// 既に開いたファイルハンドルから内容を読み切る（種別確認済みの `File` を渡す契約）。
 ///
 /// [`read_picked_from`]（`take(max+1)` の 1 回の読み取りで上限判定）へ委譲し、サイズ超過
-/// （`DeviceError::InvalidInput`）は [`DropError::TooLarge`] へ、それ以外の失敗は
+/// （`PickError::InvalidInput`）は [`DropError::TooLarge`] へ、それ以外の失敗は
 /// [`DropError::Unreadable`] へ写す（[`read_dropped`] と Android 経路の唯一の写像箇所、
 /// 実装計画 §3-4「fd 読み取り」）。
 ///
@@ -116,7 +116,7 @@ pub fn read_dropped(path: &Path) -> Result<PickedFile, DropError> {
 /// フォルダを弾いた残り）。
 pub fn read_dropped_from(file: File, name: String) -> Result<PickedFile, DropError> {
     read_picked_from(file, name, MAX_FILE_BYTES).map_err(|e| match e {
-        crate::DeviceError::InvalidInput(_) => DropError::TooLarge,
+        crate::file_picker::PickError::InvalidInput(_) => DropError::TooLarge,
         _ => DropError::Unreadable,
     })
 }
@@ -180,7 +180,7 @@ mod tests {
     fn read_dropped_from_maps_empty_name_to_unreadable() {
         let path = write_temp_file(b"hello");
         let file = File::open(&path).unwrap();
-        // `read_picked_from` は空/NUL 込みの名前を `DeviceError::Internal` にする
+        // `read_picked_from` は空/NUL 込みの名前を `PickError::Internal` にする
         // （`file_picker.rs` doc 参照）。Android 経路は本テストと同じ写像を通る。
         let err = read_dropped_from(file, String::new()).unwrap_err();
         assert_eq!(err, DropError::Unreadable);

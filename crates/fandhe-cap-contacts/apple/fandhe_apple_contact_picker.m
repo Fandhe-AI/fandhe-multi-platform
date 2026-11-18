@@ -1,7 +1,7 @@
 // Phase 11 の拡充ループ（親 #1117）型サンプル「連絡先選択」: macOS（Issue #1220）+ iOS（Issue #1221）実装。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_contact_picker.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が macOS / iOS ターゲット（feature `device` 有効時）で `cc` コンパイルし、
+// `crates/fandhe-cap-contacts/src/apple.rs` から C ABI 経由で呼ばれる。
+// `build.rs` が macOS / iOS ターゲットで `cc` コンパイルし、
 // Contacts / ContactsUI をリンクする。
 //
 // 契約（pull 型。`fandhe_apple_biometric.m` と同型、coding-rust.md の FFI 例外規定）:

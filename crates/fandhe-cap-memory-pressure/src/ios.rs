@@ -1,6 +1,6 @@
 //! iOS 向けメモリ逼迫の通知実装（Issue #912）。`ios/fandhe_ios_memory_pressure.m`
 //! （メモリ警告の main キュー observer と `DISPATCH_SOURCE_TYPE_MEMORYPRESSURE`。`build.rs` が iOS 分岐で
-//! feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` はこの呼び出しに
+//! コンパイルする）を `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` はこの呼び出しに
 //! 閉じ `// SAFETY:` で契約を明記する。`driver.rs` の ios 経路から呼ばれ、
 //! 契約は `crate::contract`。
 //!
@@ -48,7 +48,7 @@ mod imp {
     use crate::driver::{register, unregister};
 
     mod ffi {
-        // SAFETY: `ios/fandhe_ios_memory_pressure.m`（`build.rs` が iOS 分岐で feature `device` 有効時に
+        // SAFETY: `ios/fandhe_ios_memory_pressure.m`（`build.rs` が iOS 分岐で
         // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
         #[allow(unsafe_code)]
         unsafe extern "C" {

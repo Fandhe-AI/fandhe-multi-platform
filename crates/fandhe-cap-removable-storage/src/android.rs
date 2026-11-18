@@ -37,7 +37,7 @@
 //! 例外の内容はログ・エラーに出さない。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `removableStorageStart` を経た後でしか呼ばれず、
-//! feature `device` が無効のビルドではその経路に届かない（sleep-lock-events と同じ根拠）。
+//! この crate を選ばないアプリではその経路に届かない（sleep-lock-events と同じ根拠）。
 //!
 //! 一次情報:
 //! <https://developer.android.com/reference/android/os/storage/StorageManager>、

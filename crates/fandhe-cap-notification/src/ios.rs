@@ -1,6 +1,6 @@
 //! iOS 向けローカル通知実装（Issue #1005）。本 crate の `driver` の iOS 経路
 //! （`bridge`/`drive_callback`）から呼ばれ、`UserNotifications`（`UNUserNotificationCenter`）
-//! 実装（`ios/fandhe_ios_notification.m`、`build.rs` が feature `device` 有効時のみ
+//! 実装（`ios/fandhe_ios_notification.m`、`build.rs` が
 //! コンパイル・リンクする）を `unsafe extern "C"` 1 関数（[`present`]）で呼ぶ。
 //! `unsafe` はこの呼び出し 1 箇所に閉じ `// SAFETY:` で契約を明記する
 //! （`apple_biometric.rs::present` と同型、coding-rust.md の FFI 例外規定準拠）。

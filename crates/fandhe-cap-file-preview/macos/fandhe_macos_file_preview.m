@@ -3,7 +3,7 @@
 // 窓が閉じた通知で Rust へ「閉じた」を伝える。
 //
 // `crates/fandhe-cap-file-preview/src/macos.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルし、QuickLookUI をリンクする。
+// `build.rs` がコンパイルし、QuickLookUI をリンクする。
 //
 // 契約（pull 型。`fandhe_macos_eye_dropper.m` と同型）:
 //   int32_t fandhe_macos_file_preview_present(uint64_t request_id, const char *path)

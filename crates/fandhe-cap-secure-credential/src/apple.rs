@@ -1,7 +1,7 @@
 //! iOS / macOS 向け資格情報保存実装（Issue #922・#924）。`device/secure_credential.rs`
 //! の iOS/macOS 経路から呼ばれ、`crate::contract::SecureCredential` を
 //! Keychain Services（`apple/fandhe_apple_secure_credential.m`、`build.rs` が iOS・
-//! macOS 双方のターゲット・feature `device` 有効時のみコンパイル・リンクする）で
+//! macOS 双方のターゲットでコンパイル・リンクする）で
 //! 実装する。Security Services は iOS/macOS 同一 API のため `.m` はそのまま共用する
 //! （分岐なし、Issue #924 調査）。
 //!
@@ -15,7 +15,7 @@ use crate::contract::{SECRET_MAX_BYTES, Secret, SecureCredential, validate_key, 
 use crate::error::SecureCredentialError;
 
 // SAFETY: `apple/fandhe_apple_secure_credential.m` が定義する C ABI（`build.rs` が
-// macOS ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は
+// macOS ターゲットでコンパイル・リンクする）。契約は
 // `.m` ファイル冒頭コメントおよび下記 `AppleKeychain` 各メソッドのコメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {

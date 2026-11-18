@@ -1695,6 +1695,7 @@ dependencies = [
  "fandhe-platform-apple",
  "fandhe-runtime",
  "libc",
+ "rfd",
  "thiserror 2.0.20",
  "windows 0.61.3",
 ]
@@ -2936,7 +2937,6 @@ dependencies = [
  "fandhe-core",
  "image",
  "libc",
- "rfd",
  "serde_json",
  "thiserror 2.0.20",
 ]
@@ -2952,27 +2952,20 @@ dependencies = [
  "egui",
  "egui_kittest",
  "fandhe-core",
- "fandhe-device",
  "fandhe-fonts",
  "fandhe-platform-android",
  "fandhe-platform-apple",
- "fandhe-platform-windows",
  "fandhe-prototype",
  "fandhe-render-egui",
  "fandhe-runtime",
  "image",
- "jni 0.22.4",
  "js-sys",
  "libc",
  "ordered-float",
- "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
  "wgpu",
- "windows 0.61.3",
- "windows-core 0.61.2",
- "windows-future",
  "winit",
 ]
 
@@ -2987,6 +2980,7 @@ dependencies = [
 name = "fandhe-gallery"
 version = "0.1.0"
 dependencies = [
+ "cargo-fandhe",
  "egui",
  "fandhe-cap-accessibility-prefs",
  "fandhe-cap-activity-recognition",

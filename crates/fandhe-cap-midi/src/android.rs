@@ -27,7 +27,7 @@
 //! 演奏内容・デバイス名・例外メッセージはログへ出さない。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `MidiHelper.start` を経た後でしか呼ばれず、
-//! feature `device` 無効ビルドではその経路に到達しない（pedometer / mic-record と同じ）。
+//! この crate を選ばないアプリではその経路に到達しない（pedometer / mic-record と同じ）。
 
 use std::collections::HashMap;
 use std::sync::Arc;

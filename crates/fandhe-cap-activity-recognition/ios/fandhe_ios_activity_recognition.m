@@ -2,7 +2,7 @@
 // `CMMotionActivityManager` で現在の行動を購読し、最新値を static に保持する（pull 型）。
 //
 // `src/ios.rs` から C ABI 経由で呼ばれる。`build.rs` が iOS 分岐の
-// feature `device` 有効時のみ `cc` コンパイルする（CoreMotion は motion 用にリンク済み）。
+// `cc` でコンパイルする（CoreMotion は motion 用にリンク済み）。
 //
 // 契約:
 //   fandhe_ios_activity_recognition_start() -> int32_t

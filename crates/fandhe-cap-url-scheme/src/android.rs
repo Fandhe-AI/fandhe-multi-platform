@@ -5,8 +5,8 @@
 //! 受け口 [`INBOX`] はプロセス全体の static で、UI ができる前（コールドスタート）に
 //! 届いた URL もここに溜まる。検査・保持は共通側の `crate::contract::UrlInbox`
 //! に任せ、本モジュールは JNI の橋渡しだけを持つ。URL は秘密値を含みうるためログへ出さない。
-//! feature `device` 無効ビルド向けの no-op は `fandhe-gallery` の `lib.rs` に置く。JNI 署名は Java の native 宣言・no-op スタブ・
-//! 本ファイルの 3 か所で `(String) -> void` に一致させる。
+//! JNI 署名は Java の native 宣言と本ファイルの 2 か所で `(String) -> void` に一致させる
+//! （本 crate を選んだアプリにだけ Java が入るので no-op スタブは要らない、#1194）。
 
 use crate::contract::{InboxSnapshot, SCHEME, UrlInbox, UrlScheme};
 use crate::error::UrlSchemeError;

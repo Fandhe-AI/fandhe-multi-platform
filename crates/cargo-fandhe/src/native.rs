@@ -108,8 +108,46 @@ struct WebConfig {
 struct OsConfig {
     #[serde(default)]
     usage_descriptions: BTreeMap<String, String>,
-    /// iOS のバンドル ID（`CFBundleIdentifier`）。iOS の Info.plist を出すとき必須。macOS はまだ使わない。
+    /// バンドル ID（`CFBundleIdentifier`）。iOS の Info.plist を出すとき必須。macOS は書いたときだけ
+    /// 本体の Info.plist を Xcode の変数ではなく確定値で出す（Xcode を通さずに実行体へ埋め込む用、#1194）。
     bundle_id: Option<String>,
+    /// 表示名（`CFBundleDisplayName`）。アプリ全体の値で、機能の宣言には書かない。
+    display_name: Option<String>,
+    /// アプリが対応する言語（`CFBundleLocalizations`）。per-app-language の選択肢にもなる。
+    #[serde(default)]
+    localizations: Vec<String>,
+    /// LAN 内の相手への平文通信を許す（ATS の `NSAllowsLocalNetworking`）。通信先の制限はアプリが決める。
+    #[serde(default)]
+    allows_local_networking: bool,
+}
+
+impl OsConfig {
+    /// 殻の確定値に足すアプリ全体の値。機能の宣言はこれらのキーを上書きできない（`AppleCtx::plist`）。
+    fn app_keys(&self) -> Map<String, Value> {
+        let mut m = Map::new();
+        if let Some(n) = &self.display_name {
+            m.insert("CFBundleDisplayName".into(), Value::String(n.clone()));
+        }
+        if !self.localizations.is_empty() {
+            m.insert(
+                "CFBundleLocalizations".into(),
+                Value::Array(
+                    self.localizations
+                        .iter()
+                        .cloned()
+                        .map(Value::String)
+                        .collect(),
+                ),
+            );
+        }
+        if self.allows_local_networking {
+            m.insert(
+                "NSAppTransportSecurity".into(),
+                serde_json::json!({ "NSAllowsLocalNetworking": true }),
+            );
+        }
+        m
+    }
 }
 
 /// アプリの crate の情報（`cargo metadata` の root package）。殻に要る値の出どころ。
@@ -159,6 +197,15 @@ fn is_reverse_dns(p: &str) -> bool {
             .all(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
 }
 
+/// `ja`・`en`・`zh-Hans`・`pt-BR` の形（2〜3 文字の英字 + `-` 区切りの英数字）。
+fn is_lang_tag(s: &str) -> bool {
+    let mut parts = s.split('-');
+    let lang = parts.next().unwrap_or_default();
+    (2..=3).contains(&lang.len())
+        && lang.chars().all(|c| c.is_ascii_alphabetic())
+        && parts.all(|p| (1..=8).contains(&p.len()) && p.chars().all(|c| c.is_ascii_alphanumeric()))
+}
+
 fn is_ident(s: &str) -> bool {
     s.starts_with(|c: char| c.is_ascii_alphabetic())
         && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
@@ -202,10 +249,30 @@ impl AppConfig {
             .iter()
             .map(|p| p.to_string()),
         );
-        if cfg.macos.bundle_id.is_some() {
-            errs.push("fandhe-app.macos.bundle-id: macOS ではまだ使いません（Info.plist は Xcode の変数のままです）".to_string());
+        if let Some(b) = &cfg.macos.bundle_id {
+            if !is_reverse_dns(b) {
+                errs.push(format!("fandhe-app.macos.bundle-id: `{b}` はドット区切り（2 セグメント以上）の英数字とハイフンにしてください"));
+            }
         }
         for (os, c) in [("ios", &cfg.ios), ("macos", &cfg.macos)] {
+            if let Some(n) = &c.display_name {
+                if n.trim().is_empty() || n.chars().any(char::is_control) {
+                    errs.push(format!(
+                        "fandhe-app.{os}.display-name: 空白だけ・制御文字を含む値にできません"
+                    ));
+                }
+            }
+            let mut seen = BTreeSet::new();
+            for l in &c.localizations {
+                if !is_lang_tag(l) {
+                    errs.push(format!("fandhe-app.{os}.localizations: `{l}` は言語タグ（`ja`・`en`・`zh-Hans` など）にしてください"));
+                }
+                if !seen.insert(l) {
+                    errs.push(format!(
+                        "fandhe-app.{os}.localizations: `{l}` が重複しています"
+                    ));
+                }
+            }
             for (k, t) in &c.usage_descriptions {
                 if !(is_ident(k) && k.ends_with("UsageDescription")) {
                     errs.push(format!("fandhe-app.{os}.usage-descriptions: `{k}` は `*UsageDescription` のキーにしてください"));
@@ -559,6 +626,8 @@ fn plist_template() -> Map<String, Value> {
 
 struct AppleCtx<'a> {
     os: &'a str,
+    /// 本体の Info.plist を確定値で出すときの実行体名（iOS は常に、macOS は bundle-id があるとき）。
+    concrete_exe: Option<&'a str>,
     cfg: &'a OsConfig,
     prefix: Option<&'a str>,
     /// この OS に到達した (id, 宣言)。説明文が無いときに要求元の機能を示す。
@@ -714,6 +783,62 @@ fn ios_base(app: &AppInfo, cfg: &OsConfig) -> Result<Map<String, Value>, Vec<Str
     .collect())
 }
 
+/// macOS 本体の土台（`fandhe-app.macos.bundle-id` を書いたときだけ）。Xcode を通さずに実行体へ
+/// 埋め込むため確定値を書く。`CFBundleName` は実行体名にそろえる（サービスメニューの `NSPortName` と
+/// servicesProvider のポート名を一致させるため。share-receive）。
+fn macos_base(app: &AppInfo, bundle: &str) -> Result<Map<String, Value>, Vec<String>> {
+    let mut errs = Vec::new();
+    if app.bins.len() != 1 {
+        errs.push(format!(
+            "macos: 実行体（bin target）がちょうど 1 つ要りますが {} 個あります: [{}]",
+            app.bins.len(),
+            app.bins.join(", ")
+        ));
+    }
+    let v = &app.version;
+    if v.is_empty()
+        || !v
+            .split('.')
+            .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
+    {
+        errs.push(format!("macos: version `{v}` は数字とドットだけの版にしてください（pre-release・build metadata は使えません）"));
+    }
+    if !errs.is_empty() {
+        return Err(errs);
+    }
+    let s = |x: &str| Value::String(x.to_string());
+    Ok([
+        ("CFBundleExecutable", s(&app.bins[0])),
+        ("CFBundleIdentifier", s(bundle)),
+        ("CFBundleInfoDictionaryVersion", s("6.0")),
+        ("CFBundleName", s(&app.bins[0])),
+        ("CFBundlePackageType", s("APPL")),
+        ("CFBundleShortVersionString", s(v)),
+        ("CFBundleVersion", s(v)),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v))
+    .collect())
+}
+
+/// 確定値の Info.plist で、機能の宣言に残る Xcode の変数を実値へ置き換える。置き換えられない変数が
+/// 残ったら返す（Xcode を通さないと解決されないため、黙って出すと実行時に壊れる）。
+fn resolve_build_vars(v: &mut Value, exe: &str, left: &mut BTreeSet<String>) {
+    match v {
+        Value::String(s) => {
+            *s = s.replace("$(EXECUTABLE_NAME)", exe);
+            if let Some(i) = s.find("$(") {
+                left.insert(s[i..].split(')').next().unwrap_or_default().to_string() + ")");
+            }
+        }
+        Value::Array(a) => a.iter_mut().for_each(|x| resolve_build_vars(x, exe, left)),
+        Value::Object(m) => m
+            .values_mut()
+            .for_each(|x| resolve_build_vars(x, exe, left)),
+        _ => {}
+    }
+}
+
 fn apple_files(
     ctx: &AppleCtx,
     base: Map<String, Value>,
@@ -723,7 +848,18 @@ fn apple_files(
 ) {
     let os = ctx.os;
     let mut local = Vec::new();
-    let plist = ctx.plist(base, &m.usage_descriptions, &m.info_plist, &mut local);
+    let mut base = base;
+    base.extend(ctx.cfg.app_keys());
+    let mut plist = ctx.plist(base, &m.usage_descriptions, &m.info_plist, &mut local);
+    if let Some(exe) = ctx.concrete_exe {
+        let mut left = BTreeSet::new();
+        for v in plist.values_mut() {
+            resolve_build_vars(v, exe, &mut left);
+        }
+        for x in left {
+            local.push(format!("{os}: 確定値の Info.plist に Xcode の変数 {x} が残ります（機能の宣言の info-plist を確定値にしてください）"));
+        }
+    }
     let ent = ctx.entitlements(&m.entitlements, &m.app_groups, os, &mut local);
     let mut outs = vec![(format!("{os}/Info.plist"), plist_doc(&plist, "Info.plist"))];
     if !ent.is_empty() {
@@ -858,21 +994,26 @@ pub(crate) fn render(
             continue;
         };
         let base = if os == "ios" {
-            match ios_base(app, &cfg.ios) {
-                Ok(b) => b,
-                Err(e) => {
-                    errs.extend(e);
-                    continue;
-                }
-            }
+            ios_base(app, &cfg.ios)
+        } else if let Some(b) = &cfg.macos.bundle_id {
+            macos_base(app, b)
         } else {
             if m == AppleMerged::default() {
                 continue;
             }
-            plist_template()
+            Ok(plist_template())
         };
+        let base = match base {
+            Ok(b) => b,
+            Err(e) => {
+                errs.extend(e);
+                continue;
+            }
+        };
+        let concrete = os == "ios" || cfg.macos.bundle_id.is_some();
         let ctx = AppleCtx {
             os,
+            concrete_exe: concrete.then(|| app.bins[0].as_str()),
             cfg: if os == "ios" { &cfg.ios } else { &cfg.macos },
             prefix: cfg.app_group_prefix.as_deref(),
             found: set,
@@ -1164,11 +1305,92 @@ mod tests {
             json!({"app-group-prefix": "com.x y"}),
             json!({"ios": {"bundle-id": "com"}}),
             json!({"ios": {"bundle-id": "com.a b"}}),
-            json!({"macos": {"bundle-id": "com.example.app"}}),
+            json!({"macos": {"bundle-id": "com"}}),
+            json!({"ios": {"display-name": " "}}),
+            json!({"macos": {"display-name": "a\tb"}}),
+            json!({"ios": {"localizations": ["japanese"]}}),
+            json!({"ios": {"localizations": ["ja", "ja"]}}),
+            json!({"ios": {"localizations": ["ja_JP"]}}),
+            json!({"ios": {"allows-local-networking": "yes"}}),
             json!({"unknown": 1}),
         ] {
             assert!(AppConfig::parse(&v).is_err(), "{v}");
         }
+        assert!(
+            AppConfig::parse(&json!({"ios": {"localizations": ["zh-Hans", "pt-BR", "en"]}}))
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn app_keys_reach_the_plist_and_features_cannot_override_them() {
+        let ios = json!({"bundle-id": BID, "display-name": "表示名", "localizations": ["ja", "en"], "allows-local-networking": true});
+        let files = render(&[], &[], &[], &cfg(json!({"ios": ios})), &app()).unwrap();
+        let p = &files["ios/Info.plist"];
+        assert!(
+            p.contains("<key>CFBundleDisplayName</key>\n\t<string>表示名</string>"),
+            "{p}"
+        );
+        assert!(
+            p.contains("<string>ja</string>") && p.contains("<string>en</string>"),
+            "{p}"
+        );
+        assert!(p.contains("<key>NSAllowsLocalNetworking</key>"), "{p}");
+        // 書かなければ出さない。
+        let files = render(
+            &[],
+            &[],
+            &[],
+            &cfg(json!({"ios": {"bundle-id": BID}})),
+            &app(),
+        )
+        .unwrap();
+        let p = &files["ios/Info.plist"];
+        assert!(
+            !p.contains("CFBundleDisplayName") && !p.contains("NSAppTransportSecurity"),
+            "{p}"
+        );
+        // 機能の宣言はアプリ全体の値を上書きできない。
+        let f = found(json!({"id": "l", "ios": {"info-plist": {"CFBundleLocalizations": ["fr"]}}}));
+        let ios = json!({"bundle-id": BID, "localizations": ["ja"]});
+        let e = err(render(&[], &[&f], &[], &cfg(json!({"ios": ios})), &app()));
+        assert!(e.contains("CFBundleLocalizations"), "{e}");
+    }
+
+    #[test]
+    fn macos_bundle_id_makes_the_main_plist_concrete() {
+        let f = found(
+            json!({"id": "s", "macos": {"info-plist": {"NSServices": [{"NSPortName": "$(EXECUTABLE_NAME)"}]}}}),
+        );
+        // bundle-id が無ければ Xcode の変数のまま。
+        let files = render(
+            &[],
+            &[],
+            &[&f],
+            &cfg(json!({"ios": {"bundle-id": BID}})),
+            &app(),
+        )
+        .unwrap();
+        assert!(files["macos/Info.plist"].contains("$(PRODUCT_BUNDLE_IDENTIFIER)"));
+        // bundle-id があれば確定値で、機能の宣言の $(EXECUTABLE_NAME) も実行体名になる。
+        let c = cfg(json!({"ios": {"bundle-id": BID}, "macos": {"bundle-id": "com.example.mac"}}));
+        let files = render(&[], &[], &[&f], &c, &app()).unwrap();
+        let p = &files["macos/Info.plist"];
+        assert!(!p.contains("$("), "{p}");
+        assert!(p.contains("<string>com.example.mac</string>"), "{p}");
+        assert!(
+            p.contains("<key>NSPortName</key>\n\t\t\t<string>my-app-bin</string>"),
+            "{p}"
+        );
+        // 機能が macOS に何も宣言しなくても、bundle-id があれば本体の Info.plist は出す（実行体へ埋め込むため）。
+        assert!(render(&[], &[], &[], &c, &app())
+            .unwrap()
+            .contains_key("macos/Info.plist"));
+        // 置き換えられない変数は拒否する（Xcode を通さないと解決されない）。
+        let g =
+            found(json!({"id": "t", "macos": {"info-plist": {"X": "$(TeamIdentifierPrefix)a"}}}));
+        let e = err(render(&[], &[], &[&g], &c, &app()));
+        assert!(e.contains("$(TeamIdentifierPrefix)"), "{e}");
     }
 
     #[test]

@@ -5,7 +5,10 @@
 //! OS へ渡す前の入力検査として使う（`consumer-app-structure.md` §8）。PNG でない・空・上限超過は
 //! `InvalidInput("photo_library png")` で弾く。画像のバイト列はログにも画面にも出さない（security.md A09）。
 
-use crate::DeviceError;
+/// 保存する PNG が契約外（`DeviceError::InvalidInput` の後継、#1194）。
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("入力が不正です: photo_library png")]
+pub struct InvalidPng;
 
 /// 受け付ける PNG の最大バイト数（OS へ渡す前の資源枯渇対策、security.md A04）。
 pub const MAX_PNG_BYTES: usize = 8 * 1024 * 1024;
@@ -20,9 +23,9 @@ pub struct PngImage(Vec<u8>);
 impl PngImage {
     /// 空・PNG シグネチャ不一致・[`MAX_PNG_BYTES`] 超過を `InvalidInput("photo_library png")`
     /// として弾く（復号の成否までは見ない。OS 側が最終判断する）。
-    pub fn new(bytes: Vec<u8>) -> Result<Self, DeviceError> {
+    pub fn new(bytes: Vec<u8>) -> Result<Self, InvalidPng> {
         if bytes.is_empty() || bytes.len() > MAX_PNG_BYTES || !bytes.starts_with(&PNG_SIGNATURE) {
-            return Err(DeviceError::InvalidInput("photo_library png"));
+            return Err(InvalidPng);
         }
         Ok(Self(bytes))
     }
@@ -42,10 +45,7 @@ mod tests {
         let mut big = PNG_SIGNATURE.to_vec();
         big.resize(MAX_PNG_BYTES + 1, 0);
         for bad in [vec![], b"not png".to_vec(), big] {
-            assert!(matches!(
-                PngImage::new(bad),
-                Err(DeviceError::InvalidInput("photo_library png"))
-            ));
+            assert!(matches!(PngImage::new(bad), Err(InvalidPng)));
         }
         assert!(PngImage::new(PNG_SIGNATURE.to_vec()).is_ok());
     }

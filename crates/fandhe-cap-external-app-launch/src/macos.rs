@@ -1,6 +1,6 @@
 //! macOS 向け「電話発信・地図など他アプリの起動」の実装（親 #176、Issue #861）。
 //! `macos/fandhe_macos_external_app_launch.m`（`NSWorkspace openURL:`、`build.rs` が macOS ターゲットの
-//! feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに
+//! コンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに
 //! 閉じ `// SAFETY:` で契約を明記する。`driver.rs` の macOS 経路から呼ばれ、契約は
 //! `crate::contract`。渡す URL は `fandhe-device` の固定値（`PHONE_URI` /
 //! `APPLE_MAPS_URL`）だけで、外から URL を受ける経路は無い。

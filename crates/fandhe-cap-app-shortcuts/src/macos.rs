@@ -1,5 +1,5 @@
 //! macOS 向けアプリショートカット実装（Issue #424、親 #101）。Dock メニューに「デモを開く」を出す。
-//! `macos/fandhe_macos_app_shortcuts.m`（`build.rs` が macOS ターゲットの feature `device` 有効時に
+//! `macos/fandhe_macos_app_shortcuts.m`（`build.rs` が macOS ターゲットで
 //! コンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じる。
 //! `driver::platform_app_shortcuts` の macOS 経路から main thread で呼ばれ、契約は
 //! `crate::contract`。メニュー項目が選ばれると `.m` が `fandhe-cap-url-scheme` の

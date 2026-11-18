@@ -8,10 +8,7 @@ members = [
     # 1 機能ごとに行を足すと並列の移行作業で衝突するため glob で拾う（docs/operations/capability-crate-migration.md）。
     "crates/fandhe-cap-*",
     "crates/fandhe-core",
-    # Phase 8（端末機能の型検証、親 #752 / Issue #746）: 端末機能（保存・HTTP・カメラ）の
-    # 抽象と共通実装を置くクレート。`fandhe-egui-proxy` の feature `device`（既定 on）から
-    # のみ参照される。spec 要件化が否決された場合は本行と下記 `ureq` 依存を
-    # 削除するだけで切り離せる構成にしている（切り離し手順は docs/architecture/device-feature-removal.md 参照）。
+    # 機能 crate が共有する OS に触れない型・検証・定数（docs/architecture/consumer-app-structure.md §8）。
     "crates/fandhe-device",
     "crates/fandhe-egui-proxy",
     # TASK-21.2（Issue #1165）: 画面カタログ（全機能の実機確認・撮影用）の非公開アプリ。
@@ -56,8 +53,7 @@ unsafe_op_in_unsafe_fn = "deny"
 # Phase 8（Issue #751）: iOS / macOS 向け ObjC 実装のコンパイルに使う。呼び出しは
 # `fandhe-platform-apple`（feature `build`、Issue #1168）に集約しており、`fandhe-egui-proxy/build.rs`
 # は直接使わない。既に workspace 依存グラフ内で解決済み（Cargo.lock 実査済み、1.4.2）の推移依存を
-# 直接依存へ昇格するのみで新規 crate の追加ではない。切り離し手順は
-# docs/architecture/device-feature-removal.md 参照（Phase 8 撤去時に本行も削除する）。
+# 直接依存へ昇格するのみで新規 crate の追加ではない。
 cc = "1"
 # Phase 11（Issue #859）: `fandhe-cap-clipboard`（`ArboardClipboard`）が使う
 # クリップボード抽象（macOS/Windows/Linux）。eframe → egui-winit が "clipboard" feature で
@@ -112,9 +108,8 @@ trybuild = "1"
 # advisory-db 1239 件）を確認済み。TLS バックエンドに ring を選ぶ理由は aws-lc-rs（cmake が
 # 必要）を避けるため。`platform-verifier` feature（Android の JNI 経由の証明書検証）は
 # 使わず、`webpki-roots` 同梱ルート証明書を使う（Android 側の JNI 配線が不要になる）。
-# wasm32 では `getrandom` の解決に失敗するため、`fandhe-device` 側で
-# `cfg(not(target_arch = "wasm32"))` に閉じ、`fandhe-egui-proxy` の feature `device` も
-# 同ターゲットには依存自体を持ち込まない（`crates/fandhe-device/Cargo.toml` 参照）。
+# wasm32 では `getrandom` の解決に失敗するため、使う機能 crate（`fandhe-cap-http-get` 等）が
+# `cfg(not(target_arch = "wasm32"))` に閉じる。
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 
 # Phase 8（Issue #750）: Android 実装（`fandhe-egui-proxy` の `device::android` モジュール）が

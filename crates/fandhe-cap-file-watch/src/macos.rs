@@ -1,5 +1,5 @@
 //! macOS 向けフォルダ変更監視実装（Issue #1410）。`macos/fandhe_macos_file_watch.m`（CoreServices の
-//! FSEventStream。`build.rs` が macOS 分岐で feature `device` 有効時にコンパイルする）を
+//! FSEventStream。`build.rs` が macOS 分岐でコンパイルする）を
 //! `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
 //! `fandhe-cap-file-watch/src/driver.rs` の macOS 経路から UI スレッドで呼ばれ、契約は `fandhe_cap_file_watch`。
 //!
@@ -27,7 +27,7 @@ use crate::error::FileWatchError;
 use crate::driver::{register, unregister};
 
 mod ffi {
-    // SAFETY: `macos/fandhe_macos_file_watch.m`（`build.rs` が macOS 分岐で feature `device` 有効時に
+    // SAFETY: `macos/fandhe_macos_file_watch.m`（`build.rs` が macOS 分岐で
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {

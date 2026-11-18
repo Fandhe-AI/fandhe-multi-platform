@@ -1,6 +1,6 @@
 //! macOS 向け無操作時間実装（Issue #631）。`macos/fandhe_macos_user_idle.m`
-//! （`CGEventSourceSecondsSinceLastEventType`、`build.rs` が macOS ターゲットの feature `device`
-//! 有効時にコンパイル・リンクする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに
+//! （`CGEventSourceSecondsSinceLastEventType`、`build.rs` が macOS ターゲットで
+//! コンパイル・リンクする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに
 //! 閉じ `// SAFETY:` で契約を明記する。`driver` の macOS 経路から呼ばれ、契約は
 //! `crate::contract`。
 //!

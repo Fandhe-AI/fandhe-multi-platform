@@ -1,7 +1,7 @@
 // Phase 11 の拡充ループ（親 #1137）型サンプル「MIDI 入力」: macOS（Issue #1398）・iOS（Issue #1399）共用の実装。
 // CoreMIDI で接続中の MIDI 入力ソースを購読し、UMP（MIDI 1.0 プロトコル）のワード列を Rust へ渡す。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_midi.rs` から C ABI 経由で呼ばれる。`build.rs::build_macos`
+// `crates/fandhe-cap-midi/src/apple.rs` から C ABI 経由で呼ばれる。`build.rs::build_macos`
 // （macOS）・`build_ios` がコンパイルし CoreMIDI をリンクする。iOS は iOS 14 以降で動き、
 // それ未満は戻りコード 1（失敗）。iOS ではペアリング UI（CABTMIDICentralViewController）を使わず、
 // ペア済み・他アプリで接続済みのソースだけを受ける。背景遷移中の受信継続は守らない範囲。

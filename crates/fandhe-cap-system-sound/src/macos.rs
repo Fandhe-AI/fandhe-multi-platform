@@ -1,5 +1,5 @@
 //! macOS 向けシステムの効果音実装（Issue #939）。`macos/fandhe_macos_system_sound.m`
-//! （`NSBeep`、`build.rs` が macOS ターゲットの feature `device` 有効時にコンパイルする）を
+//! （`NSBeep`、`build.rs` が macOS ターゲットでコンパイルする）を
 //! `extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
 //! `driver.rs` の macOS 経路から main スレッドで呼ばれ、契約は
 //! `fandhe_cap_system_sound`。

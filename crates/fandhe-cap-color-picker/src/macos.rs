@@ -1,5 +1,5 @@
 //! macOS 向けシステムの色選択ダイアログ実装（Issue #941）。`driver.rs` の macOS 経路から
-//! 呼ばれ、`macos/fandhe_macos_color_picker.m`（`NSColorPanel`。`build.rs` が feature `device` 有効時のみ
+//! 呼ばれ、`macos/fandhe_macos_color_picker.m`（`NSColorPanel`。`build.rs` が
 //! コンパイルする）を `unsafe extern "C"` 1 関数（[`present`]）で呼ぶ。
 //! `unsafe` はこの呼び出しと受け口に閉じ `// SAFETY:` で契約を明記する
 //! （`macos_eye_dropper.rs` と同型、coding-rust.md の FFI 例外規定準拠）。

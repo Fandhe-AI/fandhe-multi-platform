@@ -5,7 +5,7 @@
 //! `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約（結果の三値・数値表・守る範囲）の SSOT は `crate::contract`。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。
+//! 非 wasm32 でのみコンパイル対象になる。
 //!
 //! # OS 別の分担（dispatch・bridge・本ファイルは #821 で最終形。後続の子はここを触らない）
 //!
@@ -47,7 +47,9 @@
 
 use std::sync::{Arc, Mutex, OnceLock};
 
-use crate::contract::{MAX_DURATION_SECS, VideoCaptureFailure, VideoCaptureOutcome, VideoCapturer};
+use crate::contract::{
+    MAX_DURATION_SECS, PanelOp, PanelState, VideoCaptureFailure, VideoCaptureOutcome, VideoCapturer,
+};
 use fandhe_core::screens::video_capture_show::VideoCaptureShowState;
 use fandhe_core::screens::video_capture_show::{
     ClipOrigin, CoreFailure, CoreOutcome, PanelCommand, PanelPhase, Phase, ShownClip,
@@ -336,8 +338,28 @@ pub(crate) fn complete_from_os(request_id: u64, result: Outcome) {
 
 /// OS 層が撮影パネルの状態を書く受け口（Windows。モジュール doc 参照）。
 #[allow(dead_code)]
-pub(crate) fn set_panel(request_id: u64, panel: Option<PanelPhase>) {
-    bridge().set_panel(request_id, panel);
+pub(crate) fn set_panel(request_id: u64, panel: Option<PanelState>) {
+    bridge().set_panel(request_id, panel.map(panel_phase_from_state));
+}
+
+/// OS 層の [`PanelState`] を画面の [`PanelPhase`] へ写す（網羅 `match`。バリアントの増減でコンパイルが止まる）。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn panel_phase_from_state(state: PanelState) -> PanelPhase {
+    match state {
+        PanelState::Ready => PanelPhase::Ready,
+        PanelState::Recording => PanelPhase::Recording,
+        PanelState::Busy => PanelPhase::Busy,
+    }
+}
+
+/// 画面の [`PanelCommand`] を OS 層の [`PanelOp`] へ写す（網羅 `match`）。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn panel_op_from_command(command: PanelCommand) -> PanelOp {
+    match command {
+        PanelCommand::Start => PanelOp::Start,
+        PanelCommand::Stop => PanelOp::Stop,
+        PanelCommand::Cancel => PanelOp::Cancel,
+    }
 }
 
 /// 画面の作り直し時に保留中の要求を破棄する。画面状態は `default()`（世代 0）に戻るため、
@@ -478,7 +500,7 @@ pub fn video_capture_show_effect(
 /// 撮影パネルの命令を OS 層へ渡す本番の転送先。Windows 以外にパネルは無い。
 fn forward_panel_command(request_id: u64, command: PanelCommand) {
     #[cfg(target_os = "windows")]
-    crate::windows::panel_command(request_id, command);
+    crate::windows::panel_command(request_id, panel_op_from_command(command));
     #[cfg(not(target_os = "windows"))]
     let _ = (request_id, command);
 }
@@ -996,5 +1018,24 @@ mod tests {
         let id = bridge.begin();
         bridge.complete_from_os(id, Err(VideoCaptureFailure::Interrupted));
         bridge.try_begin_present(id)
+    }
+
+    /// 画面の型と OS 層の型の写像が 1 対 1 で対応する（片側へ値を足したときの取りこぼし防止）。
+    #[test]
+    fn panel_type_mapping_is_one_to_one() {
+        let states = [PanelState::Ready, PanelState::Recording, PanelState::Busy];
+        let phases = [PanelPhase::Ready, PanelPhase::Recording, PanelPhase::Busy];
+        for (s, p) in states.into_iter().zip(phases) {
+            assert_eq!(panel_phase_from_state(s), p);
+        }
+        let commands = [
+            PanelCommand::Start,
+            PanelCommand::Stop,
+            PanelCommand::Cancel,
+        ];
+        let ops = [PanelOp::Start, PanelOp::Stop, PanelOp::Cancel];
+        for (c, o) in commands.into_iter().zip(ops) {
+            assert_eq!(panel_op_from_command(c), o);
+        }
     }
 }

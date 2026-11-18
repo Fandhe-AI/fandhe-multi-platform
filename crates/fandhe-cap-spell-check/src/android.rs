@@ -25,7 +25,7 @@
 //! 結果の違い。IME がスペルチェックを抑止中で結果が空配列のときは失敗にする（0 件の成功にしない）。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `requestSpellCheck` を経た後でしか呼ばれず、
-//! feature `device` 無効ビルドではその経路に到達しない（translation と同じ）。
+//! この crate を選ばないアプリではその経路に到達しない（translation と同じ）。
 //!
 //! JNI 署名（Java・Rust で一致させる）: `request(Landroidx/activity/ComponentActivity;JLjava/lang/String;Ljava/lang/String;I)V`、
 //! `cancel(Landroidx/activity/ComponentActivity;J)V`、`native nativeOnSpellCheckResult(long, int, int[], String[], String)`。

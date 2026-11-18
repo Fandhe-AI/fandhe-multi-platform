@@ -6,7 +6,7 @@
 //! 重力ベクトル相当の傾きを取り、`step` を毎フレーム進める。`fandhe-device` の
 //! `Motion` トレイトは egui 経路（デスクトップのスライダー代替・iOS/Android の実センサ、
 //! `fandhe-egui-proxy::device::tilt` 参照）専用で、Web は `location.rs`/`gamepad.rs` と
-//! 同じ理由（`fandhe-egui-proxy` の feature `device` が wasm32 に依存を持ち込まない設計）で
+//! 同じ理由（機能 crate の OS 実装は wasm32 を対象にしない設計（Web の実装は本クレート、consumer-app-structure.md §7））で
 //! これを通らず、本モジュールが DOM レンダラ側の対応実装にあたる。
 //!
 //! # 重力ベクトルへの変換（画面座標: x 右・y 下が正）

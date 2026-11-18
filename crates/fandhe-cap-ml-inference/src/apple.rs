@@ -13,7 +13,7 @@ use crate::contract::{DemoModel, INVALID_MODEL, MlInference, TIMEOUT, coreml_spe
 use crate::error::MlInferenceError;
 
 // SAFETY: `apple/fandhe_apple_ml_inference.m` が定義する C ABI（`build.rs` が macOS / iOS
-// ターゲットの feature `device` 有効時のみコンパイル・リンクする）。契約は `.m` 冒頭コメントに集約する。
+// ターゲットでコンパイル・リンクする）。契約は `.m` 冒頭コメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {
     fn fandhe_apple_ml_inference_run(

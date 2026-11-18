@@ -1,5 +1,5 @@
 //! macOS 向け複数ディスプレイ実装（Issue #1341）。`macos/fandhe_macos_multi_display.m`
-//! （`NSScreen.screens`、`build.rs` が macOS ターゲットの feature `device` 有効時にコンパイルする）
+//! （`NSScreen.screens`、`build.rs` が macOS ターゲットでコンパイルする）
 //! を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を
 //! 明記する。`fandhe-cap-multi-display/src/driver.rs` の macOS 経路から呼ばれ、契約は
 //! `fandhe_cap_multi_display`。

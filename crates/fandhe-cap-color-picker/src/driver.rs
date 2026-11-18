@@ -4,7 +4,7 @@
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は
 //! `crate::contract` のモジュール doc。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる。
+//! 非 wasm32 でのみコンパイル対象になる。
 //!
 //! # dispatch（最終形）
 //!
@@ -92,7 +92,7 @@ fn drive_callback(state: &ColorPickerState, sender: &CompletionSender<ColorPicke
         let _ = sender.send(Box::new(mark_picking));
         let Some(request_id) = bridge::begin() else {
             // 公開入口の要求が進行中・未取得。置き換えず、画面へ「処理中」の失敗を返す。
-            let outcome = to_outcome(Err(ColorPickerError::Internal("color picker busy")));
+            let outcome = to_outcome(Err(ColorPickerError::Internal("color_picker busy")));
             let _ = sender.send(Box::new(move |s: &mut ColorPickerState| {
                 finish_pick(s, generation, outcome);
             }));
@@ -170,7 +170,7 @@ pub fn platform_color_picker() -> Box<dyn ColorPicker> {
 pub fn begin_color_pick() -> Result<u64, ColorPickerError> {
     let request_id = bridge::SLOT
         .try_begin_unless(|_| true)
-        .ok_or(ColorPickerError::Internal("color picker busy"))?;
+        .ok_or(ColorPickerError::Internal("color_picker busy"))?;
     if let Err(e) = present(request_id) {
         bridge::SLOT.clear(request_id);
         return Err(e);

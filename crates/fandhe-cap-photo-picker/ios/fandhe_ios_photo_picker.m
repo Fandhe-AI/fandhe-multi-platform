@@ -6,8 +6,8 @@
 // `unsafe extern "C"` 宣言 1 点のみを Rust 側へ公開する（`fandhe_ios_file_picker.m` と同型。
 // coding-rust.md の FFI 例外規定）。
 //
-// `build.rs` が iOS ターゲット（`CARGO_CFG_TARGET_OS == "ios"`）かつ feature `device`
-// 有効時のみ `cc` でコンパイルし、PhotosUI・ImageIO をリンクする。
+// `build.rs` が iOS ターゲット（`CARGO_CFG_TARGET_OS == "ios"`）でだけ
+// `cc` でコンパイルし、PhotosUI・ImageIO をリンクする。
 //
 // 権限: 不要。`PHPickerViewController` はプロセス外のシステムピッカーで、選ばれた 1 枚だけが
 // アプリへ渡る（`NSPhotoLibraryUsageDescription` は追加しない）。
@@ -34,6 +34,10 @@
 // `NSItemProvider` のバックグラウンドキューで走り、Rust 側の復号もそこで行う（main を塞がない）。
 // すべての Cocoa 呼び出しは `@autoreleasepool` の内側（Rust ワーカーではなく本ファイルの
 // キュー上で動くが、ハンドラごとに明示する）。
+//
+// 完了通知を失う経路のうちシーンの切断は、`UISceneDidDisconnectNotification` の観測で失敗（code 2）として 1 度だけ確定する
+// （画面の effect が `Picking` のまま止まらない）。UIKit が提示を捨てて completion も来ない場合と、提示先のシーンが特定できない場合は観測できず、確定しない。
+// 切断でピッカーが delegate を呼ばずに消える挙動自体が、公式文書で確認されておらず実機で未確認。
 //
 // 進行中かどうかは OS の観測（提示中のピッカーが実際に提示されているか）で決める。推測タイマーのフラグは持たない:
 // 画面 effect も公開入口（`begin_photo_pick`）も同じこの入口を通るため、Rust 側が slot を捨てた（`discard_photo_pick`）後でも、
@@ -213,9 +217,57 @@ static void FandheDeliverPickedProvider(uint64_t requestId, NSItemProvider *prov
 
 @end
 
+// 提示したシーン（weak）。シーンの切断（`UISceneDidDisconnectNotification`）が、その要求の完了通知を失った観測になる。
+// 提示の直前に記録し、`g_activePicker` を nil にする箇所ですべて nil にする。main queue からのみ読み書きする。
+static __weak UIScene *g_activeScene = nil;
+// 切断通知の購読トークン。強参照で持ち続けないと observer が解放されて購読が無効になる。main queue からのみ触る。
+static id _Nullable g_sceneDisconnectToken = nil;
+
+// シーンの切断で、完了通知を失った要求を失敗（code 2）で 1 度だけ確定する（main queue）。
+// 切断されるとピッカーは delegate を呼ばずに消え、画面の effect が `Picking` のまま止まる、という挙動は公式文書で確認されておらず実機で未確認。
+// OS の観測で確定するので推測のタイマーは持たない。
+// 提示したシーンが記録でき、それが切断されたときだけ確定する。提示先が特定できない（記録が nil）ときは、iPad のマルチウィンドウで
+// 無関係な別シーンが閉じただけで正しい選択を落とさないよう、切断では確定しない（観測できない天井）。
+// 正しい選択は先に `g_retainedDelegate` が nil になっているので何もしない。確定後に遅れて届いた通知は Rust 側が消費済みの id として捨てる。
+static void FandhePhotoPickerFailOnSceneDisconnect(UIScene *disconnected) {
+    id stale = g_retainedDelegate;
+    if (stale == nil) {
+        return;
+    }
+    UIScene *active = g_activeScene;
+    if (active == nil || active != disconnected) {
+        return;
+    }
+    PHPickerViewController *picker = g_activePicker;
+    picker.presentationController.delegate = nil;
+    g_retainedDelegate = nil;
+    g_activePicker = nil;
+    g_activeScene = nil;
+    fandhe_rust_photo_picker_outcome((((FandhePhotoPickerDelegate *)stale).requestId), 2, NULL, 0);
+}
+
+// 切断通知の購読を 1 度だけ登録する（main queue）。
+static void FandhePhotoPickerObserveSceneDisconnect(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+      g_sceneDisconnectToken = [NSNotificationCenter.defaultCenter
+          addObserverForName:UISceneDidDisconnectNotification
+                      object:nil
+                       queue:NSOperationQueue.mainQueue
+                  usingBlock:^(NSNotification *note) {
+                    @autoreleasepool {
+                        if ([note.object isKindOfClass:UIScene.class]) {
+                            FandhePhotoPickerFailOnSceneDisconnect((UIScene *)note.object);
+                        }
+                    }
+                  }];
+    });
+}
+
 int32_t fandhe_ios_photo_picker_pick(uint64_t requestId) {
     dispatch_async(dispatch_get_main_queue(), ^{
       @autoreleasepool {
+        FandhePhotoPickerObserveSceneDisconnect();
         // 進行中のピッカー（提示中、提示・dismiss のアニメーション中）があれば、重ねて提示せず busy を返す。
         // 判定は delegate の有無ではなく OS の観測（提示状態）で行う: 完了通知で delegate を解放した直後も、
         // ピッカーは dismiss が終わるまで提示中のままで、その上へ present すると失敗してコールバックが来ない。
@@ -230,6 +282,7 @@ int32_t fandhe_ios_photo_picker_pick(uint64_t requestId) {
         FandhePhotoPickerDelegate *stale = g_retainedDelegate;
         g_retainedDelegate = nil;
         g_activePicker = nil;
+        g_activeScene = nil;
         if (stale != nil) {
             fandhe_rust_photo_picker_outcome(stale.requestId, 2, NULL, 0);
         }
@@ -263,23 +316,22 @@ int32_t fandhe_ios_photo_picker_pick(uint64_t requestId) {
         picker.presentationController.delegate = delegate;
         g_retainedDelegate = delegate;
         g_activePicker = picker;
+        g_activeScene = top.view.window.windowScene;
 
         // 提示の成否は completion（提示の完了後、presented 側の `viewDidAppear:` の後に呼ばれる。公式文書）で確かめる。
         // 直後には確かめない: `presentingViewController` / `isBeingPresented` が提示の直後に立つ保証が文書に無く、立つ前に確かめると
         // 正しい提示を失敗と誤判定して delegate を外し、選択を捨ててしまう。ここは「completion が来たのに提示が成立していない」
         // 場合の安全網で、通常は何もしない。delegate の完了経路が先に走っていれば（`g_retainedDelegate != delegate`）何もしない。
-        // 既知の天井: UIKit が提示を捨てたとき completion が呼ばれるかは文書に無く、呼ばれなければこの要求は確定しない。
-        // completion ブロックが picker を強参照するため、weak の `g_activePicker` は nil にならない。残った delegate は、次の要求が
-        // 「提示されていない（`presentingViewController == nil && !isBeingPresented && !isBeingDismissed`）」と判定してここで
-        // 旧 delegate を失敗（code 2）で確定して回収する（推測のタイマーは持たない）。ただし Rust 側の slot は要求中のまま残るため、
-        // 次の要求がここへ届くのは、公開入口で discard したあと、または slot が reset されたあとだけ（画面 effect は busy で断られ、
-        // iOS に画面の `Picking` を抜ける経路は無い）。遷移中は上で busy にして提示自体を避けるので、捨てられること自体はほぼ起きない前提の天井。
+        // 既知の天井: UIKit が提示を捨てたとき completion が呼ばれるかは文書に無く、呼ばれず、シーンも接続されたままなら、この要求は確定しない
+        // （これを観測する OS の通知は無い。アクティブ化で提示状態を見直す案は、提示直後の状態が文書に無く正しい提示を失敗と誤判定し得るので採らない）。
+        // シーンが切断されたときは `FandhePhotoPickerFailOnSceneDisconnect` が失敗（code 2）で確定する。遷移中は上で busy にして提示自体を避ける。
         [top presentViewController:picker
                           animated:YES
                         completion:^{
                           if (g_retainedDelegate == delegate && picker.presentingViewController == nil) {
                               g_retainedDelegate = nil;
                               g_activePicker = nil;
+                              g_activeScene = nil;
                               picker.presentationController.delegate = nil;
                               fandhe_rust_photo_picker_outcome(requestId, 2, NULL, 0);
                           }

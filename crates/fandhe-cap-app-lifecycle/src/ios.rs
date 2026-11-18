@@ -1,5 +1,5 @@
 //! iOS 向けアプリの前面・背面の通知実装（Issue #894）。`ios/fandhe_ios_app_lifecycle.m`
-//! （`UIScene` の通知。`build.rs` が iOS 分岐で feature `device` 有効時にコンパイルする）を
+//! （`UIScene` の通知。`build.rs` が iOS 分岐でコンパイルする）を
 //! `unsafe extern "C"` 3 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
 //! `driver.rs` の ios 経路から呼ばれ、契約は `crate::contract`。
 //!
@@ -37,7 +37,7 @@ use crate::driver::{register, unregister};
 
 #[cfg(target_os = "ios")]
 mod ffi {
-    // SAFETY: `ios/fandhe_ios_app_lifecycle.m`（`build.rs` が iOS 分岐で feature `device` 有効時に
+    // SAFETY: `ios/fandhe_ios_app_lifecycle.m`（`build.rs` が iOS 分岐で
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {

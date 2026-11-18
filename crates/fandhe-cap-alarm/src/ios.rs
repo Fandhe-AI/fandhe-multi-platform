@@ -69,7 +69,7 @@ mod imp {
     use std::sync::Mutex;
 
     // SAFETY: `ios/fandhe_ios_alarm.swift` が `@_cdecl` で定義する C ABI（`build.rs` が iOS ターゲットの
-    // feature `device` 有効時のみコンパイル・リンクする）。契約は swift 冒頭コメントに集約する。
+    // コンパイル・リンクする）。契約は swift 冒頭コメントに集約する。
     #[allow(unsafe_code)]
     unsafe extern "C" {
         fn fandhe_ios_alarm_schedule(fire_at_ms: u64) -> i32;

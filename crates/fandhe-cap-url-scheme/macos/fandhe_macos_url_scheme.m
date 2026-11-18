@@ -5,7 +5,7 @@
 // （`fandhe_macos_background_task.m` と同じ判断）。
 //
 // `crates/fandhe-cap-url-scheme/src/apple.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `build.rs` がコンパイルする。
 //
 // 契約:
 //   fandhe_apple_url_scheme_register(void) -> void

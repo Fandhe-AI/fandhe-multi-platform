@@ -17,6 +17,11 @@ thiserror = { workspace = true }
 # 共有の検証（`clean_text` など）。契約は `fandhe-device` に残る共有部品を参照する。
 fandhe-device = { path = "../fandhe-device" }
 
+# フォルダ選択（`driver::pick_folder`）の macOS 経路（`NSOpenPanel`）。Windows は rfd を使わず PowerShell の子プロセス
+# （`fandhe-device` の `run_windows_dialog`。rfd 0.17 の同期 API は Windows で失敗をキャンセルへ畳むため）。#1194 で `fandhe-device` から移した。
+[target.'cfg(target_os = "macos")'.dependencies]
+rfd = { workspace = true }
+
 [target.'cfg(target_os = "android")'.dependencies]
 fandhe-platform-android = { path = "../fandhe-platform-android" }
 # inotify（`android.rs`）。android-activity 等の推移的依存で既に解決済みのため新規パッケージは増えない。

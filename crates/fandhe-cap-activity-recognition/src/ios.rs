@@ -1,5 +1,5 @@
 //! iOS 向け行動認識実装（Issue #614、親 #124）。`ios/fandhe_ios_activity_recognition.m`
-//! （CoreMotion `CMMotionActivityManager` の購読、`build.rs` が iOS ターゲットの feature `device` 有効時に
+//! （CoreMotion `CMMotionActivityManager` の購読、`build.rs` が iOS ターゲットで
 //! コンパイルする）を `unsafe extern "C"` 3 関数で呼ぶ。`driver` の iOS 経路が
 //! [`implementation`] を呼ぶ。dispatch・共通コア画面・ドライバ・trait 契約
 //! （`crate::contract`）は #613 の最終形のまま変えない。
@@ -97,8 +97,8 @@ mod imp {
 
     use super::{read_result, start_result};
 
-    // SAFETY: `ios/fandhe_ios_activity_recognition.m`（`build.rs` が iOS ターゲットの feature `device`
-    // 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
+    // SAFETY: `ios/fandhe_ios_activity_recognition.m`（`build.rs` が iOS ターゲットで
+    // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {
         fn fandhe_ios_activity_recognition_start() -> i32;

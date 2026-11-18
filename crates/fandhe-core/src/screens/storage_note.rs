@@ -9,9 +9,9 @@
 //! 一方向、coding-rust.md 準拠）ため、本モジュールは [`fandhe_device::storage::Storage`]
 //! と同形の最小トレイト [`NoteStorage`] を独自に定義する。純粋なトレイト定義のみで
 //! I/O を持たないため「端末依存」には当たらず、画面ファイルと一緒に削除できる
-//! （docs/architecture/device-feature-removal.mdの範囲内）。
+//! （保存の実装は `fandhe-cap-local-storage-kv`）。
 //!
-//! `fandhe-egui-proxy` 側の `device.rs` が `fandhe_device::storage::FsStorage` を
+//! `fandhe-cap-local-storage-kv` の driver が `fandhe_device::storage::FsStorage` を
 //! newtype で [`NoteStorage`] へ橋渡しし、レジストリの `init` 行が渡す状態ファクトリ
 //! （`fn() -> StorageNoteState`）が [`StorageNoteState::with_storage`] を呼んで
 //! 構築時に保存済みメモを読み込む（＝再起動後の復元）。`Default` 実装は保存先を
@@ -22,10 +22,10 @@ use crate::ui::{Node, Screen, WidgetId};
 /// （A03 インジェクション対策、security.md 準拠）。
 pub const NOTES_KEY: &str = "storage_note.txt";
 
-/// 端末保存領域への読み書きで発生し得るエラー。`fandhe_device::DeviceError` を
+/// 端末保存領域への読み書きで発生し得るエラー。`fandhe_device::storage::StorageError` を
 /// 直接使わない（本クレートは `fandhe-device` に依存しない、coding-rust.md の
-/// 二層アーキテクチャ準拠）。橋渡し側（`fandhe-egui-proxy::device::DeviceNoteStorage`）
-/// が `DeviceError` の各バリアントをこの型へ変換する。表示文言は `Display` 経由で
+/// 二層アーキテクチャ準拠）。橋渡し側（`fandhe-cap-local-storage-kv` の driver）
+/// が `StorageError` の各バリアントをこの型へ変換する。表示文言は `Display` 経由で
 /// `status` にそのまま流用する（`SAVE_FAILED_PREFIX`/`LOAD_FAILED_PREFIX` 参照）。
 #[derive(Debug, thiserror::Error)]
 pub enum NoteStorageError {

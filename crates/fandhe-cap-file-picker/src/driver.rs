@@ -34,15 +34,15 @@
 //! 自分で `finish_pick`/`finish_import` を反映できたことを確認してから
 //! [`bridge::clear`] するため、「キュー投入成功 ≠ 反映」の隙間も無い。
 //!
-//! 固定タイムアウトを掛けないため、OS がコールバックしないケース（シーン破棄等）は
-//! `Picking` のまま残る（既知の天井、out-of-scope-tracking.md 対象外の設計上の割り切り）。
+//! 固定タイムアウトを掛けないため、OS がコールバックしないケースは `Picking` のまま残る。
+//! iOS のシーンの切断は `.m` が `UISceneDidDisconnectNotification` の観測で失敗として確定するので残らず（切断でピッカーが delegate を呼ばずに消える挙動は公式文書で未確認・実機でも未確認）、
+//! 残るのは UIKit が提示を捨ててコールバックが来ず、シーンも接続されたままの稀な場合と、提示先のシーンが特定できず切断で確定しない場合だけ（既知の天井、out-of-scope-tracking.md 対象外の設計上の割り切り）。
 //!
 //! # `bridge` は `file_pick`/`tsv_import` の 2 画面で共有する
 //!
-//! `bridge::SLOT` は本モジュールと [`crate::tsv_import`] の両方が使う static。
+//! `bridge::SLOT` は本モジュールの `file_pick`・`tsv_import` の両 effect が使う static。
 //! `FANDHE_PROXY_APP` で起動する画面は 1 プロセスに 1 つだけのため、同じプロセスで
-//! 両方の effect ドライバが動くことは無く、共有しても要求が混線しない（`tsv_import.rs`
-//! モジュール doc も参照）。`Outcome` を `PickedSummary` ではなく生の
+//! 両方の effect ドライバが動くことは無く、共有しても要求が混線しない。`Outcome` を `PickedSummary` ではなく生の
 //! `Result<Option<Arc<PickedFile>>, FilePickerError>` に留めているのは、`tsv_import` 側は
 //! バイト列を解析に使う（要約に潰さない）ため。要約（`PickedSummary` への変換）は
 //! 各画面固有の [`PickHooks::finish`] 側で行う。
@@ -64,6 +64,7 @@ use crate::error::FilePickerError;
 use fandhe_core::screens::file_pick::{
     FilePickState, PickPhase, PickedSummary, finish_pick, mark_picking, request_pick,
 };
+use fandhe_core::screens::tsv_import::{self, TsvImportState, finish_import, request_import};
 use fandhe_device::file_picker::{MAX_FILE_BYTES, PickedFile};
 
 use fandhe_runtime::CompletionSender;
@@ -194,8 +195,9 @@ pub(crate) fn drive_with<S: 'static>(
 /// 連番 `request_id`（再生成で画面の `generation` が 1 から再開しても衝突しない）。
 ///
 /// 画面 effect と公開入口（[`begin_file_pick`] / [`poll_file_pick`]）が同じ slot を共有する。
-/// 持ち主（[`bridge::SCREEN_OWNER`]・[`bridge::PUBLIC_OWNER`]）で自分の分の要求を区別し、片方が進行中・結果未取得のとき
-/// 他方は置き換えず busy で断る。slot には変換前の生の結果（`FilePickerError`）を置き、画面へ渡すときに文言へ変換する。
+/// 持ち主（[`bridge::SCREEN_OWNER`]・[`bridge::PUBLIC_OWNER`]）で自分の分の要求を区別し、
+/// 進行中の要求は busy で断り、公開側の未取得の結果は守る。画面側の届いた未取得の結果は、公開入口の開始が捨てずに画面の受け取り待ちへ移し、画面はそのまま受け取る（`SlotOwner::begin_parking`）。
+/// slot には変換前の生の結果（`FilePickerError`）を置き、画面へ渡すときに文言へ変換する。
 ///
 /// テストでホストからも検証できるよう `cfg(test)` でもコンパイルする（OS 呼び出しは含まない）。
 #[cfg(any(test, target_os = "ios", target_os = "android"))]
@@ -229,9 +231,13 @@ pub(crate) mod bridge {
         SCREEN_OWNER.begin_keeping_foreign(&SLOT)
     }
 
-    /// 公開入口の要求を登録する。進行中、または結果が未取得の要求（画面側の分を含む）があれば `None`（busy）。
+    /// 公開入口の要求を登録する。進行中の要求と自分の未取得の結果があれば `None`（busy）。画面側の届いた未取得の結果は捨てずに
+    /// 画面の受け取り待ちへ移して始める（画面の effect が回らず取り出されないままでも詰まらず、生きている画面の結果も失わない）。
+    /// 移した結果は画面の poll がそのまま受け取り、受け取られない分は画面の次の開始で解放される
+    /// （残るのは最大 1 件で、結果のバイト列は上限 `MAX_FILE_BYTES`（8 MiB）まで。
+    /// 本番の reset は無く、解放の契機は画面の次の開始だけ）。
     pub(crate) fn begin_public() -> Option<u64> {
-        PUBLIC_OWNER.begin_excluding(&SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
+        PUBLIC_OWNER.begin_parking(&SLOT, &SCREEN_OWNER)
     }
 
     /// 公開入口の提示依頼が同期的に失敗したときに、登録を取り消す。
@@ -277,13 +283,15 @@ pub(crate) mod bridge {
     }
 
     /// 画面が観測する「自分の分の」要求と結果。持ち主が画面でない要求（公開入口の分）は見せず `None` にする
-    /// （画面が公開入口の要求を再生成後の復元と取り違えない）。失敗は画面へ渡す文言へ変換する。
+    /// （画面が公開入口の要求を再生成後の復元と取り違えない）。公開入口の開始で受け取り待ちへ移された自分の結果も見せる
+    /// （[`begin_public`]。照合と取得は slot の 1 回のロックで行う）。失敗は画面へ渡す文言へ変換する。
     pub(crate) fn screen_snapshot() -> Option<(u64, Option<super::MobileOutcome>)> {
-        let (request_id, ready) = SLOT.snapshot()?;
-        if request_id != SCREEN_OWNER.current() {
+        let mine = SCREEN_OWNER.current();
+        if mine == 0 {
             return None;
         }
-        Some((request_id, ready.map(|r| r.map_err(super::to_message))))
+        let ready = SLOT.snapshot_of(mine)?;
+        Some((mine, ready.map(|r| r.map_err(super::to_message))))
     }
 
     /// OS からの結果を `Arc` で包んでから置く（任意スレッド）。`request_id` 不一致・未登録（プロセス死後の再配送等）・
@@ -499,10 +507,17 @@ pub fn platform_file_picker() -> Result<&'static dyn crate::contract::FilePicker
 /// ファイル選択を OS へ依頼し、結果を [`poll_file_pick`] で受け取るための要求 id を返す（iOS・Android）。
 ///
 /// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。選択条件の引数は無い（画面経路と同じく 1 ファイル・
-/// 種類の絞り込みなし）。1 プロセスに 1 要求で、画面 effect と slot を共有するため、進行中・結果が未取得の要求
-/// （画面側の分を含む）があるうちは `Internal`（busy）で断る。画面 effect 側も、この入口の進行中・未取得の要求があれば
-/// 置き換えず処理中の失敗で終える。画面側の未取得の結果・進行中の要求が残る間も busy で断られる（画面状態が破棄されて
-/// effect が回らないと解消しない。lan-discovery と同じ構造）。依頼自体の失敗は `Err`（結果は届かない）。
+/// 種類の絞り込みなし）。1 プロセスに 1 要求で、画面 effect と slot を共有する。
+///
+/// - 進行中の要求は busy で断る。
+/// - 画面側の届いた未取得の結果があっても断らない（画面が描かれず取り出されないままでも詰まらない）。結果は捨てずに画面の受け取り待ちへ移し、
+///   画面はそのまま受け取る（結果が届いてから次フレームの poll までの間に始めても、画面の結果は失われない）。
+///   受け取られない分は画面の次の開始で解放される
+///   （残るのは最大 1 件で、結果のバイト列は上限 `MAX_FILE_BYTES`（8 MiB）まで。
+///   本番の reset は無く、解放の契機は画面の次の開始だけ）。
+/// - 自分の未取得の結果があれば `Internal`（busy）で断る。
+/// - 画面 effect 側も、この入口の進行中・未取得の要求があれば
+///   置き換えず処理中の失敗で終える。依頼自体の失敗は `Err`（結果は届かない）。
 ///
 /// デスクトップ（macOS・Windows）は同期で使える [`platform_file_picker`] の `pick()` を使うため、この入口は持たず
 /// `Unsupported` を返す。Linux 等も `Unsupported`。
@@ -569,7 +584,7 @@ pub fn poll_file_pick(request_id: u64) -> Option<Result<Option<PickedFile>, File
 
 /// `file_pick` 画面用の [`PickHooks`]（`FilePickState` 版）。`finish` は `PickedFile` を
 /// `PickedSummary { name, size }` へ要約してから `finish_pick` へ渡す（本画面の
-/// 従来挙動を保つ、[`super::tsv_import::TSV_IMPORT_HOOKS`] と対）。
+/// 従来挙動を保つ、[`TSV_IMPORT_HOOKS`] と対）。
 const FILE_PICK_HOOKS: PickHooks<FilePickState> = PickHooks {
     phase: |s| s.phase,
     generation: |s| s.generation,
@@ -600,6 +615,52 @@ pub fn file_pick_effect(state: &FilePickState, sender: &CompletionSender<FilePic
     match platform_file_picker() {
         Ok(picker) => drive_with(state, sender, picker, FILE_PICK_HOOKS),
         Err(message) => fail_request_with(state, sender, message, FILE_PICK_HOOKS),
+    }
+}
+
+/// `tsv_import` 画面（TSV 読み込み、親 #979 / Issue #980）用の [`PickHooks`]（`TsvImportState` 版）。
+///
+/// サイズ上限は 2 段。(1) `bridge` 側（[`MAX_FILE_BYTES`]、8 MiB）で選べるファイルを絞り、
+/// (2) 解析側（`fandhe_core::tsv::MAX_TSV_BYTES`、1 MiB）で読み込める行数・列数を絞る。
+/// 前者を通っても後者で `TsvError::TooLarge` になり得る（別々の上限、SSOT を混ぜない）。
+///
+/// `finish` は `PickedFile` を
+/// バイト列（`Vec<u8>`）だけへ潰してから `finish_import` へ渡す（解析は
+/// `fandhe_core::screens::tsv_import::finish_import` 内部で行う。要約に潰す
+/// `driver::FILE_PICK_HOOKS` とはここが異なる）。`PickedFile`（`fandhe_device::
+/// file_picker::PickedFile`、`bytes: Vec<u8>`）は共通コアが依存できない型のため、
+/// この完了時 1 回だけ `Vec<u8>` を取り出す。毎フレームの `RequestSlot::snapshot`
+/// クローンは `bridge::Outcome` が `Arc<PickedFile>` で包んでいるため参照カウント
+/// 共有のみで、バイト列自体はここでの 1 回しか複製されない
+/// （`driver.rs` の `bridge` モジュール doc 参照）。
+const TSV_IMPORT_HOOKS: PickHooks<TsvImportState> = PickHooks {
+    phase: |s| s.phase,
+    generation: |s| s.generation,
+    request: request_import,
+    mark_picking: tsv_import::mark_picking,
+    finish: |s, generation, result| {
+        finish_import(
+            s,
+            generation,
+            result.map(|opt| opt.map(|f: PickedFile| f.bytes)),
+        );
+    },
+};
+
+/// `registry.rs` の `effect` 区画から `tsv_import` 画面用に配線される effect ドライバ
+/// （iOS/Android 版）。
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub fn tsv_import_effect(state: &TsvImportState, sender: &CompletionSender<TsvImportState>) {
+    drive_mobile_with(state, sender, TSV_IMPORT_HOOKS);
+}
+
+/// `registry.rs` の `effect` 区画から `tsv_import` 画面用に配線される effect ドライバ
+/// （デスクトップ版）。
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+pub fn tsv_import_effect(state: &TsvImportState, sender: &CompletionSender<TsvImportState>) {
+    match platform_file_picker() {
+        Ok(picker) => drive_with(state, sender, picker, TSV_IMPORT_HOOKS),
+        Err(message) => fail_request_with(state, sender, message, TSV_IMPORT_HOOKS),
     }
 }
 
@@ -862,6 +923,85 @@ mod bridge_tests {
         bridge::reset();
     }
 
+    /// 画面の開始 → 結果の到着 → 公開入口の開始 → 画面の poll の順でも、画面は届いた結果をそのまま受け取り（lost にならない）、
+    /// 公開入口もその後に自分の結果を受け取れる。
+    #[test]
+    fn public_begin_parks_unpolled_screen_result_for_screen() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        bridge::SCREEN_OWNER.release(bridge::SCREEN_OWNER.current());
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::deliver(screen, Ok(Some(picked("a.txt")))));
+        // 画面が取り出さない結果で公開入口が詰まらない。
+        let public = bridge::begin_public().expect("画面の未取得の結果で詰まらない");
+        assert_ne!(public, screen);
+        // 受け取り待ちへ移した画面の id へ重ねて配送しても捨てられる。
+        assert!(!bridge::deliver(screen, Ok(Some(picked("b.txt")))));
+        // 画面は移された自分の結果をそのまま観測し、反映へ進む。
+        match next_action(PickPhase::Picking, bridge::screen_snapshot()) {
+            Action::Finish {
+                request_id,
+                outcome: Ok(Some(file)),
+            } => {
+                assert_eq!(request_id, screen);
+                assert_eq!(file.name, "a.txt");
+                bridge::clear(request_id);
+            }
+            other => panic!("画面の結果がそのまま届かない: {other:?}"),
+        }
+        assert!(bridge::screen_snapshot().is_none());
+        assert_eq!(bridge::SCREEN_OWNER.current(), 0);
+        // 公開入口の結果は画面へ渡らず、公開入口が受け取る。
+        assert!(bridge::deliver(public, Ok(None)));
+        assert!(matches!(bridge::poll_public(public), Some(Ok(None))));
+        bridge::reset();
+    }
+
+    /// 画面が受け取らないまま残った受け取り待ちの結果は、画面の次の開始で解放される。
+    #[test]
+    fn parked_screen_result_is_released_by_next_screen_begin() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        bridge::SCREEN_OWNER.release(bridge::SCREEN_OWNER.current());
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::deliver(screen, Ok(Some(picked("a.txt")))));
+        let public = bridge::begin_public().unwrap();
+        assert!(bridge::deliver(public, Ok(None)));
+        assert!(bridge::poll_public(public).is_some());
+        let next = bridge::begin_screen().expect("公開入口が受け取った後は開始できる");
+        assert!(bridge::SLOT.snapshot_of(screen).is_none());
+        assert!(matches!(bridge::screen_snapshot(), Some((id, None)) if id == next));
+        bridge::clear(next);
+        bridge::reset();
+    }
+
+    /// 画面の要求が進行中なら公開入口は busy で、画面の持ち主は変わらない。
+    #[test]
+    fn public_begin_is_busy_while_screen_request_is_in_flight() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        bridge::SCREEN_OWNER.release(bridge::SCREEN_OWNER.current());
+        let screen = bridge::begin_screen().unwrap();
+        assert!(bridge::begin_public().is_none());
+        assert_eq!(bridge::SCREEN_OWNER.current(), screen);
+        bridge::SCREEN_OWNER.release(screen);
+        bridge::reset();
+    }
+
+    /// 公開入口の届いた未取得の結果は、公開入口も画面も置き換えない。
+    #[test]
+    fn public_begin_keeps_unpolled_public_result() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        bridge::reset();
+        let public = bridge::begin_public().unwrap();
+        assert!(bridge::deliver(public, Ok(None)));
+        assert!(bridge::begin_public().is_none());
+        assert!(bridge::begin_screen().is_none());
+        assert!(matches!(bridge::poll_public(public), Some(Ok(None))));
+        assert!(bridge::poll_public(public).is_none());
+        bridge::reset();
+    }
+
     #[test]
     fn selected_file_is_returned_with_bytes() {
         let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -990,5 +1130,122 @@ mod bridge_tests {
         assert_eq!(begin_file_pick(), Err(FilePickerError::Unsupported));
         assert!(poll_file_pick(1).is_none());
         assert!(!discard_file_pick(1));
+    }
+}
+
+#[cfg(test)]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+mod tsv_import_tests {
+    use super::*;
+
+    /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
+    struct NoopWaker;
+    impl fandhe_runtime::RepaintWaker for NoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
+    use crate::contract::FilePicker;
+    use crate::error::FilePickerError;
+
+    fn sender_with_channel() -> (
+        CompletionSender<TsvImportState>,
+        std::sync::mpsc::Receiver<fandhe_runtime::Completion<TsvImportState>>,
+    ) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        (
+            CompletionSender::new(tx, std::sync::Arc::new(NoopWaker)),
+            rx,
+        )
+    }
+
+    /// 常に指定した結果を返すモック（GUI 無しで `drive_with` を検証する。
+    /// `driver.rs` の `MockPicker` と同型）。
+    struct MockPicker(Result<Option<PickedFile>, FilePickerError>);
+
+    impl FilePicker for MockPicker {
+        fn pick(&self) -> Result<Option<PickedFile>, FilePickerError> {
+            match &self.0 {
+                Ok(v) => Ok(v.clone()),
+                Err(e) => Err(*e),
+            }
+        }
+    }
+
+    fn apply_all(
+        state: &mut TsvImportState,
+        rx: &std::sync::mpsc::Receiver<fandhe_runtime::Completion<TsvImportState>>,
+    ) {
+        while let Ok(apply) = rx.try_recv() {
+            apply(state);
+        }
+    }
+
+    #[test]
+    fn drive_reflects_valid_tsv_as_row_count_status() {
+        let (sender, rx) = sender_with_channel();
+        let mut state = TsvImportState::default();
+        request_import(&mut state);
+
+        drive_with(
+            &state,
+            &sender,
+            &MockPicker(Ok(Some(PickedFile {
+                name: "dict.tsv".to_string(),
+                bytes: b"a\tb\nc\td\n".to_vec(),
+            }))),
+            TSV_IMPORT_HOOKS,
+        );
+        apply_all(&mut state, &rx);
+
+        assert!(state.status.contains("2 行"));
+        assert_eq!(state.error, "");
+    }
+
+    #[test]
+    fn drive_reports_non_utf8_as_error() {
+        let (sender, rx) = sender_with_channel();
+        let mut state = TsvImportState::default();
+        request_import(&mut state);
+
+        drive_with(
+            &state,
+            &sender,
+            &MockPicker(Ok(Some(PickedFile {
+                name: "dict.tsv".to_string(),
+                bytes: vec![0xFF, 0xFE],
+            }))),
+            TSV_IMPORT_HOOKS,
+        );
+        apply_all(&mut state, &rx);
+
+        assert_eq!(state.status, "");
+        assert!(state.error.contains("UTF-8"));
+    }
+
+    #[test]
+    fn drive_reflects_cancel_without_success_wording() {
+        let (sender, rx) = sender_with_channel();
+        let mut state = TsvImportState::default();
+        request_import(&mut state);
+
+        drive_with(&state, &sender, &MockPicker(Ok(None)), TSV_IMPORT_HOOKS);
+        apply_all(&mut state, &rx);
+
+        assert!(!state.status.contains("読み込みました"));
+        assert_eq!(state.error, "");
+    }
+
+    #[test]
+    fn fail_request_reports_unavailable_without_success_wording() {
+        let (sender, rx) = sender_with_channel();
+        let mut state = TsvImportState::default();
+        request_import(&mut state);
+
+        fail_request_with(&state, &sender, UNAVAILABLE, TSV_IMPORT_HOOKS);
+        apply_all(&mut state, &rx);
+
+        assert_eq!(state.error, format!("失敗しました: {UNAVAILABLE}"));
+        assert_eq!(state.status, "");
     }
 }

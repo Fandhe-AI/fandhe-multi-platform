@@ -2,7 +2,7 @@
 name = "fandhe-device"
 version = "0.1.0"
 edition = "2024"
-description = "Phase 8（端末機能の型検証、Issue #746）: 保存・HTTP・カメラの抽象トレイトと共通実装。fandhe-egui-proxy の feature `device` からのみ参照される切り離し可能なクレート"
+description = "機能 crate（fandhe-cap-*）が共有する OS に触れない型・検証・定数（consumer-app-structure.md §8）"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
 publish = false
@@ -20,16 +20,6 @@ serde_json = { workspace = true }
 # jpeg は Cargo.lock 済みの zune-jpeg で、新しいパッケージは増えない。
 fandhe-core = { path = "../fandhe-core", optional = true }
 image = { workspace = true, features = ["jpeg"], optional = true }
-
-# Phase 11（Issue #872、#876 codex-review P1 是正）: `file_picker::pick_folder`（フォルダ選択）の macOS 経路のみ。
-# ファイル選択の `RfdFilePicker` は `fandhe-cap-file-picker`、写真選択の `RfdPhotoPicker` は `fandhe-cap-photo-picker` へ移した（どちらも自前の macOS 依存を持つ）。
-# Windows は rfd を使わない（rfd 0.17 の同期 API が COM 初期化失敗等を `.ok()` で握り潰しキャンセルへ化けさせ、
-# 「キャンセルと失敗は別の結果」契約に違反するため）。Windows は PowerShell の `System.Windows.Forms.OpenFileDialog` を
-# 子プロセスとして起動し、終了コードで選択/キャンセル/失敗を区別する（`file_picker.rs` 参照）。
-# 対応表（`docs/device/capabilities/file-picker.json`）が Linux を対象外としているため、Linux はこの依存自体を持ち込まず
-# `Unsupported` を返す。
-[target.'cfg(target_os = "macos")'.dependencies]
-rfd = { workspace = true }
 
 # codex-review P1 是正（PR #1018）: `drag_drop::open_for_type_check` が
 # `O_NONBLOCK`（`OpenOptionsExt::custom_flags`）で開くために使う定数。

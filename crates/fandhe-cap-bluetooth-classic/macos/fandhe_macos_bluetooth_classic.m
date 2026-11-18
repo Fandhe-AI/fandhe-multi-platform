@@ -4,7 +4,7 @@
 // 機器のアドレス文字列は同一機器の判定キーとして Rust 側へ渡すだけで、画面にもログにも出さない。
 //
 // `src/macos.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルし IOBluetooth をリンクする。
+// `build.rs` がコンパイルし IOBluetooth をリンクする。
 //
 // 契約（検索は pull 型。`fandhe_apple_lan_discovery.m` と同型）:
 //   int32_t fandhe_macos_bt_classic_paired(FandheBtClassicListRaw *out)

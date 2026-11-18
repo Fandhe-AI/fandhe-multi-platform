@@ -1,6 +1,6 @@
 //! macOS / iOS 向け触覚フィードバック実装（Issue #1091・#1092）。`driver.rs` の
 //! Apple 経路から呼ばれ、`apple/fandhe_apple_haptics.m`（macOS は `NSHapticFeedbackManager`、
-//! iOS は `UIImpactFeedbackGenerator`。`build.rs` が feature `device` 有効時にコンパイル）を `unsafe extern "C"` 1 関数で
+//! iOS は `UIImpactFeedbackGenerator`。`build.rs` がコンパイル）を `unsafe extern "C"` 1 関数で
 //! 呼ぶ。`unsafe` はこの呼び出し 1 箇所に閉じる（`fandhe-cap-share-sheet/src/apple.rs` と同型、coding-rust.md の
 //! FFI 例外規定準拠）。
 //!
@@ -13,7 +13,7 @@ use crate::contract::Haptics;
 use crate::error::HapticsError;
 
 // SAFETY: `apple/fandhe_apple_haptics.m` が定義する C ABI（`build.rs` が macOS / iOS ターゲットの
-// feature `device` 有効時のみコンパイル・リンクする）。引数なし・ポインタなし・
+// コンパイル・リンクする）。引数なし・ポインタなし・
 // 所有権の移転なし。契約は `.m` ファイル冒頭コメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {

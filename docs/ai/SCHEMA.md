@@ -1070,12 +1070,10 @@ std::thread::spawn(move || {
 `fandhe-device` の `Http` 実装が許可する平文 http はループバックと私設 IPv4
 リテラルのみで、それ以外の宛先は https 必須（`crates/fandhe-device/src/http.rs`）。
 
-端末機能（`fandhe-device` の `Storage`/`Http`/`Camera`）を使う `effect` 行は
-`#[cfg(all(feature = "device", not(target_arch = "wasm32")))]` を行頭に付ける（Issue #746）。
-`device` feature は既定 on で wasm32 でも有効になるが、`fandhe-device` 自体は
-`fandhe-egui-proxy/Cargo.toml` の非 wasm32 分岐にのみ optional dependency として
-置かれているため、`feature = "device"` 単体では wasm32 ビルドで未解決の crate 参照に
-なる（`not(target_arch = "wasm32")` を併記して防ぐ）。
+端末機能（機能 crate `fandhe-cap-*`）を使う `effect` 行は
+`#[cfg(not(target_arch = "wasm32"))]` を行頭に付ける（Issue #746）。機能 crate は
+`fandhe-gallery/Cargo.toml` の非 wasm32 分岐にだけ依存として置かれているため（Web の実装は
+`fandhe-web-dom` 側）、付けないと wasm32 ビルドで未解決の crate 参照になる。
 
 ### パターン 10: 端末保存の型サンプル「メモ保存」（Issue #747）
 
@@ -1094,7 +1092,7 @@ std::thread::spawn(move || {
 ドライバがフレーム末尾で毎回それを見て起動する二段階遷移（`Requested` → ドライバ検知
 → `Capturing`）にするのが契約（同一フレーム内の二重起動観測を避けるため）。
 参照実装は `crates/fandhe-core/src/screens/camera_capture.rs`（状態機械・
-`CameraCaptureState`）と `crates/fandhe-cap-camera-capture/src/lib.rs`
+`CameraCaptureState`）と `crates/fandhe-cap-camera-capture/src/driver.rs`
 （`camera_capture_effect`、機能 crate 内の `Camera` トレイトを呼ぶ側。Issue #1170 で移した）。
 
 **Android の配線先（Issue #750）**: `DataDir`（「メモ保存」の保存先）は
@@ -1173,9 +1171,9 @@ Issue #715）へも 1 行足す。`generated_screens!` マクロは `"<name>" =>
 そのまま残した全文を出力する。この 1 行がある画面は `FANDHE_PROXY_APP=<name>` で起動した
 egui プロキシ端末に表示される。変更はコミットしてから次の作業に進む。
 
-端末機能を使う画面の行には `#[cfg(all(feature = "device", not(target_arch = "wasm32")))]` を
-行頭に付ける（Issue #746/#747。`fandhe-device` への依存自体が `Cargo.toml` の native 分岐に
-しか無いため、feature `device` 単独では wasm32 ビルドが壊れる）。`generated_screens!` マクロは
+端末機能を使う画面の行には `#[cfg(not(target_arch = "wasm32"))]` を
+行頭に付ける（Issue #746/#747。機能 crate への依存が `Cargo.toml` の native 分岐に
+しか無いため）。`generated_screens!` マクロは
 各行に属性を 0 個以上付けられる（非 `nav` 行は属性が `"名前"` の直前、`nav` 行は `nav`
 キーワードの直後、`init` 行（下記参照）は `init` キーワードの直後、`effect` 行（パターン 9
 参照）は `effect` キーワードの直後に属性が来る点が異なる。マクロの repetition 境界解決の

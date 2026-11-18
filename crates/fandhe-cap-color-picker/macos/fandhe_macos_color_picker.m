@@ -2,7 +2,7 @@
 // 共有の `NSColorPanel` を固定の初期色で開き、閉じた時点の色を sRGB に直して 0xRRGGBB の整数で Rust へ通知する。
 //
 // `crates/fandhe-cap-color-picker/src/macos.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする（AppKit は既存のリンク）。
+// `build.rs` がコンパイルする（AppKit は既存のリンク）。
 //
 // 契約（pull 型。`fandhe_macos_eye_dropper.m` と同型）:
 //   int32_t fandhe_macos_color_picker_present(uint64_t request_id, int32_t initial_rgb)
@@ -10,7 +10,7 @@
 //   fandhe_rust_macos_color_picker_outcome(uint64_t request_id, int32_t code, int32_t rgb)
 //     -> Rust 側（`macos_color_picker.rs`）が公開する `extern "C"` 関数。
 //        code 表: 0 = 選択（rgb = 0xRRGGBB）、1 = 色を選ばずに閉じた、2 = sRGB 変換の失敗・成分が NaN、
-//        3 = 提示できなかった（NSApp が無い）。code → 結果の写像の SSOT は Rust の
+//        3 = 提示できなかった（NSApp が無い）。4（busy）は iOS のみが送る。code → 結果の写像の SSOT は Rust の
 //        `fandhe_cap_color_picker::result_from_apple_code`（`.m` では写像しない）。
 //
 // 確定: パネルに確定ボタンは無い。閉じる（NSWindowWillCloseNotification）までに

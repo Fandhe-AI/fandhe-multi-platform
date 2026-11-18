@@ -130,11 +130,11 @@ use fandhe_cap_background_task::BackgroundTaskError;
 use fandhe_cap_background_task::{RunRecord, RunResult};
 use fandhe_core::screens::background_task::{LastRunView, RunResultView, ScheduleView};
 
-/// Web の背景ダウンロード（`background_download.rs`、`fandhe_device::DeviceError` で返す別機能）が、本ファイルの
+/// Web の背景ダウンロード（`background_download.rs`、自前の `DeviceError` で返す別機能）が、本ファイルの
 /// `wait_until_active` の失敗を自分の型へ写すための変換。種別と固定識別子はそのまま写し、それ以外は内部エラーへ畳む。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-pub(crate) fn to_device_error(e: BackgroundTaskError) -> fandhe_device::DeviceError {
-    use fandhe_device::DeviceError;
+pub(crate) fn to_device_error(e: BackgroundTaskError) -> crate::background_download::DeviceError {
+    use crate::background_download::DeviceError;
     match e {
         BackgroundTaskError::Unsupported(s) => DeviceError::Unsupported(s),
         BackgroundTaskError::PermissionDenied(s) => DeviceError::PermissionDenied(s),

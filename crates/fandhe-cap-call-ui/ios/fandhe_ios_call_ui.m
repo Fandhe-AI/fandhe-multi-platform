@@ -1,6 +1,6 @@
 // 通話 UI 統合: iOS 実装（Issue #277、親 #87）。CallKit の `CXProvider` で疑似着信を 1 件出し、
 // 応答・拒否・終了の結果を Rust へ返す。`crates/fandhe-cap-call-ui/src/ios.rs` から C ABI 経由で呼ばれる。
-// `build.rs` が iOS 分岐の feature `device` 有効時のみ `cc` コンパイルし CallKit をリンクする。
+// `build.rs` が iOS 分岐で `cc` コンパイルし CallKit をリンクする。
 //
 // 契約:
 //   fandhe_ios_call_ui_report(uint64_t call_id)  何スレッドからでも可。main queue へ非同期に渡す

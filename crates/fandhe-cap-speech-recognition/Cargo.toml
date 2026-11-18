@@ -42,6 +42,8 @@ frameworks = ["AVFoundation", "Speech"]
 
 [package.metadata.fandhe.android]
 permissions = [{ name = "android.permission.RECORD_AUDIO" }]
+# RECORD_AUDIO が暗に要求するマイクを必須にしない（マイクの無い端末をストアの自動フィルタから外さない）。
+features = [{ name = "android.hardware.microphone", required = false }]
 java = ["android/java"]
 # Android 11 以降のパッケージ可視性。これが無いと `SpeechRecognizer.isRecognitionAvailable` が認識サービスを見つけられない
 # （action だけを宣言し、`<package>` は書かない）。

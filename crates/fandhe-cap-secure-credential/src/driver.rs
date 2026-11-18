@@ -5,7 +5,7 @@
 //! registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、
 //! `device/clipboard.rs` と同型）。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
+//! 非 wasm32 でのみコンパイル対象になる
 //! （`device.rs` モジュール doc と同じ理由）。
 //!
 //! # 別スレッドで OS を呼ぶ理由（codex-review P1 指摘の是正）

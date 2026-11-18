@@ -4,7 +4,7 @@
 //! 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
-//! feature `device`（既定 on）かつ非 wasm32 でのみコンパイル対象になる
+//! 非 wasm32 でのみコンパイル対象になる
 //! （`device.rs` モジュール doc と同じ理由）。Web（wasm32）は本経路を通らず
 //! `fandhe-web-dom` の `haptics.rs` が `navigator.vibrate` へ直接配線する。
 //! 契約（`Ok` の意味・`Unsupported` の条件・連打）の SSOT は `crate::contract`。

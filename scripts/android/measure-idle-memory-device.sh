@@ -244,7 +244,8 @@ for i in "${!APP_IDS[@]}"; do
   if [ "${i}" -eq 0 ]; then
     # fandhe（platforms/android/app）: jniLibs.srcDirs が参照する ABI 一覧を
     # build.gradle.kts の fandheAndroidAbis プロパティで揃える
-    # （verify-android-launch.sh / build-aab.sh と同じ運用）。
+    # （verify-android-launch.sh / build-aab.sh と同じ運用）。殻が取り込む gen の出力も作り直す。
+    fandhe_gen_gallery
     log "gradle -p ${gradle_dir} ${gradle_task} -PfandheAndroidAbis=${abi_csv}"
     gradle -p "${gradle_dir}" "${gradle_task}" --console=plain \
       "-PfandheAndroidAbis=${abi_csv}"

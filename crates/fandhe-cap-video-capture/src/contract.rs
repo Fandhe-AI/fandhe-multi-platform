@@ -247,6 +247,34 @@ impl VideoCapturer for UnsupportedVideoCapturer {
     }
 }
 
+/// 撮影パネルの状態（OS 層が書く側）。画面の `PanelPhase` とは別の、本 crate 内の型。
+///
+/// OS 実装（`windows`）が画面の状態型に依存しないよう、境界の `driver` が `PanelPhase` へ写す
+/// （`consumer-app-structure.md` §8.1）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub(crate) enum PanelState {
+    /// カメラの準備ができ、録画の開始待ち。
+    Ready,
+    /// 録画中。
+    Recording,
+    /// 開始中・停止中（ボタンなし）。
+    Busy,
+}
+
+/// 撮影パネルのボタンの命令（OS 層が受ける側）。画面の `PanelCommand` とは別の、本 crate 内の型。
+/// `driver` が `PanelCommand` から写して OS 層へ渡す。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub(crate) enum PanelOp {
+    /// 録画を始める。
+    Start,
+    /// 録画を止める。
+    Stop,
+    /// 取り消す。
+    Cancel,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

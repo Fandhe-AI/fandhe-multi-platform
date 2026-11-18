@@ -414,14 +414,33 @@ pub fn file_watch_show_effect(state: &FileWatchShowState, sender: &Sender) {
         platform_file_watch().as_ref(),
         &work_dir,
         &PICKED,
-        &|| {
-            // 共有部品 `pick_folder` の失敗を本機能の失敗へ写す（OS の文言は持ち込まない）。
-            fandhe_device::file_picker::pick_folder().map_err(|e| match e {
-                fandhe_device::DeviceError::Unsupported(_) => FileWatchError::Unsupported,
-                _ => FileWatchError::Internal,
-            })
-        },
+        &pick_folder,
     );
+}
+
+/// フォルダ選択ダイアログを 1 回開く（「選んだフォルダ」用、Issue #37）。
+///
+/// 結果は 3 値: 選択 `Ok(Some(path))` / キャンセル `Ok(None)` / 失敗 `Err`。固定タイムアウトは掛けない。
+/// macOS の `NSOpenPanel`（rfd）はメインスレッド必須のため、UI スレッドから同期で呼ぶ。Windows は
+/// `fandhe-device` の PowerShell ダイアログ（`run_windows_dialog`）を使い、失敗をキャンセルへ畳まない。
+/// macOS・Windows 以外は `Unsupported`。返したパスは本ドライバが保持し、画面状態へは渡さない（表示はフォルダ名のみ）。
+fn pick_folder() -> Result<Option<std::path::PathBuf>, FileWatchError> {
+    #[cfg(target_os = "macos")]
+    {
+        Ok(rfd::FileDialog::new().pick_folder())
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use fandhe_device::file_picker::{run_windows_dialog, windows_folder_command};
+        // OS の文言は持ち込まない。
+        run_windows_dialog(windows_folder_command())
+            .map(|o| o.map(std::path::PathBuf::from))
+            .map_err(|_| FileWatchError::Internal)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        Err(FileWatchError::Unsupported)
+    }
 }
 
 #[cfg(test)]

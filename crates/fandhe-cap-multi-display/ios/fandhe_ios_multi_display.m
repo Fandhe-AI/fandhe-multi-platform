@@ -6,8 +6,8 @@
 // 画面名は `UIScreen` に表示名の API が無いため常に空（Rust 側で `None`）。個体識別子は読まず、
 // 値をログへ出さない。ミラーリング中の扱いは OS が返す scene のとおり。
 //
-// `crates/fandhe-egui-proxy/src/device/ios_multi_display.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の iOS 分岐が feature `device` 有効時にのみコンパイルする。
+// `crates/fandhe-cap-multi-display/src/ios.rs` から C ABI 経由で呼ばれる。
+// `build.rs` の iOS 分岐でコンパイルする。
 //
 // 契約:
 //   fandhe_ios_multi_display_read(FandheScreenRaw *out, uint32_t cap, uint32_t *count) -> int32_t

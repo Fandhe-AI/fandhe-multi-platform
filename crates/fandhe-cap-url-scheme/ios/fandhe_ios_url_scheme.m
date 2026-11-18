@@ -3,7 +3,7 @@
 // URL を受けたとき（ウォーム）の両方を、共通コアの検査（`UrlInbox::receive_bytes`）へ流す。
 //
 // `crates/fandhe-cap-url-scheme/src/apple.rs`（macOS と共用）から C ABI 経由で
-// 呼ばれる。`build.rs` の `build_ios()` が feature `device` 有効時にのみコンパイルする。
+// 呼ばれる。`build.rs` がコンパイルする。
 // Info.plist 側の宣言は `platforms/apple/FandheIosApp/Resources/Info.plist` の
 // `CFBundleURLTypes`。
 //

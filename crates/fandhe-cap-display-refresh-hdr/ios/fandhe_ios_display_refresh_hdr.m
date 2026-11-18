@@ -6,7 +6,7 @@
 // currentEDRHeadroom は EDR を描いている間だけ 1 を超えるので使わない。
 //
 // `crates/fandhe-cap-display-refresh-hdr/src/ios.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の iOS 分岐が feature `device` 有効時にのみコンパイルする。
+// `build.rs` の iOS 分岐でコンパイルする。
 //
 // 契約:
 //   fandhe_ios_display_refresh_hdr_read(FandheIosDisplayRaw *out) -> int32_t

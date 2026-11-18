@@ -180,6 +180,7 @@ abi_csv="$(IFS=,; echo "${abi_list[*]}")"
 # 上記フェーズ 1 の FANDHE_ANDROID_KEYSTORE 必須化ガードで担保する
 # （未署名 APK は adb install が INSTALL_PARSE_FAILED_NO_CERTIFICATES で拒否するため
 # 実機計測には使えない。Review 指摘対応：旧コメントとの矛盾を解消）。
+fandhe_gen_gallery
 log "gradle -p ${fandhe_gradle_project_dir} :app:assembleRelease -PfandheAndroidAbis=${abi_csv}"
 gradle -p "${fandhe_gradle_project_dir}" :app:assembleRelease --console=plain \
   "-PfandheAndroidAbis=${abi_csv}"

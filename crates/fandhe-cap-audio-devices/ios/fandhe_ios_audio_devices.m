@@ -4,8 +4,8 @@
 // 共有セッションは mic-record（`apple/fandhe_apple_mic_record.m`）が category を切り替えて
 // 所有しており、2 つ目の機能が書き込むと所有権が割れるため。`portUID`・種別は読まない。
 //
-// `crates/fandhe-egui-proxy/src/device/ios_audio_devices.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の iOS 分岐が feature `device` 有効時にのみコンパイルする（AVFoundation はリンク済み）。
+// `crates/fandhe-cap-audio-devices/src/ios.rs` から C ABI 経由で呼ばれる。
+// `build.rs` の iOS 分岐でコンパイルする（AVFoundation はリンク済み）。
 //
 // 契約:
 //   fandhe_ios_audio_devices_list(FandheIosAudioDevicesRaw *out) -> int32_t

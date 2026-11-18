@@ -1,7 +1,7 @@
 //! macOS 向け「無線の状態と切り替え」実装（Issue #972、親 #189）。
 //! `macos/fandhe_macos_radio_control.m`（CoreWLAN の `CWInterface.powerOn` / `setPower:error:` と
-//! IOBluetooth の `IOBluetoothHostController.powerState`。`build.rs` が macOS 分岐で feature `device`
-//! 有効時にコンパイルする）を `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ
+//! IOBluetooth の `IOBluetoothHostController.powerState`。`build.rs` が macOS 分岐で
+//! コンパイルする）を `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ
 //! `// SAFETY:` で契約を明記する。`driver` の macOS 経路からワーカースレッドで呼ばれ、
 //! 契約は `crate::contract`。
 //!
@@ -54,7 +54,7 @@ fn decode_set(rc: i32) -> Result<SwitchOutcome, RadioControlError> {
 
 #[cfg(target_os = "macos")]
 mod ffi {
-    // SAFETY: `macos/fandhe_macos_radio_control.m`（`build.rs` が macOS 分岐で feature `device` 有効時に
+    // SAFETY: `macos/fandhe_macos_radio_control.m`（`build.rs` が macOS 分岐で
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {

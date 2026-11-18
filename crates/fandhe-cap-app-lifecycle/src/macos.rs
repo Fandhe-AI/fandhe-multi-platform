@@ -1,5 +1,5 @@
 //! macOS 向けアプリの前面・背面の通知実装（Issue #893）。`macos/fandhe_macos_app_lifecycle.m`
-//! （`NSApplication` の通知。`build.rs` が macOS 分岐で feature `device` 有効時にコンパイルする）を
+//! （`NSApplication` の通知。`build.rs` が macOS 分岐でコンパイルする）を
 //! `unsafe extern "C"` 3 関数で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。
 //! `driver.rs` の macOS 経路から UI スレッドで呼ばれ、契約は
 //! `crate::contract`。
@@ -32,7 +32,7 @@ use crate::error::AppLifecycleError;
 use crate::driver::{register, unregister};
 
 mod ffi {
-    // SAFETY: `macos/fandhe_macos_app_lifecycle.m`（`build.rs` が macOS 分岐で feature `device` 有効時に
+    // SAFETY: `macos/fandhe_macos_app_lifecycle.m`（`build.rs` が macOS 分岐で
     // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {

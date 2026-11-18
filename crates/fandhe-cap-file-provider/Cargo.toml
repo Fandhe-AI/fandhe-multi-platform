@@ -25,6 +25,8 @@ id = "file-provider"
 
 [package.metadata.fandhe.android]
 java = ["android/java"]
+# 保存先の表示名（file_provider_root_title）。
+res = ["android/res"]
 
 # クラウド保存先として OS のファイル画面に出る DocumentsProvider。exported=true は DocumentsProvider の要件だが、
 # MANAGE_DOCUMENTS を要求するので bind できるのは system だけ（最小公開）。Manifest の同じ要素と完全に一致させる

@@ -340,11 +340,18 @@ mod tests {
     struct MemStorage(StdMutex<Option<Vec<u8>>>);
 
     impl Storage for MemStorage {
-        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, fandhe_device::DeviceError> {
+        fn read(
+            &self,
+            _key: &str,
+        ) -> Result<Option<Vec<u8>>, fandhe_device::storage::StorageError> {
             Ok(self.0.lock().expect("lock は成功する").clone())
         }
 
-        fn write(&self, _key: &str, bytes: &[u8]) -> Result<(), fandhe_device::DeviceError> {
+        fn write(
+            &self,
+            _key: &str,
+            bytes: &[u8],
+        ) -> Result<(), fandhe_device::storage::StorageError> {
             *self.0.lock().expect("lock は成功する") = Some(bytes.to_vec());
             Ok(())
         }
@@ -353,12 +360,21 @@ mod tests {
     struct FailingWriteStorage;
 
     impl Storage for FailingWriteStorage {
-        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, fandhe_device::DeviceError> {
+        fn read(
+            &self,
+            _key: &str,
+        ) -> Result<Option<Vec<u8>>, fandhe_device::storage::StorageError> {
             Ok(None)
         }
 
-        fn write(&self, _key: &str, _bytes: &[u8]) -> Result<(), fandhe_device::DeviceError> {
-            Err(fandhe_device::DeviceError::Internal("write failure"))
+        fn write(
+            &self,
+            _key: &str,
+            _bytes: &[u8],
+        ) -> Result<(), fandhe_device::storage::StorageError> {
+            Err(fandhe_device::storage::StorageError::Io(
+                std::io::Error::other("write failure"),
+            ))
         }
     }
 
@@ -527,13 +543,19 @@ mod tests {
     }
 
     impl Storage for FailOnceStorage {
-        fn read(&self, key: &str) -> Result<Option<Vec<u8>>, fandhe_device::DeviceError> {
+        fn read(&self, key: &str) -> Result<Option<Vec<u8>>, fandhe_device::storage::StorageError> {
             self.inner.read(key)
         }
 
-        fn write(&self, key: &str, bytes: &[u8]) -> Result<(), fandhe_device::DeviceError> {
+        fn write(
+            &self,
+            key: &str,
+            bytes: &[u8],
+        ) -> Result<(), fandhe_device::storage::StorageError> {
             if self.writes.fetch_add(1, Ordering::SeqCst) == 0 {
-                return Err(fandhe_device::DeviceError::Internal("write failure"));
+                return Err(fandhe_device::storage::StorageError::Io(
+                    std::io::Error::other("write failure"),
+                ));
             }
             self.inner.write(key, bytes)
         }

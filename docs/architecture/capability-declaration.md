@@ -190,21 +190,23 @@ params = { text = "share_text", url = "share_url" }
 | `<application>` の属性（`localeConfig` 等） | アプリ全体の値で、機能の宣言に書かない。例外はバックアップ規則の 2 属性（`backup-exclusions` があるときだけ gen が出す） |
 | `neverForLocation` 以外の権限フラグ | 使う機能が出たとき enum に足す |
 | 統合エラー（flags・meta-data・属性の食い違い）を利用者が上書きする手段 | 追記・`--eject`（#1202）の範囲 |
-| Gradle の版の正本 | #1194 までは `scripts/android/versions.env` が手書きビルドの正本で、宣言の版は突き合わせテストで一致を保証する |
+| Gradle の版の正本 | 宣言（`gradle`）が正本で、gen の出力からビルドに入る。版の選定根拠は `scripts/android/versions.env` に残し、`tests/gen.rs` が両者の一致を確かめる（#1194） |
 
-## 6. 現行設定との突き合わせ
+## 6. カタログアプリの設定との突き合わせ
 
-先行 5 機能の宣言を（機能 crate へ移した機能は `crates/fandhe-cap-<id>/Cargo.toml`、それ以外は `crates/cargo-fandhe/tests/fixtures/*.toml`。camera-capture は #1170、document-scan は #1171、nfc-card-emulation は #1172、share-receive は #1173、home-widget は #1174 で crate へ移した）、現行の設定と突き合わせました（#1161、REQ-21 / TASK-21.2）。`crates/cargo-fandhe/tests/gen.rs`（生成物との比較）と `tests/declarations.rs`（生成しない項目）が、次を毎回の `cargo test` で確かめます。
+カタログアプリ（`fandhe-gallery`）の各 OS の設定は、機能 crate の宣言とアプリ設定から生成したものだけを使います（#1194。それまでは手書きの設定と生成物を突き合わせていました、#1161）。
+殻（`platforms/android`・`platforms/apple`）に残るのはアプリ全体の値と組み立ての手順だけです。`crates/cargo-fandhe/tests/gen.rs`（生成物）と `tests/declarations.rs`（生成しない項目）が、次を毎回の `cargo test` で確かめます。
 
-| 宣言 | 比較先 |
+| 確かめること | 比較先 |
 |------|-------|
-| Android の権限・feature・コンポーネント・MainActivity の intent-filter（生成した overlay と比較） | `platforms/android/app/src/main/AndroidManifest.xml`（属性・filter・meta-data の過不足を含む）。camera の feature 群、HCE の feature 群、`ACTION_SEND` の filter は逆方向も確かめる |
-| Gradle の依存の座標（生成した `fandhe.gradle`） | `build.gradle.kts` の `androidVersion("KEY")` を辿り、`scripts/android/versions.env` の値と一致 |
-| iOS の `usage-descriptions`・`frameworks` | `FandheIosApp/Resources/Info.plist` のキー、機能 crate の `build.rs`（無ければ `fandhe-egui-proxy/build.rs`）のリンク指定 |
-| Android の `java`・`res`（機能 crate のディレクトリ。生成した srcDirs と比較） | `build.gradle.kts` の srcDirs の `crates/fandhe-cap-<id>/<dir>` と両方向で一致 |
-| macOS の `NSServices`（生成した Info.plist） | `scripts/apple/bundle-macos-url-scheme.sh` の JSON |
-| macOS の Widget 拡張（生成した Info.plist・entitlements） | 拡張の `Info.plist` と entitlements。`project.yml` と Swift の `import` は `declarations.rs` が確かめる |
-| iOS の `NSCameraUsageDescription`（生成した Info.plist） | `FandheIosApp/Resources/Info.plist` の文言 |
+| 殻の Android Manifest が `<application>` の属性だけを持ち、`build.gradle.kts` が gen の `fandhe.gradle` を取り込むだけであること | `platforms/android/app/src/main/AndroidManifest.xml`・`build.gradle.kts` |
+| 全機能の権限・feature・コンポーネントが overlay に出て、MainActivity の filter（MAIN・SEND・`fandhe` scheme）と `lib_name` が揃うこと | 全機能の宣言 |
+| `<application>` 直下の meta-data が宣言どおりの属性で出ること | 宣言の `application-meta-data` |
+| Java・res の srcDirs が、`android/java`・`android/res` を持つ全 crate（共通層を含む）と一致し、Gradle 依存の版が選定根拠と一致すること | crate のディレクトリ、`scripts/android/versions.env` |
+| iOS の Info.plist の確定値・アプリ全体の値（表示名・対応言語・LAN 内通信）・scene 構成 | `fandhe-app.ios`、`fandhe_ios_scene.m` |
+| 説明文がアプリ設定の文言そのものであること（iOS・macOS） | `fandhe-app.<os>.usage-descriptions` |
+| macOS 本体の Info.plist が確定値で、`NSServices` の `NSPortName` が実行体名になること。Widget 拡張の Info.plist・entitlements と、それを指す `project.yml` | 宣言・`platforms/apple/project.yml` |
+| 機能 crate の framework のリンク指定と Widget 拡張の Swift の `import` | 機能 crate の `build.rs`、`project.yml`（`declarations.rs`） |
 
 規則: 宣言は、その機能がいま実際に必要とするものだけを書きます。未実装の OS の欄（iOS の共有拡張 #1211・Widget 拡張 #1212、Windows のパッケージ ID #1208）は、実装する issue で足します。残すと生成で実体のない拡張と権限が出て、最小権限が崩れるためです。形式の確認は JSON を使うテストで保ちます。
 
@@ -217,16 +219,16 @@ params = { text = "share_text", url = "share_url" }
 | `GmsAvailability.java`（廃止済み） | かつて document-scan 以外の GMS 機能（行動認識・決済）も使う共有コードとして `platforms/android/app` に置いた。共通層（`fandhe-platform-android`）へ移さないのは、GMS を使わない機能だけを選んだ利用者に Play services の依存を乗せないため。各機能が同じ判定を Helper の private メソッドに持つ形にそろえ（document-scan #1257、activity-recognition #1329、payment-request #1335）、ファイルは削除した | #1183 |
 | `RequestTracker.java`・`FeatureLifecycleProvider.java` | 全機能が使う Java の共有クラス。共通層 `fandhe-platform-android` が `android/java` として持ち、その crate の宣言（`id = "platform-android"`。`fandhe-cap-*` 以外は id と crate 名の一致を求めない）が srcDirs に載る。機能 crate は Android の依存に共通層を持つので到達判定に入る（#1257） | 決着（#1257） |
 | UIKit・Foundation・CoreGraphics | 全機能の基盤リンクで機能固有ではない | #1168 |
-| `NSPortName` | 宣言は `$(EXECUTABLE_NAME)`、スクリプトは実行体名へ置換。生成はビルド設定変数のまま出す（Xcode が展開する）。iOS 本体の `CFBundle*` は確定値（下の行）だが、macOS は宣言が変数に依存するため変数のまま | 決着（#1176） |
+| `NSPortName` | 宣言は `$(EXECUTABLE_NAME)`。macOS の `bundle-id` があれば gen が実行体名へ置き換え、無ければビルド設定変数のまま出す（Xcode が展開する） | 決着（#1176・#1194） |
 | `FandheWidgetHost` | 素の実行体に拡張を載せるホストアプリ。生成では利用者の `.app` が親になる | #1212 |
 | `FandheCountControl.swift`・`AppIntents` | quick-settings-tile の分。ソースは home-widget から分離済み（#1174）。束ねる入口 `FandheWidgets.swift` は platforms 側に残る（Xcode ターゲットの生成は #1212） | #1212 |
 | `FandheAppGroupIdentifier` | 現行どおり `$(TeamIdentifierPrefix)com.fandhe.widget` を literal で宣言。記号名との一本化は未決。生成も literal のまま出す | 未決 |
 | `NSMenuItem.default` | 現行どおり literal。利用者が差し替える手段は未決。生成も literal のまま出す | 未決 |
-| `CFBundle*` 等の定型キー | 生成側のテンプレートの責務。iOS 本体は確定値（実行体名・bundle id・版・`MinimumOSVersion`・`UIDeviceFamily`・`UILaunchScreen`）、macOS と拡張はビルド設定変数 7 キーを出す | 決着（#1176・#1259） |
+| `CFBundle*` 等の定型キー | 生成側のテンプレートの責務。iOS 本体は確定値（実行体名・bundle id・版・`MinimumOSVersion`・`UIDeviceFamily`・`UILaunchScreen`）、macOS 本体は `bundle-id` があれば確定値、無ければ拡張と同じくビルド設定変数 7 キーを出す | 決着（#1176・#1259・#1194） |
 | Windows の `webcam` | 形式に欄がない。カメラの Windows 実装はダミー | #1208 |
 | 対応表 JSON の `perm` 文 | 対応表から外し、権限欄は crate の宣言から生成する（`crate` キーで id を結合） | 決着（#1195） |
 
-突き合わせテストの寿命: 生成物との比較（`tests/gen.rs`）は、設定を生成へ切り替える #1194 で比べる相手ごと撤去します。`declarations.rs` に残す項目（framework のリンク・Gradle の版と `versions.env`・Xcode の拡張ターゲット・Swift の `import`）は、#1194 と #1212 で撤去します。
+`declarations.rs` に残す項目（framework のリンク・Xcode の拡張ターゲット・Swift の `import`）は、Xcode ターゲットを生成する #1212 で撤去します。
 
 ## 7. 生成（`cargo fandhe gen`）
 
@@ -257,8 +259,20 @@ backup-exclusions = [{ domain = "file", path = "cache-index" }]
 
 ```toml
 [package.metadata.fandhe-app.ios]
-bundle-id = "com.example.app"               # iOS の Info.plist を出すので必須（macOS はまだ使えずエラー）
+bundle-id = "com.example.app"               # iOS の Info.plist を出すので必須
+display-name = "Example"                    # 任意。CFBundleDisplayName
+localizations = ["ja", "en"]                # 任意。CFBundleLocalizations（対応する言語）
+allows-local-networking = true              # 任意。ATS の NSAllowsLocalNetworking（LAN 内の相手への平文通信）
+
+[package.metadata.fandhe-app.macos]
+bundle-id = "com.example.mac"               # 任意。書くと macOS 本体の Info.plist を確定値で出す（下記）
 ```
+
+表示名・対応言語・LAN 内通信の許可はアプリ全体の値で、機能の宣言には書けません（機能の `info-plist` が同じキーを書くとエラー）。
+macOS の `bundle-id` を書くと、本体の Info.plist を Xcode の変数ではなく確定値（実行体名・バンドル ID・版）で出し、
+機能の `info-plist` の `$(EXECUTABLE_NAME)` も実行体名に置き換えます。Xcode を通さずに素の実行体へ埋め込む・`.app` を
+手で組むアプリ向けです（カタログは `build.rs` で埋め込む、#1194）。置き換えられない変数（`$(TeamIdentifierPrefix)` など）が
+本体に残るとエラーです。書かなければ従来どおり Xcode の変数のまま出します。拡張は常に Xcode の変数のままです。
 
 殻に要る値は、アプリの crate からも取ります。Android は `cdylib` を含む lib target が要り（無ければエラー）、iOS は bin target がちょうど 1 つと、数字とドットだけの version が要ります。
 
@@ -283,8 +297,8 @@ manifest = "web/manifest.webmanifest"       # アプリの crate からの相対
 | `android/res/xml/fandhe_data_extraction_rules.xml`・`fandhe_backup_rules.xml` | バックアップ除外があるときだけ。API 31 以降用（`cloud-backup`・`device-transfer`）と API 30 以前用（`full-backup-content`）。overlay の `<application>` が `dataExtractionRules`・`fullBackupContent` で指す |
 | `android/fandhe.gradle` | `apply from:` 用。常に出す。gen の `android/java` と機能 crate の `java`・`res`（バックアップ規則があれば gen の `android/res` も）を srcDirs に足し、gen の Manifest を全 variant の overlay として登録し（`androidComponents`）、`gradle` の依存（基盤を含む）を `implementation` で足す |
 | `android/java/com/fandhe/platform/FandheLibrary.java` | `NAME` に cdylib 名（`[lib] name`）を持つ。殻は `System.loadLibrary(FandheLibrary.NAME)` と書き、ライブラリ名の正本を `[lib] name` 1 か所にする |
-| `ios/Info.plist` | 確定値の定型キー（上記）、説明文、`info-plist`。機能が無くても出す |
-| `macos/Info.plist` | ビルド設定変数の定型 7 キー、説明文、`info-plist` |
+| `ios/Info.plist` | 確定値の定型キー（上記）、アプリ全体の値、説明文、`info-plist`。機能が無くても出す |
+| `macos/Info.plist` | ビルド設定変数の定型 7 キー（`fandhe-app.macos.bundle-id` があれば確定値）、アプリ全体の値、説明文、`info-plist` |
 | `ios/App.entitlements`・`macos/App.entitlements` | `entitlements` と、展開した App Group（ios は `group.<prefix>.<名>`、macos は `$(TeamIdentifierPrefix)<prefix>.<名>`） |
 | `<os>/extensions/<name>/Info.plist`・`<name>.entitlements` | 拡張ごとの plist と entitlements |
 | `web/manifest.webmanifest` | `--os web` のときだけ。基礎 manifest に、wasm32 で到達した機能の `web.manifest` を足した JSON。選ばなかった機能のメンバーは入らない |
@@ -300,7 +314,7 @@ manifest = "web/manifest.webmanifest"       # アプリの crate からの相対
 
 ### 範囲外
 
-`CFBundleSupportedPlatforms`（シミュレータか実機かは組み立て時に決まる、#1201）、applicationId・compileSdk・`<application>` の属性（バックアップ規則の 2 属性を除く）、macOS・拡張の Info.plist の確定値化、framework のリンクと Xcode のターゲット（#1212）、Windows の identity（#1208）、手書き設定の置き換え（#1194）、`run`/`build` への組み込み（#1201）、追記と `--eject`（#1202）、`verify-scope` の Web 対応。
+`CFBundleSupportedPlatforms`（シミュレータか実機かは組み立て時に決まる、#1201）、applicationId・compileSdk・`<application>` の属性（バックアップ規則の 2 属性を除く）、拡張の Info.plist の確定値化、framework のリンクと Xcode のターゲット（#1212）、Windows の identity（#1208）、`run`/`build` への組み込み（#1201）、追記と `--eject`（#1202）、`verify-scope` の Web 対応。
 
 ## 8. 選ばなかった機能の検査（`cargo fandhe verify-scope`）
 

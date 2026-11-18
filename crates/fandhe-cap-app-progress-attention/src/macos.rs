@@ -1,6 +1,6 @@
 //! macOS 向け進捗表示・注意喚起実装（Issue #860）。`macos/fandhe_macos_app_progress_attention.m`
 //! （`NSDockTile.contentView` + `display`、`requestUserAttention:NSCriticalRequest`、`build.rs` が
-//! macOS ターゲットの feature `device` 有効時にコンパイルする）を `unsafe extern "C"` 3 関数で呼ぶ。
+//! macOS ターゲットでコンパイルする）を `unsafe extern "C"` 3 関数で呼ぶ。
 //! `unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する。`driver.rs`
 //! の macOS 経路から呼ばれ、契約は `contract`。
 //!
@@ -29,7 +29,7 @@ pub(crate) fn outcome_from_code(
 #[cfg(target_os = "macos")]
 mod ffi {
     // SAFETY: `macos/fandhe_macos_app_progress_attention.m`（`build.rs` が macOS ターゲットの
-    // feature `device` 有効時にコンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
+    // コンパイルする）が定義する C ABI。契約は `.m` 冒頭コメント。
     #[allow(unsafe_code)]
     unsafe extern "C" {
         fn fandhe_macos_app_progress_set(percent: u32) -> i32;

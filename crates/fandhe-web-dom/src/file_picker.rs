@@ -10,7 +10,7 @@
 //! `change` イベントで得た `File` を読み切って結果を書き戻す。
 //!
 //! Web は `fandhe-device` の `FilePicker` トレイトを通らない（`tts.rs`/`clipboard.rs` と
-//! 同じ理由。`fandhe-egui-proxy` の feature `device` は wasm32 に依存を持ち込まない設計）。
+//! 同じ理由。機能 crate の OS 実装は wasm32 を対象にしない設計（Web の実装は本クレート、consumer-app-structure.md §7））。
 //! そのため本モジュールが DOM レンダラ側の対応実装にあたる。`fandhe_device::file_picker`
 //! からは上限バイト数 [`fandhe_device::file_picker::MAX_FILE_BYTES`] のみを参照し
 //! （上限の SSOT を複製しない）、`FilePicker` トレイト自体は使わない。
@@ -76,11 +76,11 @@ use fandhe_core::screens::tsv_import::{
     finish_import, mark_picking as tsv_mark_picking, take_request as tsv_take_request,
     TsvImportState,
 };
+use fandhe_device::file_picker::PickError;
 use fandhe_device::file_picker::MAX_FILE_BYTES;
 use fandhe_device::photo_picker::{
     dimensions_within_limits, image_dimensions, validate_photo, MAX_PHOTO_BYTES,
 };
-use fandhe_device::DeviceError;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -455,7 +455,7 @@ async fn read_photo(mount_id: u64, file: File) -> Result<ShownPhoto, String> {
     let picked = read(file).await?;
     let bytes = js_sys::Uint8Array::new(&picked.buffer).to_vec();
     let photo = validate_photo(bytes).map_err(|e| match e {
-        DeviceError::InvalidInput(_) => format!(
+        PickError::InvalidInput(_) => format!(
             "{} MiB を超える画像は選べません",
             MAX_PHOTO_BYTES / (1024 * 1024)
         ),

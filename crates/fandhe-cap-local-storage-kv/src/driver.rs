@@ -5,28 +5,21 @@
 //! 本モジュールの責務（依存方向は機能 crate → コアの一方向）。
 
 use fandhe_core::screens::storage_note::{NoteStorage, NoteStorageError, StorageNoteState};
-use fandhe_device::{DeviceError, storage::Storage};
+use fandhe_device::storage::{Storage, StorageError};
 
 use crate::contract::FsStorage;
 
-/// `fandhe_device::DeviceError` を `fandhe_core::screens::storage_note::NoteStorageError` へ変換する。
-/// `DeviceError` の内部構造（`std::io::Error` 等）は `fandhe-core` 側へ漏らさず、`Display` の文言のみを転送する
+/// `fandhe_device::storage::StorageError` を `fandhe_core::screens::storage_note::NoteStorageError` へ変換する。
+/// `StorageError` の内部構造（`std::io::Error` 等）は `fandhe-core` 側へ漏らさず、`Display` の文言のみを転送する
 /// （security.md A09 準拠）。
-fn to_note_storage_error(e: DeviceError) -> NoteStorageError {
+fn to_note_storage_error(e: StorageError) -> NoteStorageError {
     match e {
-        // `DeviceError::Io` の `Display` は既に「入出力エラー: 」を前置するため、
+        // `StorageError::Io` の `Display` は既に「入出力エラー: 」を前置するため、
         // ここでは内側の `std::io::Error` の `Display` のみを転送する
         // （`NoteStorageError::Io` 側の `#[error("入出力エラー: {0}")]` と二重にしない）。
-        DeviceError::Io(io_err) => NoteStorageError::Io(io_err.to_string()),
-        DeviceError::InvalidKey(key) => NoteStorageError::InvalidKey(key),
-        DeviceError::Unsupported(s) => NoteStorageError::Unsupported(s.to_string()),
-        DeviceError::Http(_)
-        | DeviceError::InvalidImageSize(_, _)
-        | DeviceError::PermissionDenied(_)
-        | DeviceError::Cancelled(_)
-        | DeviceError::Internal(_)
-        | DeviceError::InvalidInput(_)
-        | DeviceError::Disabled(_) => NoteStorageError::Other(e.to_string()),
+        StorageError::Io(io_err) => NoteStorageError::Io(io_err.to_string()),
+        StorageError::InvalidKey(key) => NoteStorageError::InvalidKey(key),
+        StorageError::Unsupported(s) => NoteStorageError::Unsupported(s.to_string()),
     }
 }
 
@@ -78,27 +71,27 @@ mod tests {
     struct MemStorage(Arc<Mutex<Option<Vec<u8>>>>);
 
     impl Storage for MemStorage {
-        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, DeviceError> {
+        fn read(&self, _key: &str) -> Result<Option<Vec<u8>>, StorageError> {
             Ok(self.0.lock().expect("lock は成功する").clone())
         }
 
-        fn write(&self, _key: &str, bytes: &[u8]) -> Result<(), DeviceError> {
+        fn write(&self, _key: &str, bytes: &[u8]) -> Result<(), StorageError> {
             *self.0.lock().expect("lock は成功する") = Some(bytes.to_vec());
             Ok(())
         }
     }
 
-    /// 不正な key を要求して `DeviceError::InvalidKey` を返す `Storage`
+    /// 不正な key を要求して `StorageError::InvalidKey` を返す `Storage`
     /// （エラー文字列化の転送経路を検証する）。
     struct RejectingStorage;
 
     impl Storage for RejectingStorage {
-        fn read(&self, key: &str) -> Result<Option<Vec<u8>>, DeviceError> {
-            Err(DeviceError::InvalidKey(key.to_string()))
+        fn read(&self, key: &str) -> Result<Option<Vec<u8>>, StorageError> {
+            Err(StorageError::InvalidKey(key.to_string()))
         }
 
-        fn write(&self, key: &str, _bytes: &[u8]) -> Result<(), DeviceError> {
-            Err(DeviceError::InvalidKey(key.to_string()))
+        fn write(&self, key: &str, _bytes: &[u8]) -> Result<(), StorageError> {
+            Err(StorageError::InvalidKey(key.to_string()))
         }
     }
 
@@ -148,13 +141,13 @@ mod tests {
         assert!(err.to_string().contains("../x"));
     }
 
-    /// PR #787 Bugbot 指摘: `DeviceError::Io` の `Display` は既に「入出力エラー: 」を
+    /// PR #787 Bugbot 指摘: `StorageError::Io` の `Display` は既に「入出力エラー: 」を
     /// 前置するため、`to_note_storage_error` がそれをそのまま `NoteStorageError::Io` へ
     /// 格納すると「入出力エラー: 入出力エラー: ...」と二重表示になっていた。
     #[test]
     fn io_error_prefix_is_not_duplicated() {
         let io_err = std::io::Error::other("disk full");
-        let err = to_note_storage_error(DeviceError::Io(io_err));
+        let err = to_note_storage_error(StorageError::Io(io_err));
         let msg = err.to_string();
         assert_eq!(msg.matches("入出力エラー").count(), 1, "got: {msg}");
     }

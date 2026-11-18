@@ -144,8 +144,9 @@ app_name="FandheIosApp"
 bundle_id="com.fandhe.iosapp"
 fandhe_target="aarch64-apple-ios"
 fandhe_bin_name="fandhe-gallery-desktop"
-info_plist_src="${repo_root}/platforms/apple/FandheIosApp/Resources/Info.plist"
-[[ -f "${info_plist_src}" ]] || fail "Info.plist が見つかりません: ${info_plist_src}"
+# Info.plist・entitlements は機能 crate の宣言とアプリ設定から生成する（Issue #1194。project.yml の
+# FandheIosApp も生成した entitlements を指す）。バンドルへの配置は scripts/ios/stage-info-plist.sh。
+"${repo_root}/scripts/build/gen-gallery.sh" || fail "cargo fandhe gen に失敗しました"
 
 app_dir="${out_dir}/${app_name}.app"
 profile_state_file="${out_dir}/resolved-provisioning-profile-path"
@@ -975,8 +976,8 @@ phase_bundle() {
   rm -rf "${app_dir}"
   mkdir -p "${app_dir}"
   cp "${built_binary}" "${app_dir}/${app_name}"
-  cp "${info_plist_src}" "${app_dir}/Info.plist"
-  cp "${info_plist_src%/*}/PrivacyInfo.xcprivacy" "${app_dir}/PrivacyInfo.xcprivacy"
+  "${repo_root}/scripts/ios/stage-info-plist.sh" "${app_dir}" "${app_name}" \
+    || fail "Info.plist の配置に失敗しました"
 
   # FANDHE_ITEMS_URL 指定時のみ、LAN 限定の ATS 例外を .app 側の Info.plist へ
   # 追加する（リポジトリの plist ファイル自体は変更しない、Issue #660）。

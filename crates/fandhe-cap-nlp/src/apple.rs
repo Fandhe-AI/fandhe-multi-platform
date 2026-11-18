@@ -1,6 +1,6 @@
 //! macOS / iOS 向け単語分割実装（Issue #1094・#1095）。`driver.rs` の macOS / iOS 経路から呼ばれ、
-//! `apple/fandhe_apple_nlp.m`（NaturalLanguage `NLTokenizer`。`build.rs` が feature `device`
-//! 有効時にコンパイル）を `unsafe extern "C"` 1 関数で呼ぶ。トークンは `.m` から
+//! `apple/fandhe_apple_nlp.m`（NaturalLanguage `NLTokenizer`。`build.rs` が
+//! コンパイル）を `unsafe extern "C"` 1 関数で呼ぶ。トークンは `.m` から
 //! コールバックで 1 件ずつ Rust の `Vec<String>` へ積み、所有権とアロケータは境界を
 //! 越えない。`unsafe` はこの呼び出しとコールバックの 2 箇所に閉じる（coding-rust.md の
 //! FFI 例外規定準拠）。`build.rs` のコンパイル条件・`lib.rs` の mod cfg と同じ OS 集合に
@@ -15,7 +15,7 @@ use crate::contract::{WordSegmenter, normalize_words, validate_input};
 use crate::error::NlpError;
 
 // SAFETY: `apple/fandhe_apple_nlp.m` が定義する C ABI（`build.rs` が macOS / iOS ターゲットの
-// feature `device` 有効時のみコンパイル・リンクする）。契約は `.m` ファイル冒頭コメントに集約する。
+// コンパイル・リンクする）。契約は `.m` ファイル冒頭コメントに集約する。
 #[allow(unsafe_code)]
 unsafe extern "C" {
     fn fandhe_apple_nlp_segment(

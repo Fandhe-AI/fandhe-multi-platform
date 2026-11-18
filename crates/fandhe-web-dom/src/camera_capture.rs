@@ -6,7 +6,7 @@
 //! でフレームを 1 枚取得してサムネイル化し、結果を書き戻す。
 //!
 //! Web は `fandhe-device` の `Camera` トレインを通らない（`mic_record.rs`/`location.rs`
-//! と同じ理由。`fandhe-egui-proxy` の feature `device` は wasm32 に依存を持ち込まない設計、
+//! と同じ理由。機能 crate の OS 実装は wasm32 を対象にしない設計（Web の実装は本クレート、consumer-app-structure.md §7）、
 //! `docs/device/capabilities/camera-capture.json` の web 欄 note 参照）。そのため本モジュール
 //! が DOM レンダラ側の対応実装にあたる。サムネイル化（実画素へのブロック平均縮小）の不変条件だけは
 //! [`fandhe_core::screens::camera_capture::thumbnail_from_rgba`] を共有する

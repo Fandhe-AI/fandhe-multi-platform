@@ -15,7 +15,7 @@
       ],
       "detail": "できている（未確認、スキャンのみ。接続は対象外）",
       "implStatus": "実装済み（スキャンのみ。実機目視は人間確認待ち）",
-      "impl": "crates/fandhe-cap-bluetooth-le/apple/fandhe_apple_bluetooth_le.m + crates/fandhe-cap-bluetooth-le/src/apple.rs + crates/fandhe-cap-bluetooth-le/src/driver.rs + crates/fandhe-cap-bluetooth-le/src/contract.rs + platforms/apple/FandheIosApp/Resources/Info.plist、Issue 旧#1061"
+      "impl": "crates/fandhe-cap-bluetooth-le/apple/fandhe_apple_bluetooth_le.m + crates/fandhe-cap-bluetooth-le/src/apple.rs + crates/fandhe-cap-bluetooth-le/src/driver.rs + crates/fandhe-cap-bluetooth-le/src/contract.rs + crates/fandhe-cap-bluetooth-le/Cargo.toml（宣言）、Issue 旧#1061"
     },
     "android": {
       "status": "done",

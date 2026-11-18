@@ -50,7 +50,19 @@
 //! 拾った色（フィンガープリントに使える）と例外の `message` はログ・エラーメッセージに出さず、
 //! 永続化しない。
 
-use crate::DeviceError;
+/// 色の取得の失敗（`DeviceError` の後継、#1194）。使うバリアントだけを持つ。
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum PickColorError {
+    /// 利用者の取り消し。
+    #[error("操作がキャンセルされました: {0}")]
+    Cancelled(&'static str),
+    /// 変換・表示・OS の失敗。
+    #[error("内部エラーが発生しました: {0}")]
+    Internal(&'static str),
+    /// この OS では提供しない。
+    #[error("このプラットフォームでは未対応です: {0}")]
+    Unsupported(&'static str),
+}
 
 /// 選ばれた色。`rgb` は `0..=0xFF_FFFF` を保証する（0xRRGGBB）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,17 +84,17 @@ impl PickedColor {
 }
 
 /// 整数の RGB を契約へ写す。範囲外は `Internal("eye_dropper rgb")`（成功にしない）。
-pub fn color_from_rgb(rgb: i64) -> Result<PickedColor, DeviceError> {
+pub fn color_from_rgb(rgb: i64) -> Result<PickedColor, PickColorError> {
     if !(0..=0xFF_FFFF).contains(&rgb) {
-        return Err(DeviceError::Internal("eye_dropper rgb"));
+        return Err(PickColorError::Internal("eye_dropper rgb"));
     }
     Ok(PickedColor { rgb: rgb as u32 })
 }
 
 /// Web の `sRGBHex` を契約へ写す。受理するのは `#` + 16 進 6 桁だけ（大文字小文字は問わない）。
 /// trim はせず、届いた文字列のまま判定する。出力は [`PickedColor::hex`] で正規化し直す。
-pub fn color_from_srgb_hex(s: &str) -> Result<PickedColor, DeviceError> {
-    let err = DeviceError::Internal("eye_dropper hex");
+pub fn color_from_srgb_hex(s: &str) -> Result<PickedColor, PickColorError> {
+    let err = PickColorError::Internal("eye_dropper hex");
     let Some(digits) = s.strip_prefix('#') else {
         return Err(err);
     };
@@ -98,25 +110,25 @@ pub fn color_from_srgb_hex(s: &str) -> Result<PickedColor, DeviceError> {
 /// `.m` 側の結果コード → 結果の写像（SSOT）。0 = 選択（`rgb` を検査）、1 = 取り消し、
 /// 2 = sRGB 変換の失敗・成分が NaN、3 = 起動できなかった。未知コードは `Internal`
 /// （偽の取り消し・偽の成功を作らない）。
-pub fn result_from_macos_code(code: i32, rgb: i32) -> Result<PickedColor, DeviceError> {
+pub fn result_from_macos_code(code: i32, rgb: i32) -> Result<PickedColor, PickColorError> {
     match code {
         0 => color_from_rgb(i64::from(rgb)),
-        1 => Err(DeviceError::Cancelled("eye_dropper")),
-        2 => Err(DeviceError::Internal("eye_dropper convert")),
-        3 => Err(DeviceError::Internal("eye_dropper present")),
-        _ => Err(DeviceError::Internal("eye_dropper outcome")),
+        1 => Err(PickColorError::Cancelled("eye_dropper")),
+        2 => Err(PickColorError::Internal("eye_dropper convert")),
+        3 => Err(PickColorError::Internal("eye_dropper present")),
+        _ => Err(PickColorError::Internal("eye_dropper outcome")),
     }
 }
 
 /// Web の DOM 例外名 → 契約のエラー。`AbortError` は取り消し、それ以外は `Internal`
 /// （識別子は名前ごとに分け、`message` は使わない）。
-pub fn error_from_dom_exception_name(name: &str) -> DeviceError {
+pub fn error_from_dom_exception_name(name: &str) -> PickColorError {
     match name {
-        "AbortError" => DeviceError::Cancelled("eye_dropper"),
-        "NotAllowedError" => DeviceError::Internal("eye_dropper not allowed"),
-        "InvalidStateError" => DeviceError::Internal("eye_dropper invalid state"),
-        "OperationError" => DeviceError::Internal("eye_dropper operation"),
-        _ => DeviceError::Internal("eye_dropper exception"),
+        "AbortError" => PickColorError::Cancelled("eye_dropper"),
+        "NotAllowedError" => PickColorError::Internal("eye_dropper not allowed"),
+        "InvalidStateError" => PickColorError::Internal("eye_dropper invalid state"),
+        "OperationError" => PickColorError::Internal("eye_dropper operation"),
+        _ => PickColorError::Internal("eye_dropper exception"),
     }
 }
 
@@ -124,15 +136,15 @@ pub fn error_from_dom_exception_name(name: &str) -> DeviceError {
 /// このトレイトを通らない。`ContactPicker` と同じ分担）。
 pub trait EyeDropper: Send + Sync {
     /// スポイトを 1 回開き、選ばれた色を返す。取り消しは `Err(Cancelled)`。
-    fn pick(&self) -> Result<PickedColor, DeviceError>;
+    fn pick(&self) -> Result<PickedColor, PickColorError>;
 }
 
 /// 対象外 OS 用。ダミーの成功実装へは倒さない。
 pub struct UnsupportedEyeDropper;
 
 impl EyeDropper for UnsupportedEyeDropper {
-    fn pick(&self) -> Result<PickedColor, DeviceError> {
-        Err(DeviceError::Unsupported("eye_dropper"))
+    fn pick(&self) -> Result<PickedColor, PickColorError> {
+        Err(PickColorError::Unsupported("eye_dropper"))
     }
 }
 
@@ -165,7 +177,7 @@ mod tests {
             assert!(
                 matches!(
                     color_from_srgb_hex(s),
-                    Err(DeviceError::Internal("eye_dropper hex"))
+                    Err(PickColorError::Internal("eye_dropper hex"))
                 ),
                 "{s:?}"
             );
@@ -179,7 +191,7 @@ mod tests {
         for bad in [0x100_0000, -1, i64::MIN, i64::MAX] {
             assert!(matches!(
                 color_from_rgb(bad),
-                Err(DeviceError::Internal("eye_dropper rgb"))
+                Err(PickColorError::Internal("eye_dropper rgb"))
             ));
         }
     }
@@ -192,24 +204,24 @@ mod tests {
         );
         assert!(matches!(
             result_from_macos_code(0, -1),
-            Err(DeviceError::Internal("eye_dropper rgb"))
+            Err(PickColorError::Internal("eye_dropper rgb"))
         ));
         assert!(matches!(
             result_from_macos_code(1, 0),
-            Err(DeviceError::Cancelled("eye_dropper"))
+            Err(PickColorError::Cancelled("eye_dropper"))
         ));
         assert!(matches!(
             result_from_macos_code(2, 0),
-            Err(DeviceError::Internal("eye_dropper convert"))
+            Err(PickColorError::Internal("eye_dropper convert"))
         ));
         assert!(matches!(
             result_from_macos_code(3, 0),
-            Err(DeviceError::Internal("eye_dropper present"))
+            Err(PickColorError::Internal("eye_dropper present"))
         ));
         for code in [-1, 4, 99] {
             assert!(matches!(
                 result_from_macos_code(code, 0x12_3456),
-                Err(DeviceError::Internal("eye_dropper outcome"))
+                Err(PickColorError::Internal("eye_dropper outcome"))
             ));
         }
     }
@@ -218,7 +230,7 @@ mod tests {
     fn dom_exception_names() {
         assert!(matches!(
             error_from_dom_exception_name("AbortError"),
-            DeviceError::Cancelled("eye_dropper")
+            PickColorError::Cancelled("eye_dropper")
         ));
         for n in [
             "NotAllowedError",
@@ -229,7 +241,7 @@ mod tests {
         ] {
             assert!(matches!(
                 error_from_dom_exception_name(n),
-                DeviceError::Internal(_)
+                PickColorError::Internal(_)
             ));
         }
     }
@@ -238,7 +250,7 @@ mod tests {
     fn unsupported_never_succeeds() {
         assert!(matches!(
             UnsupportedEyeDropper.pick(),
-            Err(DeviceError::Unsupported("eye_dropper"))
+            Err(PickColorError::Unsupported("eye_dropper"))
         ));
     }
 }

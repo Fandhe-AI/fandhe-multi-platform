@@ -1,7 +1,7 @@
 //! file-picker の失敗の種類。画面の状態型にも `fandhe-device` の `DeviceError` にも依存しないよう、機能 crate ごとに持つ（Issue #1183）。
 //! 表示文言は移行前の `DeviceError` と同じ書き出しで、OS の文言は持たない（ログ・`Debug` に出さない契約）。
 
-use fandhe_device::DeviceError;
+use fandhe_device::file_picker::PickError;
 
 /// file-picker の失敗。使うバリアントだけを持つ。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -17,15 +17,13 @@ pub enum FilePickerError {
     Internal(&'static str),
 }
 
-/// `fandhe-device::file_picker` の共有部品（読み取り・受け取りの検証）が返す `DeviceError` を、識別子ごと 1:1 に写す。
-/// 共有部品が返さないバリアント（`Io` など）は内部エラーへ畳む（OS の文言は持ち込まない）。
-impl From<DeviceError> for FilePickerError {
-    fn from(e: DeviceError) -> Self {
+/// `fandhe-device::file_picker` の共有部品（読み取り・受け取りの検証）が返す `PickError` を、識別子ごと 1:1 に写す。
+impl From<PickError> for FilePickerError {
+    fn from(e: PickError) -> Self {
         match e {
-            DeviceError::Unsupported(_) => Self::Unsupported,
-            DeviceError::InvalidInput(what) => Self::InvalidInput(what),
-            DeviceError::Internal(what) => Self::Internal(what),
-            _ => Self::Internal("file_picker"),
+            PickError::Unsupported(_) => Self::Unsupported,
+            PickError::InvalidInput(what) => Self::InvalidInput(what),
+            PickError::Internal(what) => Self::Internal(what),
         }
     }
 }
@@ -57,21 +55,16 @@ mod tests {
     #[test]
     fn device_error_maps_one_to_one_with_identifiers() {
         assert_eq!(
-            FilePickerError::from(DeviceError::InvalidInput("file_picker size")),
+            FilePickerError::from(PickError::InvalidInput("file_picker size")),
             FilePickerError::InvalidInput("file_picker size")
         );
         assert_eq!(
-            FilePickerError::from(DeviceError::Internal("file_picker read")),
+            FilePickerError::from(PickError::Internal("file_picker read")),
             FilePickerError::Internal("file_picker read")
         );
         assert_eq!(
-            FilePickerError::from(DeviceError::Unsupported("file_picker")),
+            FilePickerError::from(PickError::Unsupported("file_picker")),
             FilePickerError::Unsupported
-        );
-        // 共有部品が返さないバリアントは内部エラーへ畳み、成功にも別種にもしない。
-        assert_eq!(
-            FilePickerError::from(DeviceError::Disabled("x")),
-            FilePickerError::Internal("file_picker")
         );
     }
 }

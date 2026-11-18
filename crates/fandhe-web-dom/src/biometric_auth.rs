@@ -5,8 +5,7 @@
 //! （`navigator.credentials`）で platform authenticator の確認を求め結果を書き戻す。
 //!
 //! Web は `fandhe-device` の `BiometricAuth` トレイトを通らない（`clipboard.rs`/
-//! `tts.rs`/`share.rs` と同じ理由。`fandhe-egui-proxy` の feature `device` は wasm32 に
-//! 依存を持ち込まない設計）。
+//! `tts.rs`/`share.rs` と同じ理由。機能 crate の OS 実装は wasm32 を対象にしない設計（Web の実装は本クレート、consumer-app-structure.md §7））。
 //!
 //! # サーバー無し・端末ローカル確認に限る（対応表 `docs/device/capabilities/biometric-auth.json`
 //! の web 欄と対）

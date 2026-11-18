@@ -14,7 +14,7 @@
 // 破棄停止が上限まで失敗して録画が残る場合は次の開始・停止・背景通知で破棄を再要求する。6 = 6 = `isAvailable == false`・iOS 14 未満・
 // シミュレータ（嘘の成功を避け固定で非対応）。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_screen_capture.rs` から C ABI 経由で呼ばれる。
+// `crates/fandhe-cap-screen-capture/src/apple.rs` から C ABI 経由で呼ばれる。
 //
 // 契約（pull 型。`fandhe_apple_mic_record.m` と同型）:
 //   fandhe_apple_screen_capture_start(uint64_t request_id, double max_seconds) -> int32_t

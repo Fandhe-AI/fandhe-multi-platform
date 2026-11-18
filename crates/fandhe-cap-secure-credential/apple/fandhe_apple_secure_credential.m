@@ -2,8 +2,8 @@
 // （Issue #922・#924）。Security.framework（Keychain Services、`SecItem*` C API）で
 // `kSecClassGenericPassword` 項目を保存・読み出し・削除する。
 //
-// `crates/fandhe-egui-proxy/src/device/apple_secure_credential.rs` から C ABI 経由で
-// 呼ばれる。`build.rs` が iOS・macOS 双方のターゲット（feature `device` 有効時）で
+// `crates/fandhe-cap-secure-credential/src/apple.rs` から C ABI 経由で
+// 呼ばれる。`build.rs` が iOS・macOS 双方のターゲットで
 // `cc` コンパイルし、Security フレームワークをリンクする（`SecItem*` API は iOS/macOS
 // 同一のため本ファイルはそのまま共用、分岐なし）。
 //

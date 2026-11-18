@@ -3,7 +3,7 @@
 // `requestUserAttention:NSCriticalRequest`（前面になるか取り消されるまで Dock のアイコンが跳ねる）。権限は不要。
 //
 // `crates/fandhe-cap-app-progress-attention/src/macos.rs` から C ABI 経由で呼ばれる。
-// `build.rs` の `build_macos()` が feature `device` 有効時にのみコンパイルする。
+// `build.rs` がコンパイルする。
 //
 // 契約（3 関数とも UI スレッド（main thread）から同期で呼ぶ）:
 //   fandhe_macos_app_progress_set(uint32_t percent) -> int32_t
