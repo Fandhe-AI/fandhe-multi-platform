@@ -50,7 +50,7 @@ fn build_sample_harness() -> egui_kittest::Harness<'static, StateStore<SampleSta
 
     egui_kittest::Harness::builder().build_ui_state(
         move |ui, store: &mut StateStore<SampleState>| {
-            fandhe_egui_proxy::render_screen(ui, &screen, store);
+            fandhe_render_egui::render_screen(ui, &screen, store);
         },
         StateStore::new(SampleState::default()),
     )
@@ -63,7 +63,7 @@ fn build_prototype_harness() -> egui_kittest::Harness<'static, StateStore<AppSta
     egui_kittest::Harness::builder().build_ui_state(
         move |ui, store: &mut StateStore<AppState>| {
             let screen = fandhe_prototype::current_screen(store.state());
-            fandhe_egui_proxy::render_screen(ui, &screen, store);
+            fandhe_render_egui::render_screen(ui, &screen, store);
         },
         StateStore::new(AppState::default()),
     )
@@ -135,7 +135,7 @@ fn sample_screen_list_items_are_exposed_as_labels_after_adding() {
     harness.get_by_role_and_label(Role::Label, "代表 1 画面サンプル");
     // `Node::TextField` は `ui.label(label)`（別ノード）＋ `labelled_by` で
     // アクセシブルネームを共有する `ui.text_edit_singleline`（本稿）の 2 ノードを
-    // 生成する（`fandhe_egui_proxy::render_screen` の `Node::TextField` アーム参照）。
+    // 生成する（`fandhe_render_egui::render_screen` の `Node::TextField` アーム参照）。
     // 「メモ」ラベル自体（`Role::Label`）も 8 要素の内訳に含まれるため、
     // `Role::TextInput` の入力欄と分けて両方を検証する
     // （Issue #216 レビュー指摘対応: メモの `Role::Label` ノードが未検証だった問題の解消）。

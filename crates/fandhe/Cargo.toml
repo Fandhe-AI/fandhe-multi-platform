@@ -11,7 +11,20 @@ publish = false
 [features]
 default = ["egui"]
 # v1 の既定バックエンド（docs/architecture/consumer-app-structure.md §7）。画面の組み立て（`fandhe::app`）を出す。
-egui = ["dep:fandhe-render-egui", "dep:egui"]
+# 各 OS の入口（`#[fandhe::main]`、Issue #1200）もこの feature に含める。入口が使う OS 層・Web の glue も一緒に入る。
+egui = [
+    "dep:fandhe-render-egui",
+    "dep:egui",
+    "dep:fandhe-macros",
+    "dep:fandhe-platform-android",
+    "dep:winit",
+    "dep:fandhe-platform-windows",
+    "dep:wasm-bindgen",
+    "dep:wasm-bindgen-futures",
+    "dep:js-sys",
+    "dep:web-sys",
+    "dep:console_error_panic_hook",
+]
 # 端末機能。名前は対応表の id（`docs/device/capabilities/<id>.json`）で、1 機能 = 1 crate（`fandhe-cap-<id>`）。
 # 選ばなかった機能は依存グラフに載らない。並びと網羅は `tests/features.rs` が検査する。
 accessibility-prefs = ["dep:fandhe-cap-accessibility-prefs"]
@@ -157,11 +170,18 @@ wifi-connect = ["dep:fandhe-cap-wifi-connect"]
 wifi-info = ["dep:fandhe-cap-wifi-info"]
 window-management = ["dep:fandhe-cap-window-management"]
 
+# iOS の入力欄の橋渡し（`ios/fandhe_ios_text_input.m`）を build.rs でコンパイルする helper。build-dependency は
+# ホストで評価されるため target cfg を付けられない。iOS 以外では build.rs が何もしない。
+[build-dependencies]
+fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"] }
+
 [dependencies]
 fandhe-core = { path = "../fandhe-core" }
 fandhe-runtime = { path = "../fandhe-runtime" }
 fandhe-render-egui = { path = "../fandhe-render-egui", optional = true }
 egui = { workspace = true, optional = true }
+fandhe-macros = { path = "../fandhe-macros", optional = true }
+
 fandhe-cap-accessibility-prefs = { path = "../fandhe-cap-accessibility-prefs", optional = true }
 fandhe-cap-activity-recognition = { path = "../fandhe-cap-activity-recognition", optional = true }
 fandhe-cap-alarm = { path = "../fandhe-cap-alarm", optional = true }
@@ -303,6 +323,31 @@ fandhe-cap-wallpaper-set = { path = "../fandhe-cap-wallpaper-set", optional = tr
 fandhe-cap-wifi-connect = { path = "../fandhe-cap-wifi-connect", optional = true }
 fandhe-cap-wifi-info = { path = "../fandhe-cap-wifi-info", optional = true }
 fandhe-cap-window-management = { path = "../fandhe-cap-window-management", optional = true }
+
+# Android の入口: `AndroidApp` の保持・window insets（共通層）と、`android_main` の引数型・ソフトキーボードの状態（winit）。
+[target.'cfg(target_os = "android")'.dependencies]
+fandhe-platform-android = { path = "../fandhe-platform-android", optional = true }
+winit = { workspace = true, features = ["android-game-activity"], optional = true }
+
+# Windows の入口: 起動時のウィンドウの HWND を控える（共有シート・生体認証などの機能 crate が使う）。
+[target.'cfg(target_os = "windows")'.dependencies]
+fandhe-platform-windows = { path = "../fandhe-platform-windows", optional = true }
+
+# Web の入口: wasm-bindgen の start・canvas の取得・CJK フォントの fetch。
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
+web-sys = { workspace = true, optional = true, features = [
+    "Document",
+    "Window",
+    "HtmlCanvasElement",
+    "HtmlElement",
+    "CssStyleDeclaration",
+    "Response",
+    "console",
+] }
+console_error_panic_hook = { workspace = true, optional = true }
 
 # web は対応表で n-a（専用 API の概念がない）。機能 crate が wasm32 でコンパイルできないため、wasm32 では依存させない。
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

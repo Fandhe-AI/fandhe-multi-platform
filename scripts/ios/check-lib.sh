@@ -39,4 +39,4 @@ if [ "${#cap_args[@]}" -eq 0 ]; then
   echo "[check-lib:ios] エラー: crates/fandhe-cap-* が見つからない" >&2
   exit 1
 fi
-cargo clippy --locked -p fandhe-gallery -p fandhe-egui-proxy -p fandhe-render-egui -p fandhe-platform-apple "${cap_args[@]}" --lib --target "${target}" -- -D warnings
+cargo clippy --locked -p fandhe-gallery -p fandhe -p fandhe-render-egui -p fandhe-platform-apple "${cap_args[@]}" --lib --target "${target}" -- -D warnings

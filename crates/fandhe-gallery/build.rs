@@ -1,10 +1,10 @@
-//! Apple（iOS / macOS）のリンク指定を `fandhe-egui-proxy` と Swift 薄層・弱リンクを持つ機能 crate から受け取って出し直し、
+//! Apple（iOS / macOS）のリンク指定を Swift 薄層・弱リンクを持つ機能 crate から受け取って出し直し、
 //! macOS では `cargo fandhe gen` の Info.plist を実行体へ埋め込む。
 //!
 //! `cargo:rustc-link-arg` は出した package 自身の成果物にしか効かない。最終成果物（bin・cdylib・
-//! テスト実行体）は本 crate が作るため、egui-proxy の `build.rs` が `links` メタデータとして公開した
-//! 弱リンク・`-rpath`・clang_rt をここで出し直す。Swift の薄層・弱リンクを持つ機能 crate
-//! （alarm・image-generation・live-activity・on-device-llm・screen-capture・translation）も同じ形で公開しており、ここで受け取る
+//! テスト実行体）は本 crate が作るため、Swift の薄層・弱リンクを持つ機能 crate
+//! （alarm・image-generation・live-activity・on-device-llm・screen-capture・translation）が `links` メタデータとして公開した
+//! 弱リンク・`-rpath`・clang_rt をここで受け取って出し直す
 //! （`fandhe-platform-apple` の `build` モジュール doc 参照）。Apple 以外では何もしない。
 //!
 //! macOS の Info.plist（Issue #1194）: 素の実行体（非バンドル）でも TCC の許可プロンプト（位置情報・マイク等）が出るよう、
@@ -15,7 +15,6 @@
 use std::path::{Path, PathBuf};
 
 fn main() {
-    fandhe_platform_apple::build::import_link_args("fandhe_egui_proxy");
     fandhe_platform_apple::build::import_link_args("fandhe_cap_alarm");
     fandhe_platform_apple::build::import_link_args("fandhe_cap_image_generation");
     fandhe_platform_apple::build::import_link_args("fandhe_cap_live_activity");

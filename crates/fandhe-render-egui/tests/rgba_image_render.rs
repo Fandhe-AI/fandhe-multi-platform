@@ -15,7 +15,7 @@ fn rgba_image_is_exposed_as_image_with_alt() {
     let screen: Screen<S> = Screen::new("img").rgba_image(pixels, "撮影結果のサムネイル");
     let mut harness = egui_kittest::Harness::builder().build_ui_state(
         move |ui, store: &mut StateStore<S>| {
-            fandhe_egui_proxy::render_screen(ui, &screen, store);
+            fandhe_render_egui::render_screen(ui, &screen, store);
         },
         StateStore::new(S),
     );

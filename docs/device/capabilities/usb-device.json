@@ -37,7 +37,7 @@
       "note": "実装済み（#506）。macOS と同じ範囲（先頭 64 件、「再取得」、0 件は成功、非対応と失敗の区別、シリアル・インスタンス ID は読まない）。WinRT `Windows.Devices.Usb` は package identity 必須のため使わず、WinUSB は機器を開くため範囲外。守らない範囲: 抜き差しの反映（再取得まで）、ハブや複合機器の扱い（OS 任せ）、Bluetooth HID、iProduct を持たない機器の名前（汎用名へは倒さず名前なし）、OS 呼び出しが戻らない場合の期限。型検査は x86_64-pc-windows-gnu のみ。",
       "detail": "できている（Windows 実機確認待ち）",
       "implStatus": "Windows 実機確認待ち（#504）",
-      "impl": "crates/fandhe-cap-usb-device/src/windows.rs + crates/fandhe-cap-usb-device/src/driver.rs + crates/fandhe-cap-usb-device/src/contract.rs + crates/fandhe-egui-proxy/Cargo.toml、Issue #506"
+      "impl": "crates/fandhe-cap-usb-device/src/windows.rs + crates/fandhe-cap-usb-device/src/driver.rs + crates/fandhe-cap-usb-device/src/contract.rs、Issue #506"
     },
     "web": {
       "status": "done",

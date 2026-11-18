@@ -63,7 +63,7 @@ use fandhe_core::{
     WidgetId, WindowHints,
 };
 
-use crate::recyclers::VirtualListRecyclers;
+use fandhe_render_egui::recyclers::VirtualListRecyclers;
 
 /// スクロール位置に応じた前後バッファ（overscan）行数。`lib.rs::VIRTUAL_LIST_OVERSCAN`
 /// と同じ役割・同じ値を持つ（`Axis::Grid` は「行」単位のオーバースキャンになる点のみ
@@ -158,7 +158,7 @@ impl<S> TvFocusController<S> {
         self.recyclers.begin_frame();
         // 画像キャッシュの掃除。通常描画経路（lib.rs）と同じくフレーム冒頭で行い、
         // 可視範囲外になった画像の画素・GPU テクスチャを解放する。
-        crate::rgba_image::begin_frame(ui.ctx());
+        fandhe_render_egui::rgba_image::begin_frame(ui.ctx());
 
         let (direction, decide) = read_navigation_input(ui.ctx());
 
@@ -269,7 +269,7 @@ fn render_node<S>(
         Node::StyledText { role, get } => {
             // `DynamicText` と同じ非フォーカス可能なラベル描画に、`text_role.rs`
             // による色解決（#813 で解決済み）を重ねる。
-            crate::text_role::styled_label(ui, *role, get(state));
+            fandhe_render_egui::text_role::styled_label(ui, *role, get(state));
         }
         Node::Button { label, id, .. } => {
             render_focusable_button(ui, label, *id, path, ctx);
@@ -309,7 +309,7 @@ fn render_node<S>(
         }
         Node::RgbaImage { pixels, alt } => {
             // フォーカス対象にしない非対話の表示（通常描画と同じ実装を使う）。
-            crate::rgba_image::show(ui, pixels, alt, path);
+            fandhe_render_egui::rgba_image::show(ui, pixels, alt, path);
         }
         Node::TextField { .. } | Node::Widget(_) => {
             // TV サンプル画面（`tv_sample.rs`）は Button/IndexedButton/List/
@@ -786,12 +786,12 @@ mod tests {
             });
         };
         pass(&with_image);
-        assert_eq!(crate::rgba_image::cached_len(&ctx), 1);
+        assert_eq!(fandhe_render_egui::rgba_image::cached_len(&ctx), 1);
         // 画像のない画面へ切り替えて数パス回すと解放される。
         pass(&without_image);
         pass(&without_image);
         pass(&without_image);
-        assert_eq!(crate::rgba_image::cached_len(&ctx), 0);
+        assert_eq!(fandhe_render_egui::rgba_image::cached_len(&ctx), 0);
     }
 
     /// `tree()` ヘルパーが単純なボタン 1 個の画面を構築できることの前提確認
@@ -900,7 +900,7 @@ mod tests {
     /// wgpu 依存を避け、`egui::Context::run`（レンダラ不要）のみで検証する）。
     #[test]
     fn nested_virtual_list_reveal_updates_both_levels_after_moving_focus_deep() {
-        use crate::tv_sample::{tv_sample_screen, TvState};
+        use crate::demo::tv_sample::{tv_sample_screen, TvState};
 
         let screen = tv_sample_screen();
         let mut store = StateStore::new(TvState::default());

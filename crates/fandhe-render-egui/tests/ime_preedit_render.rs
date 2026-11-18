@@ -5,7 +5,7 @@
 //! `winit → egui-winit → egui::TextEdit` を直結しており、`fandhe-winit-ime` は
 //! 経路上にない（同クレートは `ImeEvent`/`ImeRequest` の純粋変換レイヤで、eframe には
 //! 配線されていない）。`crates/fandhe-core/src/ui/text_field.rs` の IME 処理も本経路には
-//! 使われない（`fandhe-egui-proxy` の `render_node` は `egui::TextEdit::text_edit_singleline`
+//! 使われない（`fandhe-render-egui` の `render_node` は `egui::TextEdit::text_edit_singleline`
 //! を直接呼び、`fandhe_core::ui::text_field::TextFieldWidget` には委譲しない）。
 //!
 //! 症状 A の実体は Linux（X11 + XIM）で IM サーバーが on-the-spot スタイルを広告しない場合、
@@ -45,7 +45,7 @@ fn build_harness() -> egui_kittest::Harness<'static, StateStore<SampleState>> {
         .renderer(egui_kittest::wgpu::WgpuTestRenderer::default())
         .build_ui_state(
             move |ui, store: &mut StateStore<SampleState>| {
-                fandhe_egui_proxy::render_screen(ui, &screen, store);
+                fandhe_render_egui::render_screen(ui, &screen, store);
             },
             StateStore::new(SampleState::default()),
         )

@@ -94,7 +94,7 @@ fn build_harness() -> egui_kittest::Harness<'static, StateStore<WidgetState>> {
         .renderer(egui_kittest::wgpu::WgpuTestRenderer::default())
         .build_ui_state(
             move |ui, store: &mut StateStore<WidgetState>| {
-                fandhe_egui_proxy::render_screen(ui, &screen, store);
+                fandhe_render_egui::render_screen(ui, &screen, store);
             },
             StateStore::new(WidgetState::default()),
         )
@@ -251,7 +251,7 @@ fn build_slider_harness() -> egui_kittest::Harness<'static, StateStore<SliderSta
         .renderer(egui_kittest::wgpu::WgpuTestRenderer::default())
         .build_ui_state(
             move |ui, store: &mut StateStore<SliderState>| {
-                fandhe_egui_proxy::render_screen(ui, &screen, store);
+                fandhe_render_egui::render_screen(ui, &screen, store);
             },
             StateStore::new(SliderState { level: 3.0 }),
         )

@@ -64,7 +64,7 @@ fn build_wgpu_harness(screen: Screen<S>) -> egui_kittest::Harness<'static, State
         .renderer(egui_kittest::wgpu::WgpuTestRenderer::default())
         .build_ui_state(
             move |ui, store: &mut StateStore<S>| {
-                fandhe_egui_proxy::render_screen(ui, &screen, store);
+                fandhe_render_egui::render_screen(ui, &screen, store);
             },
             build_state(),
         )
@@ -124,9 +124,9 @@ fn error_text_is_painted_with_color_error_token() {
     // ライト/ダーク両方の解決色を許容する（`text_role::text_role_color` が実装と同じ
     // 解決経路であり、期待色を独自定数として持たない）。
     let expected = [
-        fandhe_egui_proxy::text_role::text_role_color(TextRole::Error, false)
+        fandhe_render_egui::text_role::text_role_color(TextRole::Error, false)
             .expect("color.error は解決できる"),
-        fandhe_egui_proxy::text_role::text_role_color(TextRole::Error, true)
+        fandhe_render_egui::text_role::text_role_color(TextRole::Error, true)
             .expect("color.error は解決できる"),
     ];
     // グリフのアンチエイリアス（背景とのアルファブレンド）でストローク内部でも
@@ -174,7 +174,7 @@ fn error_text_is_painted_with_color_error_token() {
 fn build_ax_harness(screen: Screen<S>) -> egui_kittest::Harness<'static, StateStore<S>> {
     egui_kittest::Harness::builder().build_ui_state(
         move |ui, store: &mut StateStore<S>| {
-            fandhe_egui_proxy::render_screen(ui, &screen, store);
+            fandhe_render_egui::render_screen(ui, &screen, store);
         },
         build_state(),
     )

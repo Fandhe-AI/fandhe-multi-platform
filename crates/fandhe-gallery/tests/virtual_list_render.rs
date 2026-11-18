@@ -119,7 +119,7 @@ fn build_harness_with(
         .renderer(egui_kittest::wgpu::WgpuTestRenderer::default())
         .build_ui_state(
             move |ui, store: &mut StateStore<VirtualListState>| {
-                fandhe_egui_proxy::render_screen(ui, &screen, store);
+                fandhe_render_egui::render_screen(ui, &screen, store);
             },
             StateStore::new(VirtualListState {
                 len: TOTAL_ITEMS,
@@ -129,7 +129,7 @@ fn build_harness_with(
         )
 }
 
-/// [`fandhe_egui_proxy::render_screen_with_recyclers`] 経由でフレーム跨ぎ再利用プールを
+/// [`fandhe_render_egui::render_screen_with_recyclers`] 経由でフレーム跨ぎ再利用プールを
 /// 保持する `Harness` を構築する（Issue #490 の受け入れ条件検証用）。
 /// `recyclers` は `move` クロージャへ捕捉され、`harness.run()` を複数回呼んでも
 /// 同一のプールがフレームをまたいで使われる。
@@ -137,13 +137,18 @@ fn build_harness_with_recyclers(
     screen: Screen<VirtualListState>,
     size: egui::Vec2,
 ) -> egui_kittest::Harness<'static, StateStore<VirtualListState>> {
-    let mut recyclers = fandhe_egui_proxy::VirtualListRecyclers::new();
+    let mut recyclers = fandhe_render_egui::VirtualListRecyclers::new();
     egui_kittest::Harness::builder()
         .with_size(size)
         .renderer(egui_kittest::wgpu::WgpuTestRenderer::default())
         .build_ui_state(
             move |ui, store: &mut StateStore<VirtualListState>| {
-                fandhe_egui_proxy::render_screen_with_recyclers(ui, &screen, store, &mut recyclers);
+                fandhe_render_egui::render_screen_with_recyclers(
+                    ui,
+                    &screen,
+                    store,
+                    &mut recyclers,
+                );
             },
             StateStore::new(VirtualListState {
                 len: TOTAL_ITEMS,
@@ -613,7 +618,7 @@ fn build_horizontal_harness_with(
         .renderer(egui_kittest::wgpu::WgpuTestRenderer::default())
         .build_ui_state(
             move |ui, store: &mut StateStore<VirtualListState>| {
-                fandhe_egui_proxy::render_screen(ui, &screen, store);
+                fandhe_render_egui::render_screen(ui, &screen, store);
             },
             StateStore::new(VirtualListState {
                 len,
@@ -852,7 +857,7 @@ fn build_grid_harness_with(
         .renderer(egui_kittest::wgpu::WgpuTestRenderer::default())
         .build_ui_state(
             move |ui, store: &mut StateStore<VirtualListState>| {
-                fandhe_egui_proxy::render_screen(ui, &screen, store);
+                fandhe_render_egui::render_screen(ui, &screen, store);
             },
             StateStore::new(VirtualListState {
                 len,
@@ -1046,7 +1051,7 @@ fn tv_grid_virtual_list_keeps_equal_column_pitch_regardless_of_content_width() {
     let screen = build_mixed_width_grid_screen();
     let Some(mut harness) = harness_or_skip(|| {
         let screen = screen.clone();
-        let mut controller = fandhe_egui_proxy::tv_focus::TvFocusController::new();
+        let mut controller = fandhe_gallery::demo::tv_focus::TvFocusController::new();
         egui_kittest::Harness::builder()
             .with_size(GRID_FULL_VIEWPORT_SIZE)
             .renderer(egui_kittest::wgpu::WgpuTestRenderer::default())
