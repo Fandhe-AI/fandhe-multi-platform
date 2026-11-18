@@ -45,7 +45,7 @@ S15・#196 → `ime-ios-uikit-text-input.md` と同じパターンを踏襲す�
 
 ### 3.1 Android 実行アーキテクチャの現状（`fandhe-egui-proxy`・TASK-1.5-S2）
 
-- `crates/fandhe/src/entry/android.rs`・`Cargo.toml`（TASK-1.5-S2）は
+- `crates/fandhe-egui-proxy/src/android.rs`・`Cargo.toml`（TASK-1.5-S2）は
   **android-activity の NativeActivity flavor**（`android_activity/native-activity` feature 経由、
   winit の `android-native-activity` feature）を採用している。理由は「OS 同梱のグルーコードで
   起動でき、Java/Gradle 側の追加実装が不要」（同 Cargo.toml コメント）。

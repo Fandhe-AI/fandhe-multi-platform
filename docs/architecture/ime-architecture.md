@@ -447,7 +447,7 @@ preedit（`setComposingText` の反映）の実現には GameActivity 方式へ�
 一切発火せず、`android-activity` の `InputEvent::TextEvent`（GameTextInput 経由の
 コンポジション更新）も未処理である**（macOS/Windows/Linux のように
 winit が `Ime::*` へ変換してくれる前提が Android では成立しない）。また既存
-`fandhe-egui-proxy`（TASK-1.5-S2）が採用する **NativeActivity flavor は組み込みの IME 対応を
+`fandhe-egui-proxy`（TASK-1.5-S2、#1200 で撤去）が当時採用していた **NativeActivity flavor は組み込みの IME 対応を
 持たず、CJK コンポジション入力が原理的に成立しない**ため、本設計は
 **GameActivity + `GameTextInput` 方式への移行を前提**とし、winit を経由せず
 `android-activity` の `AndroidApp`（`TextInputState`）を直接操作する新クレート
@@ -686,7 +686,7 @@ Issue #4）、Linux: `Disabled`/`Enabled` が同期発火。いずれも正当�
 
 ## 6. トレードオフ・代替案
 
-- **egui 既存 IME サポートの流用案（不採用）**: `fandhe-egui-proxy` は egui 自体の IME 処理
+- **egui 既存 IME サポートの流用案（不採用）**: `fandhe-egui-proxy`（当時。現在は `fandhe-render-egui`）は egui 自体の IME 処理
   （`egui::Event::Ime` 相当）に委ねている（egui バックエンドではこれを使う）が、独自レンダラ方式の
   プラットフォーム（macOS/iOS/Android/デスクトップ）には適用できない。egui の IME 処理は
   egui 内部の `TextEdit` ウィジェットに閉じており、`fandhe-core` の `Widget<S>` 抽象と

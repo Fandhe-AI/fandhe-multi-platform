@@ -4,7 +4,7 @@
 //!
 //! 起動（eframe）は [`crate::launch`] が担い、本モジュールは eframe に依存しない
 //! （[`EguiApp`] を実装するだけ）。`#[doc(hidden)]` の項目は入口（`fandhe` の
-//! `src/entry/`）・カタログ・機能 crate の driver が使う口で、利用者向けの公開 API ではない。
+//! `src/entry/`）とカタログ（`fandhe-gallery`）が使う口で、利用者向けの公開 API ではない。
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

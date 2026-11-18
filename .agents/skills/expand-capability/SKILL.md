@@ -171,8 +171,8 @@ Windows がプロセス間転送・レジストリ等で 2h を明らかに超�
 **兄弟 PR が同じ行を触らないための条件**（7 周目の手作業の競合 5 件のうち 4 件は、iOS と Android の PR が
 共通ファイルの `#[cfg(any(target_os = ...))]` と fallback 行をそれぞれ広げたものだった）:
 
-- (a) は **全対象 OS の骨格を先に置く**。機能 crate（`fandhe-cap-<id>`）の `lib.rs` の dispatch（`#[cfg(...)]` の分岐・
-  `not(any(...))` の fallback 行・OS 別モジュールの `mod` 列）を全対象 OS の最終形で書き、まだ実装しない OS は
+- (a) は **全対象 OS の骨格を先に置く**。機能 crate（`fandhe-cap-<id>`）の dispatch（`driver.rs` の `platform_<id>()` の `#[cfg(...)]` の分岐・
+  `not(any(...))` の fallback 行と、`lib.rs` の OS 別 `mod` 列）を全対象 OS の最終形で書き、まだ実装しない OS は
   `fandhe_device::<feature>::Unsupported...` を返す薄い関数 1 つのスタブを OS 別モジュールに置く。
   後続の子は自分の OS のモジュールだけを埋め、dispatch・fallback 行・`mod` 列を触らない。
   スタブは嘘の成功ではない（明示の `Unsupported` を返す）。スタブの OS は対応表で `possible` のまま、`impl` に書かない。

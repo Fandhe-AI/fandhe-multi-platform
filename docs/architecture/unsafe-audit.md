@@ -172,10 +172,11 @@ workspace メンバー自身のコードに限定）。既知脆弱性確認（`
   閉じる／`// SAFETY:` コメントで安全性根拠を明記する／安全な公開 API でラップし `unsafe` を呼び出し側へ
   漏らさない）に従う。現行の FFI 境界クレート（`fandhe-swiftui-bridge` の `ffi` モジュール、
   `fandhe-winit-ime` の `macos_secure_input` モジュール、`fandhe` の iOS の入力欄
-  `src/entry/ios_text_input.rs`、`fandhe-platform-android` の `with_activity`、
-  機能 crate の OS 別モジュール）はいずれも FFI 境界で `unsafe` が不可避なため forbid を付けられず、
-  `scripts/audit/unsafe-audit.sh` 冒頭の `FORBID_EXEMPT_CRATES`（`scripts/android/versions.env` と同様の
-  SSOT パターン）へ明示的に登録済みである。新規クレートを追加する際も同様に登録する運用とする。
+  `src/entry/ios_text_input.rs`、`fandhe-gallery` の `android_main` ほか、`fandhe-platform-android`・
+  `fandhe-platform-apple`・`fandhe-platform-windows`）はいずれも FFI 境界で `unsafe` が不可避なため
+  forbid を付けられず、`scripts/audit/unsafe-audit.sh` 冒頭の `FORBID_EXEMPT_CRATES`
+  （`scripts/android/versions.env` と同様の SSOT パターン）へ明示的に登録済みである。
+  機能 crate（`fandhe-cap-*`）は一覧に載せず、名前の接頭辞で扱う（同スクリプト参照）。新規クレートを追加する際も同様に登録する運用とする。
   登録しない限り forbid 未適用は違反（exit 1）として検出されるため、登録漏れによる監査基準の
   暗黙的な緩和を防ぐ。
 - **クレート追加時の再監査**: workspace にクレートを追加するたびに `bash scripts/audit/unsafe-audit.sh`

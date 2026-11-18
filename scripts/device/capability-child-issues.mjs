@@ -69,7 +69,7 @@ export function resolveLayout(layers, targets) {
 const LAYER_EXTRA = {
   a: [
     "失敗系テスト（キャンセル・権限拒否・入力不正・古い世代の完了が成功にならない、非対応 OS が成功を返さない）",
-    "**全対象 OS の骨格を先に置く**: 機能 crate（`fandhe-cap-<id>`）の `lib.rs` の dispatch（`#[cfg(...)]` の分岐・`not(any(...))` の fallback 行）を全対象 OS の最終形で書き、まだ実装しない OS は `fandhe_device::<feature>::Unsupported...` を返す薄い関数 1 つのスタブを OS 別モジュールに置く。後続の子は自分の OS のモジュールだけを埋め、dispatch・fallback 行・OS 別モジュールの `mod` 列を触らない",
+    "**全対象 OS の骨格を先に置く**: 機能 crate（`fandhe-cap-<id>`）の dispatch（`driver.rs` の `platform_<id>()` の `#[cfg(...)]` の分岐・`not(any(...))` の fallback 行）を全対象 OS の最終形で書き、まだ実装しない OS は `fandhe_device::<feature>::Unsupported...` を返す薄い関数 1 つのスタブを OS 別モジュールに置く。後続の子は自分の OS のモジュールだけを埋め、dispatch・fallback 行・`lib.rs` の OS 別 `mod` 列を触らない",
     "スタブの OS は対応表で `possible` のまま、`impl` に書かない",
     "スタブを置いた OS のクロスビルド（`cargo build --target ...` か `cargo ndk`）が通る",
     "共通コア画面（`crates/fandhe-core/src/screens/`）の状態・定数・文言は、OS 固有の操作 UI（登録・解除ボタン等）を含め全対象 OS 分を (a) で定義する。後続の子は共通コア画面を触らない",

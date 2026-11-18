@@ -27,7 +27,7 @@
 //
 // 呼び出しスレッド（P1 是正、PR #1041 codex 指摘、Issue #1039）:
 //   AppKit 呼び出しは main thread 必須。呼び出し元（`apple.rs`）は
-//   `fandhe-egui-proxy::device::system_tray::drive` が起こす作業スレッドから
+//   本 crate の `driver.rs` の `drive` が起こす作業スレッドから
 //   呼ぶため main でないことがある。本体を block（`FandheRunOnMainAndWait`）に
 //   包み、呼び出しスレッドが main ならそのまま実行、main でなければ
 //   `dispatch_sync(dispatch_get_main_queue(), block)` で main へ寄せて実行する。

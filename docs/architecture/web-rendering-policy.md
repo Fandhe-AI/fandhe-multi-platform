@@ -22,7 +22,7 @@ Web（wasm32-unknown-unknown）ターゲットの描画バックエンドは **`
 - `eframe::WebOptions::default()` の既定値 `WebGlContextOption::BestFirst`
   （WebGL2 失敗時に WebGL1 へ暗黙フォールバックする）も採用せず、
   `WebGlContextOption::WebGl2` を明示的に指定して WebGL1 への暗黙フォールバックも無効化します
-  （`crates/fandhe/src/entry/web.rs` の `WebOptions` 構築箇所）。
+  （`crates/fandhe-render-egui/src/launch.rs` の `start_web` の `WebOptions` 構築箇所）。
 
 結果として、WebGL2 コンテキストの生成に失敗する環境（WebGL2 非対応ブラウザ等）では、
 黙って劣化した描画（WebGL1）を出さず、`eframe::WebRunner::start()` がエラーを返し

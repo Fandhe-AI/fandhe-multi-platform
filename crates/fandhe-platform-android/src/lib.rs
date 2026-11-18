@@ -1,7 +1,7 @@
 //! Android の共通層（TASK-21.2、Issue #1166）。
 //!
 //! 機能 crate が egui に依存しないよう、Android の機能実装が共通で要る 3 点だけを
-//! レンダラ非依存で切り出した crate。依存方向は `fandhe-render-egui`・`fandhe`・機能 crate → 本 crate
+//! レンダラ非依存で切り出した crate。依存方向は `fandhe`・機能 crate → 本 crate
 //! の一方向で、egui / eframe / winit は参照しない。
 //!
 //! - [`set_android_app`] / [`android_app`]: `android_main` が受け取る [`AndroidApp`] の保持

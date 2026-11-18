@@ -21,7 +21,8 @@
 pub mod accessibility;
 pub mod app;
 pub mod font;
-// 機能 crate の driver（写真選択・書類スキャン等）が使う口。利用者向けの公開 API ではない。
+// 描画（`render.rs` の `Node::Widget` 分岐）がテクスチャを引く口。利用者向けの公開 API ではない
+// （画素の置き場は `fandhe_runtime::image_store` で、機能 crate の driver はそちらへ置く）。
 #[doc(hidden)]
 pub mod image_store;
 pub mod launch;
