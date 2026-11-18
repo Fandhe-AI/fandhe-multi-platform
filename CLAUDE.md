@@ -25,6 +25,7 @@ fandhe-multi-platform/
 │
 ├── crates/
 │   ├── cargo-fandhe/            # 機能宣言（[package.metadata.fandhe]）の検証と統合規則。`cargo fandhe check`（#1160）・`cargo fandhe gen`（#1176、ネイティブ設定の生成）・`cargo fandhe verify-scope`（#1178、選ばなかった機能の混入検査）、forbid(unsafe_code)
+│   ├── fandhe/                  # 入口 crate。利用者が依存する 1 つの crate で、端末機能を feature（対応表の id）で選ぶ。契約だけを再公開し、画面の組み立ては `fandhe::app`（#1199、TASK-21.5）
 │   ├── fandhe-cap-*/            # 端末機能 1 つにつき 1 crate（契約・OS 別実装・宣言。egui 非依存。`crates/fandhe-cap-*` を workspace の glob で拾う。移行手順は `docs/operations/capability-crate-migration.md`、TASK-21.3・21.4）
 │   ├── fandhe-core/             # 共通コア（UI DSL・状態管理・AI 型安全 DSL、forbid(unsafe_code)）
 │   │   ├── src/lib.rs           # 役割要約・モジュール地図（ui / state / token / screens）

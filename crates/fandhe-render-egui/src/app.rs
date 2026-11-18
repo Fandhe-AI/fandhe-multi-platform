@@ -348,6 +348,8 @@ pub struct ProxyApp<S = SampleState> {
     /// [`Self::with_effect`] 経由で注入される。既定 `None`（大半の画面は端末 I/O を
     /// 持たないため、フックなしのまま何もしない）。
     effect: Option<EffectFn<S>>,
+    /// このフレームに来た戻る操作を画面が処理しなかった（[`ProxyAppDyn::take_unhandled_back`]）。
+    unhandled_back: bool,
 }
 
 /// Xvfb 上での自動起動確認用: 起動から一定フレーム後にスクリーンショットを要求し、
@@ -443,6 +445,7 @@ impl<S> ProxyApp<S> {
             completions_rx,
             waker: Arc::new(EguiWaker(ctx.clone())),
             effect: None,
+            unhandled_back: false,
         }
     }
 
@@ -510,6 +513,12 @@ pub trait ProxyAppDyn: EguiApp {
     /// [`ProxyApp::set_autoshot`] の dyn 越し版（Issue #715）。名前指定で解決した
     /// 生成画面にも native 自動撮影（`FANDHE_PROXY_AUTOSHOT`）を配線できるようにする。
     fn set_autoshot(&mut self, output_path: std::path::PathBuf, save_failed: Arc<AtomicBool>);
+
+    /// 直前の `update` で来た戻る操作（Esc・Android の戻る）を画面が処理しなかったら `true` を返し、記録を消す。
+    /// 親（[`crate::Menu`]）が子の画面を閉じるのに使う。既定は `false`（戻る操作を外へ渡さない）。
+    fn take_unhandled_back(&mut self) -> bool {
+        false
+    }
 }
 
 impl<S: 'static> ProxyAppDyn for ProxyApp<S> {
@@ -519,6 +528,10 @@ impl<S: 'static> ProxyAppDyn for ProxyApp<S> {
 
     fn set_autoshot(&mut self, output_path: std::path::PathBuf, save_failed: Arc<AtomicBool>) {
         ProxyApp::set_autoshot(self, output_path, save_failed);
+    }
+
+    fn take_unhandled_back(&mut self) -> bool {
+        std::mem::take(&mut self.unhandled_back)
     }
 }
 
@@ -598,7 +611,11 @@ impl<S: 'static> EguiApp for ProxyApp<S> {
         // 誤判定を招く。`Fixed` はゼロコピーになった以上、この 2 回目の呼び出し自体の
         // コストは小さく単純化を優先した。codex-review 指摘 P1 の判断根拠）。
         let screen_after_render = self.source.build(self.store.state());
-        crate::dispatch_back_if_requested(ctx, &screen_after_render, &mut self.store);
+        // 画面が処理しなかった戻る操作は、親（`Menu`）が [`ProxyAppDyn::take_unhandled_back`] で受け取る。
+        self.unhandled_back = crate::render::take_back_request(ctx)
+            && !self
+                .store
+                .dispatch(&screen_after_render, &fandhe_core::Event::BackRequested);
 
         // 汎用 I/O 起動フック（Issue #748）。`drain_completions` で確定した最新状態
         // （上記 `dispatch_back_if_requested` までの反映を経た `store.state()`）を渡し、
@@ -616,9 +633,15 @@ impl<S: 'static> EguiApp for ProxyApp<S> {
     /// （TTS の子プロセス等）を明示的に止めるためのもの（Issue #865 の codex-review P1 指摘）。
     /// 何を止めるかは端末機能の配線を持つ側（`fandhe-egui-proxy`）が登録する。
     fn on_exit(&mut self) {
-        if let Some((on_exit, _)) = TEARDOWN_HOOKS.get() {
-            on_exit();
-        }
+        run_exit_hook();
+    }
+}
+
+/// 登録済みの終了フック（[`set_teardown_hooks`] の `on_exit`）を呼ぶ。プロセス全体の端末資源を止めるため、
+/// 画面の切り替えでは呼ばず、ウィンドウを閉じる経路（`EguiApp::on_exit`）からだけ呼ぶ。
+pub(crate) fn run_exit_hook() {
+    if let Some((on_exit, _)) = TEARDOWN_HOOKS.get() {
+        on_exit();
     }
 }
 

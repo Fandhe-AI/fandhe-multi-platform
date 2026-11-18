@@ -199,6 +199,14 @@ pub fn dispatch_back_if_requested<S>(
     screen: &Screen<S>,
     store: &mut StateStore<S>,
 ) -> bool {
+    take_back_request(ctx) && store.dispatch(screen, &Event::BackRequested)
+}
+
+/// OS の戻る操作（Esc・`BrowserBack`）がこのフレームに来たかを判定し、来ていれば消費する。
+/// 判定の規則（テキスト入力のフォーカス中の Esc を除く・キーリピートを除く・1 フレーム分の持ち越し）は
+/// [`dispatch_back_if_requested`] の doc のとおり。画面が処理しなかった戻る操作を親（[`crate::Menu`]）へ
+/// 渡すため、[`crate::ProxyApp`] は判定と画面への配送を分けて呼ぶ。毎フレーム呼ぶ契約も同じ。
+pub(crate) fn take_back_request(ctx: &egui::Context) -> bool {
     // Cursor Bugbot 指摘（PR #733）: `egui::Memory::set_focus_lock_filter`（`escape: true`
     // をテキスト入力へ適用する箇所、`Node::TextField` 描画部）は
     // `had_focus_last_frame(id) && has_focus(id)` の両方を満たすフレームでしか
@@ -242,10 +250,7 @@ pub fn dispatch_back_if_requested<S>(
         && ctx.input_mut(|i| {
             consume_key_ignoring_repeat(i, egui::Modifiers::NONE, egui::Key::Escape)
         });
-    if !escape_requested && !browser_back_pressed {
-        return false;
-    }
-    store.dispatch(screen, &Event::BackRequested)
+    escape_requested || browser_back_pressed
 }
 
 /// [`dispatch_back_if_requested`] が「直前フレームでテキスト入力がフォーカスしていたか」を

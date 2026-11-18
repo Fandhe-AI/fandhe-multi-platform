@@ -25,6 +25,7 @@ pub mod font;
 #[doc(hidden)]
 pub mod image_store;
 pub mod launch;
+pub mod menu;
 pub mod paint_command;
 pub mod recyclers;
 mod render;
@@ -34,6 +35,7 @@ pub mod text_role;
 
 pub use app::{Completion, CompletionSender, EffectFn, ProxyApp, ProxyAppDyn};
 pub use launch::{EguiApp, LaunchContext, LaunchError};
+pub use menu::Menu;
 pub use recyclers::VirtualListRecyclers;
 pub use render::{
     dispatch_back_if_requested, render_screen, render_screen_with_recyclers, save_color_image,
