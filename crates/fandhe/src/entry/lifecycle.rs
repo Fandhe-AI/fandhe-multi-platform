@@ -24,11 +24,20 @@ pub(crate) fn before_launch() {
     // （登録が無いとファイル起動は転送されない）。
     #[cfg(all(target_os = "windows", feature = "file-association"))]
     fandhe_cap_file_association::windows::register_route();
-    // Issue #1216: URL 起動で既存インスタンスがあれば pipe で転送して終える。受ける側なら URL を受け口へ入れて続ける。
-    #[cfg(all(target_os = "windows", feature = "url-scheme"))]
+    // Issue #1216: URL・ファイル起動で既存インスタンスがあれば pipe で転送して終える。受ける側なら受け口へ入れて続ける。
+    // 調停は url-scheme の `startup` が持つ。file-association だけを選んだアプリも同じ調停を通す
+    // （通さないとファイル起動の引数が受け口へ届かない）。
+    #[cfg(all(
+        target_os = "windows",
+        any(feature = "url-scheme", feature = "file-association")
+    ))]
     {
         let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
-        if let Some(code) = fandhe_cap_url_scheme::windows::win::startup(&args) {
+        #[cfg(feature = "url-scheme")]
+        let forwarded = fandhe_cap_url_scheme::windows::win::startup(&args);
+        #[cfg(not(feature = "url-scheme"))]
+        let forwarded = fandhe_cap_file_association::windows::startup(&args);
+        if let Some(code) = forwarded {
             std::process::exit(code);
         }
     }
