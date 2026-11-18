@@ -27,7 +27,7 @@ fn button_after_long_text_is_reachable_by_scrolling() {
         .with_size(size)
         .build_ui_state(
             move |ui, store: &mut StateStore<S>| {
-                fandhe_egui_proxy::render_screen(ui, &screen, store);
+                fandhe_render_egui::render_screen(ui, &screen, store);
             },
             StateStore::new(S),
         );
@@ -67,7 +67,7 @@ fn virtual_list_rows_are_reachable_below_many_buttons() {
         .with_size(size)
         .build_ui_state(
             move |ui, store: &mut StateStore<S>| {
-                fandhe_egui_proxy::render_screen(ui, &screen, store);
+                fandhe_render_egui::render_screen(ui, &screen, store);
             },
             StateStore::new(S),
         );
@@ -131,7 +131,7 @@ fn touch_scroll_reaches_everything(height: f32, outer_scrolls: bool) {
         .with_step_dt(1.0 / 60.0)
         .build_ui_state(
             move |ui, store: &mut StateStore<S>| {
-                fandhe_egui_proxy::render_screen(ui, &screen, store);
+                fandhe_render_egui::render_screen(ui, &screen, store);
             },
             StateStore::new(S),
         );

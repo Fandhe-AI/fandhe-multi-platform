@@ -239,7 +239,7 @@ impl FrameMetricsApp {
     /// 計測アプリを構築する。`result_path` は Android のみ結果 JSON の書き出し先を指定する
     /// （デスクトップ/iOS は `None`、オーバーレイと stderr のみで結果を提示する）。
     pub fn new(ctx: &egui::Context, result_path: Option<std::path::PathBuf>) -> Self {
-        crate::font::install_cjk_font(ctx);
+        fandhe_render_egui::font::install_cjk_font(ctx);
         Self {
             screen: frame_metrics_screen(),
             store: StateStore::new(FrameMetricsState::default()),
@@ -277,7 +277,7 @@ impl fandhe_render_egui::EguiApp for FrameMetricsApp {
         self.store.state().tick.set(next_tick);
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            crate::render_screen(ui, &self.screen, &mut self.store);
+            fandhe_render_egui::render_screen(ui, &self.screen, &mut self.store);
         });
 
         if let Some(summary) = self.collector.summary().cloned() {
@@ -333,7 +333,7 @@ pub fn run_ios() -> Result<(), fandhe_render_egui::LaunchError> {
 /// [`FrameMetricsApp::on_measurement_complete`] 側で panic にせず stderr へ記録する
 /// （panic を API 契約にしない、coding-rust.md 準拠）。
 #[cfg(target_os = "android")]
-pub fn run_android(app: winit::platform::android::activity::AndroidApp) {
+pub fn run_android(app: fandhe::__private::AndroidApp) {
     let result_path = app
         .internal_data_path()
         .unwrap_or_default()

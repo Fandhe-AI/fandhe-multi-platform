@@ -7,7 +7,7 @@
  *   node scripts/device/migrate-capability.mjs inventory <id> [--module <stem>]   移す対象と参照を表示する（読み取りのみ）
  *   node scripts/device/migrate-capability.mjs scaffold <id> [--module <stem>] [--dry-run]
  *                                                                                  git mv で機能 crate を作り、機械的に直せる記述を直す
- *   node scripts/device/migrate-capability.mjs sync [--check]                      gallery の機能 crate の依存を
+ *   node scripts/device/migrate-capability.mjs sync [--check]                      gallery の機能 crate の依存と入口 crate の feature を
  *                                                                                  `crates/fandhe-cap-*` から書き直す（冪等）。--check は書かずに、
  *                                                                                  目印ブロックのずれと公開入口 `pub fn platform_<stem>()` の欠けを検査する
  *
@@ -264,6 +264,8 @@ export function replaceBlock(text, n, makeLines) {
 }
 
 export const depLines = (ids) => (ind) => ids.map((id) => `${ind}fandhe-cap-${id} = { path = "../fandhe-cap-${id}" }`);
+/** 入口 crate `fandhe` の全機能の feature（gallery の入口が全機能の起動前の登録・終了処理を行うため、#1200）。 */
+export const fandheFeatureLines = (ids) => (ind) => [`${ind}fandhe = { path = "../fandhe", features = [`, ...ids.map((id) => `${ind}    "${id}",`), `${ind}] }`];
 // ---- 実体 ----
 
 const git = (R, ...args) => execFileSync("git", args, { cwd: R, encoding: "utf8" });
@@ -324,7 +326,7 @@ function sync(R, check = false) {
   const caps = listCaps(R);
   const ids = caps.map((c) => c.id);
   const edits = [
-    ["crates/fandhe-gallery/Cargo.toml", (t) => replaceBlock(t, 0, depLines(ids))],
+    ["crates/fandhe-gallery/Cargo.toml", (t) => replaceBlock(replaceBlock(t, 0, depLines(ids)), 1, fandheFeatureLines(ids))],
   ];
   let ok = true;
   for (const [p, f] of edits) {

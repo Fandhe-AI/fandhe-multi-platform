@@ -165,10 +165,10 @@ fn split_lines(text: &str) -> Vec<String> {
 /// `Event::Text` + `Event::Key::Enter` に分解して積む（空セグメントは送らない）。
 fn push_text_with_newlines(events: &mut Vec<egui::Event>, text: &str) {
     let mut segments = split_lines(text).into_iter();
-    if let Some(first) = segments.next() {
-        if !first.is_empty() {
-            events.push(egui::Event::Text(first));
-        }
+    if let Some(first) = segments.next()
+        && !first.is_empty()
+    {
+        events.push(egui::Event::Text(first));
     }
     for segment in segments {
         push_enter(events);
@@ -501,12 +501,16 @@ mod tests {
         // 同じ `next`（Android 側バッファは変化していない）で再評価する。
         let second = keyboard_events(&first.prev, &next);
         assert_eq!(key_presses(&second.events), 1);
-        assert!(second
-            .events
-            .contains(&egui::Event::Ime(egui::ImeEvent::Enabled)));
-        assert!(second
-            .events
-            .contains(&egui::Event::Ime(egui::ImeEvent::Preedit("か".to_string()))));
+        assert!(
+            second
+                .events
+                .contains(&egui::Event::Ime(egui::ImeEvent::Enabled))
+        );
+        assert!(
+            second
+                .events
+                .contains(&egui::Event::Ime(egui::ImeEvent::Preedit("か".to_string())))
+        );
         assert_eq!(second.prev, next);
     }
 

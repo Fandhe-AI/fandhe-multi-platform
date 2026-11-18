@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI の `cargo test` job で GNU ld が desktop_render（fandhe-egui-proxy、GUI 依存の
+# CI の `cargo test` job で GNU ld が desktop_render（fandhe-render-egui、GUI 依存の
 # 大量 rlib を静的リンクするテストバイナリ）のリンク時に OOM killer に kill される
 # 事象（親 Issue #630）を、rust-toolchain.toml 固定の rustc 1.88.0 に同梱される
 # rust-lld（`<sysroot>/lib/rustlib/<host>/bin/gcc-ld/ld.lld`）へ切り替えて回避する
@@ -14,7 +14,7 @@
 # lld 使用の証拠にならないため、`--verify-link` モードで fail-closed に機械検証する。
 #
 # 使い方（ローカル）:
-#   RUSTFLAGS="$(bash scripts/build/lld-rustflags.sh)" cargo test -p fandhe-egui-proxy --test desktop_render --no-run
+#   RUSTFLAGS="$(bash scripts/build/lld-rustflags.sh)" cargo test -p fandhe-render-egui --test desktop_render --no-run
 #
 # 使い方（CI・.github/workflows/ci.yml の test job から呼ばれる想定）:
 #   bash scripts/build/lld-rustflags.sh            # RUSTFLAGS の値を stdout へ出力

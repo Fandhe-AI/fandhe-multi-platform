@@ -6,10 +6,10 @@
 //! winit を経由して egui へ届かない（実機実測）。`ios/fandhe_ios_text_input.m`
 //! （`build.rs` が iOS ターゲットで常時コンパイルする ObjC）が、ゼロサイズの
 //! `UITextField` を代わりに first responder にすることで `UITextInput` 実装一式を
-//! 借用し、変更のたびに本モジュールの `#[no_mangle]` コールバックを呼ぶ。
+//! 借用し、変更のたびに本モジュールの `no_mangle` コールバックを呼ぶ。
 //!
 //! 変換ロジック本体（差分 → egui イベント列）は Android（#796）と共有する
-//! [`crate::soft_keyboard`] の純関数へ委譲する。`.m` 側のコールバックは 3 種類
+//! [`super::soft_keyboard`] の純関数へ委譲する。`.m` 側のコールバックは 3 種類
 //! （文字列変更 `_changed` / Backspace / Enter）が UIKit のメインスレッドから任意の
 //! 順序・タイミングで届く（イベント駆動でありポーリングではない）。egui へ届ける際は
 //! この到着順を保つ必要がある（例: 「あ」入力 → 確定 → Enter の順に届いたのに
@@ -36,7 +36,7 @@
 
 use std::collections::VecDeque;
 
-use crate::soft_keyboard::{keyboard_events, KeyboardSnapshot};
+use super::soft_keyboard::{KeyboardSnapshot, keyboard_events};
 #[cfg(any(test, target_os = "ios"))]
 use fandhe_runtime::TextInputHintError;
 
@@ -209,7 +209,7 @@ mod platform {
     /// バイト列を指す（`NSString.UTF8String` が返すバッファ、呼び出し完了まで有効）。
     /// この関数は呼び出し中に `to_string_lossy` でコピーを作るのみで、ポインタを保存しない。
     #[allow(unsafe_code)]
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     extern "C" fn fandhe_ios_text_input_changed(
         text_utf8: *const c_char,
         compose_start: isize,
@@ -228,7 +228,7 @@ mod platform {
         } else {
             Some((compose_start as usize, compose_end as usize))
         };
-        let next = crate::soft_keyboard::snapshot(&text, compose);
+        let next = super::super::soft_keyboard::snapshot(&text, compose);
         push_snapshot(next);
     }
 
@@ -242,7 +242,7 @@ mod platform {
     /// アプリ本体へのみリンクされるため他シンボルと衝突しない
     /// （[`fandhe_ios_text_input_changed`] と同じ根拠）。
     #[allow(unsafe_code)]
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     extern "C" fn fandhe_ios_text_input_backspace() {
         push_key_event(egui::Key::Backspace);
     }
@@ -253,7 +253,7 @@ mod platform {
     /// この関数自体は `unsafe` 操作を含まない（上記 `fandhe_ios_text_input_backspace`
     /// と同じ根拠）。
     #[allow(unsafe_code)]
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     extern "C" fn fandhe_ios_text_input_return() {
         push_key_event(egui::Key::Enter);
     }
@@ -265,7 +265,7 @@ mod platform {
     /// この関数自体は `unsafe` 操作を含まない（上記 `fandhe_ios_text_input_backspace`
     /// と同じ根拠）。
     #[allow(unsafe_code)]
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     extern "C" fn fandhe_ios_text_input_reset() {
         reset_state();
     }
@@ -315,7 +315,7 @@ mod platform {
         fn fandhe_ios_text_input_clear();
     }
 
-    /// [`crate::ios::run`] が組み立てる実描画 `Box<dyn EguiApp>` を包み、`update` の
+    /// [`super::ios::run`] が組み立てる画面 を包み、`update` の
     /// 先頭で ObjC 側の `WinitUIView` メソッド差し込み（`.m` 側で冪等、`WinitUIView` 未登録
     /// なら次フレームも無害に再試行される契約）・[`egui::Context`] の保存・[`QUEUE`] の
     /// 消化を行い、`inner.update` に委譲した後で focus 遷移検知を行う
@@ -396,6 +396,11 @@ mod platform {
         /// 実機実測済み）。
         fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
             visuals.panel_fill.to_normalized_gamma_f32()
+        }
+
+        /// 終了処理は包んだ画面へ渡す（`ProxyApp`・`Menu` は `on_exit` で端末機能を止める）。
+        fn on_exit(&mut self) {
+            self.inner.on_exit();
         }
     }
 }
@@ -510,9 +515,11 @@ mod tests {
         // より後ろの `Enter` はこのフレームでは処理されず残る。
         let (events2, prev_after_second, remaining2) = drain_pending(prev_after_first, remaining);
         assert_eq!(key_count(&events2), 1); // Backspace のみ（Enter はまだ）
-        assert!(events2
-            .iter()
-            .any(|e| matches!(e, egui::Event::Ime(egui::ImeEvent::Preedit(_)))));
+        assert!(
+            events2
+                .iter()
+                .any(|e| matches!(e, egui::Event::Ime(egui::ImeEvent::Preedit(_))))
+        );
         assert_eq!(remaining2.len(), 1);
         assert_eq!(prev_after_second, deferred_snap);
     }

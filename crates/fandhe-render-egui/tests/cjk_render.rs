@@ -2,7 +2,7 @@
 //!
 //! `desktop_render.rs`（TASK-1.2）と同じ `egui_kittest`（wgpu バックエンド）の枠組みで
 //! `sample_screen()` を描画するが、本ファイルは描画前に必ず
-//! [`fandhe_egui_proxy::font::install_cjk_font`] を通す点が異なる（`ProxyApp::new` と
+//! [`fandhe_render_egui::font::install_cjk_font`] を通す点が異なる（`ProxyApp::new` と
 //! 同じ配線を `Harness` 経由で再現する）。日本語ラベル（「メモ」「カウントを増やす」等）が
 //! tofu 表示でないことを PNG エビデンスとして `CARGO_TARGET_TMPDIR` へ保存し、
 //! REQ-10 受け入れ基準（CJK 対応フォントを既定の同梱フォントセットに含め、日本語テキストが
@@ -44,9 +44,9 @@ fn build_harness() -> egui_kittest::Harness<'static, StateStore<SampleState>> {
         .build_ui_state(
             move |ui, store: &mut StateStore<SampleState>| {
                 install_font_once.call_once(|| {
-                    fandhe_egui_proxy::font::install_cjk_font(ui.ctx());
+                    fandhe_render_egui::font::install_cjk_font(ui.ctx());
                 });
-                fandhe_egui_proxy::render_screen(ui, &screen, store);
+                fandhe_render_egui::render_screen(ui, &screen, store);
             },
             StateStore::new(SampleState::default()),
         )

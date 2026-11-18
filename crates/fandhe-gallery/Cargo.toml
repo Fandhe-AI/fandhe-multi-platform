@@ -8,16 +8,21 @@ repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
 # 配布しない。`docs/architecture/consumer-app-structure.md` §3。
 publish = false
 
-# 計測・デバッグ用の feature は、すべて `fandhe-egui-proxy` の同名 feature へ転送する
-# （入口の切替は egui-proxy の `ios.rs`・`frame_metrics.rs` が持つ）。どれも既定 off のまま
-# ストア提出物に混ざらない（security.md A05）。
+# 計測・デバッグ用の feature は本 crate だけが持つ（入口の差し替えは `src/main.rs`・`src/lib.rs`、
+# 画面名の読み出しは `src/select.rs`）。どれも既定 off のままストア提出物に混ざらない（security.md A05）。
 [features]
-frame-metrics = ["fandhe-egui-proxy/frame-metrics"]
-cold-start-probe = ["fandhe-egui-proxy/cold-start-probe"]
-debug-proxy-app = ["fandhe-egui-proxy/debug-proxy-app"]
+# TASK-5.3（Issue #238）: 固定 60Hz 環境でのフレームレート計測専用アプリ（`src/demo/frame_metrics.rs`）へ入口を差し替える。
+frame-metrics = []
+# TASK-5.1（Issue #236 / #593）: iOS・デスクトップの入口をコールドスタート計測（`src/demo/cold_start.rs`）で包む。
+# 既定 off で、ストア配布ビルドに計測用の出力を残さない。`frame-metrics` と同時なら本 feature を優先する。
+cold-start-probe = []
+# Issue #718: Android の `debug.fandhe.proxy_app` システムプロパティで表示画面を切り替える経路（`src/select.rs`）。
+# 既定 off で、release ビルドには `adb shell setprop` で画面を差し替える経路自体が入らない
+# （security.md A05）。`scripts/android/verify-tv-focus.sh` が有効にしてビルドする。
+debug-proxy-app = []
 
 # Android は cdylib（`android_main`）、Web は wasm の cdylib（`#[wasm_bindgen(start)]`）を使う。
-# rlib は bin（`main.rs`）が `build_app` を使うために要る。
+# rlib は bin（`main.rs`）が `#[fandhe::main]` の生成した `main` を呼ぶために要る。
 [lib]
 name = "fandhe_gallery"
 crate-type = ["cdylib", "rlib"]
@@ -84,8 +89,12 @@ cargo-fandhe = { path = "../cargo-fandhe" }
 
 [dependencies]
 fandhe-core = { path = "../fandhe-core" }
-fandhe-egui-proxy = { path = "../fandhe-egui-proxy" }
+# 各 OS の入口（`#[fandhe::main]`、Issue #1200）。wasm32 では端末機能を載せないため feature なしで使う。
+# 端末機能の feature は下の wasm32 以外の分岐で足す（resolver 2 は対象外のターゲットの feature を合成しない）。
+fandhe = { path = "../fandhe" }
 fandhe-render-egui = { path = "../fandhe-render-egui" }
+# プロトタイプアプリ（一覧・詳細・設定の 3 画面、TASK-2.2-S5 / #52）を `FANDHE_PROXY_APP=prototype` で出す。
+fandhe-prototype = { path = "../fandhe-prototype" }
 # `audio_play` の effect の合成（media-playback → now-playing-controls、registry.rs）が `CompletionSender` を受ける。
 fandhe-runtime = { path = "../fandhe-runtime" }
 egui = { workspace = true }
@@ -237,17 +246,164 @@ fandhe-cap-wifi-connect = { path = "../fandhe-cap-wifi-connect" }
 fandhe-cap-wifi-info = { path = "../fandhe-cap-wifi-info" }
 fandhe-cap-window-management = { path = "../fandhe-cap-window-management" }
 # END fandhe-cap
+# 入口 crate の端末機能の feature。入口が全機能の起動前の登録・終了処理・Activity 再生成時の破棄を行う。
+# BEGIN fandhe-cap（`node scripts/device/migrate-capability.mjs sync` が書き直す。手で編集しない）
+fandhe = { path = "../fandhe", features = [
+    "accessibility-prefs",
+    "activity-recognition",
+    "alarm",
+    "app-attest",
+    "app-badge",
+    "app-lifecycle",
+    "app-progress-attention",
+    "app-shortcuts",
+    "ar",
+    "audio-devices",
+    "audio-session",
+    "autofill-otp",
+    "background-download",
+    "background-task",
+    "background-upload",
+    "barcode-scan",
+    "biometric-auth",
+    "ble-peripheral",
+    "bluetooth-classic",
+    "bluetooth-le",
+    "calendar",
+    "call-ui",
+    "camera-capture",
+    "camera-preview-stream",
+    "capture-protection",
+    "car-display",
+    "clipboard",
+    "color-picker",
+    "companion-device",
+    "compass-heading",
+    "compose-mail-sms",
+    "contacts",
+    "deep-link",
+    "device-identifier",
+    "device-info",
+    "digital-credentials",
+    "display-refresh-hdr",
+    "document-scan",
+    "drag-drop",
+    "dynamic-type",
+    "environment-sensors",
+    "external-app-launch",
+    "eye-dropper",
+    "file-association",
+    "file-picker",
+    "file-preview",
+    "file-provider",
+    "file-watch",
+    "flashlight",
+    "focus-mode-status",
+    "foldable-posture",
+    "fullscreen-immersive",
+    "gamepad",
+    "geocoding-search",
+    "geofence",
+    "global-hotkey",
+    "haptics",
+    "health-data",
+    "home-widget",
+    "http-get",
+    "human-presence",
+    "image-generation",
+    "image-recognition",
+    "in-app-browser",
+    "in-app-review",
+    "lan-discovery",
+    "launch-at-login",
+    "live-activity",
+    "local-fonts",
+    "local-peer-connect",
+    "local-storage-kv",
+    "location",
+    "managed-app-config",
+    "map-view",
+    "media-cast",
+    "media-playback",
+    "media-transcode",
+    "memory-pressure",
+    "mic-record",
+    "midi",
+    "ml-inference",
+    "motion-raw-sensors",
+    "multi-display",
+    "music-library",
+    "network-status",
+    "nfc",
+    "nfc-card-emulation",
+    "nlp",
+    "notification",
+    "now-playing-controls",
+    "on-device-llm",
+    "open-in-shell",
+    "open-system-settings",
+    "passkey-signin",
+    "payment-request",
+    "pdf-viewer",
+    "pedometer",
+    "pen-stylus",
+    "per-app-language",
+    "photo-library",
+    "photo-picker",
+    "picture-in-picture",
+    "power-state",
+    "print",
+    "quick-settings-tile",
+    "radio-control",
+    "recent-documents",
+    "removable-storage",
+    "safe-area-insets",
+    "scanner-devices",
+    "screen-brightness",
+    "screen-capture",
+    "screen-orientation",
+    "screen-wake-lock",
+    "secure-credential",
+    "serial-port",
+    "share-receive",
+    "share-sheet",
+    "sleep-lock-events",
+    "smart-home",
+    "sound-classification",
+    "speech-recognition",
+    "spell-check",
+    "spotlight-index",
+    "system-accent-color",
+    "system-sound",
+    "system-tray",
+    "tilt-motion",
+    "translation",
+    "tts",
+    "url-scheme",
+    "usb-device",
+    "user-idle",
+    "uwb-ranging",
+    "video-capture",
+    "video-transcode",
+    "volume-control",
+    "wallpaper-set",
+    "web-auth-session",
+    "wifi-connect",
+    "wifi-info",
+    "window-management",
+] }
+# END fandhe-cap
 
-# Windows の共通層。起動時にメインウィンドウの HWND を控える（端末機能の有無によらない起動の定型、TASK-21.4 / #1184）。
-[target.'cfg(target_os = "windows")'.dependencies]
-fandhe-platform-windows = { path = "../fandhe-platform-windows" }
-
-# Android の共通層。通知の片付け等が `AndroidApp` を要するため、`android_main` が片付けの前に自分で登録する。
+# debug システムプロパティの読み出し（`__system_property_get`、feature `debug-proxy-app`、`src/select.rs`）。
+# libc は android-activity 等の推移依存で解決済みで、新しい package は増えない。
 [target.'cfg(target_os = "android")'.dependencies]
-fandhe-platform-android = { path = "../fandhe-platform-android" }
+libc = "0.2"
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = { workspace = true }
+# 検証アプリ（プロトタイプ・TV フォーカス）の実描画テスト（`tests/`）。Android は egui/accesskit の不整合（E0027）を
+# 避けるため対象外（`fandhe-render-egui` と同じ判断）。テストビルド時だけ eframe の "accesskit" を明示する。
+[target.'cfg(not(target_os = "android"))'.dev-dependencies]
+egui_kittest = { workspace = true, features = ["wgpu"] }
+eframe = { workspace = true, default-features = false, features = ["accesskit"] }
 
 [lints]
 workspace = true

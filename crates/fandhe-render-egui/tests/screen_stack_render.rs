@@ -25,7 +25,7 @@ static GPU_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
 /// プロセス内で一度「アダプタなし」と判定したら以降は `Harness` の再構築を省略する。
 static GPU_UNAVAILABLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// [`fandhe_egui_proxy::app::ScreenSource::FromState`]（`ProxyApp::with_screen_fn`）と
+/// [`fandhe_render_egui::app::ScreenSource::FromState`]（`ProxyApp::with_screen_fn`）と
 /// 同型のループで `Harness` を組み立てる。描画（`render_screen`）でボタン処理により
 /// `store` の画面スタックが変わりうるため、`dispatch_back_if_requested` へ渡す画面は
 /// 描画後に `current_screen` で `store` から引き直したものを使う（描画に使った画面を
@@ -36,9 +36,9 @@ fn build_harness() -> egui_kittest::Harness<'static, StateStore<ListDetailState>
         .build_ui_state(
             move |ui, store: &mut StateStore<ListDetailState>| {
                 let screen = current_screen(store.state());
-                fandhe_egui_proxy::render_screen(ui, &screen, store);
+                fandhe_render_egui::render_screen(ui, &screen, store);
                 let screen_after_render = current_screen(store.state());
-                fandhe_egui_proxy::dispatch_back_if_requested(
+                fandhe_render_egui::dispatch_back_if_requested(
                     ui.ctx(),
                     &screen_after_render,
                     store,
@@ -212,7 +212,7 @@ fn escape_key_consumed_by_modal_does_not_pop_detail_screen() {
             .build_ui_state(
                 move |ui, store: &mut StateStore<ListDetailState>| {
                     let screen = current_screen(store.state());
-                    fandhe_egui_proxy::render_screen(ui, &screen, store);
+                    fandhe_render_egui::render_screen(ui, &screen, store);
 
                     if modal_open.load(std::sync::atomic::Ordering::Relaxed) {
                         let response = egui::Modal::new(egui::Id::new("test-modal"))
@@ -223,7 +223,7 @@ fn escape_key_consumed_by_modal_does_not_pop_detail_screen() {
                     }
 
                     let screen_after_render = current_screen(store.state());
-                    fandhe_egui_proxy::dispatch_back_if_requested(
+                    fandhe_render_egui::dispatch_back_if_requested(
                         ui.ctx(),
                         &screen_after_render,
                         store,

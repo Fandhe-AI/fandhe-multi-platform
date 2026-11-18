@@ -38,7 +38,7 @@ fn build_harness() -> egui_kittest::Harness<'static, StateStore<ConfirmDialogSta
         .build_ui_state(
             move |ui, store: &mut StateStore<ConfirmDialogState>| {
                 let screen = confirm_dialog_screen(store.state());
-                fandhe_egui_proxy::render_screen(ui, &screen, store);
+                fandhe_render_egui::render_screen(ui, &screen, store);
             },
             StateStore::new(ConfirmDialogState::default()),
         )
@@ -226,7 +226,7 @@ fn build_count_harness_or_skip(
     screen: Screen<CountState>,
 ) -> Option<egui_kittest::Harness<'static, StateStore<CountState>>> {
     let build = move |ui: &mut egui::Ui, store: &mut StateStore<CountState>| {
-        fandhe_egui_proxy::render_screen(ui, &screen, store);
+        fandhe_render_egui::render_screen(ui, &screen, store);
     };
 
     if std::env::var_os("FANDHE_REQUIRE_DESKTOP_RENDER").is_some() {

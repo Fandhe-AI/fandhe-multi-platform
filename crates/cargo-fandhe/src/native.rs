@@ -954,13 +954,12 @@ pub(crate) fn render(
         a
     }) {
         match &app.cdylib {
-            None => errs.push(format!(
-                "android: {} に cdylib の lib target がありません。Cargo.toml の [lib] に crate-type = [\"cdylib\", ...] を足してください",
-                app.name
+            // Android の入口（`android_main`）は cdylib にしか置けない。cdylib の無いアプリは Android を対象にしない
+            // （iOS・デスクトップだけのアプリ。Issue #1200）ので、Android の生成物を出さない。
+            None => {}
+            Some(lib) if !is_ident(lib) => errs.push(format!(
+                "android: lib 名 `{lib}` は英数字と `_` の識別子にしてください"
             )),
-            Some(lib) if !is_ident(lib) => {
-                errs.push(format!("android: lib 名 `{lib}` は英数字と `_` の識別子にしてください"))
-            }
             Some(lib) => {
                 let dirs: BTreeMap<&str, &Path> = android
                     .iter()
@@ -1503,7 +1502,11 @@ mod tests {
             f(&mut a);
             err(render(&[], &[], &[], &ok, &a))
         };
-        assert!(with(&|a| a.cdylib = None).contains("cdylib"));
+        // cdylib が無いアプリは Android を対象にしない（Android の生成物を出さずに通る。Issue #1200）。
+        let mut no_lib = app();
+        no_lib.cdylib = None;
+        let files = render(&[], &[], &[], &ok, &no_lib).expect("cdylib が無くても通る");
+        assert!(!files.keys().any(|k| k.starts_with("android/")));
         assert!(with(&|a| a.bins.clear()).contains("bin target"));
         assert!(with(&|a| a.bins.push("b".into())).contains("bin target"));
         assert!(with(&|a| a.version = "1.0.0-rc.1".into()).contains("pre-release"));

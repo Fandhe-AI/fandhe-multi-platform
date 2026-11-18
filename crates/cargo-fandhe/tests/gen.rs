@@ -999,3 +999,23 @@ fn app_backup_exclusions_reject_bad_path() {
     let m = make_ws("bk-bad", "app", &[("app", app)]);
     assert!(errs(generate(Some(&m))).contains("fandhe-app.android.backup-exclusions[0].path"));
 }
+
+/// cdylib の無いアプリ（iOS・デスクトップだけ）は Android を対象にしないため、Android を出さずに通る（Issue #1200）。
+#[test]
+fn app_without_cdylib_skips_android() {
+    let (dir, toml) = cap("cam");
+    let app = pkg(
+        "app",
+        "[package.metadata.fandhe-app.ios]\nbundle-id = \"com.example.app\"\n\n\
+         [dependencies]\nfandhe-cap-cam = { path = \"../fandhe-cap-cam\" }\n\
+         [package.metadata.fandhe-app.ios.usage-descriptions]\nNSCameraUsageDescription = \"写真を撮ります\"\n",
+    );
+    let m = make_ws("nocdylib", "app", &[(&dir, toml), ("app", app)]);
+    let g = generate(Some(&m)).expect("cdylib が無くても iOS は出る");
+    assert!(g.files.contains_key("ios/Info.plist"));
+    assert!(
+        !g.files.keys().any(|k| k.starts_with("android/")),
+        "{:?}",
+        g.files.keys()
+    );
+}

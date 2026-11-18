@@ -1,0 +1,20 @@
+[package]
+name = "fandhe-macros"
+version = "0.2.0"
+edition = "2024"
+description = "fandhe-multi-platform の `#[fandhe::main]`（各 OS の入口を生成する属性）。利用者は入口 crate `fandhe` 経由で使う"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
+# 入口 crate `fandhe` と揃える（公開設定は #1216 の範囲）。
+publish = false
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true, features = ["full"] }
+
+[lints]
+workspace = true

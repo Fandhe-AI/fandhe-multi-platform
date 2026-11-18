@@ -11,7 +11,7 @@
 - 本書より古い文書と食い違う場合は、本書を正とします
 - 古い文書の「独自レンダラ」は、第 2 バックエンドの候補と読み替えます
 - 旧構造（`feature device`、手書きの設定、`fandhe-egui-proxy/src/device/`）は #1194 で撤去しました。
-  `fandhe-egui-proxy` に残る各 OS の入口は、入口 crate（#1199）と `#[fandhe::main]`（#1200）で撤去します
+  `fandhe-egui-proxy` に残っていた各 OS の入口は、入口 crate（#1199）と `#[fandhe::main]`（#1200）へ移して crate ごと撤去しました
 
 ## 2. 決定の要約
 
@@ -31,7 +31,7 @@ crates.io では、公開する crate の通常依存も公開が要るためで
 | crate | 役割 | 公開 | 由来・担当 issue |
 |-------|------|------|-----------------|
 | `fandhe` | 入口。機能は optional 依存の feature で選ぶ。feature 名は対応表の id で、`fandhe::<stem>` に機能 crate の crate ルート（契約と状態型に依存しない入口）を出し、`driver` は覆い隠して届かなくする。画面の組み立てと複数画面の切り替えは `fandhe::app`（`ProxyApp`・`Menu`）。web が n-a で wasm32 をコンパイルできない web-auth-session は wasm32 では出さない | する | #1199 |
-| `#[fandhe::main]` 用の proc-macro crate（`fandhe-macros`、名前は仮） | 各 OS の入口を生成。proc-macro は別 crate が必須 | する | #1200 |
+| `fandhe-macros`（名前は仮） | `#[fandhe::main]`。画面を作る関数 1 つから、デスクトップ・iOS の `main`、Android の `android_main`、Web の `start` を生成する（3.3 節）。proc-macro は別 crate が必須 | する | #1200 |
 | `cargo-fandhe` | Rust 製 CLI（`gen`・`run`・`build`） | する | #1176・#1201 |
 | `fandhe-core` | UI DSL・状態管理 | する | 既存 |
 | `fandhe-runtime` | 起床・完了通知・要求追跡（`RequestSlot`）・画素の受け渡し枠（`image_store`）・`Renderer` trait・描画層の観測値と操作（フォーカス・ファイルのドラッグ・拡大率・画面の読み戻し・ウィンドウ操作・入力欄のヒントの `HostView`。`Renderer` には載せず `RepaintWaker::host_view` で届ける）。egui 非依存 | する | #1162・#1163・#1302・#1326 |
@@ -40,11 +40,11 @@ crates.io では、公開する crate の通常依存も公開が要るためで
 | `fandhe-platform-android` / `-apple` / `-windows` / `-web` | 機能をまたいで共有する OS 層。`-windows` は HWND の保持と COM 初期化ガードだけを持ち、`windows` crate の feature は共通層が最小限（`Win32_Foundation`・`Win32_System_Com`）、各機能 crate が自分の分を宣言する | する | #1166・#1168・#1184・#1185 |
 | `fandhe-cap-<id>` | 1 機能 1 crate。OS 別実装・ObjC・Java・`build.rs`・宣言を同居 | する | #1170〜#1174、第 5 Phase |
 | `fandhe-web-dom` | Web の DOM 出力 | する | 既存 |
-| `fandhe-gallery` | 全機能を載せるカタログ（実機確認用）。画面の登録と各 OS の最終成果物（デスクトップ・iOS の bin、Android・Web の cdylib）を持つ。各 OS の設定は `cargo fandhe gen` の出力だけを使う（#1194）。各 OS の入口は #1200 までは `fandhe-egui-proxy` を使う | しない | #1165（追加済み） |
+| `fandhe-gallery` | 全機能を載せるカタログ（実機確認用）。画面の登録と各 OS の最終成果物（デスクトップ・iOS の bin、Android・Web の cdylib）を持つ。各 OS の設定は `cargo fandhe gen` の出力だけを使う（#1194）。各 OS の入口は利用者と同じ `#[fandhe::main]`（#1200）で、画面を名前で選ぶ部分と検証・計測専用のアプリ（TV フォーカス・プロトタイプ・計測）だけを持つ | しない | #1165（追加済み） |
 | `fandhe-prototype` | 検証用プロトタイプ | しない | 既存 |
 | `fandhe-winit-ime` | 入口から到達しない。第 2 バックエンド着手時に判断 | しない | 既存 |
 | `fandhe-swiftui-bridge` | watchOS / visionOS 用。入口から到達しない | しない | 既存 |
-| `fandhe-egui-proxy` | 上記へ分解して消す。端末機能の配線と一括切り替えは撤去済み（#1355・#1194）で、各 OS の入口・ソフトキーボード・TV のフォーカス移動・計測用の入口が残る | 消滅 | #1164〜#1168・#1194・#1199・#1200 |
+| `fandhe-egui-proxy` | 撤去済み。描画と起動は `fandhe-render-egui`、端末機能の配線は機能 crate、各 OS の入口・ソフトキーボード・iOS の入力欄の橋渡しは `fandhe`、TV のフォーカス移動・計測用の入口・描画テストの一部は `fandhe-gallery` へ移した | 消滅 | #1164〜#1168・#1194・#1199・#1200 |
 | `fandhe-device` | 機能 crate へ移した後に残る、OS に触れない共有の型・検証・定数・符号化（宣言は持たない）。縮小して残す（共通エラー型の撤去と OS ダイアログの移動は #1194 で済んだ）。名前は #1215 で決める | する（機能 crate の通常依存になるため） | #1183・#1194 |
 
 依存は `fandhe-core` へ向かう一方向です。
@@ -75,6 +75,30 @@ graph TD
 
 第三者が機能 crate を作れるよう、契約（trait・宣言・登録）だけを公開します。配布の仕組みは作りません（#1203）。
 標準機能も `fandhe` の feature を経由せず依存の追加で使える形にし、第三者の機能と同じ選び方を残します。
+
+### 3.3 各 OS の入口（`#[fandhe::main]`、#1200）
+
+利用者は画面を作る関数 1 つに `#[fandhe::main]` を付けます。入口は起動時にその関数を 1 回だけ呼び、返した画面を最初に出します。
+画面の名前や環境変数では選びません（画面の登録表に依存しません）。複数画面は `fandhe::app::Menu` で組みます。
+
+```rust
+// src/lib.rs（Android は crate-type に cdylib）
+#[fandhe::main]
+fn app(ctx: &fandhe::egui::Context) -> Box<dyn fandhe::app::ProxyAppDyn> {
+    Box::new(fandhe::app::Menu::new(ctx, "メニュー"))
+}
+// src/main.rs（iOS・デスクトップ）: fn main() -> Result<(), fandhe::app::LaunchError> { my_app::main() }
+```
+
+- 生成するのは `pub fn main`（デスクトップ・iOS。Android・Web では何もしない）、`android_main`（cdylib から探される固定名）、
+  wasm-bindgen の `start` です。起動の中身は `fandhe` の隠しモジュール `fandhe::__private` が持ち、生成コードはそれを呼ぶだけです
+- 選んだ端末機能の起動前の登録（URL scheme・ファイルを開く・背景転送の完了・検索から開く・Windows の単一インスタンス）、
+  終了処理、Android の Activity 再生成時の破棄は、`fandhe` が有効な feature の分だけ行います。機能の追加・削除は feature の追加・削除だけで済みます。
+  呼ぶ関数の網羅は `crates/fandhe/tests/features.rs` が機能 crate の crate ルートと突き合わせます
+- Android の `android_main` は `no_mangle` を伴うため、利用者の crate は Android で `forbid(unsafe_code)` にできません（`deny` にします）
+- `bin` だけのアプリ（iOS・デスクトップ）は `src/main.rs` に付けます。cdylib の無いアプリには `cargo fandhe gen` が Android の生成物を出しません
+- 採らなかった案: 画面名と構築関数の表を入口へ渡す（従来の形。画面の名前を環境変数やビルド時の値で選ぶ必要が残る）、
+  起動前の登録を利用者が書く口（属性の引数・フック）を設ける（機能ごとの手順を利用者が知る必要が残る）
 
 ## 4. 宣言の形式の方針
 
@@ -234,8 +258,9 @@ graph TD
   （Cargo の build-scripts 文書の `rustc-link-arg` 節）。`rustc-link-lib` は rlib 経由で伝わります。
   Swift 薄層（`compile_swift`）と弱リンクの framework（`weak_link_framework`）はこの制約を受けるため、
   rlib の機能 crate の `build.rs` から呼ぶと最終成果物へ届きません。先行 5 機能は Swift 薄層も弱リンクも
-  使わないので影響せず、該当機能を移すときに解決します。現状の呼び出し元は最終成果物を作る
-  `fandhe-egui-proxy` 自身のため、動作は変わりません
+  使わないので影響せず、該当機能を移すときに解決します。該当する 6 機能（alarm・image-generation・live-activity・on-device-llm・
+  screen-capture・translation）は `links` メタデータで公開し、最終成果物（`fandhe-gallery`）の `build.rs` が出し直しています。
+  利用者のアプリがこれらを選ぶときは同じ出し直しが要ります（`#[fandhe::main]` では吸収できません）
 - Linux の `fandhe-platform-*` は作りません。対応表に Linux の列が無いためです。必要になったら足します
 - 名前の確定と予約（#1215）、Windows のパッケージ ID（#1208）。
   `windows-package-identity-consideration.md` は提案のままです

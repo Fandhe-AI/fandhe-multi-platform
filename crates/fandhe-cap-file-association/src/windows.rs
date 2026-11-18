@@ -47,7 +47,7 @@ pub struct Registrar {
     pub unregister: fn() -> Result<(), FileAssociationError>,
 }
 
-/// url-scheme の単一インスタンス転送へ、ファイル起動の経路を登録する。`fandhe-gallery` の `main` が
+/// url-scheme の単一インスタンス転送へ、ファイル起動の経路を登録する。入口（`fandhe` の `entry/lifecycle.rs`）が
 /// url-scheme の `startup` より前に 1 度だけ呼ぶ（登録が無いとファイル起動は URL 起動として扱われず捨てられる）。
 #[cfg(target_os = "windows")]
 pub fn register_route() -> bool {
@@ -57,6 +57,15 @@ pub fn register_route() -> bool {
         receive,
         max_body: crate::contract::MAX_PATH_BYTES,
     })
+}
+
+/// 単一インスタンスの調停（url-scheme の `startup`）を、url-scheme を選ばないアプリからも呼べるようにする口。
+/// ファイル起動の受け口への配送と起動済みインスタンスへの転送は `startup` が担うため、入口（`fandhe`）は
+/// file-association だけを選んだとき [`register_route`] の後にこれを呼ぶ。戻り値は `startup` と同じ
+/// （転送して終えるべきなら終了コード、自分が受ける側なら `None`）。
+#[cfg(target_os = "windows")]
+pub fn startup(args: &[std::ffi::OsString]) -> Option<i32> {
+    fandhe_cap_url_scheme::windows::win::startup(args)
 }
 
 #[cfg(target_os = "windows")]

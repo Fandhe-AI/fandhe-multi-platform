@@ -1,20 +1,19 @@
 //! プロトタイプ・TV フォーカスの検証用アプリ（[`PrototypeApp`]・[`TvFocusApp`]）。
 //!
-//! 汎用の [`ProxyApp`] と起床口・完了通知は `fandhe-render-egui` が持つ（Issue #1164）。
-//! 本モジュールは、TV フォーカス（`tv_focus.rs`）など本クレートに残る部品を使うアプリだけを置き、
-//! 移した項目を従来のパス（`crate::app::CompletionSender` 等）で再公開する。
+//! 汎用の `ProxyApp` は `fandhe-render-egui` が持つ。カタログの入口（`select.rs`）が `FANDHE_PROXY_APP` の
+//! `prototype`・`tv-focus` で選ぶ。入口へ渡すため `ProxyAppDyn` を実装する（自動撮影は配線しない）。
+
+use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 use fandhe_core::{Screen, StateStore};
-use fandhe_render_egui::app::central_panel_with_insets;
-pub use fandhe_render_egui::app::{
-    insets_px_to_margin, Completion, CompletionSender, EffectFn, EguiWaker, InsetMarginSupplier,
-    ProxyApp, ProxyAppDyn,
-};
+use fandhe_render_egui::app::{central_panel_with_insets, InsetMarginSupplier, ProxyAppDyn};
 use fandhe_render_egui::{EguiApp, VirtualListRecyclers};
 use fandhe_runtime::Renderer as _;
 
-use crate::tv_focus::TvFocusController;
-use crate::tv_sample::{tv_sample_screen, TvState};
+use crate::demo::tv_focus::TvFocusController;
+use crate::demo::tv_sample::{tv_sample_screen, TvState};
 
 // TASK-2.3（#54）計測マーカー: 以下はプロトタイプ描画対象切替（TASK-2.2-S5 / #52）の
 // 専用型。共通/プラットフォーム別コード比率計測（分母）としてマーカー登録する
@@ -41,7 +40,7 @@ pub struct PrototypeApp {
 impl PrototypeApp {
     /// 既定の初期状態（一覧画面・空の項目一覧）でアプリを構築する。
     pub fn new(ctx: &egui::Context) -> Self {
-        crate::font::install_cjk_font(ctx);
+        fandhe_render_egui::font::install_cjk_font(ctx);
         Self {
             store: fandhe_core::StateStore::new(fandhe_prototype::AppState::default()),
             recyclers: VirtualListRecyclers::new(),
@@ -86,24 +85,13 @@ pub struct TvFocusApp {
 impl TvFocusApp {
     /// 既定の初期状態でアプリを構築する。
     pub fn new(ctx: &egui::Context) -> Self {
-        crate::font::install_cjk_font(ctx);
+        fandhe_render_egui::font::install_cjk_font(ctx);
         Self {
             screen: tv_sample_screen(),
             store: StateStore::new(TvState::default()),
             controller: TvFocusController::new(),
             inset_margin: None,
         }
-    }
-
-    /// window insets 供給関数を注入する（Issue #579、`ProxyApp::with_inset_margin_supplier`
-    /// と同じ契約。`android.rs` からのみ呼ばれる）。
-    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
-    pub fn with_inset_margin_supplier(
-        mut self,
-        supplier: impl Fn(&egui::Context) -> egui::Margin + 'static,
-    ) -> Self {
-        self.inset_margin = Some(Box::new(supplier));
-        self
     }
 }
 
@@ -116,4 +104,18 @@ impl EguiApp for TvFocusApp {
             self.controller.update(ui, &self.screen, &mut self.store);
         });
     }
+}
+
+/// insets は使わない（デスクトップでの検証用）。自動撮影も配線しない。
+impl ProxyAppDyn for PrototypeApp {
+    fn set_inset_margin_supplier(&mut self, _supplier: InsetMarginSupplier) {}
+    fn set_autoshot(&mut self, _output_path: PathBuf, _save_failed: Arc<AtomicBool>) {}
+}
+
+/// insets は入口（Android）が渡す供給関数を使う。自動撮影は配線しない。
+impl ProxyAppDyn for TvFocusApp {
+    fn set_inset_margin_supplier(&mut self, supplier: InsetMarginSupplier) {
+        self.inset_margin = Some(supplier);
+    }
+    fn set_autoshot(&mut self, _output_path: PathBuf, _save_failed: Arc<AtomicBool>) {}
 }

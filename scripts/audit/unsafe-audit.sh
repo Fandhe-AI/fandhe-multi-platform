@@ -43,22 +43,12 @@ cd -- "${REPO_ROOT}"
 # 該当クレートを追加する際はここへ明示的に登録する（scripts/android/versions.env と
 # 同様に、監査基準の変更を diff で追跡可能にする狙い）。
 #
-# fandhe-egui-proxy: Android・iOS ターゲットのみ `#![forbid(unsafe_code)]` を
-# `#![cfg_attr(not(any(target_os = "android", target_os = "ios")), forbid(unsafe_code))]`
-# へ緩めており（android.rs の `#[no_mangle]` エントリ、TASK-1.5-S2。device/ios.rs の
-# FFI 呼び出し、Issue #751）、本スクリプトが grep -qF で検索する厳密な
-# `#![forbid(unsafe_code)]` の文字列と一致しない。
-# lib.rs 冒頭のドキュメンテーションコメントに同文字列が偶然含まれるため現状は
-# 判定を通過するが、コメント文言の変更で判定が壊れる偶然の一致に依存しないよう
-# 明示的に免除登録する（Bugbot 指摘対応）。
-#
 # fandhe-swiftui-bridge: クレートルートは forbid 属性ではなく `#![deny(unsafe_code)]`
 # を採用する（`ffi` モジュールのみ `unsafe` を許可し他モジュールは禁止するという
 # 設計上の境界を forbid では表現できないため、
 # docs/architecture/swiftui-bridge-architecture.md §3.1「unsafe 境界の規約」・
 # TASK-3.2-S3 / #60 参照）。forbid ではなく deny を採用している事実を、
 # grep -qF の偶然の一致に頼らずここへ明示的に登録することで正しく反映する
-# （fandhe-egui-proxy の運用に倣う）。
 #
 # fandhe-winit-ime: クレートルートは forbid 属性ではなく `#![deny(unsafe_code)]` を
 # 採用する（`macos_secure_input` モジュールのみ Carbon FFI（SecureEventInput）で
@@ -76,13 +66,15 @@ cd -- "${REPO_ROOT}"
 # fandhe-cap-*（機能 crate）: 1 機能ごとに本一覧へ足すと並列の移行作業で衝突するため、名前の接頭辞で扱う
 # （Issue #1183）。ただしクレートルートに `has_forbid_attr` が通す形の
 # forbid 属性が必要（コメント中の言及は数えない）。OS 限定で `deny` へ緩める crate も、他の OS では forbid を保つ。
-# fandhe-gallery: クレートルートは Android のみ `deny(unsafe_code)` で、`android_main` の
-# `#[no_mangle]` 1 関数にだけ `#[allow(unsafe_code)]` を付ける（android-activity の固定シンボルは
-# 最終成果物の cdylib が持つ必要がある。Issue #1165）。
+# fandhe-gallery: クレートルートは Android のみ `deny(unsafe_code)` で、`android_main`（`#[fandhe::main]` の生成分と
+# 計測専用の 1 関数）の `no_mangle` と debug システムプロパティの読み出しにだけ `#[allow(unsafe_code)]` を付ける
+# （android-activity の固定シンボルは最終成果物の cdylib が持つ必要がある。Issue #1165・#1200）。
+# fandhe: 入口 crate。クレートルートは iOS のみ `deny(unsafe_code)`（それ以外は forbid）。iOS の入力欄の橋渡し
+# （`src/entry/ios_text_input.rs`、ObjC の C ABI と `no_mangle` のコールバック）にだけ SAFETY 付きで `allow` を付ける（Issue #1200）。
 # fandhe-cap-document-scan: クレートルートは iOS・Android のみ `deny(unsafe_code)`（それ以外の OS は
 # forbid）。iOS の FFI（`ios.rs`）と Android の JNI エクスポート（`android.rs`）にだけ SAFETY 付きで
 # `allow` を付ける（機能 crate に OS 実装を持たせるため。TASK-21.3 / Issue #1171）。
-FORBID_EXEMPT_CRATES=("fandhe-gallery" "fandhe-egui-proxy" "fandhe-swiftui-bridge" "fandhe-winit-ime" "fandhe-platform-android" "fandhe-platform-apple" "fandhe-platform-windows")
+FORBID_EXEMPT_CRATES=("fandhe" "fandhe-gallery" "fandhe-swiftui-bridge" "fandhe-winit-ime" "fandhe-platform-android" "fandhe-platform-apple" "fandhe-platform-windows")
 
 # 機能 crate（fandhe-cap-*）のクレートルートに有効な forbid 属性があるか。
 # 通す形は次の 3 つだけ。いずれも行頭（先頭空白可）の内側属性 `#![...]` で、空白の揺れ

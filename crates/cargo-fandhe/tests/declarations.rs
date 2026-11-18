@@ -661,20 +661,23 @@ fn declared(id: &str) -> Declaration {
 fn ios_frameworks_match_build_rs() {
     // 説明文は gen の出力に入る（tests/gen.rs の usage_descriptions_come_from_the_app_config）。ここは framework のリンクだけ。
     for id in IDS {
-        // 機能 crate へ移した機能は crate の build.rs、それ以外は egui-proxy の build.rs と比べる。
+        // framework をリンクするのは機能 crate 自身の build.rs（全機能を移し終え、egui-proxy は #1200 で撤去した）。
         let own = format!("crates/fandhe-cap-{id}/build.rs");
-        let build_rs = if Path::new(env!("CARGO_MANIFEST_DIR"))
+        let has_build_rs = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
             .join(&own)
-            .exists()
-        {
-            repo(&own)
-        } else {
-            repo("crates/fandhe-egui-proxy/build.rs")
-        };
+            .exists();
         let Some(ios) = declared(id).ios else {
             continue;
         };
+        if ios.frameworks.is_empty() {
+            continue;
+        }
+        assert!(
+            has_build_rs,
+            "{id}: framework を宣言しているが {own} がない"
+        );
+        let build_rs = repo(&own);
         for f in &ios.frameworks {
             assert!(
                 build_rs.contains(&format!("\"{f}\"")),

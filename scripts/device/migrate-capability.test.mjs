@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   checkId, stemOf, pascalOf, moveTargets, rewriteSource, usedErrorVariants, unmappedVariants,
-  renderErrorRs, replaceBlock, depLines, renderUnsafeAttr, renderBuildRs, unsafeOsesOf,
+  renderErrorRs, replaceBlock, depLines, fandheFeatureLines, renderUnsafeAttr, renderBuildRs, unsafeOsesOf,
   strErrorVariants, rewriteEdition2024, stripRustLiterals, refPatterns, missingEntry,
 } from "./migrate-capability.mjs";
 
@@ -77,6 +77,10 @@ test("replaceBlock: 目印の間だけ書き直し、冪等で、目印が無け
   assert.equal(replaceBlock(once, 0, depLines(["a", "b"])), once);
   assert.throws(() => replaceBlock("no markers", 0, depLines([])));
   assert.throws(() => replaceBlock(t, 2, depLines([])));
+});
+
+test("fandheFeatureLines: 入口 crate の feature を id の順に並べる", () => {
+  assert.deepEqual(fandheFeatureLines(["a", "b-c"])(""), ['fandhe = { path = "../fandhe", features = [', '    "a",', '    "b-c",', "] }"]);
 });
 
 test("rewriteSource: --module で id と違う stem の契約パスも書き換える", () => {

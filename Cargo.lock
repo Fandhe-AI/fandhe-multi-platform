@@ -1065,6 +1065,7 @@ dependencies = [
 name = "fandhe"
 version = "0.2.0"
 dependencies = [
+ "console_error_panic_hook",
  "egui",
  "fandhe-cap-accessibility-prefs",
  "fandhe-cap-activity-recognition",
@@ -1209,8 +1210,17 @@ dependencies = [
  "fandhe-cap-wifi-info",
  "fandhe-cap-window-management",
  "fandhe-core",
+ "fandhe-macros",
+ "fandhe-platform-android",
+ "fandhe-platform-apple",
+ "fandhe-platform-windows",
  "fandhe-render-egui",
  "fandhe-runtime",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "winit",
 ]
 
 [[package]]
@@ -3094,34 +3104,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fandhe-egui-proxy"
-version = "0.1.0"
-dependencies = [
- "accesskit",
- "accesskit_winit",
- "console_error_panic_hook",
- "eframe",
- "egui",
- "egui_kittest",
- "fandhe-core",
- "fandhe-fonts",
- "fandhe-platform-android",
- "fandhe-platform-apple",
- "fandhe-prototype",
- "fandhe-render-egui",
- "fandhe-runtime",
- "image",
- "js-sys",
- "libc",
- "ordered-float",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "wgpu",
- "winit",
-]
-
-[[package]]
 name = "fandhe-fonts"
 version = "0.1.0"
 dependencies = [
@@ -3133,7 +3115,10 @@ name = "fandhe-gallery"
 version = "0.1.0"
 dependencies = [
  "cargo-fandhe",
+ "eframe",
  "egui",
+ "egui_kittest",
+ "fandhe",
  "fandhe-cap-accessibility-prefs",
  "fandhe-cap-activity-recognition",
  "fandhe-cap-alarm",
@@ -3277,13 +3262,20 @@ dependencies = [
  "fandhe-cap-wifi-info",
  "fandhe-cap-window-management",
  "fandhe-core",
- "fandhe-egui-proxy",
- "fandhe-platform-android",
  "fandhe-platform-apple",
- "fandhe-platform-windows",
+ "fandhe-prototype",
  "fandhe-render-egui",
  "fandhe-runtime",
- "wasm-bindgen",
+ "libc",
+]
+
+[[package]]
+name = "fandhe-macros"
+version = "0.2.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]

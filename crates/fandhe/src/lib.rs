@@ -13,7 +13,23 @@
 //! 再公開するのは契約（trait・型）と状態型に依存しない入口（`platform_<stem>()`・begin / poll / discard など）だけで、
 //! カタログの画面とつなぐ effect ドライバ（`fandhe_cap_<stem>::driver`）は出さない（`docs/architecture/consumer-app-structure.md` §8.1）。
 //! 画面の宣言（`Screen`・`Node`・`StateStore` など）は `fandhe-core` を、画面の組み立てと切り替えは [`app`] を使う。
-//! 各 OS の入口の生成（`#[fandhe::main]`）は #1200 で足す。
+//!
+//! 各 OS の入口は [`main`]（`#[fandhe::main]`）で生成する（Issue #1200）。画面を作る関数 1 つに付けると、
+//! デスクトップと iOS の `main`、Android の `android_main`、Web の `start` ができる。選んだ端末機能の起動前の登録
+//! （URL scheme の受信など）・終了処理・Activity 再生成時の破棄は入口が feature に応じて行うため、利用者は書かない。
+//!
+//! ```ignore
+//! // src/lib.rs（Android は crate-type に cdylib、iOS・デスクトップは src/main.rs から呼ぶ）
+//! #[fandhe::main]
+//! fn app(ctx: &fandhe::egui::Context) -> Box<dyn fandhe::app::ProxyAppDyn> {
+//!     Box::new(fandhe::app::Menu::new(ctx, "メニュー"))
+//! }
+//!
+//! // src/main.rs
+//! fn main() -> Result<(), fandhe::app::LaunchError> {
+//!     my_app::main()
+//! }
+//! ```
 //!
 //! 依存の向きは本 crate → 機能 crate・`fandhe-render-egui` → `fandhe-runtime` → `fandhe-core` の一方向。
 //!
@@ -30,7 +46,10 @@
 #![cfg_attr(not(feature = "clipboard"), doc = "```compile_fail")]
 //! let _ = fandhe::clipboard::platform_clipboard();
 //! ```
-#![forbid(unsafe_code)]
+// iOS の入力欄の橋渡し（`entry/ios_text_input.rs`）が ObjC の C ABI を呼ぶため、iOS だけ `deny` へ緩める
+// （`unsafe` は各呼び出しに閉じて `// SAFETY:` を付ける。`.claude/rules/coding-rust.md` の FFI 例外規定）。
+#![cfg_attr(not(target_os = "ios"), forbid(unsafe_code))]
+#![cfg_attr(target_os = "ios", deny(unsafe_code))]
 
 pub use fandhe_core::*;
 /// 起床・完了通知・要求追跡と `Renderer` trait（レンダラ非依存の実行基盤）。
@@ -49,6 +68,14 @@ pub mod app {
 /// 画面の組み立てで使う egui（`egui::Context` など）。利用者が版を合わせて依存しなくて済むよう再公開する。
 #[cfg(feature = "egui")]
 pub use egui;
+#[cfg(feature = "egui")]
+pub use fandhe_macros::main;
+
+/// `#[fandhe::main]` が生成するコードから呼ぶ各 OS の入口。利用者は直接使わない（互換を保証しない）。
+#[cfg(feature = "egui")]
+#[doc(hidden)]
+#[path = "entry/mod.rs"]
+pub mod __private;
 
 #[cfg(feature = "accessibility-prefs")]
 pub mod accessibility_prefs {

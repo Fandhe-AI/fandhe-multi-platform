@@ -3,7 +3,7 @@
 //! `desktop_render.rs`（TASK-1.2）と同様、`fandhe_prototype::current_screen` を
 //! `render_screen` へ渡して実描画し、AccessKit ツリー経由で要素の存在・
 //! 画面切替を確認する。本ファイル固有の観点は「毎フレーム `current_screen` を
-//! 引き直す」実配線（[`fandhe_egui_proxy::PrototypeApp`] と同型のループ）で
+//! 引き直す」実配線（[`fandhe_gallery::demo::PrototypeApp`] と同型のループ）で
 //! 一覧画面から設定画面への実描画レベルの切替が機能することの検証である。
 //!
 //! GPU アダプタが存在しない環境でのスキップ判定は `desktop_render.rs` の
@@ -29,7 +29,7 @@ fn build_harness() -> egui_kittest::Harness<'static, StateStore<AppState>> {
         .build_ui_state(
             move |ui, store: &mut StateStore<AppState>| {
                 let screen = fandhe_prototype::current_screen(store.state());
-                fandhe_egui_proxy::render_screen(ui, &screen, store);
+                fandhe_render_egui::render_screen(ui, &screen, store);
             },
             StateStore::new(AppState::default()),
         )

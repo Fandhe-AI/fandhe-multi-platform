@@ -2,7 +2,7 @@
 //!
 //! `fandhe_core::sample_screen()`（見出し・本文テキスト・「メモ」入力欄・
 //! 「カウントを増やす」「項目を追加」ボタン・リスト項目の 4 種の要素）を
-//! [`fandhe_egui_proxy::render_screen`] で描画し、AccessKit ツリー経由で全要素の
+//! [`fandhe_render_egui::render_screen`] で描画し、AccessKit ツリー経由で全要素の
 //! 存在を確認する（PoC-1 の「macOS AX ツリーで要素確認」と同型の検証を
 //! クロスプラットフォームに再現する）。ボタン押下・テキスト入力による状態反映も
 //! あわせて検証し、wgpu バックエンドでレンダ画像（PNG エビデンス）を
@@ -52,7 +52,7 @@ fn build_harness() -> egui_kittest::Harness<'static, StateStore<SampleState>> {
         .renderer(egui_kittest::wgpu::WgpuTestRenderer::default())
         .build_ui_state(
             move |ui, store: &mut StateStore<SampleState>| {
-                fandhe_egui_proxy::render_screen(ui, &screen, store);
+                fandhe_render_egui::render_screen(ui, &screen, store);
             },
             StateStore::new(SampleState::default()),
         )

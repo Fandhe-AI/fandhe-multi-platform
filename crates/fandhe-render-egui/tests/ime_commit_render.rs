@@ -2,7 +2,7 @@
 //! （Issue #616 症状 B / #663）。
 //!
 //! `render_screen_with_recyclers` が呼ぶ
-//! [`fandhe_egui_proxy::inject_preedit_before_ime_commit`]（非公開・`lib.rs` の
+//! [`fandhe_render_egui::inject_preedit_before_ime_commit`]（非公開・`lib.rs` の
 //! `#[cfg(test)]` ユニットテストで純関数として検証済み）の効果を、実際の
 //! `egui::Event` 列注入 → 描画 → 状態反映という結合経路で確認する。
 //!
@@ -27,7 +27,7 @@ fn build_harness() -> egui_kittest::Harness<'static, StateStore<SampleState>> {
         .renderer(egui_kittest::wgpu::WgpuTestRenderer::default())
         .build_ui_state(
             move |ui, store: &mut StateStore<SampleState>| {
-                fandhe_egui_proxy::render_screen(ui, &screen, store);
+                fandhe_render_egui::render_screen(ui, &screen, store);
             },
             StateStore::new(SampleState::default()),
         )
