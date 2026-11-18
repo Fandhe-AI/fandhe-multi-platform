@@ -27,8 +27,8 @@
 # SwiftUI アプリが `main.swift` 冒頭を `t0` として同一の `COLD_START_MS=<value>`
 # 形式で出力する（同ディレクトリの `main.swift` 冒頭コメント参照）。
 #
-# 両者の t0 の対称性については crates/fandhe-gallery/src/main.rs の iOS 版 `main` の
-# doc コメントに明記した限界（dyld・プロセス起動時間は含まれない近似）を参照。
+# 両者の t0 はどちらもプロセス内の最初期の地点（fandhe 側は crates/fandhe-gallery/src/main.rs の
+# iOS 版 `main` の doc にある計測の起点）で、dyld・プロセス起動時間は含まれない近似。
 #
 # 実行環境について: `xcodebuild` / `devicectl` は macOS + Xcode 限定のため、
 # Linux 実行時は手順を案内して明示的に失敗する（ci.md「野良インストール禁止」

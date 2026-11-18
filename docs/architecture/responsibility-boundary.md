@@ -38,7 +38,7 @@ graph TD
     Proxy --> Desktop["macOS / Windows / Linux<br/>バックエンド: glow (OpenGL)<br/>起動: ネイティブウィンドウ生成"]
     Proxy --> IOS["iOS<br/>バックエンド: wgpu (Metal)<br/>起動: Metal 起動"]
     Proxy --> Web["Web (WASM)<br/>バックエンド: glow (WebGL2)<br/>起動: wasm-bindgen による DOM 連携ブリッジ"]
-    Proxy --> Android["Android<br/>バックエンド: wgpu (Vulkan 固定)<br/>起動: android-activity（NativeActivity）"]
+    Proxy --> Android["Android<br/>バックエンド: wgpu (Vulkan 固定)<br/>起動: android-activity（GameActivity）"]
 
     Platform["プラットフォーム最適化レイヤー<br/>fandhe-platform-* 等（M3 以降）"]
     Desktop -.将来的に置き換え.-> Platform
