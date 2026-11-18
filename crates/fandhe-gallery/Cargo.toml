@@ -8,9 +8,8 @@ repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
 # 配布しない。`docs/architecture/consumer-app-structure.md` §3。
 publish = false
 
-# 計測・デバッグ用の feature は、すべて `fandhe-egui-proxy` の同名 feature へ転送する
-# （入口の切替は egui-proxy の `ios.rs`・`frame_metrics.rs` が持つ）。どれも既定 off のまま
-# ストア提出物に混ざらない（security.md A05）。
+# 計測・デバッグ用の feature は本 crate だけが持つ（入口の差し替えは `src/main.rs`・`src/lib.rs`、
+# 画面名の読み出しは `src/select.rs`）。どれも既定 off のままストア提出物に混ざらない（security.md A05）。
 [features]
 # TASK-5.3（Issue #238）: 固定 60Hz 環境でのフレームレート計測専用アプリ（`src/demo/frame_metrics.rs`）へ入口を差し替える。
 frame-metrics = []

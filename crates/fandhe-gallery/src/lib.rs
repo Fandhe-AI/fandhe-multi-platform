@@ -36,11 +36,11 @@ fn app(ctx: &egui::Context) -> Box<dyn fandhe_render_egui::ProxyAppDyn> {
 /// Android の入口（計測専用ビルド）。`android-activity` がこの固定名で呼ぶ。
 ///
 /// # Safety
-/// この関数自体は `unsafe` 操作を含まない。`#[no_mangle]` は名前修飾を外すだけで、`android_main` は
+/// この関数自体は `unsafe` 操作を含まない。`no_mangle` は名前修飾を外すだけで、`android_main` は
 /// `android-activity` の規約上の固定名。`frame-metrics` では `#[fandhe::main]` を付けないため重複しない。
 #[cfg(all(target_os = "android", feature = "frame-metrics"))]
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 fn android_main(app: fandhe::__private::AndroidApp) {
     demo::frame_metrics::run_android(app);
 }
