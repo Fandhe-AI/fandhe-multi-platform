@@ -48,6 +48,14 @@ fn get_selected(state: &FormState) -> Option<usize> {
     state.selected
 }
 
+fn set_menu_open(state: &mut FormState, open: bool) {
+    state.menu_open = open;
+}
+
+fn set_selected(state: &mut FormState, index: usize) {
+    state.selected = Some(index);
+}
+
 fn menu_items() -> Vec<String> {
     vec!["項目 A".to_string(), "項目 B".to_string()]
 }
@@ -58,7 +66,9 @@ fn menu_screen() -> Screen<FormState> {
         "選択してください",
         menu_items(),
         get_menu_open,
+        set_menu_open,
         get_selected,
+        set_selected,
     )
 }
 
@@ -132,7 +142,9 @@ fn menu_does_not_affect_rendering_of_other_node_variants() {
         "選択してください",
         menu_items(),
         get_menu_open,
+        set_menu_open,
         get_selected,
+        set_selected,
     );
     let state = FormState {
         menu_open: false,
@@ -175,7 +187,9 @@ fn closed_menu_is_measured_and_painted_as_trigger_only() {
         "選択してください",
         menu_items(),
         get_menu_open,
+        set_menu_open,
         get_selected,
+        set_selected,
     );
 
     let measurement = menu.measure(sized(800.0, 600.0));
@@ -204,7 +218,9 @@ fn open_menu_paints_trigger_and_popup_and_hit_test_covers_measured_size() {
         "選択してください",
         menu_items(),
         get_menu_open,
+        set_menu_open,
         get_selected,
+        set_selected,
     );
     menu.sync_from_state(&FormState {
         menu_open: true,
@@ -243,7 +259,9 @@ fn sync_from_state_transitions_open_closed_open_via_public_api() {
         "選択してください",
         menu_items(),
         get_menu_open,
+        set_menu_open,
         get_selected,
+        set_selected,
     );
 
     let mut state = FormState {
@@ -272,7 +290,9 @@ fn selected_index_reflects_in_displayed_trigger_text_via_public_api() {
         "選択してください",
         menu_items(),
         get_menu_open,
+        set_menu_open,
         get_selected,
+        set_selected,
     );
     menu.sync_from_state(&FormState {
         menu_open: false,
@@ -294,7 +314,9 @@ fn accessibility_role_is_combo_box() {
         "選択してください",
         menu_items(),
         get_menu_open,
+        set_menu_open,
         get_selected,
+        set_selected,
     );
     assert_eq!(menu.accessibility_role(), AccessibilityRole::ComboBox);
 }
@@ -347,7 +369,9 @@ fn trigger_click_then_item_click_opens_selects_and_closes_via_state_store_dispat
         "選択してください",
         menu_items(),
         get_menu_open,
+        set_menu_open,
         get_selected,
+        set_selected,
     );
     menu.sync_from_state(store.state());
     assert!(!menu.is_open());

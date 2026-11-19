@@ -284,7 +284,8 @@ fn assert_screen_signatures<S: 'static>() {
     let _: fn(Screen<S>, WidgetId) -> Screen<S> = Screen::<S>::spinner;
     let _: fn(Screen<S>, Stack<S>) -> Screen<S> = Screen::<S>::stack;
     let _: fn(Screen<S>, Grid<S>) -> Screen<S> = Screen::<S>::grid;
-    let _: fn(Screen<S>, WidgetId, Vec<String>, ReadFn<S, usize>) -> Screen<S> = Screen::<S>::tabs;
+    let _: fn(Screen<S>, WidgetId, Vec<String>, ReadFn<S, usize>, WriteFn<S, usize>) -> Screen<S> =
+        Screen::<S>::tabs;
     let _: fn(Screen<S>, Card<S>) -> Screen<S> = Screen::<S>::card;
     let _: fn(Screen<S>, Separator<S>) -> Screen<S> = Screen::<S>::separator;
 }
@@ -336,7 +337,9 @@ fn build_screen_via_impl_trait_builders() -> Screen<()> {
             "label",
             vec!["a".to_string()],
             get_bool,
+            set_bool,
             get_option_usize,
+            set_usize,
         )
         .tooltip(WidgetId::from_raw(15), "text", anchor)
 }
@@ -401,6 +404,10 @@ assert_eq!(assert_iter(screen.iter()), 2);
   （Issue #726）: OS の戻る操作を受けたときのハンドラ。`state::Event::BackRequested` →
   `ui::request_back` 経由で発火する（パターン 8 参照）。未設定（既定）の画面では
   戻る操作に応答しない
+- `menu(id, label, items, open, set_open, selected, set_selected)` / `tabs(id, labels, selected, set_selected)`
+  （Issue #1429）: 状態を読む `ReadFn` に加えて、書き戻し先の `WriteFn` を取る。書き方はパターン 7-3。
+  `set_selected` は `WriteFn<S, usize>`（利用者が選択を外す操作は無い）。`menu` は項目を選ぶと
+  `set_selected(i)` に続けて `set_open(false)` も呼ぶ
 - **`.dialog()`（`Dialog<S>`、S46）は AX ノード公開のみで、描画・開閉イベントは未配線**
   （`fandhe-render-egui` の実描画・`render_headless` のどちらからも呼ばれない）。実際に描画される
   ダイアログは、`DialogWidget::new_dynamic(..).with_content(expand_fn)`（`DialogWidget`
@@ -418,8 +425,8 @@ assert_eq!(assert_iter(screen.iter()), 2);
 （macOS・Android・Windows では AX ノードだけは公開される）。`crates/fandhe-render-egui/tests/widget_coverage.rs` が 1 種ずつ
 `egui::Context::run` で描画し、出力の shape が空画面と同数のままかを確かめている（根拠は
 `render.rs` の `Node::Widget` 分岐が `DialogWidget` / `Checkbox` / `ToggleSwitch` / `Slider` /
-`RadioButton` / `ProgressBar` / `Spinner` / `Separator` / `ImageWidget` / `CanvasWidget` の 10 種だけを `downcast_ref` していること）。
-この 10 種以外の `Widget<S>` 実装（`LabelWidget`・`CheckboxWidget`・`TabBarWidget`・`ProgressWidget` 等）は
+`RadioButton` / `ProgressBar` / `Spinner` / `Separator` / `Menu` / `Tabs` / `ImageWidget` / `CanvasWidget` の 12 種だけを `downcast_ref` していること）。
+この 12 種以外の `Widget<S>` 実装（`LabelWidget`・`CheckboxWidget`・`TabBarWidget`・`ProgressWidget` 等）は
 `.with_node()` で置いても描画されない。web-dom の対応は本表の対象外。
 描画の配線と API の整理は #1427（重複する書き方の整理）・#1428・#1429・#1430・#1437（icon）で扱う。
 
@@ -431,6 +438,7 @@ assert_eq!(assert_iter(screen.iter()), 2);
 描画される（`Node::Widget`）:
 `.checkbox()` / `.toggle_switch()` / `.radio_button()` / `.slider()` / `.progress_bar()`（割合は 0..=1 に収め、
 非有限値（NaN・±∞）は 0 とする。% は四捨五入で、ラベルがあれば「ラベル 42%」と出す）/ `.spinner()` /
+`.menu()` / `.tabs()`（書き方はパターン 7-3。`tabs` は見出しだけを描き、中身は描かない）/
 `.separator()`（太さは無視。縦線は親が横並び（`Node::Row`）のときだけで、画面のルートなど縦並びでは横線になる）/
 `ImageWidget::bound(..)` / `::fixed(..)`（`.with_node()` で置く。識別子が `fandhe_runtime::image_store::put` と一致するときだけ）/
 `DialogWidget`（`.with_node()` で置く）/ `CanvasWidget`（`.with_node()` で置く）
@@ -449,8 +457,6 @@ assert_eq!(assert_iter(screen.iter()), 2);
 | `.grid()` | `.list_with_axis(.., Axis::Grid { columns })`（大量なら `.virtual_list_with_axis`） |
 | `.card()` | 子のノードを直接並べる。枠は出せない |
 | `.dialog()` | `DialogWidget::new_dynamic(..).with_content(..)`（上の `.dialog()` の注意書き） |
-| `.menu()` | 開くボタンは `.button()`。項目は `.list()` の `expand` が開いているときだけ `Node::IndexedButton` を返す（`.button()` は `.list()` の中に置けない） |
-| `.tabs()` | 見出しごとに `.button()`（押すと選択を書き換える）+ 選択中の中身を返す `.list()` |
 | `.tooltip()` | 補足を `.text()` で隣に置く（ホバー表示は無い） |
 
 `DialogWidget` の `dismiss_label` ボタンは、`with_content` の子ノード列にある同名の `Node::Button` が描く
@@ -1067,6 +1073,69 @@ assert!(click_button_at(&screen, &[0, 1, 1], "★3", &mut state));
 assert_eq!(state.rated, Some((1, 3)));
 assert!(click_button_at(&screen, &[0, 1, 2], "削除", &mut state));
 assert_eq!(state.names, vec!["a".to_string()]);
+```
+
+### パターン 7-3: ドロップダウン（`menu`）とタブ（`tabs`）で選んだ値を状態へ返す（Issue #1429）
+
+状態が開閉・選択の正で、書き戻しは `WriteFn`（環境をキャプチャしない関数ポインタ）で渡す。
+`menu` は開閉（`bool`）と選んだ項目（`usize`）、`tabs` は選んだタブ（`usize`）を書き戻す。
+`fandhe-render-egui` は、トリガー・外側クリック・Esc を `Event::WidgetValueChanged`（`WidgetValue::Bool`）、
+項目・タブの選択を同（`WidgetValue::Index`）で積む。選んだ項目の番号は `items` / `labels` の添字で、
+範囲外の番号は無視される。`menu` は項目を選ぶと自動で閉じる。`tabs` は見出しだけを描くため、
+選択中のタブの中身は、続けて `.dynamic_text()` / `.list()` で `state.tab` を読んで出し分ける。
+参照実装: `crates/fandhe-core/src/screens/menu_tabs.rs`（gallery の `menu-tabs`）
+
+```rust
+use fandhe_core::{Screen, WidgetId};
+
+#[derive(Default)]
+struct S {
+    open: bool,
+    sort: Option<usize>,
+    tab: usize,
+}
+
+fn open(s: &S) -> bool {
+    s.open
+}
+fn set_open(s: &mut S, v: bool) {
+    s.open = v;
+}
+fn sort(s: &S) -> Option<usize> {
+    s.sort
+}
+fn set_sort(s: &mut S, i: usize) {
+    s.sort = Some(i);
+}
+fn tab(s: &S) -> usize {
+    s.tab
+}
+fn set_tab(s: &mut S, i: usize) {
+    s.tab = i;
+}
+fn body(s: &S) -> String {
+    format!("タブ {} の中身", s.tab)
+}
+
+fn main() {
+    let _screen: Screen<S> = Screen::new("一覧")
+        .menu(
+            WidgetId::from_raw(1),
+            "並び順",
+            vec!["新しい順".into(), "古い順".into()],
+            open,
+            set_open,
+            sort,
+            set_sort,
+        )
+        .tabs(
+            WidgetId::from_raw(2),
+            vec!["概要".into(), "詳細".into()],
+            tab,
+            set_tab,
+        )
+        .dynamic_text(body);
+}
 ```
 
 ### パターン 8: 画面遷移スタック（積む/戻る、Issue #726）

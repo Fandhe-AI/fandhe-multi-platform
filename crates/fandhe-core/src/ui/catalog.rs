@@ -666,6 +666,12 @@ fn preview_menu_selected(_state: &PreviewState) -> Option<usize> {
     None
 }
 
+/// プレビューは書き戻さないため、メニュー・タブの書き込み側は何もしない
+/// （Issue #1429。[`crate::state::WriteFn`] 契約）。
+fn preview_set_open(_state: &mut PreviewState, _open: bool) {}
+
+fn preview_set_index(_state: &mut PreviewState, _index: usize) {}
+
 /// `menu` エントリの preview 画面を組み立てる（TASK-8.3-S51 / Issue #146）。
 ///
 /// `Menu<S>`（`menu.rs` 参照、Issue #144）を `Screen::menu`
@@ -680,7 +686,9 @@ fn menu_preview_screen() -> Screen<PreviewState> {
         "選択してください",
         vec!["項目 A".to_string(), "項目 B".to_string()],
         preview_menu_open,
+        preview_set_open,
         preview_menu_selected,
+        preview_set_index,
     )
 }
 
@@ -714,6 +722,7 @@ fn tabs_preview_screen() -> Screen<PreviewState> {
         WidgetId::from_raw(1),
         vec!["タブ A".to_string(), "タブ B".to_string()],
         preview_tabs_selected,
+        preview_set_index,
     )
 }
 

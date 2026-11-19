@@ -4,9 +4,9 @@
 //! [`crate::launch`]、アプリ本体（`StateStore` の保持と毎フレームの駆動）は [`crate::app`]。
 
 use fandhe_core::{
-    Axis, CanvasWidget, Checkbox, DialogWidget, Event, ImageWidget, Measurement, Node,
+    Axis, CanvasWidget, Checkbox, DialogWidget, Event, ImageWidget, Measurement, Menu, Node,
     PaintCommand, ProgressBar, RadioButton, Screen, Separator, SeparatorOrientation, Slider,
-    Spinner, StateStore, ToggleSwitch, Widget, WidgetValue,
+    Spinner, StateStore, Tabs, ToggleSwitch, Widget, WidgetValue,
 };
 
 use crate::recyclers::VirtualListRecyclers;
@@ -184,8 +184,10 @@ fn virtual_list_max_height(ui: &egui::Ui, item_extent: f32) -> f32 {
 /// この関数は描画（[`render_screen_with_recyclers`]）の後に呼ぶ契約のため、描画中に
 /// オーバーレイ側が `consume_key` 済みなら、ここでの `consume_key` は false を返す。
 /// なお `egui::Popup`（コンボボックス等）の Esc クローズは egui 側が `consume_key` を
-/// 呼ばず `key_pressed` のみで判定しているため、この仕組みでも救えない
-/// （upstream の既知の制約。`egui::Modal` 等 `consume_key` を呼ぶオーバーレイのみ対象）。
+/// 呼ばず `key_pressed` のみで判定しているため、この仕組みだけでは救えない
+/// （upstream の既知の制約）。`Menu` の描画（Issue #1429）は、Popup が Esc で閉じたと
+/// 判定したときに自分で `consume_key` して、閉じると戻るの二重発火を防ぐ。
+/// 他の部品が `egui::Popup` を使う場合も同じ対処が要る。
 ///
 /// `Escape` / `BrowserBack` を長押しした場合、OS はキーリピートとして毎フレーム
 /// `Event::Key { pressed: true, repeat: true, .. }` を送り続ける（egui 0.33.3
@@ -524,8 +526,8 @@ fn render_node<S: 'static>(
         Node::Widget(widget) => {
             // `Widget<S>` トレイトオブジェクトの実描画配線は、`DialogWidget`（S47、
             // Issue #739）と `Checkbox` / `ToggleSwitch` / `Slider` / `RadioButton`
-            // （Issue #806・親 #804）・`ProgressBar` / `Spinner` / `Separator`（Issue #1428）を
-            // egui 標準部品へ配線済み（下記ブロック参照）。
+            // （Issue #806・親 #804）・`ProgressBar` / `Spinner` / `Separator`（Issue #1428）・
+            // `Menu` / `Tabs`（Issue #1429）を egui 標準部品へ配線済み（下記ブロック参照）。
             // それ以外の具象型（レイアウトプロトコル S4 等が未確定）は引き続き
             // AX ノード公開のみに留める（TASK-8.3-S2、Issue #97、
             // out-of-scope-tracking.md 対象）。
@@ -561,7 +563,7 @@ fn render_node<S: 'static>(
             //
             // Issue #806: `Checkbox` / `ToggleSwitch` / `Slider` / `RadioButton` は
             // egui 標準部品（下記ブロック）が自前で正しい accesskit ノード（role・label）
-            // を生成する。この 4 型（と #1428 の `ProgressBar` / `Spinner`）に対して以下の合成 AX ノードも重ねて登録すると、
+            // を生成する。この 4 型（と #1428 の `ProgressBar` / `Spinner`、#1429 の `Menu` / `Tabs`）に対して以下の合成 AX ノードも重ねて登録すると、
             // 同一ラベル・同一 role のノードが 2 つ存在することになり
             // `egui_kittest::get_by_label` 等が一意に解決できなくなる（実測で確認済み）。
             // `as_any` は型判定のみに使い、クローン前の `widget` から直接呼べる
@@ -574,6 +576,8 @@ fn render_node<S: 'static>(
                     || any.is::<RadioButton<S>>()
                     || any.is::<ProgressBar<S>>()
                     || any.is::<Spinner<S>>()
+                    || any.is::<Menu<S>>()
+                    || any.is::<Tabs<S>>()
             });
             #[cfg(any(target_os = "macos", target_os = "android", target_os = "windows"))]
             if !is_natively_rendered {
@@ -588,8 +592,8 @@ fn render_node<S: 'static>(
             }
 
             // `DialogWidget`（S47）・`Checkbox` / `ToggleSwitch` / `Slider` /
-            // `RadioButton`（Issue #806）・`ProgressBar` / `Spinner` / `Separator`（Issue #1428）を
-            // 実描画する。`Checkbox` とは別系統の自己完結型
+            // `RadioButton`（Issue #806）・`ProgressBar` / `Spinner` / `Separator`（Issue #1428）・
+            // `Menu` / `Tabs`（Issue #1429）を実描画する。`Checkbox` とは別系統の自己完結型
             // `CheckboxWidget`（`checkbox.rs`）は未配線のまま（#806 のスコープ外）。reconcile 契約
             // （`Widget::sync_from_state` は `&mut self` を要求し `&Node<S>` の
             // 共有参照走査からは呼べない、`widget.rs` doc 参照）を満たすため
@@ -854,6 +858,110 @@ fn render_node<S: 'static>(
                     egui::Separator::default().vertical()
                 } else {
                     egui::Separator::default().horizontal()
+                });
+            } else if let Some(menu) = synced
+                .as_any()
+                .and_then(|any| any.downcast_ref::<Menu<S>>())
+            {
+                // Issue #1429: 開閉と選択は状態が正。トリガー押下は `Bool(!open)`、項目の選択は
+                // `Index(i)`（`Menu::apply_value` が選択と閉じるのを続けて書く）、外側クリック・Esc は
+                // `Bool(false)` を積む。ポップアップの開閉は egui のメモリではなく `open` で決める。
+                let disabled = widget.interaction_state().disabled;
+                let open = menu.is_open();
+                let selected = menu.selected_index();
+                let trigger_text = selected
+                    .and_then(|i| menu.items().get(i))
+                    .map_or(menu.label_text(), String::as_str);
+                ui.add_enabled_ui(!disabled, |ui| {
+                    let trigger = ui.button(trigger_text);
+                    // AX は egui のボタンのノードを使い、役割と開閉だけコアの契約（ComboBox）へ補正する。
+                    #[cfg(any(target_os = "macos", target_os = "android", target_os = "windows"))]
+                    ui.ctx().accesskit_node_builder(trigger.id, |node| {
+                        node.set_role(crate::accessibility::to_accesskit_role(
+                            fandhe_core::AccessibilityRole::ComboBox,
+                        ));
+                        // 名前はメニューのラベル（`Menu::accessibility_label`）。egui は選んだ項目の
+                        // 文言を名前にするため、項目は value へ回す。
+                        node.set_label(menu.label_text());
+                        match selected.and_then(|i| menu.items().get(i)) {
+                            Some(item) => node.set_value(item.as_str()),
+                            None => node.clear_value(),
+                        }
+                        node.set_expanded(open);
+                    });
+                    if trigger.clicked() {
+                        ctx.pending_events.push(Event::WidgetValueChanged {
+                            id: widget.id(),
+                            path: path.to_vec(),
+                            value: WidgetValue::Bool(!open),
+                        });
+                    }
+                    // 無効化中は開いていてもポップアップを出さない（操作も閉じることもできないため）。
+                    if open && !disabled {
+                        let mut still_open = true;
+                        let mut picked = false;
+                        egui::Popup::from_response(&trigger)
+                            .open_bool(&mut still_open)
+                            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                            .show(|ui| {
+                                for (i, item) in menu.items().iter().enumerate() {
+                                    if ui.selectable_label(selected == Some(i), item).clicked() {
+                                        ctx.pending_events.push(Event::WidgetValueChanged {
+                                            id: widget.id(),
+                                            path: path.to_vec(),
+                                            value: WidgetValue::Index(i),
+                                        });
+                                        picked = true;
+                                    }
+                                }
+                            });
+                        // トリガー自身の押下は上で積み済み。外側クリック・Esc で egui が閉じたときだけ積む。
+                        if !still_open && !picked && !trigger.clicked() {
+                            // egui の Popup は Esc を消費しない。Esc で閉じたなら、後続の
+                            // `dispatch_back_if_requested` が同じ Esc を戻る操作として拾わないよう消費する。
+                            // 外側クリックで閉じたときは Esc が無いので何もしない。
+                            ui.input_mut(|i| {
+                                i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)
+                            });
+                            ctx.pending_events.push(Event::WidgetValueChanged {
+                                id: widget.id(),
+                                path: path.to_vec(),
+                                value: WidgetValue::Bool(false),
+                            });
+                        }
+                    }
+                });
+            } else if let Some(tabs) = synced
+                .as_any()
+                .and_then(|any| any.downcast_ref::<Tabs<S>>())
+            {
+                // Issue #1429: 見出しを横に並べ（幅を超えたら折り返す）、押したタブの index を
+                // `WidgetValue::Index` で積む。選択中の見た目は `selectable_label` の選択状態で出す。
+                // 中身（`Tabs::with_content`）は描かない。画面側が選択中の状態を読んで出し分ける。
+                let disabled = widget.interaction_state().disabled;
+                let selected = tabs.selected_index();
+                ui.add_enabled_ui(!disabled, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        for (i, label) in tabs.labels().into_iter().enumerate() {
+                            let tab = ui.selectable_label(selected == Some(i), label);
+                            #[cfg(any(
+                                target_os = "macos",
+                                target_os = "android",
+                                target_os = "windows"
+                            ))]
+                            ui.ctx().accesskit_node_builder(tab.id, |node| {
+                                node.set_role(egui::accesskit::Role::Tab);
+                                node.set_selected(selected == Some(i));
+                            });
+                            if tab.clicked() {
+                                ctx.pending_events.push(Event::WidgetValueChanged {
+                                    id: widget.id(),
+                                    path: path.to_vec(),
+                                    value: WidgetValue::Index(i),
+                                });
+                            }
+                        }
+                    });
                 });
             } else if let Some(img) = synced
                 .as_any()

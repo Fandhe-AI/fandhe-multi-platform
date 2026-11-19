@@ -233,7 +233,7 @@ pub fn activate_focus_at<S>(
 }
 
 /// `path` で指定したツリー上の位置にある `Node::Widget`（`Checkbox` / `ToggleSwitch` /
-/// `Slider` / `RadioButton`）へ値変更を反映する（Issue #805 / 親 #804）。
+/// `Slider` / `RadioButton` / `Menu` / `Tabs`）へ値変更を反映する（Issue #805 / 親 #804）。
 ///
 /// `click_button_at` / `activate_focus_at` と同じく `path` 降下は共通ヘルパー
 /// [`resolve_node_at`] へ委譲する。[`activate_focus_at`]（`ButtonActivatedAt` の id
