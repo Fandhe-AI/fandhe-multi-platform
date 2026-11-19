@@ -29,7 +29,7 @@ FROM rust:1.99.1-slim-bookworm
 # - procps: measure-idle-memory.sh が RSS サンプリングに使う `ps`（`-o rss=`/`-o state=`）
 #   の提供元。slim イメージには既定で入っておらず、未導入だと前提コマンド検査で
 #   即失敗することを Issue #513 検証で確認した
-# - libxcursor1 / libxi6 / libxkbcommon-x11-0: fandhe-egui-proxy（eframe の
+# - libxcursor1 / libxi6 / libxkbcommon-x11-0: fandhe-render-egui（eframe の
 #   "x11" feature、native ターゲット分岐）が winit 経由で dlopen する実行時共有
 #   ライブラリ。xvfb パッケージ自身の依存では libx11-6・libgl1・libglx0・
 #   libgl1-mesa-dri までしか入らず、この 3 つは別途必要になることを Xvfb 上での
