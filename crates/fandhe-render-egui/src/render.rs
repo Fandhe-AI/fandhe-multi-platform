@@ -59,6 +59,23 @@ pub fn render_screen<S: 'static>(ui: &mut egui::Ui, screen: &Screen<S>, store: &
     render_screen_with_recyclers(ui, screen, store, &mut recyclers);
 }
 
+/// 状態を反映した複製から `accessibility_label` を読む。`Tooltip::bound`・`Label::bound` 等は
+/// 本文を `sync_from_state` で初めて持つため、未反映の widget から読むと空になる（PR #1443 codex 指摘）。
+/// `Stack` / `Grid` / `Card` は自前のラベルを持たず、複製・sync が子の入れ子の深さに比例して
+/// 重複するだけなので、そのまま読む（`None`）。
+#[cfg(any(target_os = "macos", target_os = "android", target_os = "windows"))]
+fn synced_accessibility_label<S: 'static>(widget: &dyn Widget<S>, state: &S) -> Option<String> {
+    if widget
+        .as_any()
+        .is_some_and(|a| a.is::<Stack<S>>() || a.is::<Grid<S>>() || a.is::<Card<S>>())
+    {
+        return widget.accessibility_label();
+    }
+    let mut synced = widget.clone_box();
+    synced.sync_from_state(state);
+    synced.accessibility_label()
+}
+
 /// [`render_screen`] のフレーム跨ぎ再利用版（#490）。`recyclers` を呼び出し側
 /// （[`ProxyApp`](crate::app::ProxyApp) / `PrototypeApp` / 結合テストハーネス）がフィールドとして
 /// フレームをまたいで保持し、本関数へ毎フレーム渡す契約にする（`recyclers` モジュール doc
@@ -587,7 +604,7 @@ fn render_node<S: 'static>(
             if !is_natively_rendered {
                 let ax_id = egui::Id::new(("fandhe-widget-ax", widget.id().raw()));
                 let role = widget.accessibility_role();
-                let label = widget.accessibility_label();
+                let label = synced_accessibility_label(widget.as_ref(), state);
                 let interaction = widget.interaction_state();
                 ui.ctx().accesskit_node_builder(ax_id, |node| {
                     *node =
@@ -884,7 +901,7 @@ fn render_node<S: 'static>(
                 // 値は数値（四捨五入した %）へ上書きする（`toggle_switch` の role 補正と同じ書き方）。
                 #[cfg(any(target_os = "macos", target_os = "android", target_os = "windows"))]
                 {
-                    let label = widget.accessibility_label();
+                    let label = synced.accessibility_label();
                     ui.ctx().accesskit_node_builder(response.id, |node| {
                         match label.as_deref() {
                             Some(l) => node.set_label(l),

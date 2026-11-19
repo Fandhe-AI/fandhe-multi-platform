@@ -378,3 +378,17 @@ fn card_draws_a_stroked_frame() {
     );
     assert_eq!(frames_for(&card), base + 1);
 }
+
+fn rd_tip(_: &St) -> String {
+    "状態からの補足".to_string()
+}
+
+/// `Tooltip::bound` の本文は状態を反映して初めて持つ。合成 AX ノードのラベルはその本文になる
+/// （未反映の widget から読むと空になる、PR #1443 codex 指摘）。AX ノードを出すのは macOS・Android・Windows のみ。
+#[cfg(any(target_os = "macos", target_os = "android", target_os = "windows"))]
+#[test]
+fn bound_tooltip_text_reaches_ax_label() {
+    let tip = Tooltip::bound(id(3), rd_tip).with_anchor(cb_a());
+    let h = harness(Screen::new("t").with_node(Node::Widget(Box::new(tip))));
+    h.get_by_label("状態からの補足");
+}

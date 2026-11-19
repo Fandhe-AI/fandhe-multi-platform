@@ -476,7 +476,13 @@ fn convert_node<S: 'static>(
                 // 残り 14 種、Issue #993 受入基準 (a)）は `role="group"` +
                 // `aria-label` で a11y 名だけ出す（ダミー部品への置き換えはしない）。
                 let mut attrs = Vec::new();
-                if let Some(label) = widget.accessibility_label() {
+                // `Tooltip::bound` 等は本文を `sync_from_state` で初めて持つため、状態を反映した
+                // 複製から読む（未反映の widget だと空になる）。
+                // ponytail: 全ウィジェットを複製して sync する。入れ子の深さに比例して重複するが、
+                // 実画面の深さでは無視できる。問題になれば、ラベルを持たない型を除外する。
+                let mut synced = widget.clone_box();
+                synced.sync_from_state(state);
+                if let Some(label) = synced.accessibility_label() {
                     attrs.push(("role".to_string(), "group".to_string()));
                     attrs.push(("aria-label".to_string(), label));
                 }
@@ -1850,6 +1856,24 @@ mod tests {
         assert_eq!(widget_dom.tag, "div");
         assert!(has_attr(widget_dom, "role", "group"));
         assert!(has_attr(widget_dom, "aria-label", "未対応部品"));
+    }
+
+    /// `Tooltip::bound` の本文は状態を反映して初めて持つ。`aria-label` はその本文になる
+    /// （未反映の widget から読むと空になる、PR #1443 codex 指摘）。
+    #[test]
+    fn bound_tooltip_gets_aria_label_from_state() {
+        use fandhe_core::{Node, Tooltip, WidgetId};
+
+        struct TipState;
+        fn tip_text(_: &TipState) -> String {
+            "状態からの補足".to_string()
+        }
+        let tip = Tooltip::<TipState>::bound(WidgetId::from_raw(1), tip_text);
+        let screen: Screen<TipState> = Screen::new("画面").with_node(Node::Widget(Box::new(tip)));
+        let dom = build_dom_tree(&screen, &TipState, 0);
+        let widget_dom = &dom.children[1];
+        assert!(has_attr(widget_dom, "role", "group"));
+        assert!(has_attr(widget_dom, "aria-label", "状態からの補足"));
     }
 
     /// 実画素の画像ノード（Issue #5）: `img` + PNG の data URL + alt で出る。
