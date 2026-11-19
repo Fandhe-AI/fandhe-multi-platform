@@ -17,14 +17,12 @@
 //! # 画面が受け取らない結果
 //!
 //! 画面の状態が作り直された・画面が破棄された等で、画面側の持ち主の結果が届いたのに誰も poll しないことがある。
-//! 結果が届いていて進行中でない slot は、画面側の持ち主でも公開入口の [`begin_eye_dropper`] が置き換えられる
-//! （公開側の持ち主の未取得の結果だけは置き換えない）。画面が後で poll すると、既存の lost 経路で失敗になる
-//! （成功には化けない）。
+//! 公開入口の [`begin_eye_dropper`] は、画面側の届いた未取得の結果を捨てずに画面の受け取り待ちへ移してから始める
+//! （`SlotOwner::begin_parking`、`consumer-app-structure.md` §8.2）。生きている画面は、結果の到着から poll までの窓に
+//! 公開入口が始まっても、移された結果をそのまま受け取る（`poll_and_finish_owned`）。受け取られない分は画面の次の開始で
+//! 解放する（本番の reset は無い。残るのは最大 1 件の色）。公開側の持ち主の未取得の結果は、どちらの入口も置き換えない。
 //!
-//! 生きている画面でも、結果が届いてから poll されるまでの窓（`POLL_INTERVAL` 程度）に公開入口を開始すると、
-//! その画面の選択は lost の失敗になる（成功にはならない）。
-//!
-//! 画面側の次の開始も同じく自分の古い結果を置き換える。進行中の要求は、サンプラーの
+//! 画面側の次の開始は自分の古い結果を置き換える。進行中の要求は、サンプラーの
 //! 二重起動を防ぐため、どちらの入口も置き換えず busy で断る（OS の確定＝結果の到着だけを正にし、期限では解放しない）。
 //!
 //! # 他の OS
@@ -78,9 +76,10 @@ pub(crate) mod bridge {
         SCREEN_OWNER.begin_excluding(&SLOT, &[&PUBLIC_OWNER])
     }
 
-    /// 公開入口の開始（進行中の要求と、自分の未取得の結果は置き換えない。画面側の届いた結果は置き換える）。
+    /// 公開入口の開始（進行中の要求と、自分の未取得の結果は置き換えない。画面側の届いた未取得の結果は捨てずに
+    /// 画面の受け取り待ちへ移す。持ち主のいない届いた結果は置き換えて捨てる）。
     pub(crate) fn begin_public_request() -> Option<u64> {
-        PUBLIC_OWNER.begin_excluding(&SLOT, &[&PUBLIC_OWNER])
+        PUBLIC_OWNER.begin_parking(&SLOT, &SCREEN_OWNER)
     }
 
     /// OS からの結果を置く（macOS の main queue から。Web は公開入口の結果だけ `web.rs` が `SLOT` へ
@@ -245,7 +244,7 @@ pub fn eye_dropper_pick_effect(
 ///
 /// - 画面 effect の要求が進行中のとき、または自分の前の要求が進行中・結果未取得のときは
 ///   `Internal("eye_dropper busy")` で断る。
-/// - 画面側の持ち主の結果が届いて未取得なだけなら置き換える。画面が後で poll すると lost の失敗になる。
+/// - 画面側の持ち主の結果が届いて未取得なだけなら、捨てずに画面の受け取り待ちへ移して始める。画面はそのまま受け取る。
 /// - 画面 effect 側も、この入口の要求があれば処理中の失敗で終える。
 /// - 依頼自体の失敗は `Err`（結果は届かない）。他の OS・`EyeDropper` を持たないブラウザは `Unsupported`。
 /// - Web はブラウザが利用者の操作（transient activation）の中の呼び出しだけを許すため、クリックなどの
@@ -470,8 +469,23 @@ mod tests {
             fn wake_after(&self, _delay: std::time::Duration) {}
         }
 
+        /// 画面の届いた未取得の結果を、公開入口の開始が捨てずに受け取り待ちへ移す。画面は poll でそのまま受け取る。
+        fn poll_screen(sender: &CompletionSender<u8>) {
+            fandhe_runtime::request_slot::poll_and_finish_owned(
+                &bridge::SLOT,
+                &bridge::SCREEN_OWNER,
+                sender,
+                |_| panic!("待機にはならない"),
+                |s: &mut u8, o| {
+                    *s = if o == Ok(color("#aabbcc")) { 1 } else { 2 };
+                    true
+                },
+                |s: &mut u8| *s = 9,
+            );
+        }
+
         #[test]
-        fn public_begin_replaces_unpolled_screen_result_and_screen_poll_is_lost() {
+        fn public_begin_parks_unpolled_screen_result_and_screen_poll_receives_it() {
             let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
             reset();
             let screen = begin_screen().unwrap();
@@ -479,23 +493,57 @@ mod tests {
             // 画面が受け取らない結果で公開入口が詰まらない。
             let public = begin_public().unwrap();
             assert_ne!(public, screen);
-            // 生きている画面が後で poll すると、lost（失敗）になり、成功値は反映されない。
+            // 生きている画面が後で poll すると、移された結果をそのまま受け取る（lost にならない）。
             let (tx, rx) = std::sync::mpsc::channel();
             let sender = CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
-            fandhe_runtime::request_slot::poll_and_finish_owned(
-                &bridge::SLOT,
-                &bridge::SCREEN_OWNER,
-                &sender,
-                |_| panic!("待機にはならない"),
-                |_s: &mut u8, _o| panic!("成功値は反映されない"),
-                |s: &mut u8| *s = 9,
-            );
+            poll_screen(&sender);
             let mut state = 0u8;
-            rx.try_recv().expect("on_lost が送られる")(&mut state);
-            assert_eq!(state, 9);
+            rx.try_recv().expect("結果が送られる")(&mut state);
+            assert_eq!(state, 1);
             assert_eq!(bridge::SCREEN_OWNER.current(), 0);
+            assert_eq!(bridge::SLOT.snapshot_of(screen), None);
             assert!(rx.try_recv().is_err());
+            // 公開入口の要求はそのまま進行中で、結果は公開側の poll が受け取る。
+            assert_eq!(poll_eye_dropper(public), None);
+            assert!(bridge::deliver(public, Ok(color("#010203"))));
+            assert_eq!(poll_eye_dropper(public), Some(Ok(color("#010203"))));
             reset();
+        }
+
+        /// 受け取られない受け取り待ちの結果は、画面の次の開始で解放される。
+        #[test]
+        fn parked_screen_result_is_released_by_next_screen_begin() {
+            let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            reset();
+            let screen = begin_screen().unwrap();
+            assert!(bridge::deliver(screen, Ok(color("#aabbcc"))));
+            let public = begin_public().unwrap();
+            assert_eq!(
+                bridge::SLOT.snapshot_of(screen),
+                Some(Some(Ok(color("#aabbcc"))))
+            );
+            // 公開入口の要求が進行中のあいだ、画面の次の開始は busy（解放もしない）。
+            assert!(begin_screen().is_none());
+            assert!(bridge::deliver(public, Ok(color("#010203"))));
+            // 公開側の未取得の結果も画面から守る。
+            assert!(begin_screen().is_none());
+            assert_eq!(poll_eye_dropper(public), Some(Ok(color("#010203"))));
+            let next = begin_screen().unwrap();
+            assert_ne!(next, screen);
+            assert_eq!(bridge::SLOT.snapshot_of(screen), None);
+            reset();
+        }
+
+        /// 機能の破棄（slot の reset）でも受け取り待ちの結果は解放される。
+        #[test]
+        fn parked_screen_result_is_released_by_reset() {
+            let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            reset();
+            let screen = begin_screen().unwrap();
+            assert!(bridge::deliver(screen, Ok(color("#aabbcc"))));
+            begin_public().unwrap();
+            reset();
+            assert_eq!(bridge::SLOT.snapshot_of(screen), None);
         }
 
         #[test]
