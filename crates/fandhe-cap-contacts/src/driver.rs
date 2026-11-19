@@ -50,7 +50,7 @@ fn to_outcome(result: Result<PickedContact, ContactsError>) -> ContactPickOutcom
 
 /// `.m` 側の生コード → 結果の写像（SSOT）。0 = 選択（名前なしは `Internal`、空名は
 /// [`validate_contact_name`] が `Internal`）、1 = キャンセル、2 = 権限拒否、
-/// 3 と未知コード = `Internal`（偽のキャンセル・偽の成功を作らない）。
+/// 3（提示失敗）・4（iOS で提示先のシーンが切断された）と未知コード = `Internal`（偽のキャンセル・偽の成功を作らない）。
 /// 呼び出し元は macOS / iOS / Android 限定のため、ホストでのテスト用に `cfg` は割らない。
 #[cfg_attr(
     not(any(target_os = "macos", target_os = "ios", target_os = "android")),
@@ -68,6 +68,7 @@ pub(crate) fn outcome_from_code(
         1 => Err(ContactsError::Cancelled),
         2 => Err(ContactsError::PermissionDenied),
         3 => Err(ContactsError::Internal("contact_picker present")),
+        4 => Err(ContactsError::Internal("contact_picker scene disconnected")),
         _ => Err(ContactsError::Internal("contact_picker outcome")),
     }
 }
@@ -302,6 +303,10 @@ mod tests {
                 Err(ContactsError::Internal(_))
             ));
         }
+        assert!(matches!(
+            outcome_from_code(4, None),
+            Err(ContactsError::Internal("contact_picker scene disconnected"))
+        ));
     }
 
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]

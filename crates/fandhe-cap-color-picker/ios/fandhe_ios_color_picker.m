@@ -13,7 +13,7 @@
 //     -> Rust 側（本 crate の `ios.rs`）が公開する `extern "C"` 関数。1 要求につき 1 回だけ呼ぶ。
 //        code 表: 0 = 選択（rgb = 0xRRGGBB）、1 = 色を選ばずに閉じた、2 = sRGB 変換の失敗・成分が NaN、
 //        3 = 提示できなかった（背景・提示先なし）、4 = busy（最前面が遷移中、または自分のピッカーが
-//        提示中・遷移中）。code → 結果の写像の SSOT は Rust の
+//        提示中・遷移中）、5 = 提示先のシーンが切断された（完了通知を失った要求の確定）。code → 結果の写像の SSOT は Rust の
 //        `fandhe_cap_color_picker::result_from_apple_code`（`.m` では写像しない）。
 //
 // 確定: 確定ボタンは無い。閉じる（colorPickerViewControllerDidFinish: / スワイプ閉じの
@@ -24,8 +24,12 @@
 // スレッド: 生成・提示・通知・`g_activePicker` の読み書きはすべて main queue。完了通知は 1 要求につき 1 回（`done`、first-wins）。
 // 通知前に状態を確定し、delegate の強参照を外す。
 //
-// 守らない範囲: 他機能のピッカーの進行の観測（安定して出ている別の画面の上には重ねる）、表示中の背景遷移、閉じた通知が届かない場合の復旧、sRGB 外の色の正確さ、
-// iPad での提示形態（既定の sheet のまま）。
+// 完了通知を失う経路のうちシーンの切断は、`UISceneDidDisconnectNotification` の観測で失敗（code 5）として 1 度だけ確定する
+// （file-picker・photo-picker と同じ形）。
+//
+// 守らない範囲: 他機能のピッカーの進行の観測（安定して出ている別の画面の上には重ねる）、表示中の背景遷移、
+// シーンが接続されたまま閉じた通知が届かない場合と、提示先のシーンが特定できず切断で確定しない場合の復旧（観測する通知が無い）、
+// sRGB 外の色の正確さ、iPad での提示形態（既定の sheet のまま）。
 //
 // 情報非保持: 選んだ色はフィンガープリントに使えるため、`NSLog` を含むログ出力は一切行わない。
 // ObjC の例外を Rust へ通さないため、例外を投げる API は使わない。
@@ -61,6 +65,11 @@ static FandheColorPickerDelegate *g_retainedDelegate = nil;
 // 自分のピッカー本体。delegate だけが残っていても提示されていなければ、閉じた通知を失って消えたものと
 // みなし進行中として扱わない（永久に busy にしないため）。main queue からのみ読み書きする。
 static __weak UIColorPickerViewController *g_activePicker = nil;
+// 提示したシーン（weak）。シーンの切断（`UISceneDidDisconnectNotification`）が、その要求の完了通知を失った観測になる。
+// 提示の直前に記録し、`g_activePicker` を nil にする箇所ですべて nil にする。main queue からのみ読み書きする。
+static __weak UIScene *g_activeScene = nil;
+// 切断通知の購読トークン。強参照で持ち続けないと observer が解放されて購読が無効になる。main queue からのみ触る。
+static id _Nullable g_sceneDisconnectToken = nil;
 
 @implementation FandheColorPickerDelegate
 
@@ -118,10 +127,53 @@ static __weak UIColorPickerViewController *g_activePicker = nil;
 
 @end
 
+// シーンの切断で、完了通知を失った要求を失敗（code 5）で 1 度だけ確定する（main queue）。
+// 切断されるとピッカーは delegate を呼ばずに消える、という挙動は公式文書で確認されておらず実機で未確認。
+// OS の観測で確定するので推測のタイマーは持たない。
+// 提示したシーンが記録でき、それが切断されたときだけ確定する。提示先が特定できない（記録が nil）ときは、iPad のマルチウィンドウで
+// 無関係な別シーンが閉じただけで正しい選択を落とさないよう、切断では確定しない（観測できない天井）。
+// 閉じて確定済みの要求は先に `g_retainedDelegate` が nil になっているので何もしない。
+static void FandheColorPickerFailOnSceneDisconnect(UIScene *disconnected) {
+    FandheColorPickerDelegate *stale = g_retainedDelegate;
+    if (stale == nil) {
+        return;
+    }
+    UIScene *active = g_activeScene;
+    if (active == nil || active != disconnected) {
+        return;
+    }
+    UIColorPickerViewController *picker = g_activePicker;
+    picker.presentationController.delegate = nil;
+    picker.delegate = nil;
+    g_activePicker = nil;
+    g_activeScene = nil;
+    // `finishWithCode:` が `g_retainedDelegate` を外してから Rust へ通知する（以降 `stale` に触れない）。
+    [stale finishWithCode:5 rgb:0];
+}
+
+// 切断通知の購読を 1 度だけ登録する（main queue）。
+static void FandheColorPickerObserveSceneDisconnect(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+      g_sceneDisconnectToken = [NSNotificationCenter.defaultCenter
+          addObserverForName:UISceneDidDisconnectNotification
+                      object:nil
+                       queue:NSOperationQueue.mainQueue
+                  usingBlock:^(NSNotification *note) {
+                    @autoreleasepool {
+                        if ([note.object isKindOfClass:UIScene.class]) {
+                            FandheColorPickerFailOnSceneDisconnect((UIScene *)note.object);
+                        }
+                    }
+                  }];
+    });
+}
+
 int32_t fandhe_ios_color_picker_present(uint64_t request_id, int32_t initial_rgb) {
     // egui のフレーム中に UIKit の遷移を始めないため main queue へ積む。
     dispatch_async(dispatch_get_main_queue(), ^{
         @autoreleasepool {
+            FandheColorPickerObserveSceneDisconnect();
             if (UIApplication.sharedApplication.applicationState == UIApplicationStateBackground) {
                 fandhe_rust_ios_color_picker_outcome(request_id, 3, 0);
                 return;
@@ -159,6 +211,7 @@ int32_t fandhe_ios_color_picker_present(uint64_t request_id, int32_t initial_rgb
             [g_retainedDelegate finishWithCode:1 rgb:0];
             g_retainedDelegate = delegate;
             g_activePicker = vc;
+            g_activeScene = top.view.window.windowScene;
             // 提示直後の状態は文書で保証されないため、成否は completion 内で判定する。
             [top presentViewController:vc
                               animated:YES
@@ -166,6 +219,7 @@ int32_t fandhe_ios_color_picker_present(uint64_t request_id, int32_t initial_rgb
                               if (!delegate.done && vc.presentingViewController == nil) {
                                   if (g_activePicker == vc) {
                                       g_activePicker = nil;
+                                      g_activeScene = nil;
                                   }
                                   [delegate finishWithCode:3 rgb:0];
                               }

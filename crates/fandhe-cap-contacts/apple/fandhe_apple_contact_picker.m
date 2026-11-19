@@ -10,7 +10,7 @@
 //   fandhe_rust_contact_picker_outcome(uint64_t request_id, int32_t code, const char *name)
 //     -> Rust 側（本 crate の `apple.rs`）が公開する `extern "C"` 関数。
 //        code 表: 0 = 選択（name は NUL 終端 UTF-8。空文字列もありうる）、1 = キャンセル、
-//        2 = 権限拒否、3 = 提示失敗。name は code 0 のときだけ非 NULL で、呼び出しの間だけ
+//        2 = 権限拒否、3 = 提示失敗、4 = 提示先のシーンが切断された（iOS のみ。完了通知を失った要求の確定）。name は code 0 のときだけ非 NULL で、呼び出しの間だけ
 //        有効（Rust 側が呼び出し中にコピーする）。コード → 結果の写像は Rust 側
 //        本 crate の `driver.rs::outcome_from_code` に一本化する（`.m` 側で二重に写像しない）。
 //
@@ -29,6 +29,10 @@
 // も足さない）。`contactPicker:didSelectContacts:`（複数形）は実装しない（実装すると複数選択
 // になる）。キャンセルボタンは `contactPickerDidCancel:`、スワイプ dismiss は
 // `presentationControllerDidDismiss:` で code 1。提示先 VC が無ければ code 3。
+//
+// シーンの切断（iOS）: 完了通知を失う経路のうちシーンの切断は、`UISceneDidDisconnectNotification` の観測で失敗（code 4）として
+// 1 度だけ確定する（file-picker・photo-picker と同じ形。画面は `Idle` 以外で次の要求を受けないため、残すと `Picking` のまま止まる）。
+// 提示先のシーンが特定できない・シーンが接続されたまま通知が来ない場合は観測する通知が無く、残る（天井）。
 //
 // 再要求は置き換え: 保留中のピッカーがあれば古いデリゲートを「通知済み」にしてから閉じる
 // （古い要求は Rust 側で要求 id の不一致により既に無効）。許可待ちの間に新しい要求が来た場合も、
@@ -73,6 +77,13 @@ static CNContactPicker *g_picker = nil;
 #endif
 static FandheContactPickerDelegate *g_delegate = nil;
 static uint64_t g_latest_request_id = 0;
+#if TARGET_OS_IOS
+// 提示したシーン（weak）。シーンの切断（`UISceneDidDisconnectNotification`）が、その要求の完了通知を失った観測になる。
+// 提示の直前に記録し、`g_delegate` を nil にする箇所ですべて nil にする。main queue 限定。
+static __weak UIScene *g_activeScene = nil;
+// 切断通知の購読トークン。強参照で持ち続けないと observer が解放されて購読が無効になる。main queue 限定。
+static id _Nullable g_sceneDisconnectToken = nil;
+#endif
 
 // 完了通知を 1 回だけ行う。
 static void FandheContactNotify(FandheContactPickerDelegate *delegate, int32_t code, NSString *name) {
@@ -88,6 +99,9 @@ static void FandheContactReleaseIfCurrent(FandheContactPickerDelegate *delegate)
     if (g_delegate == delegate) {
         g_delegate = nil;
         g_picker = nil;
+#if TARGET_OS_IOS
+        g_activeScene = nil;
+#endif
     }
 }
 
@@ -134,6 +148,46 @@ static NSString *FandheContactDisplayName(CNContact *contact) {
 
 @end
 
+// シーンの切断で、完了通知を失った要求を失敗（code 4）で 1 度だけ確定する（main queue）。
+// 切断されるとピッカーは delegate を呼ばずに消える、という挙動は公式文書で確認されておらず実機で未確認。
+// OS の観測で確定するので推測のタイマーは持たない。提示したシーンが記録でき、それが切断されたときだけ確定する
+// （記録が nil なら、iPad のマルチウィンドウで無関係な別シーンが閉じただけで正しい選択を落とさないよう確定しない）。
+// 選択・キャンセルで確定済みの要求は先に `g_delegate` が nil になっているので何もしない。
+static void FandheContactFailOnSceneDisconnect(UIScene *disconnected) {
+    FandheContactPickerDelegate *stale = g_delegate;
+    if (stale == nil) {
+        return;
+    }
+    UIScene *active = g_activeScene;
+    if (active == nil || active != disconnected) {
+        return;
+    }
+    g_picker.presentationController.delegate = nil;
+    g_picker.delegate = nil;
+    g_delegate = nil;
+    g_picker = nil;
+    g_activeScene = nil;
+    FandheContactNotify(stale, 4, nil);
+}
+
+// 切断通知の購読を 1 度だけ登録する（main queue）。
+static void FandheContactObserveSceneDisconnect(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+      g_sceneDisconnectToken = [NSNotificationCenter.defaultCenter
+          addObserverForName:UISceneDidDisconnectNotification
+                      object:nil
+                       queue:NSOperationQueue.mainQueue
+                  usingBlock:^(NSNotification *note) {
+                    @autoreleasepool {
+                        if ([note.object isKindOfClass:UIScene.class]) {
+                            FandheContactFailOnSceneDisconnect((UIScene *)note.object);
+                        }
+                    }
+                  }];
+    });
+}
+
 static void FandheContactShow(uint64_t request_id) {
     UIViewController *top = FandheTopmostViewController();
     if (top == nil || top.view.window == nil) {
@@ -147,6 +201,7 @@ static void FandheContactShow(uint64_t request_id) {
     picker.delegate = delegate; // weak のため g_delegate の強参照で生かす。
     g_delegate = delegate;
     g_picker = picker;
+    g_activeScene = top.view.window.windowScene;
     [top presentViewController:picker animated:YES completion:^{
       // スワイプ dismiss の通知先。提示後に設定する（提示前は presentationController が無い場合がある）。
       picker.presentationController.delegate = delegate;
@@ -155,6 +210,7 @@ static void FandheContactShow(uint64_t request_id) {
 
 static void FandheContactPresentOnMain(uint64_t request_id) {
     g_latest_request_id = request_id;
+    FandheContactObserveSceneDisconnect();
 
     // 認可状態の確認・要求はしない（ピッカーはプロセス外で動き権限不要。code 2 は出さない）。
     if (g_delegate == nil) {
@@ -166,6 +222,7 @@ static void FandheContactPresentOnMain(uint64_t request_id) {
     CNContactPickerViewController *old = g_picker;
     g_delegate = nil;
     g_picker = nil;
+    g_activeScene = nil;
     UIViewController *presenting = old.presentingViewController;
     if (presenting == nil) {
         // 古いピッカーが提示に失敗した等で閉じる対象が無い。nil へ送った dismiss は completion が

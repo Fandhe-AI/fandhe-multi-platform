@@ -50,7 +50,8 @@ fn rgb_err(e: fandhe_device::eye_dropper::PickColorError) -> ColorPickerError {
 }
 
 /// Apple（macOS・iOS 共用）の `.m` 側の結果コード → 結果の写像（SSOT）。0 = 選択（`rgb` を検査）、
-/// 1 = 選ばずに閉じた、2 = sRGB 変換の失敗・NaN、3 = 提示できなかった、4 = busy（iOS のみ）。未知は `Internal`。
+/// 1 = 選ばずに閉じた、2 = sRGB 変換の失敗・NaN、3 = 提示できなかった、4 = busy（iOS のみ）、
+/// 5 = 提示先のシーンが切断された（iOS のみ。完了通知を失った要求を失敗で確定する）。未知は `Internal`。
 pub fn result_from_apple_code(code: i32, rgb: i32) -> Result<PickedColor, ColorPickerError> {
     match code {
         0 => color_from_rgb(i64::from(rgb)).map_err(rgb_err),
@@ -58,6 +59,9 @@ pub fn result_from_apple_code(code: i32, rgb: i32) -> Result<PickedColor, ColorP
         2 => Err(ColorPickerError::Internal("color_picker convert")),
         3 => Err(ColorPickerError::Internal("color_picker present")),
         4 => Err(ColorPickerError::Internal("color_picker busy")),
+        5 => Err(ColorPickerError::Internal(
+            "color_picker scene disconnected",
+        )),
         _ => Err(ColorPickerError::Internal("color_picker outcome")),
     }
 }
@@ -140,7 +144,13 @@ mod tests {
             result_from_apple_code(4, 0),
             Err(ColorPickerError::Internal("color_picker busy"))
         );
-        for code in [-1, 5, 99] {
+        assert_eq!(
+            result_from_apple_code(5, 0),
+            Err(ColorPickerError::Internal(
+                "color_picker scene disconnected"
+            ))
+        );
+        for code in [-1, 6, 99] {
             assert!(matches!(
                 result_from_apple_code(code, 0x12_3456),
                 Err(ColorPickerError::Internal("color_picker outcome"))

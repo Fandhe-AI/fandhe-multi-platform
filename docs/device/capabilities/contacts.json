@@ -10,7 +10,7 @@
       "status": "done",
       "api": "ContactsUI（`CNContactPickerViewController`）/ Contacts（`CNContactStore`）",
       "url": "https://developer.apple.com/documentation/contacts/requesting-authorization-to-access-contacts",
-      "note": "実装済み（旧#1221）。`fandhe_apple_contact_picker.m` が `CNContactPickerViewController` を main queue で提示し、選んだ 1 件の表示名（姓名を `NSPersonNameComponentsFormatter` で整形、無ければ会社名）だけを返す。電話・メール・識別子・一覧は扱わない。複数選択になる `didSelectContacts:` は実装しない。キャンセル（ボタン・スワイプ dismiss）は失敗にしない。空白だけの名前は成功にしない。提示先の画面が無い場合は Internal。再要求は保留中のピッカーを閉じて置き換え、古い要求の完了は要求 id の照合で捨てる。完了は一度きり。名前はログに出さない。守る範囲: 1 プロセス内の要求と完了の順序、偽の成功の禁止、ピッカーの強参照の解放。守らない範囲: 複数プロセスの同時操作、OS 側の非同期確定との時間差による一時的な表示の食い違い。実機確認は #9 で済み",
+      "note": "実装済み（旧#1221）。`fandhe_apple_contact_picker.m` が `CNContactPickerViewController` を main queue で提示し、選んだ 1 件の表示名（姓名を `NSPersonNameComponentsFormatter` で整形、無ければ会社名）だけを返す。電話・メール・識別子・一覧は扱わない。複数選択になる `didSelectContacts:` は実装しない。キャンセル（ボタン・スワイプ dismiss）は失敗にしない。空白だけの名前は成功にしない。提示先の画面が無い場合は Internal。再要求は保留中のピッカーを閉じて置き換え、古い要求の完了は要求 id の照合で捨てる。完了は一度きり。提示先のシーンが切断されたときは `UISceneDidDisconnectNotification` の観測で失敗（Internal）として 1 度だけ確定し、次の開始ができる（残る天井: シーンが接続されたまま通知が来ない場合と、提示先のシーンが特定できず切断で確定しない場合は `Picking` のまま残る。シーン切断の実機確認は人間担当）。名前はログに出さない。守る範囲: 1 プロセス内の要求と完了の順序、偽の成功の禁止、ピッカーの強参照の解放。守らない範囲: 複数プロセスの同時操作、OS 側の非同期確定との時間差による一時的な表示の食い違い。実機確認は #9 で済み",
       "sourceName": [
         "連絡先アクセス"
       ],
