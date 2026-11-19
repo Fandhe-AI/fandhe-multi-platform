@@ -21,10 +21,12 @@ cargo fandhe run|build [--os macos|windows|linux|web] [--release] [--manifest-pa
 
 - Web の出力先は `<target_dir>/fandhe/<package 名>/web/` です。`cargo build` が成功したあと、`wasm-bindgen` の前にこのディレクトリを消して作り直します（コンパイルに失敗しても前回の成果物は残ります）
   （`target_dir` の配下で、途中に symlink が無いことを確かめてから消します）。`wasm-bindgen` の出力は直下に置きます
-- アプリの `web/` ディレクトリがあれば丸ごと写します（symlink は写しません）。`web/index.html` が無ければ（symlink も無いものとして扱います）、全画面の canvas を持つ
+- アプリの `web/` ディレクトリがあれば丸ごと写します
+  （`web/` 自身が symlink なら無いものとして扱い、配下の symlink は写しません）。`web/index.html` が無ければ（symlink も無いものとして扱います）、全画面の canvas を持つ
   既定の `index.html` を出します。`[package.metadata.fandhe-app.web]` があれば、`web/` の写しのあとに
   `cargo fandhe gen --os web` と同じ manifest を置きます（テーブル以外の書き方は gen と同じエラーです）
-- フォント（Noto Sans JP）は、依存に `fandhe-fonts` があれば `fonts/noto-sans-jp-regular.otf` へ写します。無ければ既定フォントで続行します
+- フォント（Noto Sans JP）は、依存に `fandhe-fonts` があれば
+  （描画層は wasm32 以外でだけ依存するため、対象を絞らない依存解決から探します）`fonts/noto-sans-jp-regular.otf` へ写します。無ければ既定フォントで続行します
 - 配信は GET だけで、配信ディレクトリ配下の通常ファイルだけを返します（`..`・絶対パス・ドライブ文字・symlink は 400）。
   `Host` が `127.0.0.1:<port>`・`localhost:<port>` 以外のリクエストも 400 にします（DNS rebinding 対策）。
   外部プロセス（python 等）を使わないため、cargo-fandhe が終わればポートも閉じます。127.0.0.1 の外へは開きません

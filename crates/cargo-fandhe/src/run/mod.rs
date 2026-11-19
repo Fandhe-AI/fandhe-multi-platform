@@ -304,12 +304,20 @@ pub fn load_app(opts: &Options, os: Os) -> Result<App, Vec<String>> {
         Os::Web => {
             app.wasm_bindgen =
                 package("wasm-bindgen").and_then(|p| p["version"].as_str().map(String::from));
-            app.font = package("fandhe-fonts")
+            // `fandhe-fonts` は描画層の wasm32 以外の依存なので、wasm32 に絞った解決には現れない。
+            // 資産の置き場だけを知りたいため、絞らない解決から探す。
+            let all = run_metadata(opts.manifest.as_deref(), None)?;
+            app.font = all["packages"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|p| p["name"].as_str() == Some("fandhe-fonts"))
                 .and_then(|p| p["manifest_path"].as_str())
                 .and_then(|m| Path::new(m).parent())
                 .map(|d| d.join("assets/NotoSansJP-Regular.otf"))
                 .filter(|f| f.is_file());
-            app.web_dir = Some(app.dir.join("web")).filter(|d| d.is_dir());
+            // symlink の web/ は読み取り元の外を指しうるため、無いものとして扱う（`copy_dir` も入口で拒否する）。
+            app.web_dir = Some(app.dir.join("web")).filter(|d| is_real_dir(d));
             // symlink の index.html は `copy_dir` が写さないため、無いものとして既定ページへ倒す。
             app.web_has_index = std::fs::symlink_metadata(app.dir.join("web/index.html"))
                 .is_ok_and(|m| m.is_file());
@@ -449,8 +457,19 @@ fn reset_dir(dir: &Path, within: &Path) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("{} を作れません: {e}", dir.display()))
 }
 
-/// `from` の中身を `to` へ再帰的に写す。symlink は写さない（読み取り元の外を成果物に取り込まないため）。
+/// symlink でない実体のディレクトリか（`is_dir` はリンク先を辿るため使わない）。
+fn is_real_dir(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|m| m.is_dir())
+}
+
+/// `from` 配下を `to` へ写す。`from` 自身と配下の symlink は辿らない（読み取り元の外を成果物に取り込まない）。
 fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
+    if !is_real_dir(from) {
+        return Err(format!(
+            "{} は symlink でないディレクトリではないため写しません",
+            from.display()
+        ));
+    }
     std::fs::create_dir_all(to).map_err(|e| format!("{} を作れません: {e}", to.display()))?;
     let rd =
         std::fs::read_dir(from).map_err(|e| format!("{} を読めません: {e}", from.display()))?;

@@ -569,3 +569,45 @@ fn copy_dir_skips_symlinks() {
     assert!(t.join("dst/real.txt").is_file());
     assert!(!t.join("dst/link.txt").exists());
 }
+
+#[test]
+fn web_finds_font_even_when_fonts_crate_is_not_a_wasm_dependency() {
+    // 描画層と同じく wasm32 以外でだけ依存する形（利用者のアプリが描画層経由で持つ形）。
+    let fonts = Path::new(env!("CARGO_MANIFEST_DIR")).join("../fandhe-fonts");
+    let m = standalone(
+        "fontdep",
+        &format!(
+            "[target.'cfg(not(target_arch = \"wasm32\"))'.dependencies]\n\
+             fandhe-fonts = {{ path = {:?} }}\n",
+            fonts.canonicalize().expect("実在")
+        ),
+    );
+    let app = load(&m, Os::Web).unwrap_or_else(|e| panic!("{e:?}"));
+    assert!(
+        app.font.as_deref().is_some_and(Path::is_file),
+        "{:?}",
+        app.font
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn symlinked_web_dir_is_ignored_and_not_copied() {
+    let m = standalone("weblink", "");
+    let root = m.parent().expect("親");
+    let outside = root.join("private");
+    std::fs::create_dir_all(&outside).expect("作成");
+    std::fs::write(outside.join("secret.txt"), "s").expect("書き込み");
+    std::os::unix::fs::symlink(&outside, root.join("web")).expect("link");
+    let app = load(&m, Os::Web).unwrap_or_else(|e| panic!("{e:?}"));
+    assert!(app.web_dir.is_none(), "symlink の web/ は採らない");
+    // 実行器も入口で拒否する。
+    let t = scratch("copy-root-link");
+    let e = execute(&[Op::CopyDir {
+        from: root.join("web"),
+        to: t.join("dst"),
+    }])
+    .expect_err("拒否");
+    assert!(e.contains("symlink"), "{e}");
+    assert!(!t.join("dst/secret.txt").exists());
+}
