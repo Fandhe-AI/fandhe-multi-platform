@@ -687,19 +687,27 @@ fn android_build_sequence_for_gallery() {
     let ops = prepare(&app, &android_opts(Action::Build, false), &aenv(false)).expect("通る");
     let sh = shell(&app);
     let jni = sh.join("app/src/main/jniLibs");
-    // gen（Android の分だけ。出力先は殻の下で、アプリの gen/ ではない）→ app/src の作り直し → 殻の書き出し → cargo-ndk → gradle。
+    // 前回の重ね置きの削除（app/src の外のファイルは Reset で消えない。控えが gen/ を指しても後の Gen が書き直すよう先頭）
+    // → gen（Android の分だけ。出力先は殻の下で、アプリの gen/ ではない）→ app/src の作り直し → 殻の書き出し → cargo-ndk → gradle。
+    assert_eq!(
+        ops[0],
+        Op::Prune {
+            dir: sh.clone(),
+            within: app.target_dir.clone()
+        }
+    );
     assert!(
-        matches!(&ops[0], Op::Gen { dir, within, files } if *dir == sh.join("gen") && *within == app.target_dir && files.contains_key("android/fandhe.gradle") && !files.keys().any(|k| k.starts_with("ios/")))
+        matches!(&ops[1], Op::Gen { dir, within, files } if *dir == sh.join("gen") && *within == app.target_dir && files.contains_key("android/fandhe.gradle") && !files.keys().any(|k| k.starts_with("ios/")))
     );
     assert_ne!(sh.join("gen"), app.dir.join("gen"));
     assert_eq!(
-        ops[1],
+        ops[2],
         Op::Reset {
             dir: sh.join("app/src"),
             within: app.target_dir.clone()
         }
     );
-    assert!(ops[2..ops.len() - 3]
+    assert!(ops[3..ops.len() - 3]
         .iter()
         .all(|o| matches!(o, Op::Write { path, within, .. } if path.starts_with(&sh) && *within == app.target_dir)));
     let steps = spawns(&ops);
@@ -740,10 +748,9 @@ fn android_build_sequence_for_gallery() {
     // 殻の中身の要点。
     let app_gradle = written(&ops, "app/build.gradle.kts", &sh);
     assert!(app_gradle.contains("applicationId = \"com.fandhe.androidapp\""));
-    assert!(app_gradle.contains(&format!(
-        "apply(from = \"{}\")",
-        sh.join("gen/android/fandhe.gradle").display()
-    )));
+    // gen の出力は殻のルートからの相対パスで参照する（絶対パスだと eject で持ち出した殻が target の場所に縛られる）。
+    assert!(app_gradle.contains("apply(from = \"../gen/android/fandhe.gradle\")"));
+    assert!(!app_gradle.contains(&app.target_dir.display().to_string()));
     let main = written(
         &ops,
         "app/src/main/java/com/fandhe/platform/MainActivity.java",
@@ -1270,8 +1277,8 @@ fn android_application_attributes_override_shell_defaults_and_stay_out_of_overla
         "{man}"
     );
     // gen の overlay には出ない。アプリの res は Gradle の srcDirs に入る。
-    let Op::Gen { files, .. } = &ops[0] else {
-        panic!("先頭は Gen のはず")
+    let Some(Op::Gen { files, .. }) = ops.iter().find(|o| matches!(o, Op::Gen { .. })) else {
+        panic!("Gen があるはず")
     };
     assert!(!files["android/AndroidManifest.xml"].contains("localeConfig"));
     assert!(files["android/fandhe.gradle"].contains("/android/res"));

@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::native::{
-    app_root, generate_android, generate_web, AppInfo, ANDROID_TRIPLE, EJECT_NOTE,
+    app_root, generate_android, generate_web, shell_overlay, AppInfo, ANDROID_TRIPLE, EJECT_NOTE,
     WEB_MANIFEST_PATH, WEB_TRIPLE,
 };
 use crate::workspace::run_metadata;
@@ -160,6 +160,8 @@ pub struct App {
     pub application_attributes: BTreeMap<String, String>,
     /// `cargo fandhe gen`（Android の分だけ）の出力。Android のときだけ作る。
     pub android_gen: Option<BTreeMap<String, String>>,
+    /// `eject/android/shell/` に置いたファイル（置き場からの相対）。Android のときだけ読む。殻へ重ねる。
+    pub shell_overlay: Vec<String>,
 }
 
 /// 実行環境のスナップショット。判定を純粋にするため、実環境の観測は [`detect_env`] だけが行う。
@@ -211,6 +213,21 @@ pub enum Op {
         path: PathBuf,
         within: PathBuf,
         body: String,
+    },
+    /// 前回の殻の重ね置きが書いたファイルを消す（`dir` の `.fandhe-overlay` に控えがある分だけ。Gradle の
+    /// `build/`・`.gradle/` など他のものは消さない。控えの項目が通常ファイルでなければ飛ばし、空になった親ディレクトリは消す）。
+    /// `within` の配下で symlink を通らないことを確かめてから消す。
+    Prune {
+        dir: PathBuf,
+        within: PathBuf,
+    },
+    /// `files`（`from` からの相対）を `to` の同じ相対パスへ重ねて写し、写した一覧を `to` の `.fandhe-overlay` に控える。
+    /// 同じパスは置き換える。`from` 側が symlink なら拒否し、写し先は `within` の配下で symlink を通らないことを確かめる。
+    Overlay {
+        from: PathBuf,
+        to: PathBuf,
+        within: PathBuf,
+        files: Vec<String>,
     },
     /// ファイルを写す（親ディレクトリは作る）。
     Copy {
@@ -334,6 +351,7 @@ pub fn load_app(opts: &Options, os: Os) -> Result<App, Vec<String>> {
         application_id: None,
         application_attributes: BTreeMap::new(),
         android_gen: None,
+        shell_overlay: Vec::new(),
     };
     match os {
         Os::Web => {
@@ -371,6 +389,13 @@ pub fn load_app(opts: &Options, os: Os) -> Result<App, Vec<String>> {
             let (g, shell) = generate_android(opts.manifest.as_deref(), gen_dir)?;
             for n in g.notes.iter().filter(|n| n.starts_with(EJECT_NOTE)) {
                 eprintln!("{n}");
+            }
+            app.shell_overlay = shell_overlay(&app.dir)?;
+            if !app.shell_overlay.is_empty() {
+                eprintln!(
+                    "{EJECT_NOTE}android/shell（{} ファイル）",
+                    app.shell_overlay.len()
+                );
             }
             app.android_gen = Some(g.files);
             app.application_id = shell.application_id;
@@ -462,6 +487,13 @@ pub fn execute(ops: &[Op]) -> Result<(), String> {
                 std::fs::write(path, body)
                     .map_err(|e| format!("{} を書けません: {e}", path.display()))?;
             }
+            Op::Prune { dir, within } => prune_overlay(dir, within)?,
+            Op::Overlay {
+                from,
+                to,
+                within,
+                files,
+            } => overlay(from, to, within, files)?,
             Op::Copy { from, to } => {
                 make_parent(to)?;
                 std::fs::copy(from, to).map_err(|e| {
@@ -484,6 +516,94 @@ pub fn execute(ops: &[Op]) -> Result<(), String> {
                 }
             }
         }
+    }
+    Ok(())
+}
+
+/// 重ね置きが書いたファイルの控え（`to` の直下。`.` 始まりなので重ね置きの対象にならない）。
+const OVERLAY_RECORD: &str = ".fandhe-overlay";
+
+/// 控えにあるファイルを消し、控えも消す。控えが無ければ何もしない。壊れた控え・`..` を含む項目では何も消さずに止まる。
+/// 控えの項目が通常ファイルでなければ（ディレクトリ等）飛ばす。項目の親ディレクトリは、空なら `dir` の手前まで消す。
+fn prune_overlay(dir: &Path, within: &Path) -> Result<(), String> {
+    let record = dir.join(OVERLAY_RECORD);
+    check_within(&record, within)?;
+    let body = match std::fs::read_to_string(&record) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(format!("{} を読めません: {e}", record.display())),
+    };
+    let broken = || {
+        format!(
+            "{} が壊れています。消してから実行し直してください",
+            record.display()
+        )
+    };
+    let files: Vec<String> = serde_json::from_str(&body).map_err(|_| broken())?;
+    let targets: Vec<PathBuf> = files.iter().map(|rel| dir.join(rel)).collect();
+    // 1 件でも範囲外なら、何も消す前に止める（check_within は `..`・絶対パス・symlink を拒否する）。
+    for t in &targets {
+        // 字句上の範囲外（`..`・絶対パス）だけが「壊れた控え」。symlink や I/O の失敗は check_within の文言のまま返す。
+        let rel = t.strip_prefix(dir).ok().filter(|r| {
+            r.components().next().is_some()
+                && r.components()
+                    .all(|c| matches!(c, std::path::Component::Normal(_)))
+        });
+        if rel.is_none() {
+            return Err(broken());
+        }
+        check_within(t, within)?;
+    }
+    for t in targets {
+        // 重ね置きが書くのは通常ファイルだけ。ディレクトリ等に変わっていれば（写し先が既存のディレクトリで写せなかった等）
+        // 自分の書いたものではないので消さない（消そうとして毎回失敗し、控えが永久に残るのを防ぐ）。
+        match std::fs::symlink_metadata(&t) {
+            Ok(m) if m.is_file() => std::fs::remove_file(&t)
+                .map_err(|e| format!("{} を消せません: {e}", t.display()))?,
+            Ok(_) => continue,
+            // 元から無い（写す途中で失敗した・途中の要素が通常ファイル）。親の空ディレクトリは残りうるので下へ落とす。
+            Err(e) if is_absent(&e) => {}
+            Err(e) => return Err(format!("{} を調べられません: {e}", t.display())),
+        }
+        // 空になった親ディレクトリを `dir` の手前まで消す（入力が `extra/a.txt` から通常ファイル `extra` に変わっても
+        // 写せるように）。空でなければ（殻のファイル・Gradle の出力がある）そこで止める。
+        let mut parent = t.parent();
+        while let Some(p) = parent.filter(|p| *p != dir) {
+            if std::fs::remove_dir(p).is_err() {
+                break;
+            }
+            parent = p.parent();
+        }
+    }
+    // 控えに自身の名前があると、上の削除で既に消えている。
+    match std::fs::remove_file(&record) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("{} を消せません: {e}", record.display())),
+    }
+}
+
+/// 殻の重ね置き。控えを先に書き（途中で失敗しても次回の `prune_overlay` が拾えるように）、そのあと 1 件ずつ写す。
+fn overlay(from: &Path, to: &Path, within: &Path, files: &[String]) -> Result<(), String> {
+    let record = to.join(OVERLAY_RECORD);
+    check_within(&record, within)?;
+    make_parent(&record)?;
+    let list = serde_json::to_string(files).map_err(|e| e.to_string())?;
+    std::fs::write(&record, list).map_err(|e| format!("{} を書けません: {e}", record.display()))?;
+    for rel in files {
+        let (src, dest) = (from.join(rel), to.join(rel));
+        check_within(&src, from)?;
+        check_within(&dest, within)?;
+        check_within(&dest, to)?;
+        if !std::fs::symlink_metadata(&src).is_ok_and(|m| m.is_file()) {
+            return Err(format!(
+                "{} は通常ファイルではないため写しません",
+                src.display()
+            ));
+        }
+        make_parent(&dest)?;
+        std::fs::copy(&src, &dest)
+            .map_err(|e| format!("{} を {} へ写せません: {e}", src.display(), dest.display()))?;
     }
     Ok(())
 }
@@ -526,11 +646,20 @@ pub(crate) fn check_within(path: &Path, within: &Path) -> Result<(), String> {
                 return Err(format!("{} は symlink のため操作しません", cur.display()))
             }
             Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => break,
+            Err(e) if is_absent(&e) => break,
             Err(e) => return Err(format!("{} を調べられません: {e}", cur.display())),
         }
     }
     Ok(())
+}
+
+/// パスが存在しないことを表すエラーか。途中の要素が通常ファイルのとき unix は `NotFound` ではなく `NotADirectory` を返す
+/// （直前の要素は symlink でないと確かめ済みなので、ここから先は存在しない扱いでよい）。
+fn is_absent(e: &std::io::Error) -> bool {
+    matches!(
+        e.kind(),
+        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+    )
 }
 
 /// symlink でない実体のディレクトリか（`is_dir` はリンク先を辿るため使わない）。

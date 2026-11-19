@@ -114,7 +114,9 @@ fn app(ctx: &fandhe::egui::Context) -> Box<dyn fandhe::app::ProxyAppDyn> {
   追記は機能の宣言と同じ欄名を `[package.metadata.fandhe-app.*]` に書く形で、生成値と食い違えば上書きせずエラーにします。
   Apple の `info-plist`・`entitlements` と、Android の宣言（機能の宣言と同じ欄。アプリを宣言者として統合）・`application-attributes`（殻の `<application>`）は実装済みです。
   `--eject` は生成した設定ファイル（Manifest・Info.plist・entitlements）を `<アプリの crate>/eject/` へ書き出し、以後は生成の代わりに使います
-  （消せば生成へ戻る。`capability-declaration.md` §7）
+  （消せば生成へ戻る。`capability-declaration.md` §7）。
+  Android の殻（`run`/`build` が作る Gradle プロジェクト）は、`eject/android/shell/**` に置いたファイルを同じパスへ重ねて置き換えます。
+  殻に無いファイル（`google-services.json`・アイコン）も置け、`versionCode` や Gradle プラグインはここで変えます（`run-build-cli.md`）
 - 権限の説明文は既定値を持たず、利用者が書きます。有効な機能の説明文が無ければエラーにします。
   既定の文言のまま審査に出る事故を避けるためです
 - Java はソース配布にします（#1216 で同梱を確かめます）。アプリの applicationId と独立した固定パッケージ `com.fandhe.platform`（仮名、公開前に確定）へ移しました（#1167）。
