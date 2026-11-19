@@ -336,10 +336,8 @@ pub fn outcome_from_as_error(code: i64) -> Result<WebAuthOutcome, WebAuthFailure
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub use server::{DemoAuthServer, LoopbackTx};
 
-#[cfg(not(target_arch = "wasm32"))]
 mod server {
     use super::WebAuthFailure;
     use std::io::{Read, Write};
