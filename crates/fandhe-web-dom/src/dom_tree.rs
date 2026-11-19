@@ -28,10 +28,11 @@
 //! | `Node::Widget(ImageWidget)`（ソースが `blob:` で始まるとき） | `img`（Issue #1103） |
 //! | `Node::Widget(ImageWidget)`（ソースが空でなく `blob:` でない） | `div role="img" aria-label=alt`（Issue #1427。画素は出ない） |
 //! | `Node::Widget(ImageWidget)`（ソースが空。写真選択の選ぶ前など） | 属性なしの空 `div` |
+//! | `Node::Widget(Icon)`（Issue #1437） | `span.fandhe-icon`（本文は `IconName::glyph` + U+FE0E。ラベルがあれば `role="img" aria-label`、空なら `aria-hidden="true"`） |
 
 use fandhe_core::{
-    CanvasWidget, Checkbox, ImageWidget, Measurement, Node, PaintCommand, RadioButton, Screen,
-    Slider, TextRole, ToggleSwitch, Widget,
+    CanvasWidget, Checkbox, Icon, ImageWidget, Measurement, Node, PaintCommand, RadioButton,
+    Screen, Slider, TextRole, ToggleSwitch, Widget,
 };
 
 /// `Screen<S>` / `Node<S>` から変換した、ターゲット非依存の DOM 中間表現。
@@ -370,6 +371,9 @@ fn convert_node<S: 'static>(
             if let Some(dom) = convert_image_widget(widget.as_ref(), state) {
                 return dom;
             }
+            if let Some(dom) = convert_icon_widget(widget.as_ref(), state) {
+                return dom;
+            }
             // `Widget<S>` トレイトオブジェクトの実 DOM マッピング（属性・イベント
             // フック含む）はレイアウトプロトコル（S4、#99）・個別ウィジェット実装
             // （S7 以降）確定後に行う。既定はプレースホルダ（空の `div`）のまま
@@ -550,6 +554,44 @@ fn convert_image_widget<S: 'static>(widget: &dyn Widget<S>, state: &S) -> Option
             ),
         ],
         text: None,
+        children: Vec::new(),
+        event_hook: None,
+    })
+}
+
+/// `Icon` を `span` へ変換する（Issue #1437）。本文は egui と同じ `IconName::glyph` に U+FE0E（テキスト表示）を付けた文字列。
+/// ラベル（開発者指定）があれば `role="img"` + `aria-label` で読み上げ名にし、空なら装飾用として
+/// `aria-hidden="true"`（記号の文字が読み上げに混ざらない）。複製へ `sync_from_state` をかけて読む。
+fn convert_icon_widget<S: 'static>(widget: &dyn Widget<S>, state: &S) -> Option<DomNode> {
+    if !widget.as_any().is_some_and(|any| any.is::<Icon<S>>()) {
+        return None;
+    }
+    let mut synced = widget.clone_box();
+    synced.sync_from_state(state);
+    let icon = synced.as_any()?.downcast_ref::<Icon<S>>()?;
+    let mut attrs = vec![
+        ("class".to_string(), "fandhe-icon".to_string()),
+        (
+            "style".to_string(),
+            format!("font-size:{}px;font-variant-emoji:text", icon.icon_size()),
+        ),
+    ];
+    match synced.accessibility_label() {
+        Some(label) => {
+            attrs.push(("role".to_string(), "img".to_string()));
+            attrs.push(("aria-label".to_string(), label));
+        }
+        None => attrs.push(("aria-hidden".to_string(), "true".to_string())),
+    }
+    Some(DomNode {
+        tag: "span".to_string(),
+        attrs,
+        text: Some(
+            icon.name()
+                // U+FE0E（テキスト表示）を付けて、絵文字の字でも色付きの絵文字にしにくくする。
+                .map(|n| format!("{}\u{FE0E}", n.glyph()))
+                .unwrap_or_default(),
+        ),
         children: Vec::new(),
         event_hook: None,
     })
@@ -1913,6 +1955,38 @@ mod tests {
         let dom = build_dom_tree(&empty, &empty_state(), 0);
         assert_eq!(dom.children[1].tag, "div");
         assert!(dom.children[1].attrs.is_empty());
+    }
+
+    /// `.icon()` は記号の `span`。ラベルがあれば名前付きの `img`、空なら装飾用（Issue #1437）。
+    #[test]
+    fn icon_emits_glyph_span_with_label_or_hidden() {
+        use fandhe_core::IconName;
+        let id = fandhe_core::WidgetId::from_raw;
+        let screen: Screen<CounterState> = Screen::new("t")
+            .icon(id(1), IconName::Settings, "設定")
+            .icon(id(2), IconName::Home, "");
+        let dom = build_dom_tree(&screen, &empty_state(), 0);
+        let named = &dom.children[1];
+        assert_eq!(named.tag, "span");
+        assert_eq!(named.text.as_deref(), Some("\u{2699}\u{FE0E}"));
+        assert!(has_attr(named, "role", "img"));
+        assert!(has_attr(named, "aria-label", "設定"));
+        let decorative = &dom.children[2];
+        assert!(has_attr(decorative, "aria-hidden", "true"));
+        assert!(!decorative.attrs.iter().any(|(k, _)| k == "aria-label"));
+    }
+
+    /// `.icon_bound()` の本文は、状態から読んだ名前の記号になる（`sync_from_state` が要る）。
+    #[test]
+    fn icon_bound_text_follows_state() {
+        use fandhe_core::IconName;
+        fn name(_: &CounterState) -> IconName {
+            IconName::Heart
+        }
+        let screen: Screen<CounterState> =
+            Screen::new("t").icon_bound(fandhe_core::WidgetId::from_raw(1), name, "好き");
+        let dom = build_dom_tree(&screen, &empty_state(), 0);
+        assert_eq!(dom.children[1].text.as_deref(), Some("\u{2665}\u{FE0E}"));
     }
 
     /// 実画素の画像ノード（Issue #5）: `img` + PNG の data URL + alt で出る。

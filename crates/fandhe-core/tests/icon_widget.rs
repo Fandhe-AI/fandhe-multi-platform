@@ -13,18 +13,25 @@
 //! イベント処理は本ファイルの対象外（Issue #133 のスコープ）。
 
 use fandhe_core::{
-    Icon, LifecyclePhase, Measurement, Node, PaintCommand, Screen, Widget, WidgetHarness, WidgetId,
-    render_headless,
+    Icon, IconName, LifecyclePhase, Measurement, Node, PaintCommand, Screen, Widget, WidgetHarness,
+    WidgetId, render_headless,
 };
 
 /// 設定画面の状態。`active_icon` フィールドをアイコンウィジェットが読み取る想定。
-#[derive(Default)]
 struct SettingsState {
-    active_icon: String,
+    active_icon: IconName,
 }
 
-fn get_active_icon(state: &SettingsState) -> String {
-    state.active_icon.clone()
+impl Default for SettingsState {
+    fn default() -> Self {
+        Self {
+            active_icon: IconName::Settings,
+        }
+    }
+}
+
+fn get_active_icon(state: &SettingsState) -> IconName {
+    state.active_icon
 }
 
 fn icon_screen() -> Screen<SettingsState> {
@@ -75,7 +82,7 @@ fn icon_screen_records_declared_and_mounted_phases_on_first_frame() {
 fn render_headless_snapshot_does_not_contain_icon_line() {
     let screen = icon_screen();
     let state = SettingsState {
-        active_icon: "settings".to_string(),
+        active_icon: IconName::Settings,
     };
 
     let snapshot = render_headless(&screen, &state);
@@ -89,12 +96,13 @@ fn render_headless_snapshot_does_not_contain_icon_line() {
 /// 回帰防止）。
 #[test]
 fn icon_does_not_affect_rendering_of_other_node_variants() {
-    let screen: Screen<SettingsState> =
-        Screen::new("混在画面")
-            .text("見出し")
-            .icon(WidgetId::from_raw(1), "settings", "設定");
+    let screen: Screen<SettingsState> = Screen::new("混在画面").text("見出し").icon(
+        WidgetId::from_raw(1),
+        IconName::Settings,
+        "設定",
+    );
     let state = SettingsState {
-        active_icon: String::new(),
+        active_icon: IconName::Settings,
     };
 
     let snapshot = render_headless(&screen, &state);
@@ -121,10 +129,10 @@ fn sync_from_state_updates_cached_name_and_paint_reflects_label_only() {
     };
 
     let state = SettingsState {
-        active_icon: "secret-icon-name".to_string(),
+        active_icon: IconName::Lock,
     };
     icon.sync_from_state(&state);
-    assert_eq!(icon.name_text(), "secret-icon-name");
+    assert_eq!(icon.name(), Some(IconName::Lock));
 
     let commands = icon.paint((0.0, 0.0), icon.measure(available));
     assert_eq!(
@@ -134,11 +142,6 @@ fn sync_from_state_updates_cached_name_and_paint_reflects_label_only() {
             PaintCommand::Text("現在のアイコン".to_string()),
         ]
     );
-    for command in &commands {
-        if let PaintCommand::Text(text) = command {
-            assert!(!text.contains("secret-icon-name"));
-        }
-    }
 }
 
 /// `Node::Widget` 経由で組み立てたアイコンが 1 ノード分正しく追加されることを確認する

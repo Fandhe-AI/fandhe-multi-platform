@@ -7,8 +7,8 @@
 
 use fandhe_core::ui::{FlexDirection, Measurement};
 use fandhe_core::{
-    CanvasWidget, Card, Checkbox, DialogWidget, Grid, Label, PaintCommand, RgbaPixels, Screen,
-    Separator, Stack, StateStore, WidgetId,
+    CanvasWidget, Card, Checkbox, DialogWidget, Grid, IconName, Label, PaintCommand, RgbaPixels,
+    Screen, Separator, Stack, StateStore, WidgetId,
 };
 
 #[derive(Default)]
@@ -73,6 +73,9 @@ fn rd_label(_: &St) -> String {
 }
 fn rd_img(_: &St) -> String {
     "img-1290".into()
+}
+fn rd_icon(_: &St) -> IconName {
+    IconName::Home
 }
 fn noop(_: &mut St) {}
 
@@ -275,8 +278,8 @@ fn rendered_or_not() {
         ),
         (
             "Icon(.icon_bound())",
-            Screen::new("t").icon_bound(id(1), rd_img, "X"),
-            false,
+            Screen::new("t").icon_bound(id(1), rd_icon, "X"),
+            true,
         ),
         (
             "Label",
@@ -306,7 +309,11 @@ fn rendered_or_not() {
             true,
         ),
         ("Spinner", Screen::new("t").spinner(id(1)), true),
-        ("Icon", Screen::new("t").icon(id(1), "star", "X"), false),
+        (
+            "Icon",
+            Screen::new("t").icon(id(1), IconName::Star, "X"),
+            true,
+        ),
         (
             "ScrollView（型を直接置く）",
             Screen::new("t").with_node(fandhe_core::Node::Widget(Box::new(

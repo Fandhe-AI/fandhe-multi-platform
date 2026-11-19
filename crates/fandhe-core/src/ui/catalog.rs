@@ -561,8 +561,11 @@ fn preview_image() -> Vec<String> {
 /// を未配線のままプレースホルダ扱いする契約（`widget.rs` 参照）のため、タイトル行のみを
 /// 返す。アイコン名は preview 専用の固定リテラルであり外部入力ではない。
 fn preview_icon() -> Vec<String> {
-    let screen: Screen<PreviewState> =
-        Screen::new("Icon プレビュー").icon(WidgetId::from_raw(1), "settings", "設定アイコン");
+    let screen: Screen<PreviewState> = Screen::new("Icon プレビュー").icon(
+        WidgetId::from_raw(1),
+        crate::ui::IconName::Settings,
+        "設定アイコン",
+    );
     render_headless(&screen, &PreviewState)
 }
 

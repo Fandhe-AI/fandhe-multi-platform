@@ -109,6 +109,9 @@ pub mod checkbox_list;
 /// 表示専用部品の確認用画面（Issue #1428）。
 pub mod display_widgets;
 
+/// `icon` / `icon_bound` の確認用画面（Issue #1437）。
+pub mod icons;
+
 /// `Stack`・`Grid`・`Card`・`Tooltip` の確認用画面（Issue #1430）。
 pub mod containers;
 

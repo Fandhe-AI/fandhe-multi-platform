@@ -45,6 +45,7 @@ generated_screens! {
     "settings" => fandhe_core::screens::settings::settings_screen,
     "checkbox-list" => fandhe_core::screens::checkbox_list::checkbox_list_screen,
     "display-widgets" => fandhe_core::screens::display_widgets::display_widgets_screen,
+    "icons" => fandhe_core::screens::icons::icons_screen,
     "containers" => fandhe_core::screens::containers::containers_screen,
     "menu-tabs" => fandhe_core::screens::menu_tabs::menu_tabs_screen,
     "row-actions" => fandhe_core::screens::row_actions::row_actions_screen,

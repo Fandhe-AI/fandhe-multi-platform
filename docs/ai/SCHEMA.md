@@ -252,7 +252,7 @@ fn main() {
 
 ```rust
 use fandhe_core::{
-    Axis, Card, DialogWidget, Grid, Label, Node, ReadFn, ReadIndexedFn, RenderMode, Screen, Separator, Stack,
+    Axis, Card, DialogWidget, Grid, IconName, Label, Node, ReadFn, ReadIndexedFn, RenderMode, Screen, Separator, Stack,
     WidgetId, WriteFn,
 };
 
@@ -306,6 +306,9 @@ fn get_f32(_state: &()) -> f32 {
     0.0
 }
 fn set_f32(_state: &mut (), _value: f32) {}
+fn get_icon_name(_state: &()) -> IconName {
+    IconName::Settings
+}
 fn get_option_usize(_state: &()) -> Option<usize> {
     None
 }
@@ -326,8 +329,8 @@ fn build_screen_via_impl_trait_builders() -> Screen<()> {
         .progress_bar(WidgetId::from_raw(7), "label", get_f32)
         .image(WidgetId::from_raw(8), "src", "alt")
         .image_bound(WidgetId::from_raw(9), get_string, "alt")
-        .icon(WidgetId::from_raw(10), "name", "label")
-        .icon_bound(WidgetId::from_raw(11), get_string, "label")
+        .icon(WidgetId::from_raw(10), IconName::Settings, "label")
+        .icon_bound(WidgetId::from_raw(11), get_icon_name, "label")
         .menu(
             WidgetId::from_raw(14),
             "label",
@@ -431,10 +434,10 @@ assert_eq!(assert_iter(screen.iter()), 2);
 （macOS・Android・Windows では AX ノードだけは公開される）。`crates/fandhe-render-egui/tests/widget_coverage.rs` が 1 種ずつ
 `egui::Context::run` で描画し、出力の shape が空画面と同数のままかを確かめている（根拠は
 `render.rs` の `Node::Widget` 分岐が `DialogWidget` / `Checkbox` / `ToggleSwitch` / `Slider` /
-`RadioButton` / `ProgressBar` / `Spinner` / `Separator` / `Menu` / `Tabs` / `Stack` / `Grid` / `Card` / `Tooltip` / `ImageWidget` / `Label` / `CanvasWidget` の 17 種だけを `downcast_ref` していること）。
-この 17 種以外の `Widget<S>` 実装（`LabelWidget`・`CheckboxWidget`・`TabBarWidget`・`ProgressWidget` 等）は
+`RadioButton` / `ProgressBar` / `Spinner` / `Separator` / `Menu` / `Tabs` / `Stack` / `Grid` / `Card` / `Tooltip` / `ImageWidget` / `Label` / `Icon` / `CanvasWidget` の 18 種だけを `downcast_ref` していること）。
+この 18 種以外の `Widget<S>` 実装（`LabelWidget`・`CheckboxWidget`・`TabBarWidget`・`ProgressWidget` 等）は
 `.with_node()` で置いても描画されない。web-dom の対応は本表の対象外。
-描画の配線と API の整理は #1427・#1428・#1429・#1430・#1437（icon）で扱う（#1427〜#1430 は対応済み。#1437 が残り）。
+描画の配線と API の整理は #1427・#1428・#1429・#1430・#1437（icon）で扱った（すべて対応済み）。
 
 描画される（`Node` の直接バリアント。ビルダー名で示す）:
 `.text()` / `.dynamic_text()` / `.error_text()` / `.text_field()` / `.button()` / `.list()` /
@@ -471,6 +474,26 @@ assert_eq!(assert_iter(screen.iter()), 2);
   macOS・Android・Windows のみ（読み上げは実機で未確認）。iOS・Web・Linux のタッチには本文へ届く経路が無く（既知の天井）、
   スクリーンリーダーを使わないタッチ利用者にも届かない
 
+**アイコン（`.icon()` / `.icon_bound()`、Issue #1437、破壊的変更）**: 名前は文字列ではなく閉じた列挙型 `IconName`
+（`fandhe_core::IconName`。`IconName::ALL` が全名前）。綴りの誤りや未対応の名前は型で作れない。
+
+- 図柄は名前ごとの Unicode 記号 1 文字（`IconName::glyph`）。egui は記号専用の font family（`fandhe-icon`）で
+  一辺 `with_size`（既定 24）の正方形の中央に描き、色は本文色。family は egui 同梱の emoji-icon-font・Noto Emoji の
+  2 つだけ（この順。新しい依存・同梱資産なし）で、**CJK（Noto Sans JP）を入れない**（`font::apply_font_bytes` が登録）。
+  `Proportional` で引くと、全 family の先頭にある CJK が ⬇ ⬆ ⚠ ★ ♥ ▶ を取って字形がばらつくため。
+  `font::apply_fonts`（ネイティブは `install_cjk_font`、Web は取得の成否にかかわらず起動時）が CJK の有無にかかわらず
+  登録する（Web でフォントの取得に失敗しても同じ字形）。これらを通っていない context（Web の起動直後〜取得の完了前・
+  既定フォントのままのテスト）では未登録なので `Proportional` に戻す（優先の順が逆で、NotoEmoji の字形になりうる）。
+  web-dom は同じ文字に U+FE0E を付け、
+  `font-variant-emoji:text` を指定して `span.fandhe-icon` の本文にする。ただし Emoji_Presentation=Yes の字
+  （🔍 🏠 🗑 など）は、ブラウザによってはテキスト指定でもカラーの絵文字のまま残りうる（既知の限界）。
+  全名前に字形があることは `fandhe-render-egui` の `icon_render` が専用 family で確かめる
+- 語彙に無いものは出せない（`#[non_exhaustive]` なので語彙の追加は後方互換）。必要な図柄は issue で足す
+- AX: 第 3 引数のラベルが読み上げ名（role Image）。**空文字列は装飾用**で、AX ノード・aria に出さない（web-dom は `aria-hidden="true"`）。
+  記号の文字は読み上げに出ない。名前（`IconName`）は読み上げにもテキストにも出さない
+- `.icon_bound()` の `get` は `fn(&S) -> IconName`
+- swiftui-bridge は従来どおり（`Node::Widget` は型を問わず共通の変換で、アイコンは出ない）
+
 **画像（`.image()` / `.image_bound()`、Issue #1427）**: 名前は残し、描かれる `ImageWidget` を作る形へ変えた。
 **識別子はファイルパスや URL を読み込むものではない**。
 
@@ -495,12 +518,11 @@ assert_eq!(assert_iter(screen.iter()), 2);
 `Image` / `ListView` / `ScrollView` / `Dialog` / `LabelWidget` の型そのものは残る（`WidgetCatalog`・`WidgetHarness` の検証用）。
 `.with_node()` で直接置いても egui では描かれない（`widget_coverage` が固定している）。画面を組むときは使わない。
 
-描画されない（何も出ない）ビルダーは、残りの 2 つ:
+描画されない（何も出ない）ビルダーは、残りの 1 つ:
 
 | 部品（ビルダー） | 代わりの書き方 |
 | --- | --- |
 | `.text_input()` | `.text_field()` |
-| `.icon()` / `.icon_bound()` | `.text()` に記号・文言を置く（#1437） |
 
 `DialogWidget` の `dismiss_label` ボタンは、`with_content` の子ノード列にある同名の `Node::Button` が描く
 （本体だけでは出ない）。
