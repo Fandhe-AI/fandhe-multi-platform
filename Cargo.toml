@@ -254,9 +254,9 @@ accesskit_winit = { version = "0.29", default-features = false }
 # `[[package]]` が増えないことを確認済み）。子プロセス方式（`tts`/`file_picker`/`location`（機能 crate `fandhe-cap-tts`・`fandhe-cap-file-picker` ほか）
 # の Windows 実装）は自分のウィンドウを持てず `ShowShareUIForWindow` に渡す HWND が
 # 無いため使えず、FFI・`unsafe` を持てる本クレート側（プラットフォーム最適化レイヤ）から
-# 直接依存する。必要 feature は `windows_share.rs` モジュール doc 参照。
+# 直接依存する。必要 feature は `fandhe-cap-share-sheet` の `Cargo.toml` 参照。
 windows = { version = "0.61", default-features = false }
-# Phase 11（Issue #907）: `device/windows_biometric.rs` が Windows Hello
+# Phase 11（Issue #907）: `fandhe-cap-biometric-auth` の `windows.rs` が Windows Hello
 # （`UserConsentVerifier::RequestVerificationForWindowAsync` の戻り値）の完了を
 # `IAsyncOperation<T>`/`AsyncOperationCompletedHandler` の型名で受けるために使う。
 # `windows` クレート（上記）0.61.3 はこれらの型を `windows::Foundation` へ
@@ -265,7 +265,7 @@ windows = { version = "0.61", default-features = false }
 # `git diff --stat Cargo.lock` で新規 `[[package]]` が増えないことを確認済み
 # （上記 `windows`/`raw-window-handle` と同じ「推移依存の直接依存への昇格」パターン）。
 windows-future = { version = "0.2", default-features = false }
-# Issue #268: `device/windows_media_playback.rs` の `#[windows::core::implement]`
+# Issue #268: `fandhe-cap-media-playback` の `windows.rs` の `#[windows::core::implement]`
 # （`IMFMediaEngineNotify` の実装）が生成するコードは `::windows_core` を絶対パスで参照するため、
 # 推移依存の `windows-core` を直接依存へ昇格する。Cargo.lock には `windows` の通常依存として
 # 0.61.2 が既に解決済みで、新規 `[[package]]` は増えない（`windows-future` と同じパターン）。

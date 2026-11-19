@@ -1,5 +1,5 @@
 // iOS 向け書類スキャン（VisionKit `VNDocumentCameraViewController`、Issue #748、親 #145）。
-// `src/device/ios_document_scan.rs` から呼ばれ、`build.rs` がコンパイルして
+// `src/ios.rs` から呼ばれ、`build.rs` がコンパイルして
 // AVFoundation と VisionKit を自分で宣言してリンクする（camera-capture 側のリンクに頼らない）。新しい権限キーは足さない
 // （`NSCameraUsageDescription` の文言に機能名を足すだけ）。
 //

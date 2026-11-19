@@ -1,5 +1,5 @@
 //! iOS / macOS 向け MIDI 入力実装（Issue #1398 macOS、#1399 iOS）。
-//! `device/midi.rs::platform_midi` の Apple 分岐（`any(target_os = "ios", target_os = "macos")`）
+//! 本 crate の `driver.rs::platform_midi` の Apple 分岐（`any(target_os = "ios", target_os = "macos")`）
 //! から呼ばれる。iOS・macOS とも `apple/fandhe_apple_midi.m`（CoreMIDI、`build.rs` の各分岐が
 //! コンパイル）を C ABI で呼ぶ。
 //!

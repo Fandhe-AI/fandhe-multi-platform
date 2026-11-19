@@ -59,7 +59,7 @@ pub(crate) fn present(request_id: u64, request: &ShareRequest) -> bool {
     code == 0
 }
 
-/// `.m` 側 delegate から届く結果コードの解釈（`device/share.rs::outcome_from_code`、
+/// `.m` 側 delegate から届く結果コードの解釈（本 crate の `driver.rs::outcome_from_code`、
 /// iOS/macOS/Android 共通の表）へ委譲する。`.m` 側の `FandheShareDelegate`
 /// （macOS: `sharingServicePicker:didChooseSharingService:`、iOS:
 /// `completionWithItemsHandler`）から呼ばれる `extern "C"` 関数。結果を

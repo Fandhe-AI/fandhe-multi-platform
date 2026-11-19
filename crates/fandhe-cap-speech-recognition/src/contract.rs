@@ -4,7 +4,7 @@
 //!
 //! macOS/iOS/Windows/Android（実装済み）は `mic_record`/`biometric_auth` と同じ理由（認識完了が
 //! コールバック型で非同期に届く）で、本トレイトを**通らず** `fandhe_core::screens::
-//! speech_recognize`（端末依存ゼロの状態機械）へ 本 crate の `driver` の
+//! speech_recognize`（端末依存ゼロの状態機械）へ本 crate の `driver` の
 //! `RequestSlot`/`poll_and_finish`（pull 型 bridge）から直接書き戻す
 //! （`fandhe-cap-mic-record` の `driver.rs` モジュール doc の判断と同じ）。本トレイトは対応不可プラットフォーム
 //! （Web/Linux）向けの [`UnsupportedSpeechRecognizer`] と、

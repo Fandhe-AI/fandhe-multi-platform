@@ -3,7 +3,7 @@
 //! `FANDHE_PROXY_APP=digital_credentials` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs` の
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod digital_credentials;` と対）。
 //!
-//! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは 機能 crate の effect
+//! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは機能 crate の effect
 //! ドライバが [`take_request`] で要求を観測して行い、[`finish`] で結果を注入する。
 //! Web 分の状態・文言もここで定義済みで、後続の子（Web）は画面に触らない。
 //!

@@ -1,7 +1,7 @@
 //! Phase 11（親 #1141）型サンプル「バッジの設定」（Issue #1360）の effect ドライバ。
 //! `fandhe_core::screens::app_badge_set`（端末依存ゼロ）の要求を観測し、値を
 //! `crate::contract::BadgeValue` で検査してから OS へ渡し、結果を `CompletionSender`
-//! 経由で返す（`screens/registry.rs` の `effect` 区画から呼ばれる契約、`device/photo_save.rs`
+//! 経由で返す（`screens/registry.rs` の `effect` 区画から呼ばれる契約、`fandhe-cap-photo-library` の `driver.rs`
 //! と同型）。契約と守る範囲は `fandhe_cap_app_badge` のモジュール doc を参照。
 //!
 //! - iOS（#1361）/ Android（#1362）: コールバック型のため pull 型 [`bridge`]（`RequestSlot`

@@ -1,4 +1,4 @@
-//! Windows 向け MIDI 入力実装（Issue #1402、親 #1137）。`device/midi.rs::platform_midi` の
+//! Windows 向け MIDI 入力実装（Issue #1402、親 #1137）。本 crate の `driver.rs::platform_midi` の
 //! Windows 経路から呼ばれ、WinRT `Windows.Devices.Midi.MidiInPort` が型付きで渡すノートオン / オフを
 //! `crate::contract::NoteEvent::from_wire` で検証して sink へ流す。
 //!

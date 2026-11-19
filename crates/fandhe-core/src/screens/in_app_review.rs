@@ -3,7 +3,7 @@
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod in_app_review;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。OS 呼び出しは effect ドライバ
-//! （`device/in_app_review.rs`）が [`take_request`] で要求を観測して行い、[`finish_request`] で結果を
+//! （`fandhe-cap-in-app-review` の `driver.rs`）が [`take_request`] で要求を観測して行い、[`finish_request`] で結果を
 //! 注入する。全 OS 分の文言は (a) で確定し、後続の OS 別 PR は本ファイルに触れない。
 //!
 //! # 結果を混同しない理由

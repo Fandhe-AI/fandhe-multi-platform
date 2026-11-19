@@ -5,7 +5,7 @@
 //! `pub mod home_widget_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`「新規画面
-//! ファイルの置き場」節）。保存・読み出しは 機能 crate `fandhe-cap-home-widget` の effect ドライバ
+//! ファイルの置き場」節）。保存・読み出しは機能 crate `fandhe-cap-home-widget` の effect ドライバ
 //! （`home_widget_show_effect`）が [`take_request`] で要求を観測し、[`finish_load`] /
 //! [`finish_set`] で結果を注入する。
 //!

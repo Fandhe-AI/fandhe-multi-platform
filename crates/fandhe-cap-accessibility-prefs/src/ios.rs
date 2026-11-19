@@ -1,5 +1,5 @@
 //! iOS 向けアクセシビリティ設定実装（Issue #1309、親 #1132。#1308 のスタブを置き換えた）。
-//! `device/accessibility_prefs.rs::implementation` の iOS 経路から呼ばれ、macOS と共用の
+//! 本 crate の `driver.rs::platform_accessibility_prefs` の iOS 経路から呼ばれ、macOS と共用の
 //! `apple_accessibility_prefs::AppleAccessibilityPrefs` を返す。`.m`
 //! （`apple/fandhe_apple_accessibility_prefs.m`）の iOS 分岐が
 //! `UIAccessibilityIsReduceMotionEnabled` / `UIAccessibilityDarkerSystemColorsEnabled`

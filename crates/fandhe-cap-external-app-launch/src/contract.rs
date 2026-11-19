@@ -4,7 +4,7 @@
 //! 電話は固定番号 [`PHONE_URI`]（北米の架空用予約帯）、地図は固定地点（東京駅）。任意の URL・番号・
 //! 座標を外から渡す経路は作らない。操作は [`LaunchTarget`] の 2 値に限るため、入力不正
 //! （`InvalidInput`）の余地は型で無くしてある。画面（`fandhe_core::screens::external_app_launch_show`、
-//! 端末依存ゼロ）へは 本 crate の effect ドライバ（`driver.rs`）が写像する。
+//! 端末依存ゼロ）へは本 crate の effect ドライバ（`driver.rs`）が写像する。
 //!
 //! # 結果の種類（[`LaunchOutcome`]）
 //!

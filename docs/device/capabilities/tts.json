@@ -38,7 +38,7 @@
       "detail": "できている",
       "api": "AVFoundation（`AVSpeechSynthesizer`）/ AppKit（`NSSpeechSynthesizer`、非推奨）",
       "url": "https://developer.apple.com/documentation/avfoundation/avspeechsynthesizer",
-      "note": "実装済み（旧#865）。`AVSpeechSynthesizer` を自前で叩くと 機能 crate の `#![forbid(unsafe_code)]` を破るため、OS 同梱コマンド `say`（内部で AVFoundation を使う）を `std::process::Command` で起動する方式にした（`tts` クレート（crates.io）は `Send`/`Sync` 非対応・保守終了気味の依存を引くため不採用、判断根拠は PR 本文参照）。Mac で実アプリを動かし、読み上げ・停止・OS 未対応時のエラー表示（偽の成功を出さないこと）を目視・聴取で確認済み",
+      "note": "実装済み（旧#865）。`AVSpeechSynthesizer` を自前で叩くと機能 crate の `#![forbid(unsafe_code)]` を破るため、OS 同梱コマンド `say`（内部で AVFoundation を使う）を `std::process::Command` で起動する方式にした（`tts` クレート（crates.io）は `Send`/`Sync` 非対応・保守終了気味の依存を引くため不採用、判断根拠は PR 本文参照）。Mac で実アプリを動かし、読み上げ・停止・OS 未対応時のエラー表示（偽の成功を出さないこと）を目視・聴取で確認済み",
       "sourceName": [
         "読み上げ（TTS、任意テキストの音声合成）"
       ],

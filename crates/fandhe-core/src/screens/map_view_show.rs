@@ -4,7 +4,7 @@
 //! の `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod map_view_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない）。座標の検証と OS 呼び出しは effect
-//! ドライバ（`device/map_view.rs`）が [`take_request`] で要求を観測して行い、[`finish`] で結果を
+//! ドライバ（`fandhe-cap-map-view` の `driver.rs`）が [`take_request`] で要求を観測して行い、[`finish`] で結果を
 //! 注入する。本画面は二重要求防止・世代照合・文言だけを持つ。全 OS 分の文言は (a) で確定する。
 //!
 //! # 結果を混同しない理由

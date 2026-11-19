@@ -89,7 +89,7 @@ fn to_os_error(err: DynamicTypeError) -> OsScaleError {
 
 /// [`platform_dynamic_type`] を読み・スライダー値を実描画へ適用する 1 フレーム分の処理。
 /// `state`/`sender`/`ts`/`last` をすべて引数で受け取ることでプラットフォーム cfg 抜きで
-/// テストできるようにしている（`device/tilt.rs::drive` と同じ構成）。
+/// テストできるようにしている（`fandhe-cap-tilt-motion` の `driver.rs::drive` と同じ構成）。
 ///
 /// `dragging` はスライダーのドラッグ中（ポインタの主ボタン押下中）か
 /// （モジュール doc「ドラッグ中は zoom 適用を保留する」参照）。ドラッグ中は zoom を
@@ -109,7 +109,7 @@ fn drive(
     if *state.os_scale() == OsScale::Unread {
         let result = read_scale(ts).map_err(to_os_error);
         // 受信側（ProxyApp）がドロップ済みの送信失敗は無視してよい
-        // （coding-rust.md: panic を API 契約にしない、`device/tilt.rs` と同じ判断）。
+        // （coding-rust.md: panic を API 契約にしない、`fandhe-cap-tilt-motion` の `driver.rs` と同じ判断）。
         let _ = sender.send(Box::new(move |s: &mut TextScalePreviewState| {
             finish_read(s, result);
         }));

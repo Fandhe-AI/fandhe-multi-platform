@@ -50,13 +50,13 @@
 //! `platforms/android/app/src/` に Java のテスト基盤が無いため、Java は生値
 //! （deviceId・source・軸値・flat・keyCode）を primitive のみで渡し、ソース判定・
 //! デッドゾーン・値域正規化・keyCode → ビット写像・状態遷移は本モジュールの
-//! 純粋な状態機械（[`AndroidGamepadState`]）が担う。`device/tilt.rs::gravity_to_tilt`
+//! 純粋な状態機械（[`AndroidGamepadState`]）が担う。`fandhe-cap-tilt-motion` の `driver.rs::gravity_to_tilt`
 //! と同じ「ロジックはホストの `cargo test` で検証する」方針。
 //!
 //! 非 Android ターゲットでは状態機械本体（`Gamepad` トレイト実装・JNI エクスポートを
 //! 除く部分）は `#[cfg(test)]` のユニットテストのみが参照するため、`dead_code`
 //! 誤検知を避けるためモジュール全体に `cfg_attr` で許可する
-//! （`device/tilt.rs::GRAVITY_EARTH` と同じ判断）。
+//! （`fandhe-cap-tilt-motion` の `driver.rs::GRAVITY_EARTH` と同じ判断）。
 
 #![cfg_attr(not(target_os = "android"), allow(dead_code))]
 
@@ -431,7 +431,7 @@ impl Default for AndroidGamepadState {
 // --------------------------------------------------------------------------
 
 /// プロセス内で共有する状態（Java 側 JNI コールバックはどのスレッドからでも
-/// 届き得るため `Mutex`、`device/tilt.rs::MOTION` と同じ考え方）。
+/// 届き得るため `Mutex`、`fandhe-cap-tilt-motion` の `driver.rs::MOTION` と同じ考え方）。
 #[cfg(target_os = "android")]
 static STATE: Mutex<AndroidGamepadState> = Mutex::new(AndroidGamepadState::new());
 
@@ -485,7 +485,7 @@ impl crate::contract::Gamepad for AndroidGamepad {
 /// この関数自体は `unsafe` 操作を含まない。`#[unsafe(no_mangle)]` により Rust の名前修飾を
 /// 無効化するが、シンボル名は JNI 命名規約上の固定名であり、本クレートは cdylib
 /// として 1 つの Android 実行単位にのみリンクされるため他シンボルと衝突しない
-/// （`device/android.rs::nativeOnMotionChanged` と同じ根拠）。
+/// （`fandhe-cap-tilt-motion` の `android.rs` の `nativeOnMotionChanged` と同じ根拠）。
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
@@ -535,7 +535,7 @@ extern "system" fn Java_com_fandhe_platform_GamepadHelper_nativeOnGamepadPresenc
         state.presence_scan_end();
     }
     // ユーザー操作（コントローラの接続/切断）起点のみのため、センサのような
-    // 画面ゲート（`device/android.rs::active_screen_uses_tilt` 相当）は不要。
+    // 画面ゲート（`fandhe-cap-tilt-motion` の `set_screen_active` 相当）は不要。
     fandhe_runtime::request_repaint();
 }
 

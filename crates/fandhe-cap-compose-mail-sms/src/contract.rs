@@ -7,7 +7,7 @@
 //! Web と、添付なしの macOS / Windows が共用する URL の組み立ても [`ComposeRequest::to_url`] に置く。
 //! iOS / Android と、添付付きの macOS / Windows は URL を使わず OS の作成画面（MessageUI / Intent /
 //! `NSSharingService` / Simple MAPI）へ値を直接渡す。
-//! 画面（`fandhe_core::screens::compose_mail_sms`、端末依存ゼロ）へは 機能 crate の
+//! 画面（`fandhe_core::screens::compose_mail_sms`、端末依存ゼロ）へは機能 crate の
 //! effect ドライバが写像する。
 //!
 //! # 結果の種類（[`ComposeOutcome`]）
@@ -413,7 +413,7 @@ impl ComposeRequest {
     }
 }
 
-/// メール・SMS の作成画面を開く OS 実装の抽象。呼び出し元は 本 crate の effect ドライバ（`driver.rs`）。
+/// メール・SMS の作成画面を開く OS 実装の抽象。呼び出し元は本 crate の effect ドライバ（`driver.rs`）。
 pub trait ComposeMailSms: Send + Sync {
     /// 作成画面を開く。結果の意味と OS ごとの到達値はモジュール doc。
     fn compose(&self, req: &ComposeRequest) -> Result<ComposeOutcome, ComposeMailSmsError>;

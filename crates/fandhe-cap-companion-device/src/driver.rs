@@ -3,7 +3,7 @@
 //! `crate::contract::CompanionDevicePicker` に機器選択画面の表示を依頼して、
 //! OS 層から届く結果を `CompletionSender` 経由で画面へ返す（`fandhe-gallery` の `screens/registry.rs` の
 //! `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
-//! 契約（結果の三値・期限・守る範囲）の SSOT は 本 crate の `contract`。
+//! 契約（結果の三値・期限・守る範囲）の SSOT は本 crate の `contract`。
 //!
 //! 非 wasm32 でのみコンパイル対象になる。
 //!
@@ -20,7 +20,7 @@
 //! - [`try_begin_present`]: 選択画面を出す直前に呼ぶ。`false` なら出さない（期限切れ・古い要求・
 //!   中断済み）。`true` を返した要求だけが成功値（選んだ・キャンセル）を返せる
 //! - [`complete_from_os`]: 結果を 1 回だけ送る唯一の受け口。古い要求 id・重複は捨てられる。
-//!   関連付けの解除は呼ぶ前に済ませる（契約は 本 crate の `contract`）
+//!   関連付けの解除は呼ぶ前に済ませる（契約は本 crate の `contract`）
 //!
 //! # 期限（契約表 3）
 //!

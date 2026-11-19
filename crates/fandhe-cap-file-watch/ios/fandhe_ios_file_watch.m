@@ -28,7 +28,7 @@
 #include <stdint.h>
 #include <unistd.h>
 
-// Rust 側の受け口（device/file_watch.rs）。kind 0 = 変化の合図、それ以外 = 失敗。
+// Rust 側の受け口（本 crate の `driver.rs`）。kind 0 = 変化の合図、それ以外 = 失敗。
 extern void fandhe_rust_file_watch_fire(uint64_t id, int32_t kind);
 
 @interface FandheIosFsWatch : NSObject

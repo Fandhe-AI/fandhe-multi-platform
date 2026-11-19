@@ -4,7 +4,7 @@
 //! `effect` 区画から呼ばれる（`screens/mod.rs` の `pub mod environment_sensors_show;` と対）。
 //!
 //! **端末依存はゼロ**（`fandhe-device` を import しない、`docs/ai/SCHEMA.md`）。OS 値の取得は
-//! `device/environment_sensors.rs` が行い、[`apply_reading`] / [`apply_failure`] で注入する。
+//! `fandhe-cap-environment-sensors` の `driver.rs` が行い、[`apply_reading`] / [`apply_failure`] で注入する。
 //! `fandhe_device::environment_sensors` の型は依存方向の都合でここへ写す。
 //!
 //! 嘘の値を出さない: 待機・取得中・失敗は数値を持たない（[`SensorView::Live`] だけが持つ）。

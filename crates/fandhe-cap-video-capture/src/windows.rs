@@ -1,4 +1,4 @@
-//! Windows 向け動画の撮影実装（Issue #1150）。`device/video_capture.rs` の `platform()`
+//! Windows 向け動画の撮影実装（Issue #1150）。本 crate の `driver.rs` の `platform_video_capture()`
 //! （Windows 経路）から呼ばれ、WinRT `MediaCapture` で動画を MP4 に録り、撮れた動画の長さ・寸法・
 //! 向き・ファイルサイズを `crate::contract::VideoClip::from_os` で検査して返す。
 //! 契約（三値・数値表・守る範囲）の SSOT は `crate::contract`。OS の撮影 UI が無いため、
@@ -304,7 +304,7 @@ mod imp {
         }
     }
 
-    /// `device/video_capture.rs` から呼ばれる、プロセスに 1 つの実装。
+    /// 本 crate の `driver.rs` から呼ばれる、プロセスに 1 つの実装。
     pub(crate) fn implementation() -> Arc<dyn VideoCapturer> {
         Arc::new(WindowsVideoCapturer)
     }

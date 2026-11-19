@@ -15,7 +15,7 @@
 //        よい（所有権は移らない）。
 //   fandhe_rust_share_outcome(uint64_t request_id, int32_t code) -> Rust 側
 //     （`apple_share.rs`）が公開する `extern "C"` 関数。結果コードの意味は
-//     `device/share.rs::outcome_from_code` の表（iOS/macOS/Android 共通、Issue #899
+//     本 crate の `driver.rs::outcome_from_code` の表（iOS/macOS/Android 共通、Issue #899
 //     §2.2）を参照。macOS: 0=共有した（service 非 nil）/1=キャンセル（service nil）/
 //     2=共有先なし/3=内部エラー（ウィンドウ不在等）。iOS: 0=共有した（completed==YES）/
 //     1=キャンセル（completed==NO && error==nil）/3=内部エラー（VC 不在・error!=nil・

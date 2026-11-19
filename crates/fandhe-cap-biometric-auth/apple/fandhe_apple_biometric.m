@@ -15,10 +15,10 @@
 //        NSString へコピーしてから return するため、呼び出し元は return 後に元の
 //        文字列バッファを解放してよい（所有権は移らない）。
 //   fandhe_rust_biometric_outcome(uint64_t request_id, int32_t success, int64_t la_code)
-//     -> Rust 側（`apple_biometric.rs`）が公開する `extern "C"` 関数。`success` は
+//     -> Rust 側（本 crate の `src/apple.rs`）が公開する `extern "C"` 関数。`success` は
 //        `LAContext.evaluatePolicy` reply の `success` をそのまま渡し、`la_code` は
 //        `error.code`（`success` が真のときは 0）をそのまま渡す。結果コード表への
-//        写像は Rust 側 `device/biometric_auth.rs::outcome_from_reply` に一本化する
+//        写像は Rust 側の本 crate の `driver.rs::outcome_from_reply` に一本化する
 //        （`.m` 側で二重に写像しない、実装計画の設計判断 3）。
 //
 // ポリシーは `LAPolicyDeviceOwnerAuthenticationWithBiometrics` 固定でパスコードへの
@@ -53,7 +53,7 @@
 #import <TargetConditionals.h>
 #import <LocalAuthentication/LocalAuthentication.h>
 
-// Rust 側（`apple_biometric.rs`）が公開する `extern "C"` 関数。両 OS 共通。
+// Rust 側（本 crate の `src/apple.rs`）が公開する `extern "C"` 関数。両 OS 共通。
 extern void fandhe_rust_biometric_outcome(uint64_t request_id, int32_t success, int64_t la_code);
 
 // reply が届くまでプロセス内で生存させる必要があるため static で強参照する

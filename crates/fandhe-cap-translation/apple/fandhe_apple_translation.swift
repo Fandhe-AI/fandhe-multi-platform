@@ -2,7 +2,7 @@
 //
 // `TranslationSession` は Swift 専用 API で ObjC から呼べないため、`build.rs` の
 // `compile_apple_translation` が swiftc で静的ライブラリ化し、Rust の
-// `device/apple_translation.rs` が `@_cdecl` の C ABI 1 関数だけを呼ぶ。macOS と iOS で共用し、
+// 本 crate の `src/apple.rs` が `@_cdecl` の C ABI 1 関数だけを呼ぶ。macOS と iOS で共用し、
 // OS の分岐は `TARGET_OS` ではなく `canImport` と `#available` で行う。
 // 26 専用 API（`TranslationSession(installedSource:target:)`）は旧 SDK（Xcode 16 は Swift 6.1 以下）に
 // 無く `#available` では型検査を除外できないため、`compiler(>=6.2)`（Xcode 26 以降）でも囲み、
