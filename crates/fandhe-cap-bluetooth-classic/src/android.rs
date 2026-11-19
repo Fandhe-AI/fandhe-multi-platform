@@ -5,7 +5,7 @@
 //! 呼び出し元: 本 crate の `driver` の Android 経路が、一覧で [`implementation`]
 //! （`paired` は egui スレッドから同期で 1 回）、検索で [`present`] を呼ぶ。Activity 再生成時の保留破棄は
 //! `android.rs` が `bluetooth_classic::reset_pending_tracking` で行う（配線済み）。dispatch・fallback・
-//! `device.rs` の `pub mod`・共通コアの画面には触らない。契約の SSOT は `crate::contract`。
+//! `lib.rs` の `mod` 列・共通コアの画面には触らない。契約の SSOT は `crate::contract`。
 //!
 //! # 役割分担
 //!

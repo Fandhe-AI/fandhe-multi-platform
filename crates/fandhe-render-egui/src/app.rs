@@ -16,15 +16,15 @@ use crate::recyclers::VirtualListRecyclers;
 
 /// `CentralPanel` の `inner_margin` へ加算する window insets 供給関数（Issue #579）。
 ///
-/// `android.rs`（`cfg(target_os = "android")`）が `AndroidApp::content_rect()` を
+/// `fandhe` の `src/entry/android.rs`（`cfg(target_os = "android")`）が `AndroidApp::content_rect()` を
 /// 捕捉したクロージャを注入する契約で、非 Android では `None`（追加 margin なし・
 /// 既存の描画結果を変えない）のまま。Android 専用の型（`android-activity` の
 /// `Rect` 等）を本モジュールへ持ち込まないよう、契約は `&egui::Context -> egui::Margin`
-/// にとどめている（cfg(target_os = "android") を android.rs 側に閉じ込める設計判断）。
+/// にとどめている（cfg(target_os = "android") を入口の `android.rs` 側に閉じ込める設計判断）。
 ///
 /// 公開しているのは、レジストリ経由（`screens::build_app`）で型消去された
 /// `Box<dyn ProxyAppDyn>` へも同じ供給関数を注入できるようにするため
-/// （`ProxyAppDyn::set_inset_margin_supplier` / `android.rs` 参照、Issue #715）。
+/// （`ProxyAppDyn::set_inset_margin_supplier` / `fandhe` の `src/entry/android.rs` 参照、Issue #715）。
 pub type InsetMarginSupplier = Box<dyn Fn(&egui::Context) -> egui::Margin>;
 
 use fandhe_runtime::{
@@ -265,16 +265,16 @@ fn find_tagged_screenshot(events: &[egui::Event], tag: u64) -> Option<Arc<egui::
 ///
 /// `insets_px` は `MainActivity`（Java 側 `OnApplyWindowInsetsListener`）が
 /// `WindowInsetsCompat.Type.systemBars() | Type.displayCutout()` から取得し、
-/// JNI 経由で渡す値（`android.rs` の `android_inset_margin` 参照。旧実装の
+/// JNI 経由で渡す値（`fandhe` の `src/entry/android.rs` の `android_inset_margin` 参照。旧実装の
 /// `AndroidApp::content_rect()` 方式は GameActivity 経路で insets を反映しないことを
 /// 実機で確認したため廃止した、PR #596 是正）。負値（想定外の入力）は 0 に、
 /// `egui::Margin`（`i8`）の表現上限（127pt）は飽和させてクランプする。
 /// `pixels_per_point` が 0 以下（想定外の入力）の場合は 1.0 として扱い、ゼロ除算を避ける。
 ///
-/// 呼び出し元: `android.rs` の `android_inset_margin`（`InsetMarginSupplier` 契約）。
+/// 呼び出し元: `fandhe` の `src/entry/android.rs` の `android_inset_margin`（`InsetMarginSupplier` 契約）。
 /// ユニットテストで境界値を検証する。
 ///
-/// 実呼び出し元（`android.rs`）は Android ターゲットのみコンパイル対象になるため、
+/// 実呼び出し元（`fandhe` の `src/entry/android.rs`）は Android ターゲットのみコンパイル対象になるため、
 /// それ以外のターゲットの通常ビルドでは未使用になる（`cfg(test)` のユニットテストからは
 /// 使われる。純関数として全ターゲットでテスト可能にしておくための意図的な構成）。
 #[doc(hidden)]
@@ -328,10 +328,10 @@ pub struct ProxyApp<S = SampleState> {
     /// `render_screen_with_recyclers` へ毎フレーム渡す契約（`recyclers` モジュール doc
     /// 参照。egui 側の永続領域は使わず、呼び出し側であるここが保持する設計判断）。
     recyclers: VirtualListRecyclers<S>,
-    /// native 自動撮影モード（`main.rs` の `FANDHE_PROXY_AUTOSHOT`）専用の状態。
+    /// native 自動撮影モード（`fandhe-gallery` の `select.rs` の `FANDHE_PROXY_AUTOSHOT`）専用の状態。
     /// wasm 側では常に `None` で本フィールドは使われない。
     autoshot: Option<AutoShot>,
-    /// window insets 供給関数（Issue #579）。`android.rs` が `with_inset_margin_supplier`
+    /// window insets 供給関数（Issue #579）。`fandhe` の `src/entry/android.rs` が `with_inset_margin_supplier`
     /// 経由で注入する。他プラットフォームでは `None`（`central_panel_with_insets` 参照）。
     inset_margin: Option<InsetMarginSupplier>,
     /// 外部 I/O 完了キューの送信側（Issue #745）。将来 `fandhe-device`（未実装）等の
@@ -353,15 +353,15 @@ pub struct ProxyApp<S = SampleState> {
 }
 
 /// Xvfb 上での自動起動確認用: 起動から一定フレーム後にスクリーンショットを要求し、
-/// 応答を受け取った時点で PNG 保存して終了コマンドを送る（`main.rs` からのみ使用）。
+/// 応答を受け取った時点で PNG 保存して終了コマンドを送る（`fandhe-gallery` の `select.rs` からのみ使用）。
 struct AutoShot {
     output_path: std::path::PathBuf,
     frames_waited: u32,
     requested: bool,
     done: bool,
-    /// PNG 保存の成否を `main.rs` 側へ伝える共有フラグ。
+    /// PNG 保存の成否を `fandhe-gallery` 側へ伝える共有フラグ。
     /// `eframe::App::logic` は戻り値でプロセス終了コードへ介入できないため、
-    /// `run_native` 完了後に `main.rs` がこのフラグを読み、失敗時は非ゼロで終了する
+    /// `run_native` 完了後に `fandhe-gallery` の `main.rs` がこのフラグを読み、失敗時は非ゼロで終了する
     /// （Bugbot 指摘: 保存失敗時も成功終了していた不整合の是正）。
     save_failed: Arc<AtomicBool>,
 }
@@ -399,10 +399,10 @@ impl ProxyApp<SampleState> {
     }
 
     /// native 自動撮影モードを有効にした状態でアプリを構築する
-    /// （`FANDHE_PROXY_AUTOSHOT=<path>` 指定時に `main.rs` から呼ばれる）。
+    /// （`FANDHE_PROXY_AUTOSHOT=<path>` 指定時に `fandhe-gallery` の `select.rs` から呼ばれる）。
     ///
-    /// `save_failed` は `main.rs` が保持する共有フラグで、PNG 保存に失敗した場合に
-    /// `true` がセットされる。`run_native` 完了後に `main.rs` 側で読み出し、
+    /// `save_failed` は `fandhe-gallery` が保持する共有フラグで、PNG 保存に失敗した場合に
+    /// `true` がセットされる。`run_native` 完了後に `fandhe-gallery` の `main.rs` 側で読み出し、
     /// プロセスの終了コードへ反映する契約（`AutoShot::save_failed` 参照）。
     pub fn new_with_autoshot(
         ctx: &egui::Context,
@@ -426,7 +426,7 @@ impl<S> ProxyApp<S> {
     /// 状態駆動で毎フレーム画面を引き直すアプリを構築する（Issue #726）。
     /// `current` は `ScreenStack<S>` を状態に持つ画面（`fandhe_core::screens::list_detail`
     /// 等）の `current_screen(&S) -> Screen<S>` のような入口関数を渡す想定
-    /// （`screens::build_app` の `nav` 区画から呼ばれる、`screens.rs` 参照）。
+    /// （`screens::build_app` の `nav` 区画から呼ばれる、`fandhe-gallery` の `screens.rs` 参照）。
     pub fn with_screen_fn(ctx: &egui::Context, current: fn(&S) -> Screen<S>, state: S) -> Self {
         Self::with_source(ctx, ScreenSource::FromState(current), state)
     }
@@ -470,7 +470,7 @@ impl<S> ProxyApp<S> {
         CompletionSender::new(self.completions_tx.clone(), self.waker.clone())
     }
 
-    /// window insets 供給関数を注入する（Issue #579、`android.rs` からのみ呼ばれる）。
+    /// window insets 供給関数を注入する（Issue #579、`fandhe` の `src/entry/android.rs` からのみ呼ばれる）。
     /// `supplier` は毎フレーム `update` 内で呼ばれるため、高コストな処理を含めない契約。
     #[cfg_attr(not(target_os = "android"), allow(dead_code))]
     pub fn with_inset_margin_supplier(
@@ -499,7 +499,7 @@ impl<S> ProxyApp<S> {
 /// レジストリ（`screens::build_app`）が返す型消去済み `ProxyApp<S>`（Issue #715）。
 ///
 /// `S` はレジストリ登録時に画面ビルダー関数の戻り型から推論されるため、
-/// 呼び出し元（`main.rs`/`web.rs`/`ios.rs`/`android.rs`）は具象の `S` を知らないまま
+/// 呼び出し元（`fandhe` の `src/entry/` とカタログ）は具象の `S` を知らないまま
 /// `Box<dyn EguiApp>` として扱いつつ、Android 限定の window insets 供給関数
 /// （Issue #579）だけは本トレイト越しに注入できる。
 pub trait ProxyAppDyn: EguiApp {
@@ -569,7 +569,7 @@ impl<S: 'static> EguiApp for ProxyApp<S> {
                             if let Err(err) = crate::save_color_image(image, &autoshot.output_path)
                             {
                                 // 自動運転モード: 失敗を panic にせず標準エラーへ記録した上で、
-                                // `save_failed` フラグを立てて `main.rs` に伝播させる。
+                                // `save_failed` フラグを立てて `fandhe-gallery` に伝播させる。
                                 // フラグを立てるだけでは `done`/`Close` の配線は変えず、
                                 // ウィンドウは通常どおり閉じつつプロセスの終了コードで
                                 // 失敗を検知できるようにする（coding-rust.md の

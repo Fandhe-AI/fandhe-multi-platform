@@ -2,7 +2,7 @@
 //! `fandhe_core::screens::ar_show`（端末依存ゼロ）の `wanted` の立ち上がりで
 //! `crate::contract::ArTracking::start`、立ち下がりで `stop` を呼び、実行中は
 //! [`READ_INTERVAL`] ごとに `read` して結果を注入する（`registry.rs` の `effect` 区画から
-//! 毎フレーム同期に呼ばれる）。`compass.rs` と同型の間隔つき pull。
+//! 毎フレーム同期に呼ばれる）。`fandhe-cap-compass-heading` の `driver.rs` と同型の間隔つき pull。
 //!
 //! 読んだら送信を省く分岐でも次回を必ず予約する（契約表 4）。失敗（開始失敗・読み取り失敗・期限切れ）
 //! を確定する前に必ず `stop()` する（契約表 3・9）。期限は単調時計（`Instant`）由来のミリ秒だけで測る。
@@ -119,14 +119,14 @@ static RESUME_EPOCH: AtomicU64 = AtomicU64::new(0);
 /// 背景中か。背景中は `NoReading` の待機を進めない。
 static BACKGROUND: AtomicBool = AtomicBool::new(false);
 
-/// 背景遷移を記録する。`ios_ar.rs` の受け口（`DidEnterBackground` 由来）が呼ぶ。
+/// 背景遷移を記録する。本 crate の `ios.rs` の受け口（`DidEnterBackground` 由来）が呼ぶ。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(target_os = "ios", allow(dead_code))]
 pub(crate) fn note_backgrounded() {
     BACKGROUND.store(true, Ordering::SeqCst);
 }
 
-/// 背景からの復帰を記録する。`ios_ar.rs` の前景復帰の受け口が呼ぶ。復帰回数を先に増やしてから背景フラグを下ろす。
+/// 背景からの復帰を記録する。本 crate の `ios.rs` の前景復帰の受け口が呼ぶ。復帰回数を先に増やしてから背景フラグを下ろす。
 #[cfg(any(target_os = "ios", test))]
 #[cfg_attr(target_os = "ios", allow(dead_code))]
 pub(crate) fn note_resumed() {

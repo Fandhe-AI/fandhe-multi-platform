@@ -8,7 +8,7 @@
 //! main thread 必須で、eframe の UI スレッドは macOS では main thread）。待ち・期限・
 //! `request_repaint_after` は持たない（押下は OS の通知 → `CompletionSender::send` が UI を起こす）。
 //! **dispatch はここで最終形にしてあり、後続 issue（Windows は #767）は OS 別モジュール
-//! （`windows_global_hotkey.rs`）だけを埋める**。macOS は `macos_global_hotkey.rs`、
+//! （本 crate の `windows.rs`）だけを埋める**。macOS は本 crate の `macos.rs`、
 //! それ以外は `UnsupportedGlobalHotkey` で「非対応」を表示する。
 //!
 //! 押下は「世代つきのまとめ送り」にする: 未適用件数を数え、0 → 1 になったときだけ完了を 1 件送る。

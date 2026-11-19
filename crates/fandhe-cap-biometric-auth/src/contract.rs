@@ -113,7 +113,7 @@ mod tests {
     }
 
     /// モック実装（`Cancelled` 固定）が `Authenticated` へ化けないことを固定する
-    /// （契約の 4 値を取り違えない、`share.rs::AlwaysCancelledShare` と同じ目的）。
+    /// （契約の 4 値を取り違えない、`fandhe-cap-share-sheet` の `contract.rs::AlwaysCancelledShare` と同じ目的）。
     struct AlwaysCancelledAuth;
 
     impl BiometricAuth for AlwaysCancelledAuth {

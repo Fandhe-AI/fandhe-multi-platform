@@ -303,7 +303,7 @@ pub fn midi_show_effect(state: &MidiShowState, sender: &CompletionSender<MidiSho
     );
 }
 
-/// アプリ終了時に購読を外す（`device::shutdown` から呼ばれる）。
+/// アプリ終了時に購読を外す（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）から呼ばれる）。
 pub fn shutdown() {
     platform_midi().stop();
 }

@@ -7,7 +7,7 @@
 //! # 方式と、スタブ時の注意との違い
 //!
 //! `CastingSource` は `MediaPlayer::GetAsCastingSource` からしか得られないため、Media Engine
-//! （`windows_media_playback.rs`）は流用しない。WinRT の活性化は実行時にだけ失敗し import table に載らない
+//! （`fandhe-cap-media-playback` の `windows.rs`）は流用しない。WinRT の活性化は実行時にだけ失敗し import table に載らない
 //! ので、Windows N でも exe の起動は巻き込まない（活性化失敗は `Failed(Unsupported)`）。
 //! スタブの doc は「接続は UI スレッドで」としていたが、デスクトップには CoreDispatcher がなく
 //! `CastingDevice` / `CastingConnection` / `MediaPlayer` は agile のため、接続はワーカーで行う
@@ -550,7 +550,7 @@ mod win {
     fn init_picker_window(picker: &CastingDevicePicker, hwnd: HWND) -> windows::core::Result<()> {
         let init: IInitializeWithWindow = picker.cast()?;
         // SAFETY: `hwnd` は `fandhe_platform_windows::window()`（`remember_window` が控えた有効なウィンドウ）
-        // 由来で、`init` は直前に取得した有効な COM ポインタ（`windows_screen_capture.rs` と同じ根拠）。
+        // 由来で、`init` は直前に取得した有効な COM ポインタ（`fandhe-cap-screen-capture` の `windows.rs` と同じ根拠）。
         unsafe { init.Initialize(hwnd) }
     }
 

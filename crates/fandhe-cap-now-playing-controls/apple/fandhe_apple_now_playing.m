@@ -52,7 +52,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-// Rust 側（apple_now_playing.rs）が公開する受け口。非 0 = 受け付けた。
+// Rust 側（本 crate の `apple.rs`）が公開する受け口。非 0 = 受け付けた。
 extern int32_t fandhe_rust_now_playing_command(int32_t code);
 
 // 登録済みの (MPRemoteCommand, token) の対。

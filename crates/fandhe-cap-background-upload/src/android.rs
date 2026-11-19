@@ -15,7 +15,7 @@
 //!
 //! JNI 署名は Java と本ファイルの `jni_sig!` の 2 か所で一致させる。native コールバック
 //! （`nativeOnBackgroundUploadChanged`）は `set_signal` が `observe` を呼んだ後でしか Java から
-//! 呼ばれないため、no-op スタブは置かない（`android_sleep_lock_events.rs` と同じ根拠）。
+//! 呼ばれないため、no-op スタブは置かない（`fandhe-cap-sleep-lock-events` の `android.rs` と同じ根拠）。
 //!
 //! # ライフサイクル（契約表 1）
 //!

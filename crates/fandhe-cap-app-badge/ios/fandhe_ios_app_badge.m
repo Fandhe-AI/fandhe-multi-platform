@@ -10,7 +10,7 @@
 //     -> 戻り値: 0 = 受理（結果は非同期に fandhe_rust_app_badge_outcome で届く。ちょうど 1 回）。
 //        同期で失敗する経路は無い。value は Rust 側 `BadgeValue` で 0〜9999 を検証済み。
 //   fandhe_rust_app_badge_outcome(uint64_t request_id, uint32_t value, int32_t code)
-//     -> Rust 側（`ios_app_badge.rs`）が公開する `extern "C"` 関数。value は 0 の成功を
+//     -> Rust 側（本 crate の `ios.rs`）が公開する `extern "C"` 関数。value は 0 の成功を
 //        「消去」表示に分けるため往復させる。code の写像は Rust 側 `outcome_from_code`
 //        （SSOT）に一本化し、本ファイルでは写像しない:
 //          0 = setBadgeCount が成功

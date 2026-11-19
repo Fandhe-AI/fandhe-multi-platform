@@ -5,8 +5,6 @@
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約）。契約の SSOT は
 //! `crate::contract`。
 //!
-//! 非 wasm32 でのみコンパイル対象になる（`device.rs` 参照）。
-//!
 //! # スレッド
 //!
 //! 全 OS で呼ばれたスレッド（egui の update ループ = main）から同期で呼ぶ。macOS の `.m` は

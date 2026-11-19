@@ -34,7 +34,7 @@ use fandhe_runtime::CompletionSender;
 /// 等で 8787 番へ立てる想定、docs/operations/http-fetch-device-check.md 参照）。文言・URL はダミー。
 /// 実機テスト（iPhone から Mac の LAN IP へ取得しに行く場合等）ではループバックへ
 /// 到達できないため、ビルド時 `FANDHE_ITEMS_URL` で差し替え可能にする（Issue #660）。
-/// `screens.rs` の `FANDHE_PROXY_APP`（画面切り替え）と同じ `option_env!` 方式を使うのは、
+/// `fandhe-gallery` の `select.rs` の `FANDHE_PROXY_APP`（画面切り替え）と同じ `option_env!` 方式を使うのは、
 /// rustc がこの環境変数への依存をコンパイル成果物に記録し、値を変えれば再ビルドが
 /// 走るようになるため（build.rs で `cargo:rerun-if-env-changed` を書く必要がない）。
 #[cfg(not(target_arch = "wasm32"))]

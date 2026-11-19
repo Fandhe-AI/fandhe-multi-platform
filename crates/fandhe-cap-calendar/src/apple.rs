@@ -4,7 +4,7 @@
 //! コンパイル・リンクする。iOS は main queue で
 //! `EKEventEditViewController` を提示する）を `unsafe extern "C"` 1 関数
 //! （[`present`]）で呼ぶ。`unsafe` はこの呼び出し 1 箇所に閉じ `// SAFETY:` で契約を明記する
-//! （`apple_biometric.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
+//! （`fandhe-cap-biometric-auth` の `apple.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `.m` 側の完了から [`fandhe_rust_calendar_outcome`] が呼ばれ、`driver::bridge`
 //! へ結果を置く（pull 型）。結果コード → 結果の写像は `driver.rs`::outcome_from_code`
@@ -61,7 +61,7 @@ pub(crate) fn present(request_id: u64, draft: &EventDraft) -> bool {
 /// （`bridge` は `Mutex`）。画面への反映は毎フレームの `drive_callback` が行う。
 ///
 /// iOS では EventKitUI の delegate が egui の `update` 外から呼ぶため、結果を置いた後に
-/// `ios::request_repaint` で次フレームを起こす（`apple_biometric.rs` と同じ理由。
+/// `ios::request_repaint` で次フレームを起こす（`fandhe-cap-biometric-auth` の `apple.rs` と同じ理由。
 /// macOS は event loop が別途 repaint を要求するためここでは呼ばない）。
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]

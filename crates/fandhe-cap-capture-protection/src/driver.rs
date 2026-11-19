@@ -6,8 +6,6 @@
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約（エラー種別・守る範囲）の SSOT は `crate::contract`。
 //!
-//! 非 wasm32 でのみコンパイル対象になる。
-//!
 //! # スレッド
 //!
 //! 全 OS とも呼ばれたスレッド（egui の update ループ = UI スレッド）で同期に呼び、

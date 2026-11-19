@@ -46,7 +46,7 @@ const POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 /// `BackgroundTaskError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
 /// それ以外は `Display` の文言のみを転送する（`BackgroundTaskError` の内部構造は漏らさない、
-/// security.md A09。`notification.rs::to_message` と同型）。
+/// security.md A09。`fandhe-cap-notification` の `driver.rs::to_message` と同型）。
 fn to_message(e: BackgroundTaskError) -> String {
     match e {
         BackgroundTaskError::Unsupported(_) => {
@@ -187,7 +187,7 @@ pub fn platform_background_task() -> Arc<dyn BackgroundTask> {
 
 /// `background_task` の要求 1 件を処理して別スレッドで OS を呼び、完了を送る
 /// （テストから任意の実装を差し込めるよう `background_task_effect` 本体から切り出す、
-/// `notification.rs::drive` と同型）。
+/// `fandhe-cap-notification` の `driver.rs::drive` と同型）。
 fn drive_request(
     state: &BackgroundTaskState,
     sender: &CompletionSender<BackgroundTaskState>,
@@ -197,7 +197,7 @@ fn drive_request(
         return false;
     };
 
-    // 起動済みマーキング（二重起動防止、`notification.rs::drive` と同型）。
+    // 起動済みマーキング（二重起動防止、`fandhe-cap-notification` の `driver.rs::drive` と同型）。
     let _ = sender.send(Box::new(mark_in_flight));
 
     let generation = request.generation;

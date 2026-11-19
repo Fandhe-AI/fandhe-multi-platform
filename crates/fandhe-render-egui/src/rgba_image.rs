@@ -1,6 +1,6 @@
 //! `Node::RgbaImage`（実画素の画像ノード、Issue #5）の egui 描画。
 //!
-//! `lib.rs` の `render_node`（と `tv_focus.rs` の同名関数）から呼ばれる。画素は
+//! `render.rs` の `render_node`（と `fandhe-gallery` の `demo/tv_focus.rs` の同名関数）から呼ばれる。画素は
 //! `fandhe_core::RgbaPixels` が構築時に検証済み（長さ一致・寸法上限）のため、長さ不一致で
 //! panic する `ColorImage::from_rgba_unmultiplied` へ安全に渡せる。
 //!

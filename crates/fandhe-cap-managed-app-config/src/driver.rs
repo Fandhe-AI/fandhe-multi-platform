@@ -6,7 +6,7 @@
 //!
 //! # スレッド
 //!
-//! Android はディスク I/O を伴うため、OS を問わずワーカースレッドで読む（`wifi_info.rs` と同型）。
+//! Android はディスク I/O を伴うため、OS を問わずワーカースレッドで読む（`fandhe-cap-wifi-info` の `driver.rs` と同型）。
 //! 完了は画面状態の世代照合つきで入れる（古い世代は捨てられる）。`CompletionSender::send` が
 //! 再描画を起こすため、iOS で別に `request_repaint` を呼ぶ必要は無い。
 //!

@@ -3,12 +3,12 @@
 //! `fandhe_core::screens::system_accent_color_show`（端末依存ゼロ）へ注入する
 //! （`registry.rs` の `effect` 区画から毎フレーム同期に呼ばれる）。
 //!
-//! **間隔つき pull**（`accessibility_prefs.rs` と同型でアニメーション部分なし）: 最終読取から
+//! **間隔つき pull**（`fandhe-cap-accessibility-prefs` の `driver.rs` と同型でアニメーション部分なし）: 最終読取から
 //! `READ_INTERVAL` 未満なら OS を読まない。状態が変わらなければ送信を省くが、次の読み取りまでの
 //! 再描画を必ず予約する（入力が無いと egui が描画せずポーリングが止まる、契約表 4）。
 //!
-//! dispatch（[`implementation`]）は全対象 OS の最終形。macOS は `macos_system_accent_color.rs`、
-//! Windows は `windows_system_accent_color.rs`、Android は `android_system_accent_color.rs`
+//! dispatch（[`implementation`]）は全対象 OS の最終形。macOS は本 crate の `macos.rs`、
+//! Windows は本 crate の `windows.rs`、Android は本 crate の `android.rs`
 //! （JNI の同期 pull）。Web は `fandhe-web-dom` 側（#423）で、純粋な定数 `READ_INTERVAL` だけを本 crate から使う。
 
 use std::sync::{Arc, Mutex};

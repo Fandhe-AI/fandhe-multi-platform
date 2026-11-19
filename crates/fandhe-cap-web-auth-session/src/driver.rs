@@ -228,7 +228,7 @@ pub(crate) mod bridge {
     }
 }
 
-/// 終了時（`device::shutdown`）に進行中の認証を閉じる。
+/// 終了時（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`））に進行中の認証を閉じる。
 pub fn shutdown() {
     if bridge::lock().is_some() {
         bridge::shutdown(&*platform_web_auth_session());

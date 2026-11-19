@@ -26,7 +26,7 @@
 //! # 期限・終了
 //!
 //! 期限は `DISCOVERY_WINDOW_MS` だけ（OS 側へ渡して一致させる、同 3 節）。画面離脱はプロセス終了と
-//! 同義のため、[`stop_shared_discovery`] を `device::shutdown` から呼んで検索を止める。再要求は
+//! 同義のため、[`stop_shared_discovery`] を `fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）から呼んで検索を止める。再要求は
 //! 古いセッションを置き換え、古い request_id の結果は照合して捨てる。Android は停止が
 //! Activity のライフサイクルで完結するため分岐を持たない。
 //!

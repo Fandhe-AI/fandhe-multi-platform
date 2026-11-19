@@ -39,7 +39,7 @@
 #import <TargetConditionals.h>
 #if TARGET_OS_IOS
 #import <UIKit/UIKit.h>
-// Rust 側（ios_media_playback.rs）の受け口。引数なし。g_lock を外した後に呼ぶ。
+// Rust 側（本 crate の `ios.rs`）の受け口。引数なし。g_lock を外した後に呼ぶ。
 extern void fandhe_rust_media_playback_changed(void);
 #endif
 

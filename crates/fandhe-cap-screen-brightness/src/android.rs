@@ -169,7 +169,7 @@ pub(crate) fn implementation() -> Arc<dyn ScreenBrightness> {
     Arc::new(AndroidScreenBrightness)
 }
 
-/// `device.rs` の `cfg(any(android, test))` でホストのテストビルドにも載るための形。
+/// `lib.rs` の `cfg(any(target_os = "android", test))` でホストのテストビルドにも載るための形。
 /// dispatch は Android でしか呼ばない。非対応を返し、成功へは倒さない。
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]

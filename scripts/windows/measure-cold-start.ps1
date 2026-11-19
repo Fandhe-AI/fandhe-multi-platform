@@ -101,7 +101,7 @@ for ($i = 1; $i -le $Trials; $i++) {
     $psi.UseShellExecute = $false
     $psi.RedirectStandardError = $true
     # stdout も必ずリダイレクトして読み捨てる。対象は console subsystem のバイナリ
-    # （main.rs に windows_subsystem 属性なし）であり、放置すると子の stdout が親へ
+    # （crates/fandhe-gallery/src/main.rs に windows_subsystem 属性なし）であり、放置すると子の stdout が親へ
     # 流れ込んで本スクリプトの CSV へ混入する（既存 bash 版が子出力を遮断しているのと
     # 同じ意図）。読み捨てないとパイプのバッファが埋まって停止しうるため必ず drain する。
     $psi.RedirectStandardOutput = $true
@@ -139,7 +139,7 @@ for ($i = 1; $i -le $Trials; $i++) {
             continue
         }
 
-        # 末尾の `;` を必須にする。cold_start.rs のコメントどおり、擬似 TTY 経由の記録では
+        # 末尾の `;` を必須にする。crates/fandhe-gallery/src/demo/cold_start.rs のコメントどおり、擬似 TTY 経由の記録では
         # 折り返しで数値の途中に改行が入りうるため、`;` が無い場合は抽出失敗（fail-fast）
         # に倒して過小・過大な値を黙って採らない。
         $m = [regex]::Match($stderrText, 'COLD_START_MS=(\d+);')

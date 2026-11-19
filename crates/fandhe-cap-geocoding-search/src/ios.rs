@@ -11,7 +11,7 @@
 //! 契約表 4（再描画）: 結果は `RequestSlot::deliver` で置く pull 型で、Rust の共有状態へ書き込む
 //! OS コールバックは無い。待機中はドライバの `poll_and_finish` が毎フレーム
 //! `request_repaint_after` を予約するので画面は止まらない。補強として FFI から戻った直後にも
-//! `fandhe_runtime::request_repaint` を呼ぶ（`ios_spell_check.rs` と同じ形）。この呼び出しは
+//! `fandhe_runtime::request_repaint` を呼ぶ（`fandhe-cap-spell-check` の `ios.rs` と同じ形）。この呼び出しは
 //! `deliver` より前に走るため、結果の反映の保証は `poll_and_finish` の予約が担う。
 //! 守る範囲・守らない範囲は `crate::contract` の doc を正とする。
 

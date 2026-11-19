@@ -249,7 +249,7 @@ mod ffi {
     /// MS Learn の `LPMAPISENDMAILW` と同じ宣言。
     type SendMailW = unsafe extern "system" fn(usize, usize, *const MapiMessageW, u32, u32) -> u32;
 
-    /// 解決した関数ポインタ。`FreeLibrary` はしない（`windows_media_playback.rs` と同じ判断）。
+    /// 解決した関数ポインタ。`FreeLibrary` はしない（`fandhe-cap-media-playback` の `windows.rs` と同じ判断）。
     static SEND_MAIL: OnceLock<Option<SendMailW>> = OnceLock::new();
 
     #[allow(unsafe_code)]

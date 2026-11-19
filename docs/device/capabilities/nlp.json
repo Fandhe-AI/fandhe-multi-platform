@@ -10,7 +10,7 @@
       "status": "done",
       "api": "NaturalLanguage（`NLTokenizer`、言語判定は `NLLanguageRecognizer`、品詞等は `NLTagger`）",
       "url": "https://developer.apple.com/documentation/naturallanguage",
-      "note": "実装済み（旧#1095）。macOS（旧#1094）と同じ `apple/fandhe_apple_nlp.m`（`NLTokenizer`、言語は自動判定）を共用し、`build.rs` の iOS 分岐と `device.rs` の cfg を広げて C ABI 1 関数で呼ぶ。`@autoreleasepool` の内側・呼び出しごとに分割器を作るため共有状態もロックも無く、`dispatch_sync` も使わない。NSString / UTF-8 変換の失敗は `Internal`。OS を呼ぶ前に `validate_input`（上限 10,000 文字・NUL 拒否）、空入力は OS を呼ばず `Ok(vec![])`、結果は必ず `normalize_words` を通す。守る範囲: 入力の検証・正規化の一貫性と失敗を成功と見せないこと。守らない範囲: OS 間の分割結果の一致、巨大入力に近い長さでの処理時間。iPhone 実機での確認は人間確認待ち",
+      "note": "実装済み（旧#1095）。macOS（旧#1094）と同じ `apple/fandhe_apple_nlp.m`（`NLTokenizer`、言語は自動判定）を共用し、`build.rs` の iOS 分岐と `lib.rs` の cfg を広げて C ABI 1 関数で呼ぶ。`@autoreleasepool` の内側・呼び出しごとに分割器を作るため共有状態もロックも無く、`dispatch_sync` も使わない。NSString / UTF-8 変換の失敗は `Internal`。OS を呼ぶ前に `validate_input`（上限 10,000 文字・NUL 拒否）、空入力は OS を呼ばず `Ok(vec![])`、結果は必ず `normalize_words` を通す。守る範囲: 入力の検証・正規化の一貫性と失敗を成功と見せないこと。守らない範囲: OS 間の分割結果の一致、巨大入力に近い長さでの処理時間。iPhone 実機での確認は人間確認待ち",
       "sourceName": [
         "自然言語処理"
       ],

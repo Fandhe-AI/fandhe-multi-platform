@@ -6,7 +6,7 @@
 //!
 //! ドロップ領域はウィンドウ全体
 //! （egui の `ViewportBuilder::drag_and_drop` は `None` のまま winit の既定＝有効に
-//! 任せている。`main.rs` の変更は不要）。領域外へ出た = ウィンドウ外 =
+//! 任せている。入口（`fandhe` の `src/entry/`）の変更は不要）。領域外へ出た = ウィンドウ外 =
 //! `HoveredFileCancelled` として扱われる。
 //!
 //! # デスクトップ（macOS/Windows）と iOS/Android で経路が分かれる理由
@@ -71,7 +71,7 @@ use fandhe_device::drag_drop::{DropError, MAX_DROP_FILES, read_dropped, read_dro
 
 use fandhe_runtime::CompletionSender;
 
-// `drop_session` はターゲット非依存（`device.rs` の doc 参照）なので、`DropEvent` は
+// `drop_session` はターゲット非依存（`lib.rs` の `pub mod drop_session` に cfg が無い）なので、`DropEvent` は
 // iOS に限らず常に import する。[`drive_events`] 自体もホストの `cargo test` から
 // 常に呼べるようにするため（`drive` と同じ「ロジックはホストの `cargo test` で
 // 検証する」方針、`fandhe-cap-gamepad` の `android.rs` と同型）。
@@ -86,7 +86,7 @@ use crate::drop_session::{DropEvent, DroppedItem};
 /// 同一ジョブの I/O が積み上がるのを防ぐ）。
 ///
 /// デスクトップ限定（[`drive`] 経路専用）。iOS では読み取りを起動側
-/// （`ios_drag_drop.rs::fandhe_rust_drag_drop_item`）が同期に 1 件ずつ処理し、
+/// （本 crate の `ios.rs::fandhe_rust_drag_drop_item`）が同期に 1 件ずつ処理し、
 /// 世代照合は [`crate::drop_session::DropSessions`] のセッション id が兼ねるため
 /// 参照されない（`cfg_attr` は iOS ビルドでの `dead_code` 誤検知を避けるため）。
 #[cfg_attr(any(target_os = "ios", target_os = "android"), allow(dead_code))]
@@ -257,7 +257,7 @@ fn into_drop_item(item: DroppedItem) -> DropItem {
 /// 評価順序が重要: ドロップされたフレームでは egui-winit が既にホバー一覧を
 /// 空にしているため、1 の分岐（ドロップ）を最初に評価しないと 3 の分岐
 /// （キャンセル）に化けてしまう。送ったフレームの次のフレームでは、先頭で
-/// 完了が適用されてから本関数が呼ばれる（`app.rs::drain_completions` の順序）ため、
+/// 完了が適用されてから本関数が呼ばれる（`fandhe-render-egui` の `app.rs` が `drain_completions` してから描画する順序）ため、
 /// `state.hovering` は既に更新済みで二重送信は起きない。
 ///
 /// ドロップ時は世代を即座に（同期の完了で）確定させてからワーカースレッドを
@@ -378,7 +378,7 @@ fn read_all(paths: Vec<Option<PathBuf>>, generation: u64) -> (Vec<DropItem>, usi
 }
 
 /// 上限（[`MAX_DROP_FILES`]）超過分を 1 件へ集約した表示行。`overflow == 0` なら
-/// `None`。デスクトップ（[`read_all`]）と iOS（`ios_drag_drop.rs::
+/// `None`。デスクトップ（[`read_all`]）と iOS（本 crate の `ios.rs::
 /// fandhe_rust_drag_drop_begin` が超過分を計算し、読み込み完了後に集約する側）の
 /// 両方で使う共通部品（安易な複製を避ける、実装計画 §2.2「再利用」）。
 pub(crate) fn overflow_item(overflow: usize) -> Option<DropItem> {
@@ -401,7 +401,7 @@ fn display_name(path: Option<&std::path::Path>) -> String {
 
 /// Android の JNI 受け口（本 crate の `android.rs` の `nativeOnDragDropItem`）が fd から得た
 /// 結果を [`DroppedItem`] へ変換する、FFI を含まない純粋な分岐部分（ホストの `cargo test`
-/// で検証できるようにする切り出し、`ios_drag_drop.rs::build_item` と同じ方針）。
+/// で検証できるようにする切り出し、本 crate の `ios.rs::build_item` と同じ方針）。
 ///
 /// `code` の意味（`MainActivity.java` の `nativeOnDragDropItem` 宣言コメントと対）:
 /// - `0`: 通常ファイル（`file` に fd から開いたハンドルが入る契約）
@@ -769,7 +769,7 @@ mod tests {
     }
 
     /// Android 経路（[`item_from_fd`]）のテスト群。fd を模した一時ファイルを渡し、
-    /// `code` ごとの分岐を検証する（`ios_drag_drop.rs::build_item` のテストと同じ方針）。
+    /// `code` ごとの分岐を検証する（本 crate の `ios.rs::build_item` のテストと同じ方針）。
     mod item_from_fd_tests {
         use super::*;
 

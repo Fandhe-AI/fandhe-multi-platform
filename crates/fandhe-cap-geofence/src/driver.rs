@@ -83,7 +83,7 @@ pub fn reset_register_tracking() {
     *DRIVER.lock().unwrap_or_else(|p| p.into_inner()) = None;
 }
 
-/// `location` の最新結果を判定して、表示が変わったときだけ完了を送る（`location.rs::drive`
+/// `location` の最新結果を判定して、表示が変わったときだけ完了を送る（`fandhe-cap-location` の `driver.rs::drive`
 /// と同じ切り出し。変化が無い間も `request_repaint_after` で次回ポーリングを予約する）。
 fn drive(
     state: &GeofenceShowState,
@@ -170,7 +170,7 @@ fn drive(
 /// `registry.rs` の `effect` 区画から `geofence_show` 画面用に配線される effect ドライバ。
 pub fn geofence_effect(state: &GeofenceShowState, sender: &CompletionSender<GeofenceShowState>) {
     let location = shared_location_precise();
-    // Apple は shared_location() から起動しない方針のため、ここで起動する（location.rs 参照）。
+    // Apple は shared_location() から起動しない方針のため、ここで起動する（`fandhe-cap-location` の `driver.rs` 参照）。
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     start_apple_location_once();
 

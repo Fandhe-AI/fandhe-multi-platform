@@ -69,7 +69,7 @@
 #include <string.h>
 
 #if TARGET_OS_IOS
-// ios_media_cast.rs が定義する再描画の受け口。
+// 本 crate の `ios.rs` が定義する再描画の受け口。
 extern void fandhe_rust_media_cast_changed(void);
 #endif
 

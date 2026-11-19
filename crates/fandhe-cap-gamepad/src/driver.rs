@@ -12,12 +12,12 @@
 //! [`AndroidGamepad`](crate::android::AndroidGamepad)
 //! （`android.rs` 参照）を使う。それ以外（Linux/その他）は常に
 //! `GamepadError::Unsupported("gamepad")` を返す `UnsupportedGamepad` にする
-//! （`location.rs` の cfg カスケードと同型。ダミー座標へフォールバックしない）。
+//! （`fandhe-cap-location` の `driver.rs` の cfg カスケードと同型。ダミー座標へフォールバックしない）。
 //!
 //! 代替入力（スライダー・チェックボックス）は `fandhe_core::screens::gamepad_show::
 //! GamepadShowState` 自身の `alt_x`/`alt_y`/`alt_button` フィールドとして画面側で
 //! 直接バインドされている（`gamepad_show_screen` の `.slider()`/`.checkbox()`
-//! 参照）ため、`tilt.rs`/`location.rs` の `DummyMotion`/`SharedLocation` のような
+//! 参照）ため、`fandhe-cap-tilt-motion` の `contract.rs`/`fandhe-cap-location` の `contract.rs` の `DummyMotion`/`SharedLocation` のような
 //! 別建ての共有ダミーオブジェクトは本ドライバでは持たない（実装が非対応・未接続の
 //! ときに [`fandhe_core::screens::gamepad_show::apply_disconnected`]/[`apply_unsupported`]
 //! が状態の `alt_x`/`alt_y`/`alt_button` をそのまま読む設計、ponytail: 不要な抽象を
@@ -59,7 +59,7 @@ const LABEL_SEPARATOR: &str = "、";
 #[cfg(any(target_os = "windows", target_os = "ios", target_os = "macos"))]
 const IDLE_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(200);
 
-/// 常に非対応を返す実装（Windows/iOS/macOS/Android 以外の cfg 分岐、`location.rs` の
+/// 常に非対応を返す実装（Windows/iOS/macOS/Android 以外の cfg 分岐、`fandhe-cap-location` の `driver.rs` の
 /// `UNSUPPORTED_PUSHED` 相当の判断をここでは実装自体で表現する）。それらのビルドでは
 /// `platform_gamepad()` の cfg 分岐から参照されないため `dead_code` を許可する
 /// （`fandhe-cap-tilt-motion` の `driver.rs::GRAVITY_EARTH` と同じ判断）。
@@ -80,8 +80,8 @@ impl Gamepad for UnsupportedGamepad {
     }
 }
 
-/// 実行対象プラットフォームに応じた `Gamepad` 実装を返す（`clipboard.rs::
-/// shared_clipboard` と同型の cfg カスケード。状態を持たない実装のみのため
+/// 実行対象プラットフォームに応じた `Gamepad` 実装を返す（`fandhe-cap-clipboard` の `driver.rs::
+/// platform_clipboard` と同型の cfg カスケード。状態を持たない実装のみのため
 /// `OnceLock` は使わず、呼び出しごとに構築する）。
 pub fn platform_gamepad() -> Box<dyn Gamepad> {
     #[cfg(target_os = "windows")]

@@ -5,7 +5,7 @@
 //! 呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・期限・守る範囲）の SSOT は
 //! `fandhe_cap_on_device_llm`。
 //!
-//! 非 wasm32 でのみコンパイル対象になる。Web の実体は
+//! Web の実体は
 //! `fandhe-web-dom` の非同期 effect（c の子 issue）が持つ。
 //!
 //! # OS 別の分担（dispatch は #345 で最終形。後続の子は自分の OS のモジュールだけを埋める）

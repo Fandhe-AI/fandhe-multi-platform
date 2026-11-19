@@ -14,14 +14,14 @@
 //!   統一であり、「上を正にする」慣例をここでは採らない。
 //! - **未接続 vs 非対応 vs 読み取り失敗**: [`Gamepad::read`] は 3 通りを型で区別する。
 //!   - 接続中のコントローラが無い: `Ok(None)`（全 0 の [`GamepadSnapshot`] を
-//!     「未接続」の代用にしない。`location.rs` の「(0, 0) に測位できた」と
+//!     「未接続」の代用にしない。`fandhe-cap-location` の `contract.rs` の「(0, 0) に測位できた」と
 //!     「まだ測位できていない」の区別と同じ設計判断）。
 //!   - 現在のプラットフォームでは未対応: `Err(GamepadError::Unsupported("gamepad"))`。
 //!   - 接続はしているが読み取りが一時的に失敗した: `Err(GamepadError::Internal("gamepad read"))`。
 //! - **複数台接続**: 先頭 1 台のみを扱う。2 台目以降は無視する（本 Issue のスコープ外、
 //!   複数台の合成・切替は将来課題）。
 //! - **切断後**: 直前の値を返し続けない。切断を検知したら次回以降の [`Gamepad::read`]
-//!   は速やかに `Ok(None)` へ戻す（`location.rs::push_failure` が保持していた `Fix` を
+//!   は速やかに `Ok(None)` へ戻す（`fandhe-cap-location` の `contract.rs::push_failure` が保持していた `Fix` を
 //!   破棄するのと同じ「古い値の張り付き」対策）。
 
 use std::sync::{Arc, Mutex};

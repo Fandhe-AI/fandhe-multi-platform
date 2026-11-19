@@ -8,7 +8,7 @@
 //   int32_t fandhe_macos_eye_dropper_present(uint64_t request_id)
 //     main queue へ dispatch してすぐ 0 を返す。結果は非同期に下の関数で届く。
 //   fandhe_rust_eye_dropper_outcome(uint64_t request_id, int32_t code, int32_t rgb)
-//     -> Rust 側（`macos_eye_dropper.rs`）が公開する `extern "C"` 関数。
+//     -> Rust 側（本 crate の `macos.rs`）が公開する `extern "C"` 関数。
 //        code 表: 0 = 選択（rgb = 0xRRGGBB）、1 = 取り消し（nil）、2 = sRGB 変換の失敗・成分が NaN、
 //        3 = 起動できなかった（NSApp が無い）。code → 結果の写像の SSOT は Rust の
 //        `fandhe_device::eye_dropper::result_from_macos_code`（`.m` では写像しない）。

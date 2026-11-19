@@ -34,7 +34,7 @@ pub fn install_cjk_font(ctx: &egui::Context) {
     apply_font_bytes(ctx, bytes);
 }
 
-/// wasm 版: フォント読み込みは `web.rs` 側で `fetch` により非同期に行うため、
+/// wasm 版: フォント読み込みは `fandhe` の `src/entry/web.rs` 側で `fetch` により非同期に行うため、
 /// 同期呼び出しであるここでは何もしない（起動時は既定フォントで開始し、
 /// 取得完了後に [`apply_font_bytes`] で差し替える）。
 #[cfg(target_arch = "wasm32")]

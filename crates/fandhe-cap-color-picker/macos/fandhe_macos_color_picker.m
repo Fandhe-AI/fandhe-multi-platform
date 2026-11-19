@@ -8,7 +8,7 @@
 //   int32_t fandhe_macos_color_picker_present(uint64_t request_id, int32_t initial_rgb)
 //     main queue へ dispatch してすぐ 0 を返す。結果は非同期に下の関数で届く。
 //   fandhe_rust_macos_color_picker_outcome(uint64_t request_id, int32_t code, int32_t rgb)
-//     -> Rust 側（`macos_color_picker.rs`）が公開する `extern "C"` 関数。
+//     -> Rust 側（本 crate の `macos.rs`）が公開する `extern "C"` 関数。
 //        code 表: 0 = 選択（rgb = 0xRRGGBB）、1 = 色を選ばずに閉じた、2 = sRGB 変換の失敗・成分が NaN、
 //        3 = 提示できなかった（NSApp が無い）。4（busy）は iOS のみが送る。code → 結果の写像の SSOT は Rust の
 //        `fandhe_cap_color_picker::result_from_apple_code`（`.m` では写像しない）。

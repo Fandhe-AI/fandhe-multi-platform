@@ -47,7 +47,7 @@
       "api": "`localStorage`（Web Storage API）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage",
       "safari": "対応",
-      "note": "実装済み（Issue 旧#987）。`fandhe_core::screens::storage_note::NoteStorage` を `localStorage` で実装。キーは `fandhe.storage.` 接頭辞（`biometric_auth.rs` と同じ `fandhe.` 系名前空間）。容量超過・使用不可（プライベートモード等）は失敗として表示し、成功へ畳まない。実ブラウザでの確認は未了",
+      "note": "実装済み（Issue 旧#987）。`fandhe_core::screens::storage_note::NoteStorage` を `localStorage` で実装。キーは `fandhe.storage.` 接頭辞（`fandhe-web-dom` の `biometric_auth.rs` と同じ `fandhe.` 系名前空間）。容量超過・使用不可（プライベートモード等）は失敗として表示し、成功へ畳まない。実ブラウザでの確認は未了",
       "sourceName": [
         "メモ保存"
       ],

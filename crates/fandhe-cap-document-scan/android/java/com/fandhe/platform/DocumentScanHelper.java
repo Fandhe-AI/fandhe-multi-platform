@@ -50,7 +50,7 @@ import java.util.concurrent.Executors;
 // main executor で受ける）→ onScanIntent で IntentSender を起動 → Activity の結果 → worker で読み込み・
 // 縮小・JPEG 化・ページファイルの削除 → 結果を Rust へ。Task の完了を worker で待たない。
 //
-// 結果コードの SSOT は Rust 側 `fandhe_device::document_scan` の契約で、KIND_* は `android_document_scan.rs`
+// 結果コードの SSOT は Rust 側 `fandhe_device::document_scan` の契約で、KIND_* は本 crate の `android.rs`
 // の定数と同じ値。上限バイト数は Rust の `MAX_PAGE_BYTES` を引数で受ける（ここに複製しない）。
 // 長辺 2048・JPEG 品質は trait doc が OS 層に課す値で、iOS 実装（kFandheDocScanMaxLongSide）と揃える。
 // 期限（表示開始まで）は Rust の単調時計だけが持つ。GMS 判定と getStartScanIntent（初回のモジュール

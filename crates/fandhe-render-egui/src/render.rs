@@ -999,11 +999,11 @@ const VIRTUAL_LIST_OVERSCAN: usize = 3;
 /// 取り出した `recycler`（`ctx.recyclers` とは別のローカル変数）を借用するだけなので、
 /// 項目の再帰描画中に `ctx.recyclers` へネストした `VirtualList` からアクセスしても
 /// 借用は競合しない。
-// Issue #540 で `axis` 引数を追加し 8 引数になった（`tv_focus.rs::render_virtual_list`
+// Issue #540 で `axis` 引数を追加し 8 引数になった（`fandhe-gallery` の `demo/tv_focus.rs::render_virtual_list`
 // と同型の分岐関数）。既存の `RenderContext` 集約方針はそれ以外の可変状態
 // （version・pending_events・recyclers）向けであり、`axis` は 1 回の呼び出しで
 // 完結する分岐条件のため無理に構造体化せず、同ファイル内の他分岐関数と同じ
-// `#[allow(clippy::too_many_arguments)]` を付ける（tv_focus.rs の同名関数と同じ判断）。
+// `#[allow(clippy::too_many_arguments)]` を付ける（`fandhe-gallery` の `demo/tv_focus.rs` の同名関数と同じ判断）。
 #[allow(clippy::too_many_arguments)]
 fn render_virtual_list<S: 'static>(
     ui: &mut egui::Ui,
@@ -1157,7 +1157,7 @@ fn render_virtual_list_horizontal<S: 'static>(
         // 広がり、交差軸（高さ = index 1）は true で 1 行分の高さに収まる。
         // `[true, false]` にすると交差軸（高さ）が `ui.available_height()` を
         // 埋めてしまい、横リストを縦に積むレイアウトで親パネルの全高を専有する
-        // （tv_focus.rs の同ポリシーと同じ理由、Cursor Bugbot 指摘 Medium 相当）。
+        // （`fandhe-gallery` の `demo/tv_focus.rs` の同ポリシーと同じ理由、Cursor Bugbot 指摘 Medium 相当）。
         .auto_shrink([false, true])
         .show_viewport(ui, |ui, viewport| {
             let total_extent = fandhe_core::total_content_extent(total_len, item_extent);
@@ -1201,7 +1201,7 @@ fn render_virtual_list_horizontal<S: 'static>(
                     // この項目だけでなく後続のスペーサー・仮想化計算が実レイアウトと
                     // ずれる。回避のため子 `Ui` を `new_child` で自前に作り、実際の
                     // 使用幅を無視して `advance_cursor_after_rect` で常に `item_extent`
-                    // 幅として親のカーソルを進める（tv_focus.rs と同じ理由）。
+                    // 幅として親のカーソルを進める（`fandhe-gallery` の `demo/tv_focus.rs` と同じ理由）。
                     let cell_rect = egui::Rect::from_min_size(
                         ui.cursor().min,
                         egui::vec2(item_extent, ui.available_height().max(0.0)),
@@ -1214,7 +1214,7 @@ fn render_virtual_list_horizontal<S: 'static>(
                     // `new_child` の `max_rect` はレイアウト制約のヒントであり描画・
                     // hit-testing をクリップしない。`item_extent` を超える内容が隣の
                     // セルへ視覚的・操作的にはみ出さないよう、セル矩形（親のクリップとの
-                    // 交差）で明示的にクリップする（tv_focus.rs と同じ理由）。
+                    // 交差）で明示的にクリップする（`fandhe-gallery` の `demo/tv_focus.rs` と同じ理由）。
                     cell_ui.set_clip_rect(cell_rect.intersect(ui.clip_rect()));
                     cell_ui.push_id(("fandhe-virtual-item", index), |ui| {
                         render_node(ui, child, state, &child_path, ctx);
@@ -1344,7 +1344,7 @@ fn render_virtual_list_grid<S: 'static>(
 /// `egui::ColorImage`（ネイティブ `ViewportCommand::Screenshot` の応答画像）を
 /// PNG として `path` へ保存する。
 ///
-/// native 自動撮影（`main.rs`）から利用する。`image` クレートへ生の RGBA バイト列を
+/// native 自動撮影（`fandhe-gallery` の `select.rs`）から利用する。`image` クレートへ生の RGBA バイト列を
 /// そのまま渡すだけの薄いラッパーであり、外部入力（`path` 以外）は取らない
 /// （A03 インジェクション対策・security.md 準拠。書き込み対象は呼び出し元が指定した
 /// 1 ファイルに限定する）。

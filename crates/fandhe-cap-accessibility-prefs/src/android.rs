@@ -10,7 +10,7 @@
 //!
 //! # 結果コード表（SSOT は Java の `AccessibilityPrefsHelper` 定数。JNI 署名 `()I`）
 //!
-//! Apple 実装（`apple_accessibility_prefs.rs`）と同じ詰め方。
+//! Apple 実装（本 crate の `apple.rs`）と同じ詰め方。
 //!
 //! | 値 | 意味 | 写像 |
 //! |---|---|---|

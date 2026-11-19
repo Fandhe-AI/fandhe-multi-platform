@@ -14,7 +14,7 @@
 //        から return するため、呼び出し元は return 後に元の文字列バッファを解放して
 //        よい（所有権は移らない）。
 //   fandhe_rust_share_outcome(uint64_t request_id, int32_t code) -> Rust 側
-//     （`apple_share.rs`）が公開する `extern "C"` 関数。結果コードの意味は
+//     （本 crate の `apple.rs`）が公開する `extern "C"` 関数。結果コードの意味は
 //     本 crate の `driver.rs::outcome_from_code` の表（iOS/macOS/Android 共通、Issue #899
 //     §2.2）を参照。macOS: 0=共有した（service 非 nil）/1=キャンセル（service nil）/
 //     2=共有先なし/3=内部エラー（ウィンドウ不在等）。iOS: 0=共有した（completed==YES）/
@@ -25,7 +25,7 @@
 // スレッド: `dispatch_async(main)` で共有 UI の提示自体を行う（`fandhe_ios_file_picker.m`
 // と同じ方針）。egui の update 内で AppKit/UIKit のネストした run loop を回さないため。
 // delegate コールバックはメインスレッドで届き、そこから直接 Rust 側 `extern "C"` 関数を
-// 呼ぶ（iOS は `apple_share.rs::fandhe_rust_share_outcome` が
+// 呼ぶ（iOS は本 crate の `apple.rs::fandhe_rust_share_outcome` が
 // `crate::ios::request_repaint()` で明示的に次フレームを起こす）。
 //
 // 共有テキスト・URL をログへ出力しない（security.md A09）。
@@ -42,7 +42,7 @@
 #import "fandhe_ios_common.h"
 #endif
 
-// Rust 側（`apple_share.rs`）が公開する `extern "C"` 関数。両 OS 共通。
+// Rust 側（本 crate の `apple.rs`）が公開する `extern "C"` 関数。両 OS 共通。
 extern void fandhe_rust_share_outcome(uint64_t request_id, int32_t code);
 
 // `NSURL URLWithString:` は未エンコードの非 ASCII 文字を含む文字列に対し nil を返す

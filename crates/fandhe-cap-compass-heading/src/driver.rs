@@ -4,7 +4,7 @@
 //! [`READ_INTERVAL`] ごとに `read` して結果を注入する（`registry.rs` の `effect` 区画から
 //! 毎フレーム同期に呼ばれる）。
 //!
-//! **間隔つき pull**（`network_status.rs` と同型）: 最終読取から `READ_INTERVAL` 未満なら OS を
+//! **間隔つき pull**（`fandhe-cap-network-status` の `driver.rs` と同型）: 最終読取から `READ_INTERVAL` 未満なら OS を
 //! 読まず残り時間で再描画を予約する。読んだら送信を省く分岐でも次回を必ず予約する
 //! （入力が無いと egui が描画せずポーリングが止まる、契約表 4）。待機（購読なし）では予約しない。
 //!

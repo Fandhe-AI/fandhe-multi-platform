@@ -9,7 +9,7 @@ repository = "https://github.com/Fandhe-AI/fandhe-multi-platform"
 publish = false
 
 [dependencies]
-# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs・tsv_import.rs だけ）。
+# 画面の状態関数を使う（画面の状態型を参照してよいのは driver.rs だけ。`file_pick`・`tsv_import` の 2 画面を受け持つ）。
 fandhe-core = { path = "../fandhe-core" }
 # 他の機能（写真選択・ドラッグ & ドロップ・ファイル関連付け・フォルダ監視）も使う部品（`PickedFile`・読み取り・受け取りの検証・
 # Windows のダイアログ起動）。`fandhe-device` から機能 crate へは依存させない（§7）。

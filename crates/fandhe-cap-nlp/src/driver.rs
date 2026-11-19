@@ -4,8 +4,7 @@
 //! 結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
-//! 非 wasm32 でのみコンパイル対象になる（`device.rs`
-//! モジュール doc と同じ理由）。Web（wasm32）は本経路を通らず `fandhe-web-dom` の
+//! Web（wasm32）は本経路を通らず `fandhe-web-dom` の
 //! `nlp.rs` が `Intl.Segmenter` へ直接配線する。契約（結果の形・失敗の区別）の SSOT は
 //! `crate::contract`。
 //!

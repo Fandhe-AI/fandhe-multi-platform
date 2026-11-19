@@ -46,7 +46,7 @@ impl Haptics for WindowsHaptics {
         let device = match VibrationDevice::GetDefaultAsync().and_then(|op| op.get()) {
             Ok(device) => device,
             // 振動デバイス無しは `GetDefaultAsync` が null（S_OK + 空）を返す
-            // （`windows_bluetooth_le.rs` と同じ判定）。
+            // （`fandhe-cap-bluetooth-le` の `windows.rs` と同じ判定）。
             Err(e) if e.code().0 == 0 => return Err(HapticsError::Unsupported),
             Err(_) => return Err(HapticsError::Internal),
         };

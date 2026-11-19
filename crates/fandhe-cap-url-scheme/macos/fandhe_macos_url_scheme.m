@@ -16,7 +16,7 @@
 //     `NSAppleEventManager` はハンドラを retain しないので、ハンドラと observer トークンは
 //     static の強参照で持ち続ける（解放しない）。
 //   fandhe_rust_url_scheme_received(const uint8_t *ptr, size_t len) -> Rust 側
-//     （`apple_url_scheme.rs`）が公開する `extern "C"` 関数。URL を UTF-8 で渡す。
+//     （本 crate の `apple.rs`）が公開する `extern "C"` 関数。URL を UTF-8 で渡す。
 //     文字列が取れなかったときは (NULL, 0)。ポインタは呼び出し中だけ有効で、Rust 側は
 //     呼び出しの中で検査して保持する。
 //

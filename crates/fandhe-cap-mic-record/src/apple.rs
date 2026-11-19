@@ -3,11 +3,11 @@
 //! （`apple/fandhe_apple_mic_record.m`、`build.rs` が iOS/macOS ターゲットで
 //! コンパイル・リンクする）を `unsafe extern "C"` 2 関数（[`present`]/
 //! [`request_stop`]）で呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を
-//! 明記する（`apple_biometric.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
+//! 明記する（`fandhe-cap-biometric-auth` の `apple.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `.m` 側の完了コールバックから [`fandhe_rust_mic_record_finished`]（本モジュールが
 //! 公開する `extern "C"` 関数）が呼ばれ、`crate::driver::bridge` へ結果を push
-//! する（pull 型、`apple_biometric.rs::fandhe_rust_biometric_outcome` と同じ
+//! する（pull 型、`fandhe-cap-biometric-auth` の `apple.rs::fandhe_rust_biometric_outcome` と同じ
 //! 橋渡し方式）。録音データの中身をログへ出力しない（security.md A09）。
 
 use std::ffi::CStr;
@@ -41,9 +41,9 @@ extern "C" fn fandhe_rust_mic_record_started(request_id: u64) {
 
 /// `.m` 側の録音開始を依頼する（`crate::driver` の effect ドライバから
 /// 呼ばれる契約）。`request_id` は `crate::driver::bridge::begin` が払い出した
-/// プロセス内一意な ID（画面の `generation` ではない、`apple_biometric.rs::present`
+/// プロセス内一意な ID（画面の `generation` ではない、`fandhe-cap-biometric-auth` の `apple.rs::present`
 /// と同じ設計）。`.m` 側は常に 0（受理）を返す契約のため、戻り値は常に `true`
-/// になるが、`apple_biometric.rs::present` と型を揃えるため `bool` のままにする。
+/// になるが、`fandhe-cap-biometric-auth` の `apple.rs::present` と型を揃えるため `bool` のままにする。
 #[allow(unsafe_code)]
 pub(crate) fn present(request_id: u64, max_duration: Duration) -> bool {
     // SAFETY: 引数はプリミティブのみでポインタを経由しない。戻り値 0 は依頼を

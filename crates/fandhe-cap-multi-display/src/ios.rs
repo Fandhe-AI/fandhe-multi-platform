@@ -2,7 +2,7 @@
 //! （`UIApplication.connectedScenes` の `UIWindowScene.screen`、`build.rs` が iOS ターゲットの
 //! コンパイルする）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの
 //! 呼び出しに閉じる。`fandhe-cap-multi-display/src/driver.rs` の iOS 経路から呼ばれ、契約は
-//! `fandhe_cap_multi_display`。`macos_multi_display.rs` と同型の薄いラッパーで、
+//! `fandhe_cap_multi_display`。本 crate の `macos.rs` と同型の薄いラッパーで、
 //! 生値の写像（`Raw` / `from_raw`）は macOS 版を共用する。
 //!
 //! 外部ディスプレイは scene 化（`ios/fandhe_ios_scene.m`、Info.plist の

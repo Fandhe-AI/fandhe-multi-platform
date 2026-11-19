@@ -32,13 +32,13 @@ wasm-bindgen --target web --out-dir "${dist_dir}" --out-name fandhe_web_dom "${w
 
 cp "${crate_dir}/web/index.html" "${dist_dir}/index.html"
 # Issue #995 P1 対応: FANDHE_ITEMS_URL 未指定時の既定取得先（相対 URL "items.json"、
-# http_fetch.rs の ITEMS_URL 参照）を配布物へ同梱する。無いと ?screen=http_fetch の
+# `fandhe-cap-http-get` の `web.rs` の ITEMS_URL 参照）を配布物へ同梱する。無いと ?screen=http_fetch の
 # 取得ボタンが同一オリジンへ 404 を返す。
 cp "${crate_dir}/web/items.json" "${dist_dir}/items.json"
 # Issue #1047: Service Worker はページと同じディレクトリ（scope）へ置く必要があるため
-# dist_dir 直下へ cp する（background_task.rs::web::SW_URL の相対参照先）。
+# dist_dir 直下へ cp する（`fandhe-web-dom` の `background_task.rs` の `SW_URL` の相対参照先）。
 cp "${crate_dir}/web/background-task-sw.js" "${dist_dir}/background-task-sw.js"
-# Issue #393: Background Fetch 用の専用 Service Worker（background_download.rs::web::SW_URL）。
+# Issue #393: Background Fetch 用の専用 Service Worker（`fandhe-web-dom` の `background_download.rs` の `SW_URL`）。
 cp "${crate_dir}/web/background-download-sw.js" "${dist_dir}/background-download-sw.js"
 # Issue #419: PWA の manifest（file_handlers）とアイコン。インストール可能にしないと
 # ファイルの関連付け（?screen=file_association_show）は届かない。

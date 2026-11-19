@@ -214,7 +214,7 @@ mod tests {
     }
 
     /// モック `Notifier`（`PermissionDenied` 固定）が成功へ化けないことを固定する
-    /// （`share.rs::AlwaysCancelledShare` と同じ「契約側の経路を固定する」目的）。
+    /// （`fandhe-cap-share-sheet` の `contract.rs::AlwaysCancelledShare` と同じ「契約側の経路を固定する」目的）。
     struct AlwaysDeniedNotifier;
 
     impl Notifier for AlwaysDeniedNotifier {

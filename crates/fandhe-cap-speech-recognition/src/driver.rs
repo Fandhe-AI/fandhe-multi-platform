@@ -88,7 +88,7 @@ fn to_message(e: SpeechRecognitionError) -> String {
 /// OS/`SpeechRecognizer` からの生の結果 → [`finish_listen`] へ渡す
 /// `Result<ListenOutcome, String>` への変換（SSOT）。`SpeechRecognitionError::Cancelled` は
 /// 正常な利用者操作（権限確認中の停止・OS 側のキャンセル）であり失敗ではないため、
-/// `to_message` を経由させず `Ok(ListenOutcome::Cancelled)` へ写す（`mic_record.rs::
+/// `to_message` を経由させず `Ok(ListenOutcome::Cancelled)` へ写す（`fandhe-cap-mic-record` の `driver.rs::
 /// to_outcome` の Cancelled 分岐と同じ判断）。
 fn to_outcome(
     result: Result<crate::contract::SpeechOutcome, SpeechRecognitionError>,
@@ -104,7 +104,7 @@ fn to_outcome(
 }
 
 /// iOS/macOS `.m`/Android `SpeechRecognitionHelper` 側から届く結果コード（`code`）→ `SpeechRecognitionError` の
-/// 写像（SSOT、実装計画 §3.3・§2.2 の表参照）。Android のコード 5 は `mic_record.rs::
+/// 写像（SSOT、実装計画 §3.3・§2.2 の表参照）。Android のコード 5 は `fandhe-cap-mic-record` の `driver.rs::
 /// error_from_code` のコード 5（ライフサイクル中断）と同じ意味。
 ///
 /// | code | 意味 | 写像 |
@@ -190,7 +190,7 @@ pub(crate) fn outcome_from_android_error(
 /// `PermissionDenied("speech_recognition")` へ、それ以外は `Internal(stage)` へ畳む
 /// （既知の天井、実装計画 §3.5）。呼び出し元（`windows.rs`）は
 /// Windows 限定モジュールのため、本関数自体には `cfg` を付けず全ターゲットで
-/// コンパイル・テスト対象にする（`mic_record.rs::error_from_hresult` と同じ方針）。
+/// コンパイル・テスト対象にする（`fandhe-cap-mic-record` の `driver.rs::error_from_hresult` と同じ方針）。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub(crate) fn error_from_hresult(code: i32, stage: &'static str) -> SpeechRecognitionError {
     const E_ACCESSDENIED: i32 = 0x8007_0005_u32 as i32;
@@ -381,7 +381,7 @@ fn request_stop(request_id: u64) -> bool {
     crate::android::request_speech_stop(request_id)
 }
 
-/// 直近の `speech_recognize_effect` 呼び出し時刻（経過時間の実測用）。`mic_record.rs::
+/// 直近の `speech_recognize_effect` 呼び出し時刻（経過時間の実測用）。`fandhe-cap-mic-record` の `driver.rs::
 /// LAST_TICK`/`measure_dt_ms` を共用する（Issue #1024、複製回避、`fandhe-cap-mic-record` の `driver.rs`
 /// 「1 回の呼び出しで進める経過ミリ秒の上限」節参照）。
 #[cfg(any(
@@ -437,7 +437,7 @@ fn drive_callback(state: &SpeechRecognizeState, sender: &CompletionSender<Speech
         let _ = sender.send(Box::new(mark_stopping));
         // 「現在進行中のセッション」の request_id と照合する（macOS は `.m` 側、
         // Windows は `windows::SESSION` が照合する契約、
-        // `mic_record.rs::drive_callback` の対応する分岐と同じ位置づけ）。停止依頼
+        // `fandhe-cap-mic-record` の `driver.rs::drive_callback` の対応する分岐と同じ位置づけ）。停止依頼
         // 自体が届かなくても（既に終了済み等）、自動停止 or 既存の結果配送が
         // 追随するため、ここでは戻り値を追加でハンドリングしない。
         let request_id = bridge::SCREEN_OWNER.current();
@@ -453,7 +453,7 @@ fn drive_callback(state: &SpeechRecognizeState, sender: &CompletionSender<Speech
     // 経過秒数は OS からの継続 push ではなく画面側の時刻で進める
     // （`fandhe_core::screens::speech_recognize` モジュール doc 参照）。ただし
     // ネイティブ側が実際に聞き取りを開始する（`bridge::mark_started`）までは
-    // 進めない（`mic_record.rs::drive_callback` の対応する分岐と同じ判断）。
+    // 進めない（`fandhe-cap-mic-record` の `driver.rs::drive_callback` の対応する分岐と同じ判断）。
     let own = bridge::SCREEN_OWNER.current();
     let started = own != 0 && bridge::has_started(own);
     let dt_ms = fandhe_runtime::tick::measure_dt_ms(
@@ -523,7 +523,7 @@ fn drive(
     }
 
     // macOS/Windows/Android 以外は同期呼び出しのため `Listening`/`Stopping` の中間
-    // 状態が観測可能なフレームを持たない（`mic_record.rs::drive` と同じ理由）。
+    // 状態が観測可能なフレームを持たない（`fandhe-cap-mic-record` の `driver.rs::drive` と同じ理由）。
     let _ = (state, sender, recognizer);
 }
 

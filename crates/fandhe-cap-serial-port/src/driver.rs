@@ -22,7 +22,7 @@
 //!
 //! # 終了
 //!
-//! [`shutdown`] を `device::shutdown` から呼ぶ。停止フラグを立て、進行中の往復が手を離すのを
+//! [`shutdown`] を `fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）から呼ぶ。停止フラグを立て、進行中の往復が手を離すのを
 //! [`SHUTDOWN_WAIT`] だけ待つ（`POLL_STEP` の 3 回分。往復は `POLL_STEP` ごとに停止を見る）。
 //! 待ち切れなくてもプロセス終了で OS が fd を閉じる（守らない範囲、`crate::contract`）。
 //! main thread でロックを握ったまま待たない。
@@ -255,7 +255,7 @@ fn global_worker() -> Option<&'static Worker> {
         .as_ref()
 }
 
-/// アプリ終了時に往復を止める（`device::shutdown` から呼ばれる）。一度も使われていなければ
+/// アプリ終了時に往復を止める（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）から呼ばれる）。一度も使われていなければ
 /// ワーカーを起こさず何もしない。
 pub fn shutdown() {
     if let Some(Some(worker)) = WORKER.get() {

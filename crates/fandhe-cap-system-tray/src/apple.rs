@@ -3,7 +3,7 @@
 //! （`apple/fandhe_apple_system_tray.m`、`build.rs::build_macos` がコンパイル・
 //! リンクする）を `unsafe extern "C"` 関数 2 つ（[`fandhe_apple_system_tray_show`]/
 //! [`fandhe_apple_system_tray_hide`]）で呼ぶ。`unsafe` はこの呼び出しに閉じ、
-//! `// SAFETY:` で契約を明記する（`apple_location.rs` と同型、coding-rust.md の
+//! `// SAFETY:` で契約を明記する（`fandhe-cap-location` の `apple.rs` と同型、coding-rust.md の
 //! FFI 例外規定準拠）。
 //!
 //! # 「表示中かどうか」を Rust 側で判定する理由
@@ -17,7 +17,7 @@
 //!
 //! `.m` 側の `onSelect:` から [`fandhe_rust_system_tray_selected`]（本モジュールが
 //! 公開する `extern "C"` 関数）が呼ばれ、[`QUEUE::push`] へ積む（push 型、
-//! `apple_location.rs` の `fandhe_rust_location_fix` と同じ橋渡し方式）。
+//! `fandhe-cap-location` の `apple.rs` の `fandhe_rust_location_fix` と同じ橋渡し方式）。
 
 use std::ffi::CString;
 use std::os::raw::c_char;

@@ -2,7 +2,7 @@
 //! 本 crate の `driver` の macOS 経路と `ios`（委譲）から呼ばれ、
 //! CoreBluetooth `CBPeripheralManager` 実装（`apple/fandhe_apple_ble_peripheral.m`、`build.rs` が
 //! iOS / macOS でコンパイル・リンクする）を `unsafe extern "C"` 2 関数で
-//! 呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する（`apple_bluetooth_le.rs` と
+//! 呼ぶ。`unsafe` はこの呼び出しに閉じ `// SAFETY:` で契約を明記する（`fandhe-cap-bluetooth-le` の `apple.rs` と
 //! 同型、coding-rust.md の FFI 例外規定）。
 //!
 //! `.m` 側のコールバックから [`fandhe_rust_ble_peripheral_event`]（本モジュールが公開する

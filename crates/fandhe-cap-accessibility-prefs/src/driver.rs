@@ -3,13 +3,13 @@
 //! `fandhe_core::screens::accessibility_prefs_show`（端末依存ゼロ）へ注入する
 //! （`registry.rs` の `effect` 区画から毎フレーム同期に呼ばれる）。
 //!
-//! **間隔つき pull**（`network_status.rs` と同型）: 最終読取から `READ_INTERVAL` 未満なら OS を
+//! **間隔つき pull**（`fandhe-cap-network-status` の `driver.rs` と同型）: 最終読取から `READ_INTERVAL` 未満なら OS を
 //! 読まない。丸を動かしているあいだは毎フレーム送信して連続描画にする。止めているとき
 //! （視差軽減オン）は状態が変わらなければ送信を省くが、次の読み取りまでの再描画を必ず予約する
 //! （入力が無いと egui が描画せずポーリングが止まる、契約表 4）。
 //!
-//! dispatch（[`implementation`]）は全対象 OS の最終形。iOS は `ios_accessibility_prefs.rs`
-//! （#1309）、Android は `android_accessibility_prefs.rs`（#1310）が返す。Web は
+//! dispatch（[`implementation`]）は全対象 OS の最終形。iOS は本 crate の `ios.rs`
+//! （#1309）、Android は本 crate の `android.rs`（#1310）が返す。Web は
 //! `fandhe-web-dom` 側（#1311）。
 
 use std::sync::{Arc, Mutex};

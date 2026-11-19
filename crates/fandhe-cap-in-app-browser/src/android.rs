@@ -96,7 +96,7 @@ mod imp {
     }
 }
 
-/// `device.rs` が Android 限定で載せるため、ホストでは使われない。呼ばれても成功へ倒さない。
+/// `lib.rs` の `cfg(any(target_os = "android", test))` でホストのテストビルドにだけ載り、そこでは呼ばれない。呼ばれても成功へ倒さない。
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]
 mod imp {

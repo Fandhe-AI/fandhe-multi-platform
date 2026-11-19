@@ -10,7 +10,7 @@
 //   int32_t fandhe_ios_color_picker_present(uint64_t request_id, int32_t initial_rgb)
 //     main queue へ dispatch してすぐ 0 を返す。提示の失敗も含め結果は非同期に下の関数で届く。
 //   fandhe_rust_ios_color_picker_outcome(uint64_t request_id, int32_t code, int32_t rgb)
-//     -> Rust 側（`ios_color_picker.rs`）が公開する `extern "C"` 関数。1 要求につき 1 回だけ呼ぶ。
+//     -> Rust 側（本 crate の `ios.rs`）が公開する `extern "C"` 関数。1 要求につき 1 回だけ呼ぶ。
 //        code 表: 0 = 選択（rgb = 0xRRGGBB）、1 = 色を選ばずに閉じた、2 = sRGB 変換の失敗・成分が NaN、
 //        3 = 提示できなかった（背景・提示先なし）、4 = busy（最前面が遷移中、または自分のピッカーが
 //        提示中・遷移中）。code → 結果の写像の SSOT は Rust の

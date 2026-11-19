@@ -270,12 +270,12 @@ pub(crate) fn instance() -> Option<Arc<IosBackgroundTask>> {
 }
 
 /// `.m` 側の `registerForTaskWithIdentifier:` を main thread から起動完了前に呼ぶ
-/// 安全なラッパー（`main.rs` の iOS 向け `fn main` から `ios::run()` の前に 1 回だけ
+/// 安全なラッパー（入口 `fandhe` の `src/entry/lifecycle.rs` の起動前の登録から 1 回だけ
 /// 呼ばれる契約、実装計画 §3.5）。
 #[cfg(target_os = "ios")]
 pub fn register() {
     // SAFETY: 引数なし、戻り値はプリミティブのみ。呼び出しのタイミング契約
-    // （起動完了前・main thread）は呼び出し元（`main.rs`）が守る。
+    // （起動完了前・main thread）は呼び出し元（入口 `fandhe` の `src/entry/lifecycle.rs`）が守る。
     ffi::register();
 }
 

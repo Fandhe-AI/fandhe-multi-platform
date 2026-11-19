@@ -3,7 +3,7 @@
 //! （`AVAssetWriter` で元動画を書き、`AVAssetExportSession` で小さい MP4 へ書き出す。`build.rs` が
 //! コンパイル）を `unsafe extern "C"` 2 関数で呼ぶ。`unsafe` は extern 宣言・
 //! 呼び出し・コールバックに閉じる（coding-rust.md の FFI 例外規定準拠）。`build.rs` のコンパイル条件・
-//! `device.rs` の mod cfg と同じ OS 集合に保つ。
+//! `lib.rs` の `mod` の cfg と同じ OS 集合に保つ。
 //!
 //! 契約の SSOT は `crate::contract`。出力の検証（`check_mp4_video`）はドライバが行う。
 //! 一時ファイル（元動画・出力）は本モジュールが `video_transcode::temp_pair` で作り、全経路で消す。

@@ -3,7 +3,7 @@
 //! `apple/fandhe_apple_local_peer.m`（MultipeerConnectivity、`build.rs` が iOS / macOS の
 //! コンパイル・リンクする）を `unsafe extern "C"` 2 関数
 //! （[`present`] / [`stop`]）で呼ぶ。`unsafe` はこの呼び出しと `CStr` / `slice` の読み取りに閉じ
-//! `// SAFETY:` で契約を明記する（`apple_lan_discovery.rs` と同型、coding-rust.md の FFI 例外規定）。
+//! `// SAFETY:` で契約を明記する（`fandhe-cap-lan-discovery` の `apple.rs` と同型、coding-rust.md の FFI 例外規定）。
 //!
 //! `.m` 側のコールバックから [`fandhe_rust_local_peer_offer`] / [`fandhe_rust_local_peer_finished`]
 //! （本モジュールが公開する `extern "C"` 関数）が呼ばれ、`driver.rs` の受信バッファへ渡す。

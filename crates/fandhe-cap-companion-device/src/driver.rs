@@ -5,8 +5,6 @@
 //! `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約（結果の三値・期限・守る範囲）の SSOT は本 crate の `contract`。
 //!
-//! 非 wasm32 でのみコンパイル対象になる。
-//!
 //! # OS 別の分担（dispatch・bridge・本ファイルは #740 で最終形。後続の子はここを触らない）
 //!
 //! - Android: `src/android.rs`（#741。`CompanionDeviceManager`、API 33 以上）

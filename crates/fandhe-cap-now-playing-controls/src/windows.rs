@@ -1,6 +1,6 @@
 //! Windows 向けロック画面・OS のメディア操作実装（Issue #385、親 #98）。
 //! `SystemMediaTransportControls`（SMTC）へ曲名と再生状態を渡し、メディアキー・SMTC フライアウトの
-//! 再生・一時停止を `device::now_playing::commands()` へ積む。
+//! 再生・一時停止を本 crate の `driver.rs::commands()` へ積む。
 //!
 //! - 呼び出し元: 本 crate の `driver::platform_now_playing` の Windows 経路（effect ドライバが UI スレッドから
 //!   `publish` / `clear` を呼ぶ）。契約の SSOT は `crate::contract`。
@@ -98,7 +98,7 @@ mod imp {
             >()
             .map_err(|_| ERR)?;
             // SAFETY: `hwnd` は `remember_window` が構築時に控えた winit の窓で、`ProxyApp` の生存中は
-            // 窓も生存する（windows_share.rs::present と同じ根拠）。`interop` は上で取得した有効な COM ポインタ。
+            // 窓も生存する（`fandhe-cap-share-sheet` の `windows.rs::present` と同じ根拠）。`interop` は上で取得した有効な COM ポインタ。
             let smtc: SystemMediaTransportControls =
                 unsafe { interop.GetForWindow(hwnd) }.map_err(|_| ERR)?;
             let token = smtc

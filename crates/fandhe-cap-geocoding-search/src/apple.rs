@@ -3,7 +3,7 @@
 //! `apple/fandhe_apple_geocoding_search.m`（MapKit `MKGeocodingRequest`。`build.rs` が feature
 //! `device` 有効時に `cc` でコンパイル）を `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの
 //! 呼び出し 1 か所に閉じる（coding-rust.md の FFI 例外規定準拠）。`build.rs` のコンパイル条件・
-//! `device.rs` の mod cfg と同じ OS 集合に保つ。
+//! `lib.rs` の `mod` の cfg と同じ OS 集合に保つ。
 //!
 //! 契約の SSOT は `crate::contract`。戻りコード → `GeocodingSearchError` の写像の SSOT は
 //! 本ファイルの `match`。呼び出しはブロックするため、呼び出し元はワーカーで呼ぶ。

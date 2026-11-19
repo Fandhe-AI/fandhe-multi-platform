@@ -32,7 +32,7 @@
 // `g_biometric_context` への書き込み（reply 内の解放）は main queue へ
 // dispatch_async して行い、生成側と同じスレッドに閉じる（static へのアクセスを
 // 1 スレッドに限定するため）。iOS は
-// `apple_biometric.rs::fandhe_rust_biometric_outcome` が
+// 本 crate の `apple.rs::fandhe_rust_biometric_outcome` が
 // `crate::ios::request_repaint()` で明示的に次フレームを起こす。
 //
 // 情報非保持: `reason` と `success`/`la_code` 以外は Rust 側へ渡さない。

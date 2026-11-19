@@ -2,7 +2,7 @@
 //! 呼ばれ、`ios/fandhe_ios_color_picker.m`（`UIColorPickerViewController`。`build.rs` が feature
 //! `device` 有効時のみコンパイルする）を `unsafe extern "C"` 1 関数（[`present`]）で呼ぶ。
 //! `unsafe` はこの呼び出しと受け口に閉じ `// SAFETY:` で契約を明記する
-//! （`macos_color_picker.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
+//! （本 crate の `macos.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `.m` 側の閉じた通知から [`fandhe_rust_ios_color_picker_outcome`] が呼ばれ、
 //! `driver::bridge` へ結果を push する（pull 型）。コード → 結果の写像は

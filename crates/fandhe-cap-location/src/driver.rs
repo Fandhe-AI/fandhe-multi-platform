@@ -7,7 +7,7 @@
 //! # 実装スコープ（#888/#889/#890）
 //!
 //! Windows は [`shared_location`] が初回アクセス時に [`crate::contract::CommandLocation`]
-//! を起動し、書き込み先として `SHARED` を渡す（`tilt.rs` の `DummyMotion` と異なり、
+//! を起動し、書き込み先として `SHARED` を渡す（`fandhe-cap-tilt-motion` の `driver.rs` の `DummyMotion` と異なり、
 //! 本モジュールでは書き手も本ファイル側で確保する）。Android は [`shared_location`] が
 //! 初回アクセス時に [`crate::android::request_location_updates`] を 1 度だけ
 //! 呼び、以後の実測位は Java 側 `LocationListener` → `nativeOnLocationChanged`/
@@ -47,7 +47,7 @@ use fandhe_core::screens::location_show::{FailureKind, apply_failure, apply_fix,
 
 use fandhe_runtime::CompletionSender;
 
-/// `drive` が変化無しのときに再描画予約する間隔（`tilt.rs` の
+/// `drive` が変化無しのときに再描画予約する間隔（`fandhe-cap-tilt-motion` の `driver.rs` の
 /// `IOS_IDLE_POLL_INTERVAL` と同種の定期起床。測位は数秒間隔のため短すぎる
 /// ポーリングは不要）。
 pub const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);

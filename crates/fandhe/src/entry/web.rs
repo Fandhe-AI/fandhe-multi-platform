@@ -10,7 +10,7 @@
 //! 変更し（`scripts/web/build-wasm-proxy.sh` 参照）、システムフォント非依存とした。
 //! wasm32 向けバイナリへ直接 `include_bytes!` しないのは、配信サイズ（REQ-4 の 3MB 基準）
 //! と衝突するため（`crates/fandhe-fonts/src/lib.rs` のモジュールコメント参照）。
-//! 取得失敗時は既定フォントのまま続行する（非致命、`font.rs` のモジュールコメント参照）。
+//! 取得失敗時は既定フォントのまま続行する（非致命、`fandhe-render-egui` の `font.rs` のモジュールコメント参照）。
 
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;

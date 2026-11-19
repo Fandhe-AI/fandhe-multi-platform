@@ -23,7 +23,7 @@
 //     main thread から `UIApplicationMain` より前に呼ぶ。冪等。起動通知と scene 通知の observer は
 //     static の強参照で持ち続ける。
 //   fandhe_rust_url_scheme_received(const uint8_t *ptr, size_t len) -> Rust 側
-//     （`apple_url_scheme.rs`）が公開する `extern "C"` 関数。URL を UTF-8 で渡す。
+//     （本 crate の `apple.rs`）が公開する `extern "C"` 関数。URL を UTF-8 で渡す。
 //     文字列が取れなかったときは (NULL, 0)。ポインタは呼び出し中だけ有効。
 //
 // スレッド契約: 起動通知は queue:nil で投稿スレッド（main）の同期実行、他は mainQueue で受け、UIKit も delegate を main thread から呼ぶ。

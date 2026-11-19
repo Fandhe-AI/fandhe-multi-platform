@@ -17,7 +17,7 @@
 //! Cursor Bugbot 指摘、`contract.rs` の `STARTUP_FAILURE_GRACE`
 //! doc 参照）。発話・停止それぞれの `dispatch_*` は要求を発送済みにする
 //! （`mark_*_dispatched`）完了だけを同期送信し、実際の OS 呼び出しは
-//! [`command_queue`] のワーカースレッドで行う（`http_fetch.rs::spawn_fetch` と同型の
+//! [`command_queue`] のワーカースレッドで行う（`fandhe-cap-http-get` の `driver.rs::spawn_fetch` と同型の
 //! 二段構え、`fandhe_core::screens::tts_speak` モジュール doc「発話中でも停止を
 //! 受け付ける理由」参照）。
 //!

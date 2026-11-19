@@ -5,7 +5,7 @@
 //!
 //! 全ターゲットでコンパイルされる（OS ごとの実装は各 OS の cfg で切り替える）。
 //!
-//! # macOS/iOS/Android/Windows: pull 型 `bridge`（`biometric_auth.rs`/`share.rs` と同型）
+//! # macOS/iOS/Android/Windows: pull 型 `bridge`（`fandhe-cap-biometric-auth` の `driver.rs`/`fandhe-cap-share-sheet` の `driver.rs` と同型）
 //!
 //! macOS/iOS の権限確認（`AVCaptureDevice.requestAccessForMediaType:`）・Android の
 //! `RECORD_AUDIO` ランタイム許可ダイアログ、および録音完了（利用者の「停止」操作、
@@ -330,7 +330,7 @@ fn request_stop(request_id: u64) -> bool {
     crate::apple::request_stop(request_id)
 }
 
-/// 直近の `mic_record_effect` 呼び出し時刻（経過時間の実測用、`fandhe-cap-tilt` の `driver.rs::
+/// 直近の `mic_record_effect` 呼び出し時刻（経過時間の実測用、`fandhe-cap-tilt-motion` の `driver.rs::
 /// LAST_TICK` と同じ役割）。`Recording` を離れたら `None` に戻す
 /// （[`measure_dt_ms`] 参照）ことで、次に録音を始めた瞬間に古い時刻との差分を
 /// 使ってしまう飛びを防ぐ。macOS/iOS/Android/Windows の `drive_callback` からのみ
@@ -399,7 +399,7 @@ fn drive_callback(state: &MicRecordState, sender: &CompletionSender<MicRecordSta
         // `windows::SESSION` が照合する契約、`.m` ファイル冒頭コメント/
         // `windows.rs::request_stop` 参照）。停止依頼自体が届かなくても
         // （既に終了済み等）、自動停止 or 既存の結果配送が追随するため、ここでは
-        // 戻り値を追加でハンドリングしない（`biometric_auth.rs` の防御的分岐と
+        // 戻り値を追加でハンドリングしない（`fandhe-cap-biometric-auth` の `driver.rs` の防御的分岐と
         // 同じ位置づけ）。
         let request_id = bridge::SCREEN_OWNER.current();
         if request_id != 0 {

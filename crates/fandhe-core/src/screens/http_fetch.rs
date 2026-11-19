@@ -27,7 +27,7 @@
 //! 一度も自分で遷移させず、`mark_loading` の完了を送るだけにする。完了は
 //! `ProxyApp::update` のフレーム先頭（`drain_completions`）で `apply` されるため、
 //! 同一フレーム内で `Requested` が 2 回観測されることはなく、二重取得は起きない
-//! （フレーム内順序「drain → 描画/dispatch → effect」が契約、`app.rs` 参照）。
+//! （フレーム内順序「drain → 描画/dispatch → effect」が契約、`fandhe-render-egui` の `app.rs` 参照）。
 //!
 //! `Loading` 以外で届いた [`finish_fetch`] は無視する（`Idle` に戻った後や、
 //! 前の取得が正しく終わる前に古い完了が届いても状態を上書きしない防御、

@@ -4,9 +4,6 @@
 //! `CompletionSender` 経由で返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
-//! 非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。
-//!
 //! # macOS/iOS/Android/Windows: pull 型 `bridge`（OS の認証 UI はいずれもコールバック型）
 //!
 //! `LAContext.evaluatePolicy`（macOS/iOS）・`BiometricPrompt.AuthenticationCallback`
@@ -112,7 +109,7 @@ pub(crate) fn outcome_from_reply(
     }
 }
 
-/// `UserConsentVerificationResult`（Windows Hello、`windows_biometric.rs` の
+/// `UserConsentVerificationResult`（Windows Hello、本 crate の `windows.rs` の
 /// `IAsyncOperation` 完了ハンドラから渡される生コード）→ 結果の写像。`code` は
 /// `UserConsentVerificationResult` の内部 `i32`（`crate::windows::present` の
 /// `r.0`）。完了ハンドラ側で `AsyncStatus != Completed`・`GetResults()` 失敗は
@@ -144,7 +141,7 @@ pub(crate) fn outcome_from_reply(
 /// | 5 | `RetriesExhausted` | `Ok(Failed)` |
 /// | それ以外 | 未知 | `Err(Internal("biometric outcome"))` |
 ///
-/// 呼び出し元（`windows_biometric.rs`）が Windows 限定モジュールのため、
+/// 呼び出し元（本 crate の `windows.rs`）が Windows 限定モジュールのため、
 /// 本関数自体には `cfg` を付けず全ターゲットでコンパイル・テスト対象にする
 /// （macOS ホスト・Linux CI runner 上の `cargo test`/clippy でも失敗系を
 /// 検証できるようにする。呼ばれない環境では `dead_code` にならないよう pub(crate)
@@ -197,7 +194,7 @@ pub(crate) mod bridge {
     /// OS からの結果（`crate::contract::AuthOutcome` を経由した生の
     /// `Result`）を `super::to_outcome` で画面用へ変換してから置く（任意スレッド。
     /// 実際には macOS/iOS はメインスレッド、Android は UI スレッドから届く契約、
-    /// `apple_biometric.rs`/`android.rs` の doc 参照）。`request_id` 不一致・未登録・
+    /// 本 crate の `apple.rs`/`android.rs` の doc 参照）。`request_id` 不一致・未登録・
     /// 既に結果ありは捨てて `false`。
     pub(crate) fn deliver(
         request_id: u64,
@@ -207,7 +204,7 @@ pub(crate) mod bridge {
     }
 
     /// Android 専用: Activity 再生成直後に `android_main` から呼ぶ
-    /// （`device::location::reset_retry_tracking` と同じ位置づけ）。[`SLOT`] は
+    /// （`fandhe_cap_location::driver::reset_retry_tracking` と同じ位置づけ）。[`SLOT`] は
     /// プロセス static のため Activity 再生成をまたいで残るが、画面状態
     /// （`BiometricCheckState`）は再生成のたびに `Default`（`Idle`）で作り直される。
     /// 再生成前に開始した認証の prompt は OS 側で生き残り（`BiometricAuthHelper` 冒頭の説明）、
@@ -451,7 +448,7 @@ pub fn biometric_check_effect(
 }
 
 /// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照。
-/// `device::location::reset_retry_tracking` と同じ命名・位置づけ）。
+/// `fandhe_cap_location::driver::reset_retry_tracking` と同じ命名・位置づけ）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
     bridge::reset();
@@ -800,8 +797,8 @@ mod tests {
 /// [`bridge`] の単体テスト。要求の追跡そのもの（採番・first-wins・照合・
 /// Android 再生成時の `reset` 回帰、PR #917）は `fandhe-runtime/src/request_slot.rs::RequestSlot`
 /// 側で検証済みのため、ここでは facade が担う「`deliver` 境界での `to_outcome`
-/// 変換」だけを固定する（Issue #943 で 3 機能の `bridge_tests` を統合、`share.rs` も
-/// 同型）。OS 側実装（`.m`/`.java`/`windows_biometric.rs`）のビルドを要さず host 上の
+/// 変換」だけを固定する（Issue #943 で 3 機能の `bridge_tests` を統合、`fandhe-cap-share-sheet` の `driver.rs` も
+/// 同型）。OS 側実装（`.m`/`.java`/本 crate の `windows.rs`）のビルドを要さず host 上の
 /// `cargo test` で回せる。`bridge` モジュール自体は `cfg(any(...))` で 4 OS 共通だが、
 /// iOS/Android はホスト上でテストを回せないため macOS/Windows のみを対象にする
 /// （既存の macOS 限定と同じ理由）。

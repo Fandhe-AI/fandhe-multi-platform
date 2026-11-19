@@ -5,9 +5,9 @@
 //! # 流れ
 //!
 //! 1. `Pedometer::GetDefaultAsync()` を呼び、`SetCompleted` ハンドラから `mpsc` に結果を送る
-//!    （`windows_biometric.rs` と同じ書き方）
+//!    （`fandhe-cap-biometric-auth` の `windows.rs` と同じ書き方）
 //! 2. `recv_timeout(timeout)` で待つ。期限切れなら `Cancel()` して `NoReading`
-//! 3. 結果を写像する。null（`e.code().0 == 0`、`windows_haptics.rs` と同じ判定）→
+//! 3. 結果を写像する。null（`e.code().0 == 0`、`fandhe-cap-haptics` の `windows.rs` と同じ判定）→
 //!    `Unsupported`、`E_ACCESSDENIED` → `PermissionDenied`、それ以外 → `Failed`
 //! 4. `GetCurrentReadings()` の各 `PedometerReading::CumulativeSteps()` を
 //!    `total_steps` で合算する（空は `NoReading`、負値は `Failed`、0 歩は成功）

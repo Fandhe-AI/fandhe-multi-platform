@@ -14,7 +14,7 @@ import java.util.Set;
 // `Font` に名前を返す公開 API は無いため、各 `Font` の `getBuffer()`（direct・read-only の mmap）と
 // `getTtcIndex()` を渡し、Rust が `name` テーブルからファミリー名を読む。
 //
-// 戻り値（Rust 側 `android_local_fonts.rs` と対で決める契約）:
+// 戻り値（Rust 側の本 crate の `android.rs` と対で決める契約）:
 //   長さ 0 の配列 = API 29 未満（Rust は `Unsupported`）
 //   長さ 2 の配列 = { ByteBuffer[] buffers, int[] ttcIndices }（同じ長さ。0 件なら長さ 0 の配列 2 本）
 //   null = 失敗（Rust は `Internal`）

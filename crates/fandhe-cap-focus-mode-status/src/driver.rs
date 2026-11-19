@@ -8,7 +8,7 @@
 //! （入力が無いと egui が描画せずポーリングが止まる、契約表 4）。
 //!
 //! dispatch（[`implementation`]）は全対象 OS の最終形。Windows は
-//! `windows_focus_mode_status.rs`、Android は `android_focus_mode_status.rs`（JNI の同期 pull）、
+//! 本 crate の `windows.rs`、Android は本 crate の `android.rs`（JNI の同期 pull）、
 //! それ以外（macOS / iOS / Linux を含む）は `UnsupportedFocusStatus`。
 
 use std::sync::{Arc, Mutex};

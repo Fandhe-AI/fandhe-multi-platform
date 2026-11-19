@@ -265,7 +265,7 @@ web-sys = { workspace = true, features = [
     "Response",
     "Headers",
     # Issue #995 P1 対応: 本文を `array_buffer()` で一括確保せず `ReadableStream` で
-    # 逐次読み取りながら `MAX_BODY_BYTES` を適用するため（http_fetch.rs 参照）。
+    # 逐次読み取りながら `MAX_BODY_BYTES` を適用するため（`fandhe-cap-http-get` の `web.rs` 参照）。
     "ReadableStream",
     "ReadableStreamDefaultReader",
     "ReadableStreamReadResult",

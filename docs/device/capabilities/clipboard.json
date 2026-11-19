@@ -61,7 +61,7 @@
       "api": "Clipboard API（`navigator.clipboard`）",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Clipboard_API",
       "safari": "対応（一部読み取り API に制限あり）",
-      "note": "実装済み（旧#859）。`fandhe-web-dom` の `mount_with_effect` + `clipboard` モジュールが `navigator.clipboard` へ配線する（wasm32 では `fandhe-device` の `Clipboard` トレイトを通らない。`device.rs` の非 wasm32 限定の制約）。secure context（https / localhost）必須で、読み取りはブラウザごとに追加の許可が要る。実ブラウザでの確認は未了",
+      "note": "実装済み（旧#859）。`fandhe-web-dom` の `mount_with_effect` + `clipboard` モジュールが `navigator.clipboard` へ配線する（wasm32 では `fandhe-device` の `Clipboard` トレイトを通らない）。secure context（https / localhost）必須で、読み取りはブラウザごとに追加の許可が要る。実ブラウザでの確認は未了",
       "sourceName": [
         "クリップボード"
       ],

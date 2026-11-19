@@ -2,7 +2,7 @@
 //! `fandhe_core::screens::uwb_ranging_show`（端末依存ゼロ）の `wanted` の立ち上がりで
 //! `crate::contract::UwbRanging::start`、立ち下がりで `stop` を呼び、測距中は
 //! [`READ_INTERVAL`] ごとに `read` して結果を注入する（`registry.rs` の `effect` 区画から
-//! 毎フレーム同期に呼ばれる。`activity_recognition.rs` と同型）。端末の能力は画面が未取得の間だけ
+//! 毎フレーム同期に呼ばれる。`fandhe-cap-activity-recognition` の `driver.rs` と同型）。端末の能力は画面が未取得の間だけ
 //! 1 回読んで注入する。
 //!
 //! **間隔つき pull**: 最終読取から `READ_INTERVAL` 未満なら OS を読まず残り時間で再描画を予約する。

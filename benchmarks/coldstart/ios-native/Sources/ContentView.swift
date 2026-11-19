@@ -41,7 +41,7 @@ struct ContentView: View {
             guard !hasLoggedColdStart else { return }
             hasLoggedColdStart = true
             let elapsedMs = Int(Date().timeIntervalSince(startTime) * 1000)
-            // 末尾 `;` は行終端マーカー（fandhe 側 `ios.rs` の `ColdStartProbe` と対称の
+            // 末尾 `;` は行終端マーカー（fandhe 側 `crates/fandhe-gallery/src/demo/cold_start.rs` の `ColdStartProbe` と対称の
             // 契約）。疑似 TTY 経由での折り返しによる数値断片化を、抽出側の正規表現が
             // `;` 必須で検知できるようにするため（Bugbot 指摘対応、review id 4834058437）。
             print("COLD_START_MS=\(elapsedMs);")

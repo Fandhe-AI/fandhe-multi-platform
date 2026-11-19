@@ -60,7 +60,7 @@
 //!
 //! `demo.rs` の各エントリポイントは `current_screen(&CameraCaptureState::default())` で
 //! 初期状態の `Screen` を固定するため（`mount_with_effect` が状態から `Screen` を
-//! 再構築しない設計、`mic_record.rs`/`http_fetch.rs` と同型の既存の天井）、「撮影」
+//! 再構築しない設計、`mic_record.rs`/`fandhe-cap-http-get` の `web.rs` と同型の既存の天井）、「撮影」
 //! ボタンは常時表示される。`start_capture` は `Requested`/`Capturing` 中は no-op、
 //! `Captured`/`Failed` からは再撮影へ進むため実害はない。
 

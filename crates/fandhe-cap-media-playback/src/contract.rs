@@ -20,7 +20,7 @@
 //!
 //! iOS の背景遷移、Android の `onPause`、Web の `pagehide` / `visibilitychange`（hidden）では一時停止して
 //! `Interrupted` にする。Android の Activity 作り直しでは `release` まで行う。macOS / Windows は窓が
-//! 背面でも再生を続け、終了時は `device::shutdown` から止める。
+//! 背面でも再生を続け、終了時は `fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）から止める。
 //!
 //! # 世代（契約表 2）
 //!

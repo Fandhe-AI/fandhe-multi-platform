@@ -3,11 +3,11 @@
 //! 実装（`ios/fandhe_ios_notification.m`、`build.rs` が
 //! コンパイル・リンクする）を `unsafe extern "C"` 1 関数（[`present`]）で呼ぶ。
 //! `unsafe` はこの呼び出し 1 箇所に閉じ `// SAFETY:` で契約を明記する
-//! （`apple_biometric.rs::present` と同型、coding-rust.md の FFI 例外規定準拠）。
+//! （`fandhe-cap-biometric-auth` の `apple.rs::present` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `.m` 側の completion から [`fandhe_rust_notification_outcome`]（本モジュールが
 //! 公開する `extern "C"` 関数）が呼ばれ、`crate::bridge` へ結果を
-//! push する（pull 型、`apple_biometric.rs::fandhe_rust_biometric_outcome` と
+//! push する（pull 型、`fandhe-cap-biometric-auth` の `apple.rs::fandhe_rust_biometric_outcome` と
 //! 同じ橋渡し方式）。OS のコード表 → 結果の写像は
 //! `crate::outcome_from_code`（SSOT）に一本化する。
 //!
@@ -31,7 +31,7 @@ unsafe extern "C" {
 /// `.m` 側の `fandhe_ios_notification_post` を呼び、通知の提示を依頼する
 /// （本 crate の `driver` の iOS 経路から呼ばれる契約）。`request_id` は
 /// `crate::bridge::begin` が払い出したプロセス内一意な ID
-/// （画面の `generation` ではない、`apple_biometric.rs::present` と同じ設計）。
+/// （画面の `generation` ではない、`fandhe-cap-biometric-auth` の `apple.rs::present` と同じ設計）。
 ///
 /// `title`/`body` の `CString` 化が失敗する（内部 NUL 混入）ことは通常起きない
 /// （`crate::contract::NotificationRequest::new` が事前に NUL を

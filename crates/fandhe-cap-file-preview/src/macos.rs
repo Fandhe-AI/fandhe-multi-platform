@@ -2,7 +2,7 @@
 //! `macos/fandhe_macos_file_preview.m`（自前の窓に載せる `QLPreviewView`。`build.rs` が feature
 //! `device` 有効時のみコンパイルする）を `unsafe extern "C"` 1 関数（[`present`]）で呼ぶ。
 //! `unsafe` はこの呼び出しと受け口に閉じ `// SAFETY:` で契約を明記する
-//! （`macos_eye_dropper.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
+//! （`fandhe-cap-eye-dropper` の `macos.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
 //! 窓が閉じると `.m` から [`fandhe_rust_file_preview_outcome`] が呼ばれ、
 //! `driver::bridge` へ結果を push する（pull 型）。コード → 結果の写像は

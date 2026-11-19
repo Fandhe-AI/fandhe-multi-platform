@@ -17,7 +17,7 @@
 //! 一切消費せず（元の callback の戻り値をそのまま返す）、ゲームパッド由来なら
 //! 追加で本モジュールの JNI エクスポートへ通知するだけに留める。リモコンの
 //! `KEYCODE_DPAD_*` は従来どおり GameActivity → winit → `egui::Key::Arrow*` →
-//! `tv_focus.rs` へ流れ続ける（#935 実装計画 §2.2）。
+//! `fandhe-gallery` の `demo/tv_focus.rs` へ流れ続ける（#935 実装計画 §2.2）。
 //!
 //! # 接続状態はレベルトリガ（再走査）
 //!
@@ -133,7 +133,7 @@ fn map_key_code(key_code: i32) -> Option<u16> {
 
 /// `AXIS_HAT_X`/`AXIS_HAT_Y` の生値を十字キービットへ写像する（閾値 0.5）。
 /// Android の `AXIS_HAT_Y` は下方向が正（`fandhe_core::screens::tilt_ball` と同じ
-/// 画面座標系、`gamepad.rs` モジュール doc の軸の向き契約参照）のため、負が UP。
+/// 画面座標系、本 crate の `contract.rs` モジュール doc の軸の向き契約参照）のため、負が UP。
 fn hat_to_buttons(hat_x: f32, hat_y: f32) -> u16 {
     const HAT_THRESHOLD: f32 = 0.5;
     let mut buttons = 0u16;

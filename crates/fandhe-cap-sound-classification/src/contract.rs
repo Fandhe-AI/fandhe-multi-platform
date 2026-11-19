@@ -67,7 +67,7 @@
 //!   （[`InterruptReason::AudioInterruption`]）で止め、[`SoundPoll::Interrupted`] を返す
 //! - 値の確定直後に `fandhe_runtime::request_repaint` を呼ぶ（契約表 4）
 //! - `ios.rs` を `apple::implementation` への委譲に差し替える
-//!   （dispatch・共通コア画面・`device.rs`・`build.rs` は変えない）
+//!   （dispatch・共通コア画面・`lib.rs`・`build.rs` は変えない）
 
 use std::time::Duration;
 

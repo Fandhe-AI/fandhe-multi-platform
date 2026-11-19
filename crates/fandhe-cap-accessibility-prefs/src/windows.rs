@@ -5,8 +5,8 @@
 //!
 //! 写像は `windows` クレートの型に依存しない純関数 [`prefs_from`] に切り出し、ホストの
 //! `cargo test` で検査する（WinRT 呼び出しだけ内側の `cfg(target_os = "windows")` に閉じる。
-//! `windows_network_status.rs` と同じ方針）。`unsafe` と `RoInitialize` は使わない
-//! （`windows_text_scale.rs` と同じ前提）。HRESULT はログにも画面にも出さず固定ラベルの
+//! `fandhe-cap-network-status` の `windows.rs` と同じ方針）。`unsafe` と `RoInitialize` は使わない
+//! （`fandhe-cap-dynamic-type` の `windows.rs` と同じ前提）。HRESULT はログにも画面にも出さず固定ラベルの
 //! `Internal` へ畳む（security.md A09）。
 //!
 //! - 視差軽減 = `AnimationsEnabled` の否定。コントラスト増加 = `HighContrast`（ハイコントラスト

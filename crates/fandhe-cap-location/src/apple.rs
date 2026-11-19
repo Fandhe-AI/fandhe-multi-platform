@@ -8,8 +8,7 @@
 //!
 //! `.m` 側の delegate コールバックから [`fandhe_rust_location_fix`] /
 //! [`fandhe_rust_location_failure`]（本モジュールが公開する `extern "C"` 関数）が
-//! 呼ばれ、`driver.rs::SHARED` へ push する（push 型、`ios.rs` の
-//! `fandhe_rust_tts_outcome` と同じ橋渡し方式）。
+//! 呼ばれ、`driver.rs::SHARED` へ push する（push 型）。
 //!
 //! 座標をログへ出力しない（security.md A09）。
 

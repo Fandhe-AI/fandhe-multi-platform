@@ -5,7 +5,7 @@
 //! 呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・期限・守る範囲）の SSOT は
 //! `fandhe_cap_media_transcode`。
 //!
-//! 非 wasm32 でのみコンパイル対象になる。Web は対象外
+//! Web は対象外
 //! （`fandhe-web-dom` 側で扱う）。
 //!
 //! # OS 別の分担（dispatch は #311 で最終形。後続の子は自分の OS のモジュールだけを埋める）
