@@ -58,6 +58,7 @@ pub use contract::*;
 pub use driver::platform_compose_mail_sms;
 #[cfg(target_os = "android")]
 pub use driver::reset_pending_tracking;
+pub use driver::{begin_compose_mail_sms, discard_compose_mail_sms, poll_compose_mail_sms};
 // OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
 #[allow(unused_imports)]
 pub(crate) use driver::*;

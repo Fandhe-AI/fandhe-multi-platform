@@ -808,3 +808,17 @@ PiP の切り替わりの口は #1327（§18）で決着していた。はじめ
 | insets の取り付け | 共通層の `HostInsetsLifecycle` が何もしない配り先を登録する（機能を 1 つも選ばないアプリでも余白が取れる） |
 | `cargo fandhe gen` | cdylib の lib target が無いアプリ（iOS・デスクトップだけ）には Android の生成物を出さない（従来はエラー） |
 | 利用者の `build.rs` | 入口のためには要らない（`compile_objc` は `rustc-link-lib` で伝わる）。Swift 薄層・弱リンクを持つ 6 機能を選ぶときだけ、`import_link_args` での出し直しが要る（consumer-app-structure.md §9） |
+
+## 32. コールバック型の機能に非同期の入口を足す（#1367）
+
+§8.2 の「同期の `platform_<stem>()` では実機能に届かない機能は begin / poll / discard 型の入口も公開する」に合わせて、
+第 1〜15 束の機能 crate を洗い出した（一覧は #1367）。足したのは compose-mail-sms の iOS・Android だけで、
+ほかは同期の wrapper か既存の非同期の入口で OS まで届く。
+
+| 項目 | 扱い |
+| --- | --- |
+| 入口 | `begin_compose_mail_sms(&ComposeRequest)`・`poll_compose_mail_sms`・`discard_compose_mail_sms`。crate ルートから出す。iOS / Android 以外は `Unsupported`（macOS・Windows は同期の `platform_compose_mail_sms`） |
+| slot | 結果を画面の型ではなく OS の生の値（`ComposeOutcome` / `ComposeMailSmsError`）で置き、画面が取り出すときに写す。画面は `begin_excluding(&[PUBLIC])` と `poll_and_finish_owned`、公開入口は `begin_parking`（前例は file-picker・eye-dropper） |
+| busy | 進行中の要求（作成画面が開いたまま）と公開側の未取得の結果は、どちらの開始も `Internal(BUSY)` で断る。discard は作成画面を閉じず、OS の結果が届くまで slot を残す |
+| 失われた要求 | Android の再生成の reset で消えた要求は、公開側の poll が `Internal(LOST)` を 1 度だけ返す。画面は失敗で終える |
+| ホストのテスト | `bridge` を `test` でもコンパイルし、slot の扱い（受け取り待ち・busy・discard・lost）を確かめる |

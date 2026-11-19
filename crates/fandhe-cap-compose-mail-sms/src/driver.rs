@@ -60,6 +60,7 @@ fn to_outcome(
                     "前回の添付の一時ファイルを消せなかったため、作成画面を開きませんでした"
                 }
                 l if l == contract::BUSY => "前の作成画面がまだ開いています",
+                l if l == contract::LOST => "作成画面の要求が失われました。もう一度お試しください",
                 l if l == contract::MAPI => {
                     "既定のメールアプリで添付付きの作成を開けませんでした（新しい Outlook は非対応）"
                 }
@@ -128,39 +129,89 @@ fn build_request(view: &ComposeRequestView) -> Result<ComposeRequest, ComposeMai
 }
 
 /// OS 側コールバックとの橋渡し（iOS / Android、pull 型、`RequestSlot` の facade）。
-/// 他機能とは共有しない本機能専用の [`SLOT`](bridge::SLOT)。
-#[cfg(any(target_os = "ios", target_os = "android"))]
+/// 他機能とは共有しない本機能専用の [`SLOT`](bridge::SLOT) を、画面 effect（`SCREEN_OWNER`）と公開入口
+/// （[`begin_compose_mail_sms`]、`PUBLIC_OWNER`）が持ち主の印で分けて共有する（`consumer-app-structure.md` §8.2）。
+/// 結果は OS の生の値（`ComposeOutcome` / `ComposeMailSmsError`）で置き、画面用への写像（`to_outcome`）は画面が取り出すときに行う。
+/// ホストのテストでも slot の扱いを確かめるため、`test` でもコンパイルする（OS 呼び出しは含まない）。
+#[cfg(any(target_os = "ios", target_os = "android", test))]
+#[cfg_attr(not(any(target_os = "ios", target_os = "android")), allow(dead_code))]
 pub(crate) mod bridge {
-    use crate::contract::ComposeOutcome;
+    use crate::contract::{ComposeOutcome, LOST};
     use crate::error::ComposeMailSmsError;
-    use fandhe_core::screens::compose_mail_sms::{ComposeFailure, CoreOutcome};
+    use fandhe_runtime::request_slot::{RequestSlot, SlotOwner};
 
-    use fandhe_runtime::request_slot::RequestSlot;
-
-    pub(crate) type Outcome = Result<CoreOutcome, ComposeFailure>;
+    pub(crate) type Outcome = Result<ComposeOutcome, ComposeMailSmsError>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
+    /// 画面 effect が追う自分の分の要求。
+    pub(crate) static SCREEN_OWNER: SlotOwner = SlotOwner::new();
+    /// 公開入口 [`super::begin_compose_mail_sms`] が追う自分の分の要求。
+    pub(crate) static PUBLIC_OWNER: SlotOwner = SlotOwner::new();
+    /// 公開側の poll・discard 本体（持ち主の照合・取得・解放）を直列にする。並行 poll で結果が二重に返らないため。
+    static PUBLIC_POLL_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-    /// 依頼直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
-    pub(crate) fn begin() -> u64 {
-        SLOT.begin()
+    /// 画面側の開始。進行中の要求（作成画面が開いたまま）と、公開側の未取得の結果は置き換えない。
+    /// 自分の未取得の結果は置き換える。
+    pub(crate) fn begin_screen() -> Option<u64> {
+        SCREEN_OWNER.begin_excluding(&SLOT, &[&PUBLIC_OWNER])
     }
 
-    /// OS からの結果を画面用へ変換して置く。`request_id` 不一致・未登録・既に結果ありは
-    /// 捨てて `false`（先に届いたものだけを採る）。
-    #[allow(dead_code)] // 後続 issue（b-ios / b-android）の受け口が使う
-    pub(crate) fn deliver(
-        request_id: u64,
-        result: Result<ComposeOutcome, ComposeMailSmsError>,
-    ) -> bool {
-        SLOT.deliver(request_id, super::to_outcome(result))
+    /// 公開入口の開始。進行中の要求と、自分の未取得の結果があれば `None`（busy）。画面側の届いた未取得の結果は
+    /// 捨てずに画面の受け取り待ちへ移す（`SlotOwner::begin_parking`）。画面は `poll_and_finish_owned` でそのまま受け取り、
+    /// 受け取られない分は画面の次の開始か [`reset`] で解放する（残るのは最大 1 件）。持ち主のいない届いた結果は置き換えて捨てる。
+    pub(crate) fn begin_public() -> Option<u64> {
+        PUBLIC_OWNER.begin_parking(&SLOT, &SCREEN_OWNER)
+    }
+
+    /// OS からの結果を置く。`request_id` 不一致・未登録・既に結果ありは捨てて `false`（先に届いたものだけを採る）。
+    pub(crate) fn deliver(request_id: u64, result: Outcome) -> bool {
+        SLOT.deliver(request_id, result)
+    }
+
+    /// [`super::poll_compose_mail_sms`] の本体。持ち主が `request_id` のときだけ見る。届いていれば 1 度だけ `Some` で
+    /// 持ち主を外す。slot の要求が失われた（reset 等で空・別の要求に替わった）ときは `Err(Internal(LOST))` を 1 度だけ返す。
+    pub(crate) fn poll_public(request_id: u64) -> Option<Outcome> {
+        let _guard = PUBLIC_POLL_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        if request_id == 0 || PUBLIC_OWNER.current() != request_id {
+            return None;
+        }
+        if let Some(result) = SLOT.take_ready(request_id) {
+            PUBLIC_OWNER.release(request_id);
+            return Some(result);
+        }
+        if SLOT.snapshot().is_some_and(|(id, _)| id == request_id) {
+            return None;
+        }
+        PUBLIC_OWNER.release(request_id);
+        Some(Err(ComposeMailSmsError::Internal(LOST)))
+    }
+
+    /// [`super::discard_compose_mail_sms`] の本体。持ち主が `request_id` のときだけ持ち主を外して `true`。
+    /// 結果が届いていれば slot も空ける。進行中なら slot は残す: 作成画面は閉じられないため、OS の結果が届くまで
+    /// 次の開始（画面・公開とも）を busy で断る（device-bridge-contracts §9「完了の通知が来るまで未解放の記録を消さない」）。
+    /// 閉じたあとの届いた結果は持ち主がいないため、次の開始が置き換える。
+    pub(crate) fn discard_public(request_id: u64) -> bool {
+        let _guard = PUBLIC_POLL_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        if request_id == 0 || PUBLIC_OWNER.current() != request_id {
+            return false;
+        }
+        let in_flight = SLOT
+            .snapshot()
+            .is_some_and(|(id, ready)| id == request_id && ready.is_none());
+        if !in_flight {
+            SLOT.clear(request_id);
+        }
+        PUBLIC_OWNER.release(request_id);
+        true
     }
 
     /// Android: Activity 再生成直後に `android_main` から呼ぶ。保留中の要求は復元せず破棄し、
-    /// 以後届く旧 `request_id` の [`deliver`] を無視させる（`app_badge::bridge::reset` と同じ）。
-    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
+    /// 以後届く旧 `request_id` の [`deliver`] を無視させる（`app_badge::bridge::reset` と同じ）。受け取り待ちの結果も捨てる。
+    /// 公開側の持ち主の印は残し、次の [`poll_public`] が失われた要求を 1 度だけ通知する。
+    #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
     pub(crate) fn reset() {
-        SLOT.reset()
+        SLOT.reset();
+        SCREEN_OWNER.release(SCREEN_OWNER.current());
     }
 }
 
@@ -189,7 +240,15 @@ fn drive_callback(state: &ComposeMailSmsState, sender: &CompletionSender<Compose
 
     if let Some(view) = take_request(state) {
         let _ = sender.send(Box::new(mark_composing));
-        let request_id = bridge::begin();
+        let generation = view.generation;
+        // 進行中の要求（作成画面が開いたまま）と公開入口の未取得の結果は置き換えず、画面には処理中の失敗を返す。
+        let Some(request_id) = bridge::begin_screen() else {
+            let outcome = to_outcome(Err(ComposeMailSmsError::Internal(contract::BUSY)));
+            let _ = sender.send(Box::new(move |s: &mut ComposeMailSmsState| {
+                finish_compose(s, generation, outcome);
+            }));
+            return;
+        };
         // 入力不正は OS へ渡さずその場で画面へ返す。
         let accepted = build_request(&view).and_then(|r| begin_compose(request_id, &r));
         if let Err(e) = accepted {
@@ -202,20 +261,87 @@ fn drive_callback(state: &ComposeMailSmsState, sender: &CompletionSender<Compose
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &bridge::SCREEN_OWNER,
         sender,
         |_request_id| {},
         move |s: &mut ComposeMailSmsState, outcome| {
             // 反映できたとき（`Idle` へ戻っていないとき）だけ `true` を返す。
             if s.phase != ComposePhase::Idle {
-                finish_compose(s, generation, outcome);
+                finish_compose(s, generation, to_outcome(outcome));
                 true
             } else {
                 false
             }
         },
+        // 自分の要求が失われた（Activity 再生成の reset 等）。待ち続けず失敗で終える。
+        move |s: &mut ComposeMailSmsState| {
+            finish_compose(
+                s,
+                generation,
+                to_outcome(Err(ComposeMailSmsError::Internal(contract::LOST))),
+            );
+        },
     );
+}
+
+/// 公開入口（iOS / Android）: 検査済みの要求で OS の作成画面を開き、結果を受け取るための要求 id を返す。
+/// 画面の状態型に依存せず、フレームワークの外のアプリも使える（`consumer-app-structure.md` §8.2）。結果は
+/// [`poll_compose_mail_sms`] で 1 度だけ取り出す。使わない要求は [`discard_compose_mail_sms`] で捨てる。
+///
+/// - 進行中の要求（画面経由を含む。作成画面が開いたまま）と、自分の結果が未取得のうちは `Internal(BUSY)` で断る
+/// - 画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める（画面はそのまま受け取る）
+/// - 依頼自体の失敗は `Err`（結果は届かない）。macOS・Windows は同期の [`platform_compose_mail_sms`] を使い、
+///   この入口は iOS / Android 以外では `Unsupported`
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub fn begin_compose_mail_sms(req: &ComposeRequest) -> Result<u64, ComposeMailSmsError> {
+    let request_id = bridge::begin_public().ok_or(ComposeMailSmsError::Internal(contract::BUSY))?;
+    if let Err(e) = begin_compose(request_id, req) {
+        bridge::SLOT.clear(request_id);
+        bridge::PUBLIC_OWNER.release(request_id);
+        return Err(e);
+    }
+    Ok(request_id)
+}
+
+/// iOS / Android 以外では成功へ倒さず `Unsupported`（macOS・Windows は同期の [`platform_compose_mail_sms`]）。
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+pub fn begin_compose_mail_sms(req: &ComposeRequest) -> Result<u64, ComposeMailSmsError> {
+    let _ = req;
+    Err(ComposeMailSmsError::Unsupported("compose"))
+}
+
+/// [`begin_compose_mail_sms`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・公開入口でない id・
+/// 取り出し済み・0・iOS / Android 以外は `None`。要求が失われた（Android の Activity 再生成等）ときは
+/// `Err(Internal(LOST))` を 1 度だけ返す。並行して同じ id を poll しても、結果が二重に返ることはない。
+pub fn poll_compose_mail_sms(
+    request_id: u64,
+) -> Option<Result<ComposeOutcome, ComposeMailSmsError>> {
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    {
+        bridge::poll_public(request_id)
+    }
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
+        let _ = request_id;
+        None
+    }
+}
+
+/// [`begin_compose_mail_sms`] の自分の要求を捨てる。`request_id` が公開入口の現在の要求のときだけ `true`
+/// （他人の id・取り出し済み・0・iOS / Android 以外は `false`）。以後 [`poll_compose_mail_sms`] は `None`。
+/// 作成画面は閉じない。開いたままなら、OS の結果が届くまで次の開始（画面・公開とも）は busy になる。
+pub fn discard_compose_mail_sms(request_id: u64) -> bool {
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    {
+        bridge::discard_public(request_id)
+    }
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
+        let _ = request_id;
+        false
+    }
 }
 
 /// `registry.rs` から `compose_mail_sms` 画面用に配線される effect ドライバ（iOS / Android）。
@@ -555,6 +681,146 @@ mod tests {
             let stale = s.generation.wrapping_sub(1);
             finish_compose(&mut s, stale, Ok(CoreOutcome::HandedOff));
             assert!(s.status.is_empty());
+        }
+    }
+
+    /// bridge（iOS / Android の slot）の公開入口と画面の共有。slot は static なので直列に走らせる。
+    mod bridge_slot {
+        use super::super::bridge;
+        use crate::contract::{ComposeOutcome, LOST};
+        use crate::error::ComposeMailSmsError;
+        use std::sync::Mutex;
+
+        static SERIAL: Mutex<()> = Mutex::new(());
+
+        fn clear() {
+            bridge::SLOT.reset();
+            bridge::SCREEN_OWNER.release(bridge::SCREEN_OWNER.current());
+            bridge::PUBLIC_OWNER.release(bridge::PUBLIC_OWNER.current());
+        }
+
+        fn poll_screen() -> u8 {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let sender =
+                fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(super::NoopWaker));
+            fandhe_runtime::request_slot::poll_and_finish_owned(
+                &bridge::SLOT,
+                &bridge::SCREEN_OWNER,
+                &sender,
+                |_| {},
+                |s: &mut u8, o| {
+                    *s = if o == Ok(ComposeOutcome::Saved) { 1 } else { 2 };
+                    true
+                },
+                |s: &mut u8| *s = 9,
+            );
+            let mut state = 0u8;
+            while let Ok(c) = rx.try_recv() {
+                c(&mut state);
+            }
+            state
+        }
+
+        #[test]
+        fn public_begin_parks_unpolled_screen_result_and_screen_receives_it() {
+            let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            clear();
+            let screen = bridge::begin_screen().unwrap();
+            assert!(bridge::deliver(screen, Ok(ComposeOutcome::Saved)));
+            let public = bridge::begin_public().expect("画面の未取得の結果で busy にならない");
+            assert_eq!(poll_screen(), 1, "画面は移された結果をそのまま受け取る");
+            assert!(bridge::SLOT.snapshot_of(screen).is_none());
+            assert_eq!(bridge::poll_public(public), None);
+            assert!(bridge::deliver(public, Ok(ComposeOutcome::Cancelled)));
+            assert_eq!(
+                bridge::poll_public(public),
+                Some(Ok(ComposeOutcome::Cancelled))
+            );
+            assert_eq!(bridge::poll_public(public), None, "結果は 1 度だけ");
+            clear();
+        }
+
+        #[test]
+        fn in_flight_is_busy_for_both_and_public_result_is_kept_from_screen() {
+            let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            clear();
+            let screen = bridge::begin_screen().unwrap();
+            assert!(bridge::begin_public().is_none());
+            assert!(bridge::begin_screen().is_none());
+            assert!(bridge::deliver(screen, Ok(ComposeOutcome::Saved)));
+            assert_eq!(poll_screen(), 1);
+            let public = bridge::begin_public().unwrap();
+            assert!(bridge::begin_screen().is_none());
+            assert!(bridge::deliver(public, Ok(ComposeOutcome::Queued)));
+            assert!(
+                bridge::begin_screen().is_none(),
+                "公開側の未取得の結果は画面から守る"
+            );
+            assert!(bridge::begin_public().is_none(), "自分の未取得の結果も守る");
+            assert_eq!(
+                bridge::poll_public(public),
+                Some(Ok(ComposeOutcome::Queued))
+            );
+            assert!(bridge::begin_screen().is_some());
+            clear();
+        }
+
+        #[test]
+        fn parked_result_is_released_by_next_screen_begin_and_reset() {
+            let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            clear();
+            let screen = bridge::begin_screen().unwrap();
+            assert!(bridge::deliver(screen, Ok(ComposeOutcome::Saved)));
+            let public = bridge::begin_public().unwrap();
+            assert!(bridge::deliver(public, Ok(ComposeOutcome::Queued)));
+            assert!(bridge::poll_public(public).is_some());
+            assert!(bridge::SLOT.snapshot_of(screen).is_some());
+            bridge::begin_screen().unwrap();
+            assert!(
+                bridge::SLOT.snapshot_of(screen).is_none(),
+                "画面の次の開始で解放"
+            );
+            clear();
+            let screen = bridge::begin_screen().unwrap();
+            assert!(bridge::deliver(screen, Ok(ComposeOutcome::Saved)));
+            bridge::begin_public().unwrap();
+            bridge::reset();
+            assert!(bridge::SLOT.snapshot_of(screen).is_none(), "reset で解放");
+            clear();
+        }
+
+        #[test]
+        fn discard_in_flight_keeps_busy_until_os_result_and_late_result_is_dropped() {
+            let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            clear();
+            let public = bridge::begin_public().unwrap();
+            assert!(!bridge::discard_public(public + 1));
+            assert!(bridge::discard_public(public));
+            assert!(!bridge::discard_public(public), "2 回目は何もしない");
+            assert_eq!(bridge::poll_public(public), None);
+            // 作成画面が開いたまま: OS の結果が届くまで次の開始は busy。
+            assert!(bridge::begin_public().is_none());
+            assert!(bridge::begin_screen().is_none());
+            // 閉じて届いた結果は持ち主がいないので、次の開始が置き換える。
+            assert!(bridge::deliver(public, Ok(ComposeOutcome::Saved)));
+            let next = bridge::begin_public().unwrap();
+            assert_ne!(next, public);
+            assert_eq!(bridge::poll_public(next), None);
+            clear();
+        }
+
+        #[test]
+        fn lost_public_request_is_reported_once() {
+            let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            clear();
+            let public = bridge::begin_public().unwrap();
+            bridge::reset();
+            assert_eq!(
+                bridge::poll_public(public),
+                Some(Err(ComposeMailSmsError::Internal(LOST)))
+            );
+            assert_eq!(bridge::poll_public(public), None);
+            clear();
         }
     }
 }
