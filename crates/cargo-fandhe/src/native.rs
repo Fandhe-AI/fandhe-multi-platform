@@ -14,6 +14,8 @@
 //! iOS の `UIApplicationSceneManifest` も殻の確定値として常に出す（アプリ全体の構成で、機能の宣言に
 //! 書けない。無いと実機で起動直後に終了する、#1292）。機能の `info-plist` が殻のキーを上書きする宣言はエラーにする。
 //!
+//! アプリ自身の追記（`fandhe-app.<os>.info-plist`・`entitlements`）は生成値へ同じ統合規則で足し、食い違えばエラーにする（#1202）。
+//!
 //! 出力先は `<アプリの crate>/gen/` に固定する（consumer-app-structure.md §4、gitignore する）。
 //! Info.plist の説明文（`*UsageDescription`）は既定値を持たず、アプリ側の
 //! `[package.metadata.fandhe-app]` に無ければエラーにする（既定文言のまま審査に出る事故を防ぐ）。
@@ -30,10 +32,11 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::declaration::{
-    backup_exclusion_problems, main_activity_attribute_allows, BackupDomain, BackupExclusion,
+    backup_exclusion_problems, entitlements_problems, info_plist_problems,
+    main_activity_attribute_allows, no_ctrl, strip_qualifier, BackupDomain, BackupExclusion,
     ComponentKind, MetaData,
 };
-use crate::merge::{merge, AndroidMerged, AppleMerged};
+use crate::merge::{merge, merge_app_map, AndroidMerged, AppleMerged};
 use crate::reach::{lib_name, reachable};
 use crate::workspace::{collect, run_metadata, Found};
 
@@ -129,6 +132,12 @@ struct OsConfig {
     /// LAN 内の相手への平文通信を許す（ATS の `NSAllowsLocalNetworking`）。通信先の制限はアプリが決める。
     #[serde(default)]
     allows_local_networking: bool,
+    /// 本体の Info.plist へ足す任意のキー（機能の宣言の `info-plist` と同じ形）。生成値と食い違えばエラー。
+    #[serde(default)]
+    info_plist: Map<String, Value>,
+    /// 本体の `App.entitlements` へ足す任意のキー（機能の宣言の `entitlements` と同じ形）。
+    #[serde(default)]
+    entitlements: Map<String, Value>,
 }
 
 impl OsConfig {
@@ -235,8 +244,44 @@ fn is_application_id(s: &str) -> bool {
     n >= 2
 }
 
+/// plist に写せない入力の検査。TOML の日時は `cargo metadata` で `$__toml_private_datetime` の
+/// 1 キーのテーブルになる（`<date>` は対応しない）ので、その形を日時として拒否する。
+fn plist_input_problems(field: &str, m: &Map<String, Value>) -> Vec<String> {
+    fn walk(v: &Value, at: &str, out: &mut Vec<String>) {
+        match v {
+            Value::Object(m) if m.keys().any(|k| k.starts_with("$__toml_private")) => out.push(
+                format!("{at}: 日時は plist の値にできません（文字列で書いてください）"),
+            ),
+            Value::Object(m) => m
+                .iter()
+                .for_each(|(k, x)| walk(x, &format!("{at}.{k}"), out)),
+            Value::Array(a) => a
+                .iter()
+                .enumerate()
+                .for_each(|(i, x)| walk(x, &format!("{at}[{i}]"), out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    m.iter()
+        .for_each(|(k, v)| walk(v, &format!("{field}.{k}"), &mut out));
+    out
+}
+
 impl AppConfig {
-    fn parse(v: &Value) -> Result<Self, Vec<String>> {
+    /// 追記した `info-plist`・`entitlements` のキー（`verify-scope` が選んだ機能の外でも許す値）。
+    pub(crate) fn appended_keys(&self, os: &str) -> Vec<String> {
+        let c = if os == "ios" { &self.ios } else { &self.macos };
+        // 修飾子つき（`UIBackgroundModes~ipad`）は、機能が宣言する素のキーとしても照合に現れるので素のキーも許す。
+        c.info_plist
+            .keys()
+            .flat_map(|k| [k.as_str(), strip_qualifier(k)])
+            .chain(c.entitlements.keys().map(String::as_str))
+            .map(String::from)
+            .collect()
+    }
+
+    pub(crate) fn parse(v: &Value) -> Result<Self, Vec<String>> {
         let cfg: AppConfig = if v.is_null() {
             AppConfig::default()
         } else {
@@ -285,7 +330,7 @@ impl AppConfig {
         }
         for (os, c) in [("ios", &cfg.ios), ("macos", &cfg.macos)] {
             if let Some(n) = &c.display_name {
-                if n.trim().is_empty() || n.chars().any(char::is_control) {
+                if n.trim().is_empty() || !no_ctrl(n) {
                     errs.push(format!(
                         "fandhe-app.{os}.display-name: 空白だけ・制御文字を含む値にできません"
                     ));
@@ -302,11 +347,24 @@ impl AppConfig {
                     ));
                 }
             }
+            for (f, m) in [
+                ("info-plist", &c.info_plist),
+                ("entitlements", &c.entitlements),
+            ] {
+                let field = format!("fandhe-app.{os}.{f}");
+                errs.extend(plist_input_problems(&field, m));
+                let probs = if f == "info-plist" {
+                    info_plist_problems(&field, m)
+                } else {
+                    entitlements_problems(&field, m)
+                };
+                errs.extend(probs.iter().map(|p| p.to_string()));
+            }
             for (k, t) in &c.usage_descriptions {
                 if !(is_ident(k) && k.ends_with("UsageDescription")) {
                     errs.push(format!("fandhe-app.{os}.usage-descriptions: `{k}` は `*UsageDescription` のキーにしてください"));
                 }
-                if t.trim().is_empty() || t.chars().any(char::is_control) {
+                if t.trim().is_empty() || !no_ctrl(t) {
                     errs.push(format!("fandhe-app.{os}.usage-descriptions.{k}: 文言は空白だけ・制御文字を含む値にできません"));
                 }
             }
@@ -868,6 +926,44 @@ fn resolve_build_vars(v: &mut Value, exe: &str, left: &mut BTreeSet<String>) {
     }
 }
 
+/// アプリの追記（`fandhe-app.<os>.<field>`）を生成値へ統合する。食い違った葉は両側の値つきでエラーにし、
+/// 生成値を残す。アプリの追記だけは殻のテーブル（`UILaunchScreen` 等）へも再帰できる。
+/// `info-plist` の修飾子つきキー（`CFBundleName~ipad`）は、素のキーが生成値にあると OS が修飾子つきを優先して
+/// 生成値を黙って上書きするため、素のキーが生成値にあればエラーにする（素のキーが無ければ通す）。
+fn append_app(
+    generated: Map<String, Value>,
+    app: &Map<String, Value>,
+    os: &str,
+    field: &str,
+    errs: &mut Vec<String>,
+) -> Map<String, Value> {
+    if app.is_empty() {
+        return generated;
+    }
+    let at = format!("fandhe-app.{os}.{field}");
+    let before = errs.len();
+    if field == "info-plist" {
+        for k in app.keys() {
+            let base = strip_qualifier(k);
+            if base != k && generated.contains_key(base) {
+                errs.push(format!(
+                    "{os}: {at}.{k}: 素のキー {base} が生成値にあるため書けません（`~ipad` 等の修飾子で生成値を上書きできません）"
+                ));
+            }
+        }
+    }
+    match merge_app_map(&generated, app) {
+        Ok(m) if errs.len() == before => m,
+        Ok(_) => generated,
+        Err(leaves) => {
+            errs.extend(leaves.into_iter().map(|(leaf, d)| {
+                format!("{os}: {at}.{leaf} が生成値と食い違います（生成値と追記の値: {d}）")
+            }));
+            generated
+        }
+    }
+}
+
 fn apple_files(
     ctx: &AppleCtx,
     base: Map<String, Value>,
@@ -880,16 +976,18 @@ fn apple_files(
     let mut base = base;
     base.extend(ctx.cfg.app_keys());
     let mut plist = ctx.plist(base, &m.usage_descriptions, &m.info_plist, &mut local);
+    plist = append_app(plist, &ctx.cfg.info_plist, os, "info-plist", &mut local);
     if let Some(exe) = ctx.concrete_exe {
         let mut left = BTreeSet::new();
         for v in plist.values_mut() {
             resolve_build_vars(v, exe, &mut left);
         }
         for x in left {
-            local.push(format!("{os}: 確定値の Info.plist に Xcode の変数 {x} が残ります（機能の宣言の info-plist を確定値にしてください）"));
+            local.push(format!("{os}: 確定値の Info.plist に Xcode の変数 {x} が残ります（機能の宣言・アプリの追記の info-plist を確定値にしてください）"));
         }
     }
     let ent = ctx.entitlements(&m.entitlements, &m.app_groups, os, &mut local);
+    let ent = append_app(ent, &ctx.cfg.entitlements, os, "entitlements", &mut local);
     let mut outs = vec![(format!("{os}/Info.plist"), plist_doc(&plist, "Info.plist"))];
     if !ent.is_empty() {
         outs.push((
@@ -1047,7 +1145,11 @@ pub(crate) fn render_for(
         } else if let Some(b) = &cfg.macos.bundle_id {
             macos_base(app, b)
         } else {
-            if m == AppleMerged::default() {
+            // 機能も bundle-id も無くても、アプリの追記があれば出す。
+            if m == AppleMerged::default()
+                && cfg.macos.info_plist.is_empty()
+                && cfg.macos.entitlements.is_empty()
+            {
                 continue;
             }
             Ok(plist_template())
@@ -1661,5 +1763,285 @@ mod tests {
             gen.join("android/a.txt").exists() && gen.join("web/manifest.webmanifest").exists()
         );
         let _ = fs::remove_dir_all(&root);
+    }
+
+    // ---- アプリの追記（info-plist・entitlements、#1202）----
+
+    fn ios_with(extra: Value) -> AppConfig {
+        let mut ios = json!({"bundle-id": BID});
+        ios.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        cfg(json!({"ios": ios}))
+    }
+
+    #[test]
+    fn app_info_plist_emits_all_six_types_with_escaping() {
+        let c = ios_with(json!({"info-plist": {
+            "S": "<&>'\"", "B": false, "I": 3, "R": 1.5,
+            "A": ["x", 2], "T": {"in<k>": {"deep": true}},
+            "k<&>": "v"
+        }}));
+        let p = &render(&[], &[], &[], &c, &app()).unwrap()["ios/Info.plist"];
+        for k in [
+            "<key>S</key>\n\t<string>&lt;&amp;&gt;&apos;&quot;</string>",
+            "<key>B</key>\n\t<false/>",
+            "<key>I</key>\n\t<integer>3</integer>",
+            "<key>R</key>\n\t<real>1.5</real>",
+            "<key>A</key>\n\t<array>\n\t\t<string>x</string>\n\t\t<integer>2</integer>\n\t</array>",
+            "<key>in&lt;k&gt;</key>",
+            "<key>deep</key>\n\t\t\t<true/>",
+            "<key>k&lt;&amp;&gt;</key>",
+        ] {
+            assert!(p.contains(k), "{k}\n{p}");
+        }
+    }
+
+    #[test]
+    fn app_info_plist_unions_arrays_and_recurses_into_shell_tables() {
+        let f = found(json!({"id": "bg", "ios": {"info-plist": {"UIBackgroundModes": ["fetch"]}}}));
+        let c = ios_with(json!({
+        "allows-local-networking": true,
+        "info-plist": {
+            "UIBackgroundModes": ["audio", "fetch"],
+            "UILaunchScreen": {"UIColorName": "Bg"},
+            "NSAppTransportSecurity": {"NSAllowsArbitraryLoadsInWebContent": true},
+        }}));
+        let p = &render(&[], &[&f], &[], &c, &app()).unwrap()["ios/Info.plist"];
+        assert_eq!(p.matches("<string>fetch</string>").count(), 1, "{p}");
+        assert!(p.contains("<string>audio</string>"), "{p}");
+        assert!(p.contains("<key>UIColorName</key>"), "{p}");
+        // allows-local-networking（殻の値）と同じテーブルへ足せる。
+        assert!(p.contains("<key>NSAllowsLocalNetworking</key>"), "{p}");
+        assert!(
+            p.contains("<key>NSAllowsArbitraryLoadsInWebContent</key>"),
+            "{p}"
+        );
+        // 同値は 1 つ。
+        let c = ios_with(json!({"info-plist": {"CFBundleName": "my-app"}}));
+        assert!(render(&[], &[], &[], &c, &app()).is_ok());
+    }
+
+    #[test]
+    fn app_info_plist_conflicts_are_errors_with_leaf_and_values() {
+        // 殻のスカラー。
+        let c = ios_with(json!({"info-plist": {"CFBundleName": "other"}}));
+        let e = err(render(&[], &[], &[], &c, &app()));
+        assert!(
+            e.contains("CFBundleName") && e.contains("\"my-app\"") && e.contains("\"other\""),
+            "{e}"
+        );
+        // 殻のテーブルの中の葉。
+        let c = ios_with(json!({"info-plist": {"UIApplicationSceneManifest":
+            {"UIApplicationSupportsMultipleScenes": true}}}));
+        let e = err(render(&[], &[], &[], &c, &app()));
+        assert!(
+            e.contains("UIApplicationSceneManifest.UIApplicationSupportsMultipleScenes")
+                && e.contains("false")
+                && e.contains("true"),
+            "{e}"
+        );
+        // 機能のスカラー。
+        let f = found(json!({"id": "k", "ios": {"info-plist": {"K": "1"}}}));
+        let c = ios_with(json!({"info-plist": {"K": "2"}}));
+        let e = err(render(&[], &[&f], &[], &c, &app()));
+        assert!(
+            e.contains("K") && e.contains("\"1\"") && e.contains("\"2\""),
+            "{e}"
+        );
+        // 型違い（配列とスカラー・テーブルとスカラー）。
+        let c = ios_with(json!({"info-plist": {"UIDeviceFamily": "1", "UILaunchScreen": 1}}));
+        let e = err(render(&[], &[], &[], &c, &app()));
+        assert!(
+            e.contains("UIDeviceFamily") && e.contains("UILaunchScreen"),
+            "{e}"
+        );
+    }
+
+    #[test]
+    fn app_plist_inputs_are_rejected() {
+        let bad = |v: Value| {
+            AppConfig::parse(&json!({"ios": v}))
+                .expect_err("拒否されるはず")
+                .join("\n")
+        };
+        let e = bad(json!({"info-plist": {"K": "a\nb"}}));
+        assert!(e.contains("制御文字"), "{e}");
+        let e = bad(json!({"entitlements": {APP_GROUPS_KEY: ["g"]}}));
+        assert!(e.contains("から生成されるため"), "{e}");
+        // 説明文は文字列で、空白だけでない（`usage-descriptions` と同じ基準。修飾子つきも）。
+        for v in [json!("  "), json!(3), json!(["a"])] {
+            for k in ["NSFaceIDUsageDescription", "NSFaceIDUsageDescription~ipad"] {
+                let e = bad(json!({"info-plist": {k: v}}));
+                assert!(e.contains("空白だけでない文字列"), "{k} {v}: {e}");
+            }
+        }
+        // 表示名・説明文の文言にも XML 1.0 で不正な文字の拒否を揃える。
+        assert!(AppConfig::parse(&json!({"ios": {"display-name": "a\u{FFFF}"}})).is_err());
+        assert!(AppConfig::parse(
+            &json!({"ios": {"usage-descriptions": {"NSCameraUsageDescription": "a\u{FFFE}"}}})
+        )
+        .is_err());
+        // XML 1.0 で不正な文字。
+        let e = bad(json!({"info-plist": {"K": "a\u{FFFE}"}}));
+        assert!(e.contains("制御文字"), "{e}");
+        let e = bad(json!({"entitlements": {"a\u{FFFF}": true}}));
+        assert!(e.contains("制御文字"), "{e}");
+        // cargo metadata の日時（`$__toml_private_datetime`）。入れ子の中でも拒否する。
+        let dt = json!({"$__toml_private_datetime": "1979-05-27"});
+        let e = bad(json!({"info-plist": {"When": dt, "N": {"X": [dt]}}}));
+        assert!(
+            e.contains("info-plist.When") && e.contains("info-plist.N.X[0]"),
+            "{e}"
+        );
+        let e = bad(json!({"entitlements": {"When": dt}}));
+        assert!(e.contains("entitlements.When") && e.contains("日時"), "{e}");
+        // null は直列化で拒否する。
+        let c = ios_with(json!({"info-plist": {"K": null}}));
+        assert!(err(render(&[], &[], &[], &c, &app())).contains("null"));
+        // 確定値の Info.plist に Xcode の変数が残る。
+        let c = ios_with(json!({"info-plist": {"K": "$(PRODUCT_NAME)"}}));
+        assert!(err(render(&[], &[], &[], &c, &app())).contains("$(PRODUCT_NAME)"));
+        // 追記の $(EXECUTABLE_NAME) は実行体名になる。
+        let c = ios_with(json!({"info-plist": {"K": "$(EXECUTABLE_NAME)"}}));
+        let p = &render(&[], &[], &[], &c, &app()).unwrap()["ios/Info.plist"];
+        assert!(p.contains("<string>my-app-bin</string>"), "{p}");
+    }
+
+    #[test]
+    fn app_entitlements_alone_emit_the_file_and_merge_with_features() {
+        let c = ios_with(json!({"entitlements": {"aps-environment": "development"}}));
+        let files = render(&[], &[], &[], &c, &app()).unwrap();
+        let e = &files["ios/App.entitlements"];
+        assert!(e.contains("<key>aps-environment</key>"), "{e}");
+        // 追記が無ければ出さない（従来どおり）。
+        assert!(!render(&[], &[], &[], &ios_cfg(), &app())
+            .unwrap()
+            .contains_key("ios/App.entitlements"));
+        // 機能の entitlements と App Group は残り、食い違いはエラー。
+        let f = found(json!({"id": "g", "ios": {"app-groups": ["w"],
+            "entitlements": {"x.shared": ["a"], "x.flag": true}}}));
+        let c = cfg(
+            json!({"app-group-prefix": "com.fandhe", "ios": {"bundle-id": BID,
+            "entitlements": {"x.shared": ["b"], "aps-environment": "production"}}}),
+        );
+        let e = &render(&[], &[&f], &[], &c, &app()).unwrap()["ios/App.entitlements"];
+        for k in [
+            "group.com.fandhe.w",
+            "<string>a</string>",
+            "<string>b</string>",
+            "production",
+        ] {
+            assert!(e.contains(k), "{k}\n{e}");
+        }
+        let c = cfg(json!({"ios": {"bundle-id": BID, "entitlements": {"x.flag": false}}}));
+        let e = err(render(&[], &[&f], &[], &c, &app()));
+        assert!(
+            e.contains("x.flag") && e.contains("true") && e.contains("false"),
+            "{e}"
+        );
+    }
+
+    #[test]
+    fn macos_app_append_emits_without_features_or_bundle_id() {
+        let none = cfg(json!({"ios": {"bundle-id": BID}, "macos": {}}));
+        assert!(!render(&[], &[], &[], &none, &app())
+            .unwrap()
+            .keys()
+            .any(|k| k.starts_with("macos/")));
+        let c =
+            cfg(json!({"ios": {"bundle-id": BID}, "macos": {"info-plist": {"LSUIElement": true}}}));
+        let files = render(&[], &[], &[], &c, &app()).unwrap();
+        assert!(files["macos/Info.plist"].contains("<key>LSUIElement</key>"));
+        assert!(files["macos/Info.plist"].contains("$(PRODUCT_BUNDLE_IDENTIFIER)"));
+        assert!(!files.contains_key("macos/App.entitlements"));
+        let c = cfg(json!({"ios": {"bundle-id": BID},
+            "macos": {"entitlements": {"com.apple.security.app-sandbox": true}}}));
+        let files = render(&[], &[], &[], &c, &app()).unwrap();
+        assert!(files["macos/App.entitlements"].contains("com.apple.security.app-sandbox"));
+        // bundle-id があれば殻の確定値へ足す。
+        let c = cfg(
+            json!({"ios": {"bundle-id": BID}, "macos": {"bundle-id": "com.example.mac",
+            "info-plist": {"LSUIElement": true, "CFBundleName": "x"}}}),
+        );
+        let e = err(render(&[], &[], &[], &c, &app()));
+        assert!(e.contains("CFBundleName"), "{e}");
+    }
+
+    #[test]
+    fn app_append_does_not_touch_extension_plists() {
+        let ext = json!({"name": "W", "bundle-suffix": "w", "deployment-target": "14.0", "sources": ["a"],
+            "info-plist": {"NSExtension": {}}});
+        let f = found(json!({"id": "w", "macos": {"extensions": [ext]}}));
+        let plain = cfg(json!({"ios": {"bundle-id": BID}, "macos": {}}));
+        let with = cfg(
+            json!({"ios": {"bundle-id": BID}, "macos": {"info-plist": {"LSUIElement": true},
+            "entitlements": {"e": true}}}),
+        );
+        let a = render(&[], &[], &[&f], &plain, &app()).unwrap();
+        let b = render(&[], &[], &[&f], &with, &app()).unwrap();
+        let key = "macos/extensions/W/Info.plist";
+        assert_eq!(a[key], b[key]);
+        assert!(!b[key].contains("LSUIElement"));
+        assert!(!a.contains_key("macos/App.entitlements"));
+        assert!(b.contains_key("macos/App.entitlements"));
+        assert!(!b.keys().any(|k| k.ends_with("W.entitlements")));
+    }
+
+    #[test]
+    fn app_info_plist_accepts_usage_descriptions_and_conflicts_with_feature_text() {
+        let cam = found(
+            json!({"id": "cam", "ios": {"usage-descriptions": ["NSCameraUsageDescription"]}}),
+        );
+        // 機能が要求しないキーは、そのまま Info.plist に出る。
+        let c = ios_with(json!({"info-plist": {"NSFaceIDUsageDescription": "顔で解除します"}}));
+        let p = &render(&[], &[], &[], &c, &app()).unwrap()["ios/Info.plist"];
+        assert!(
+            p.contains("<key>NSFaceIDUsageDescription</key>\n\t<string>顔で解除します</string>"),
+            "{p}"
+        );
+        // 機能が要求したキーの文言と食い違えばエラー（値は黙って消えない）。
+        let c = ios_with(json!({
+            "usage-descriptions": {"NSCameraUsageDescription": "A"},
+            "info-plist": {"NSCameraUsageDescription": "B"}}));
+        let e = err(render(&[], &[&cam], &[], &c, &app()));
+        assert!(
+            e.contains("fandhe-app.ios.info-plist.NSCameraUsageDescription")
+                && e.contains("\"A\"")
+                && e.contains("\"B\""),
+            "{e}"
+        );
+        // 同じ文言なら 1 つにまとまる。
+        let c = ios_with(json!({
+            "usage-descriptions": {"NSCameraUsageDescription": "A"},
+            "info-plist": {"NSCameraUsageDescription": "A"}}));
+        let p = &render(&[], &[&cam], &[], &c, &app()).unwrap()["ios/Info.plist"];
+        assert_eq!(p.matches("NSCameraUsageDescription").count(), 1, "{p}");
+    }
+
+    #[test]
+    fn app_info_plist_qualified_keys_follow_the_base_key() {
+        // 素のキーが生成値にあれば、修飾子つきは生成値を黙って上書きするのでエラー。
+        for k in [
+            "CFBundleName~ipad",
+            "UIApplicationSceneManifest~ipad",
+            "CFBundleName-iphoneos",
+        ] {
+            let c = ios_with(json!({"info-plist": {k: "x"}}));
+            let e = err(render(&[], &[], &[], &c, &app()));
+            assert!(
+                e.contains(&format!("fandhe-app.ios.info-plist.{k}")) && e.contains("素のキー"),
+                "{k}: {e}"
+            );
+        }
+        // 素のキーが生成値に無ければ通る。
+        let c = ios_with(
+            json!({"info-plist": {"UISupportedInterfaceOrientations~ipad": ["UIInterfaceOrientationPortrait"]}}),
+        );
+        let p = &render(&[], &[], &[], &c, &app()).unwrap()["ios/Info.plist"];
+        assert!(
+            p.contains("<key>UISupportedInterfaceOrientations~ipad</key>"),
+            "{p}"
+        );
     }
 }

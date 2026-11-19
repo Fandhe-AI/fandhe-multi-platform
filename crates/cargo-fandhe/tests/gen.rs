@@ -1023,3 +1023,86 @@ fn app_without_cdylib_skips_android() {
     // 飛ばしたことは通知で知らせる（Issue #1399）。
     assert_eq!(g.notes, [cargo_fandhe::ANDROID_SKIPPED_NOTE]);
 }
+
+/// アプリの追記（`fandhe-app.ios.info-plist`・`entitlements`）が実際の TOML から plist へ届く（Issue #1202）。
+/// 6 つの型を通し、殻のテーブルへ再帰し、機能の宣言の配列と和集合になる。
+#[test]
+fn app_info_plist_and_entitlements_append_from_toml() {
+    let (dir, toml) = cap("cam");
+    let app = app_pkg(
+        "[dependencies]\nfandhe-cap-cam = { path = \"../fandhe-cap-cam\" }\n\
+         [package.metadata.fandhe-app.ios.usage-descriptions]\nNSCameraUsageDescription = \"写真を撮ります\"\n\
+         [package.metadata.fandhe-app.ios.info-plist]\n\
+         Str = \"a\"\nBool = true\nInt = 7\nReal = 1.5\nArr = [\"x\", \"y\"]\n\
+         UILaunchScreen = { UIColorName = \"LaunchBackground\" }\n\
+         [package.metadata.fandhe-app.ios.entitlements]\n\"aps-environment\" = \"development\"\n",
+    );
+    let m = make_ws("append-ios", "app", &[(&dir, toml), ("app", app)]);
+    let g = generate(Some(&m)).unwrap();
+    let p = &g.files["ios/Info.plist"];
+    assert_eq!(plist_string(p, "Str"), "a");
+    for k in [
+        "<key>Bool</key>\n\t<true/>",
+        "<key>Int</key>\n\t<integer>7</integer>",
+        "<key>Real</key>\n\t<real>1.5</real>",
+        "<key>UIColorName</key>",
+        "<string>写真を撮ります</string>",
+    ] {
+        assert!(p.contains(k), "{k}\n{p}");
+    }
+    assert_eq!(
+        plist_array(p, "Arr"),
+        "<string>x</string><string>y</string>"
+    );
+    assert_eq!(
+        plist_string(&g.files["ios/App.entitlements"], "aps-environment"),
+        "development"
+    );
+    // 生成値との食い違いは葉のパスと両側の値つきのエラー（配列の UIDeviceFamily は和集合なので衝突しない）。
+    let app = app_pkg("[package.metadata.fandhe-app.ios.info-plist]\nUIDeviceFamily = [3]\nCFBundleName = \"other\"\n");
+    let m = make_ws("append-conflict", "app", &[("app", app)]);
+    let e = errs(generate(Some(&m)));
+    assert!(
+        e.contains("CFBundleName") && e.contains("\"app\"") && e.contains("\"other\""),
+        "{e}"
+    );
+    assert!(!e.contains("UIDeviceFamily"), "{e}");
+}
+
+/// TOML の日時は `cargo metadata` で `$__toml_private_datetime` のテーブルになる。plist の値にできないので拒否する。
+#[test]
+fn app_plist_inputs_reject_datetime_and_app_groups_but_accept_usage_description() {
+    for body in [
+        "[package.metadata.fandhe-app.ios.info-plist]\nWhen = 1979-05-27T07:32:00Z\n",
+        "[package.metadata.fandhe-app.ios.info-plist]\nNested = { X = [1979-05-27] }\n",
+        "[package.metadata.fandhe-app.ios.entitlements]\nWhen = 07:32:00\n",
+    ] {
+        let m = make_ws("append-datetime", "app", &[("app", app_pkg(body))]);
+        let e = errs(generate(Some(&m)));
+        assert!(e.contains("日時"), "{body}\n{e}");
+    }
+    // `*UsageDescription` は info-plist にも書ける（機能が要求しないキーはそのまま出る）。
+    let body = "[package.metadata.fandhe-app.ios.info-plist]\nNSFaceIDUsageDescription = \"顔で解除します\"\n";
+    let m = make_ws("append-usage", "app", &[("app", app_pkg(body))]);
+    let g = generate(Some(&m)).unwrap();
+    assert_eq!(
+        plist_string(&g.files["ios/Info.plist"], "NSFaceIDUsageDescription"),
+        "顔で解除します"
+    );
+    let body = "[package.metadata.fandhe-app.ios.entitlements]\n\"com.apple.security.application-groups\" = [\"g\"]\n";
+    let m = make_ws("append-groups", "app", &[("app", app_pkg(body))]);
+    assert!(errs(generate(Some(&m))).contains("から生成されるため"));
+}
+
+/// macOS は機能も bundle-id も無くても、追記があれば Info.plist を出す。
+#[test]
+fn macos_append_emits_without_features_or_bundle_id() {
+    let app = app_pkg(
+        "[package.metadata.fandhe-app.macos.info-plist]\nLSUIElement = true\n\
+         [package.metadata.fandhe-app.macos.entitlements]\n\"com.apple.security.app-sandbox\" = true\n",
+    );
+    let m = make_ws("append-macos", "app", &[("app", app)]);
+    let g = generate(Some(&m)).unwrap();
+    assert!(g.files["macos/Info.plist"].contains("<key>LSUIElement</key>"));
+    assert!(g.files["macos/App.entitlements"].contains("com.apple.security.app-sandbox"));
+}

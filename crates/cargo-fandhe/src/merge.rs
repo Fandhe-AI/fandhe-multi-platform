@@ -136,6 +136,33 @@ fn merge_value(
     }
 }
 
+/// アプリの追記（`fandhe-app.*.info-plist`・`entitlements`）を生成値へ統合する。規則は機能同士と同じ
+/// （同値は 1 つ・配列は和集合・テーブルは再帰）で、食い違った葉は `(`.` 区切りのパス, 両側の値)` で返す。
+/// 前者が生成値、後者がアプリの値。
+pub(crate) fn merge_app_map(
+    generated: &Map<String, Value>,
+    app: &Map<String, Value>,
+) -> Result<Map<String, Value>, Vec<(String, String)>> {
+    let mut owners = BTreeMap::new();
+    let mut errs = Vec::new();
+    let mut out = generated.clone();
+    for (k, v) in app {
+        let merged = match generated.get(k) {
+            Some(cur) => merge_value(cur, v, k, &mut owners, "", &mut errs),
+            None => v.clone(),
+        };
+        out.insert(k.clone(), merged);
+    }
+    if errs.is_empty() {
+        Ok(out)
+    } else {
+        Err(errs
+            .into_iter()
+            .map(|(p, d)| (p.replace(SEP, "."), d))
+            .collect())
+    }
+}
+
 fn merge_map(
     into: &mut Map<String, Value>,
     from: &Map<String, Value>,

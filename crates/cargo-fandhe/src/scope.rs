@@ -4,6 +4,7 @@
 //! （aapt2・codesign・otool・Gradle 等）で取り出したテキストに、禁止集合の値が 1 つでも
 //! 現れたら違反とする。ツールの実行は `scripts/audit/verify-capability-scope.sh` の担当で、
 //! 本モジュールはテキストの照合だけを行う（ネットワーク・外部コマンドは `cargo metadata` のみ）。
+//! アプリ自身が追記した Info.plist・entitlements のキー（修飾子を落とした素のキーを含む）も、禁止集合から除く。
 //! 到達した宣言と値が重なるもの（複数機能が同じ権限を宣言する等）は、正当に現れるため禁止にしない。
 //! 宣言から禁止集合を作るので、機能が増えても検査側の修正は要らない。
 //! Android は加えて aapt2 の xmltree を要素単位で読み、カタログの権限の `usesPermissionFlags`（ビット値）と
@@ -17,7 +18,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use crate::declaration::{Apple, Declaration, MAIN_ACTIVITY_ATTRIBUTES};
-use crate::native::{ANDROID_TRIPLE, APP_GROUPS_KEY, IOS_TRIPLE, MACOS_TRIPLE, MAIN_ACTIVITY};
+use crate::native::{
+    app_root, AppConfig, ANDROID_TRIPLE, APP_GROUPS_KEY, IOS_TRIPLE, MACOS_TRIPLE, MAIN_ACTIVITY,
+};
 use crate::reach::reachable;
 use crate::workspace::{collect, run_metadata};
 
@@ -436,7 +439,15 @@ pub fn verify_scope(
             "観測テキストが空です（ツールの失敗を見逃さないため失敗にします）".into(),
         ]);
     }
-    let forbidden = forbidden_tokens(&reached, &catalog_decls, os);
+    let mut forbidden = forbidden_tokens(&reached, &catalog_decls, os);
+    // アプリ自身が追記した Info.plist・entitlements のキーは、未選択の機能と同名でも違反にしない。
+    if os != "android" {
+        let (_, app_cfg, _) = app_root(&meta)?;
+        let cfg = AppConfig::parse(&app_cfg)?;
+        for k in cfg.appended_keys(os) {
+            forbidden.remove(&k);
+        }
+    }
     let mut hits = scan(&forbidden, observed);
     if os == "android" {
         hits.extend(android_structure(&reached, &catalog_decls, observed));

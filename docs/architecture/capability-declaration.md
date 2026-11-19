@@ -275,6 +275,39 @@ macOS の `bundle-id` を書くと、本体の Info.plist を Xcode の変数で
 手で組むアプリ向けです（カタログは `build.rs` で埋め込む、#1194）。置き換えられない変数（`$(TeamIdentifierPrefix)` など）が
 本体に残るとエラーです。書かなければ従来どおり Xcode の変数のまま出します。拡張は常に Xcode の変数のままです。
 
+アプリ自身が Apple の `Info.plist`・`App.entitlements` へ任意のキーを足せます（iOS・macOS 共通、#1202）。
+機能の宣言の `info-plist`・`entitlements` と同じ書き方です。
+型は TOML の文字列・真偽・整数・小数・配列・テーブルが、
+plist の `string`・`true`/`false`・`integer`・`real`・`array`・`dict` に対応します。
+
+```toml
+[package.metadata.fandhe-app.ios.info-plist]
+ITSAppUsesNonExemptEncryption = false
+UILaunchScreen = { UIColorName = "LaunchBackground" }
+UIBackgroundModes = ["fetch"]
+
+[package.metadata.fandhe-app.ios.entitlements]
+"aps-environment" = "development"
+```
+
+- 統合は、殻の確定値・アプリ全体の値・機能の宣言・説明文を合わせた生成値へ、§4 と同じ規則で足します。
+  同値は 1 つ、配列は和集合、テーブルは再帰で、それ以外の食い違いはエラーです。
+  生成値を黙って上書きしません（`UIApplicationSceneManifest` を書き換えると iOS で起動できなくなるため、#1292）
+- 機能の宣言と違い、追記だけは殻のテーブル（`UILaunchScreen`・`NSAppTransportSecurity`）の中へ足せます
+- エラーには、食い違った葉のパスと両側の値（生成値と追記の値）を含めます
+- 拒否するもの: 日時（`cargo metadata` では `$__toml_private_datetime` のテーブルになる。`date`・`data` は扱わない）、
+  `inf`・`nan`（JSON にできず null になる）、制御文字・XML 1.0 で不正な文字（U+FFFE・U+FFFF）、確定値の Info.plist に残る Xcode の変数
+- `info-plist` には `*UsageDescription` も書けます。機能が要求しないキー（`NSFaceIDUsageDescription` 等）はそのまま出ます。
+  機能が要求したキーは、`usage-descriptions` の文言と同じなら 1 つにまとまり、違えば上の規則でエラーです（値は黙って消えません）。
+  機能が要求したキーを `info-plist` だけに書くと、文言が無いエラーになります。`usage-descriptions` に書いてください。
+  文字列で、空白だけでないことが必要です（`usage-descriptions` と同じ基準。修飾子つきも同じ）
+- 修飾子つきのキー（`CFBundleName~ipad`・`-iphoneos`）は、素のキーが生成値にあるとエラーです（OS が修飾子つきを優先し、生成値を黙って上書きするため）。
+  素のキーが生成値に無ければ（`UISupportedInterfaceOrientations~ipad` 等）通ります
+- `entitlements` に `com.apple.security.application-groups` を書くとエラーです。App Group は機能の `app-groups` と `app-group-prefix` から生成します
+- 追記は本体の plist にだけ効きます。拡張の plist は機能の持ち物で変わりません
+- macOS は、機能も `bundle-id` も無くても、`info-plist` か `entitlements` の追記があれば `Info.plist` を出します（`bundle-id` が無ければ Xcode の変数のまま）
+- `entitlements` の追記があれば `App.entitlements` も出します（iOS・macOS 共通）
+
 殻に要る値は、アプリの crate からも取ります。Android は `cdylib` を含む lib target が要り、iOS は bin target がちょうど 1 つと、数字とドットだけの version が要ります。
 
 `cdylib` の無いアプリ（iOS・デスクトップだけ）は Android を対象にしないため、Android の生成物を出さずに通ります（#1200）。
@@ -300,9 +333,9 @@ manifest = "web/manifest.webmanifest"       # アプリの crate からの相対
 | `android/res/xml/fandhe_data_extraction_rules.xml`・`fandhe_backup_rules.xml` | バックアップ除外があるときだけ。API 31 以降用（`cloud-backup`・`device-transfer`）と API 30 以前用（`full-backup-content`）。overlay の `<application>` が `dataExtractionRules`・`fullBackupContent` で指す |
 | `android/fandhe.gradle` | `apply from:` 用。Android を出すとき（cdylib があるとき）は常に出す。gen の `android/java` と機能 crate の `java`・`res`（バックアップ規則があれば gen の `android/res` も）を srcDirs に足し、gen の Manifest を全 variant の overlay として登録し（`androidComponents`）、`gradle` の依存（基盤を含む）を `implementation` で足す |
 | `android/java/com/fandhe/platform/FandheLibrary.java` | `NAME` に cdylib 名（`[lib] name`）を持つ。殻は `System.loadLibrary(FandheLibrary.NAME)` と書き、ライブラリ名の正本を `[lib] name` 1 か所にする |
-| `ios/Info.plist` | 確定値の定型キー（上記）、アプリ全体の値、説明文、`info-plist`。機能が無くても出す |
-| `macos/Info.plist` | ビルド設定変数の定型 7 キー（`fandhe-app.macos.bundle-id` があれば確定値）、アプリ全体の値、説明文、`info-plist` |
-| `ios/App.entitlements`・`macos/App.entitlements` | `entitlements` と、展開した App Group（ios は `group.<prefix>.<名>`、macos は `$(TeamIdentifierPrefix)<prefix>.<名>`） |
+| `ios/Info.plist` | 確定値の定型キー（上記）、アプリ全体の値、説明文、`info-plist`、アプリの `info-plist` の追記。機能が無くても出す |
+| `macos/Info.plist` | ビルド設定変数の定型 7 キー（`fandhe-app.macos.bundle-id` があれば確定値）、アプリ全体の値、説明文、`info-plist`、アプリの `info-plist` の追記 |
+| `ios/App.entitlements`・`macos/App.entitlements` | `entitlements` と、展開した App Group（ios は `group.<prefix>.<名>`、macos は `$(TeamIdentifierPrefix)<prefix>.<名>`）、アプリの `entitlements` の追記 |
 | `<os>/extensions/<name>/Info.plist`・`<name>.entitlements` | 拡張ごとの plist と entitlements |
 | `web/manifest.webmanifest` | `--os web` のときだけ。基礎 manifest に、wasm32 で到達した機能の `web.manifest` を足した JSON。選ばなかった機能のメンバーは入らない |
 | `.fandhe-gen` | 生成物の印 |
@@ -317,7 +350,10 @@ manifest = "web/manifest.webmanifest"       # アプリの crate からの相対
 
 ### 範囲外
 
-`CFBundleSupportedPlatforms`（シミュレータか実機かは組み立て時に決まる、#1201）、applicationId・compileSdk・`<application>` の属性（バックアップ規則の 2 属性を除く）、拡張の Info.plist の確定値化、framework のリンクと Xcode のターゲット（#1212）、Windows の identity（#1208）、`run`/`build` への組み込み（#1201）、追記と `--eject`（#1202）、`verify-scope` の Web 対応。
+`CFBundleSupportedPlatforms`（シミュレータか実機かは組み立て時に決まる、#1201）、
+applicationId・compileSdk・`<application>` の属性（バックアップ規則の 2 属性を除く）、拡張の Info.plist の確定値化、
+framework のリンクと Xcode のターゲット（#1212）、Windows の identity（#1208）、`run`/`build` への組み込み（#1201）、
+Android の追記と `--eject`（#1202 の後続）、`verify-scope` の Web 対応。
 
 ## 8. 選ばなかった機能の検査（`cargo fandhe verify-scope`）
 
@@ -331,6 +367,7 @@ cargo fandhe verify-scope --catalog <全機能を含む Cargo.toml> \
 - 禁止集合は「カタログの宣言 − アプリが到達した宣言」から作ります。到達判定は `gen` と同じです
 - 基盤の framework（`scope.rs` の `BASE_FRAMEWORKS`。UIKit・AppKit 等、選択によらずどのアプリもリンクするもの）は禁止にしません。宣言に書いても書かなくても判定は変わりません
 - 到達した機能と同じ値を宣言する未選択機能の値は、正当に現れるため禁止にしません
+- アプリ自身が追記した `info-plist`・`entitlements` のキー（iOS・macOS）も、未選択機能が同名を宣言していても禁止にしません（キー単位。`~ipad` 等の修飾子つきで追記したときは素のキーも含む。#1202）
 - 観測ファイルは成果物から外部ツールで取り出したテキストです。いずれかの禁止値が現れたら、機能 id・種別・値を出して終了コード 1 で終わります
 - 照合はトークン境界つきです。`android.hardware.camera` は `android.hardware.camera.autofocus` に、`group:artifact` は `group:artifact-ktx` に一致しません
 - 観測テキストが空なら失敗します（ツールの失敗の見逃し防止）。未選択の機能が 0 件でも、禁止トークンの照合対象が空になるだけで、空の観測の検出と Android の構造照合は行います

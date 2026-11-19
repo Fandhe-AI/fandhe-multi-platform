@@ -83,6 +83,13 @@ const BK: &str = "\
 [package.metadata.fandhe.android]
 backup-exclusions = [{ domain = \"sharedpref\", path = \"fandhe_bk.xml\" }]
 ";
+/// 未選択の機能が Info.plist・entitlements のキーを宣言する（アプリの追記と同名になる）。
+const BG: &str = "\
+[package.metadata.fandhe.ios.info-plist]
+UIBackgroundModes = [\"fetch\"]
+[package.metadata.fandhe.ios.entitlements]
+\"com.apple.developer.healthkit\" = true
+";
 const PIP: &str = "\
 [package.metadata.fandhe.android.main-activity-attributes]
 supportsPictureInPicture = \"true\"
@@ -106,6 +113,7 @@ fn make_ws(tag: &str, app_deps: &str, extra: &[(&str, String)]) -> PathBuf {
         ("scan", SCAN),
         ("pip", PIP),
         ("bk", BK),
+        ("bg", BG),
     ] {
         let (dir, toml) = cap(id, rest);
         write_crate(&root, &dir, &toml);
@@ -403,7 +411,7 @@ fn all_selected_still_checks_structure() {
     // 未選択 0 件でも構造照合は走る。全機能を選んだ正常系（宣言どおりのフラグ・属性）は誤検知しない。
     let m = make_ws(
         "all-flags",
-        &deps(&["cam", "nfc", "both", "ble", "scan", "pip", "bk"]),
+        &deps(&["cam", "nfc", "both", "ble", "scan", "pip", "bk", "bg"]),
         &[],
     );
     let pip = "        A: http://schemas.android.com/apk/res/android:supportsPictureInPicture(0x010104f7)=true\n";
@@ -504,4 +512,46 @@ fn unselected_backup_exclusion_fails_and_selected_passes() {
     let broken = "      E: exclude (line=5)\n        A: path=\"y\" (Raw: \"y\")\n";
     let e = check("android", &m, &format!("{ANDROID_CLEAN}{broken}")).unwrap_err();
     assert!(e.contains("読めません"), "{e}");
+}
+
+/// アプリ自身が追記した Info.plist・entitlements のキーは、未選択の機能が同名を宣言していても違反にしない（Issue #1202）。
+#[test]
+fn app_appended_keys_are_not_forbidden() {
+    let observed = format!(
+        "{IOS_CLEAN}<key>UIBackgroundModes</key><array><string>fetch</string></array>\n\
+         <key>com.apple.developer.healthkit</key><true/>\n"
+    );
+    // 追記が無ければ、未選択の機能 bg の値として違反になる。
+    let m = make_ws("app-append-none", SELECT_CAM, &[]);
+    let e = check("ios", &m, &observed).unwrap_err();
+    assert!(
+        e.contains("UIBackgroundModes") && e.contains("com.apple.developer.healthkit"),
+        "{e}"
+    );
+    // アプリが追記すれば通る（キー単位。追記していない他のキーは従来どおり違反）。
+    let app = format!(
+        "{SELECT_CAM}[package.metadata.fandhe-app.ios.info-plist]\nUIBackgroundModes = [\"fetch\"]\n\
+         [package.metadata.fandhe-app.ios.entitlements]\n\"com.apple.developer.healthkit\" = true\n"
+    );
+    let m = make_ws("app-append", &app, &[]);
+    check("ios", &m, &observed).unwrap();
+    let e = check(
+        "ios",
+        &m,
+        &format!("{IOS_CLEAN}<key>com.apple.developer.nfc.readersession.formats</key>"),
+    )
+    .unwrap_err();
+    assert!(e.contains("nfc"), "{e}");
+}
+
+/// 修飾子つきの追記（`UIBackgroundModes~ipad`）でも、機能が宣言する素のキーは禁止にしない。
+#[test]
+fn app_appended_qualified_keys_allow_the_base_key() {
+    let observed =
+        format!("{IOS_CLEAN}<key>UIBackgroundModes</key><array><string>fetch</string></array>\n");
+    let app = format!(
+        "{SELECT_CAM}[package.metadata.fandhe-app.ios.info-plist]\n\"UIBackgroundModes~ipad\" = [\"fetch\"]\n"
+    );
+    let m = make_ws("app-append-qualified", &app, &[]);
+    check("ios", &m, &observed).unwrap();
 }
