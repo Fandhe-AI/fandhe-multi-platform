@@ -11,17 +11,14 @@
 
 use super::card::{Card, Separator};
 use super::checkbox::Checkbox;
-use super::dialog::Dialog;
+use super::dialog_widget::DialogWidget;
 use super::icon::Icon;
-use super::image::Image;
-use super::label::Label;
-use super::list_view::ListView;
+use super::image_widget::ImageWidget;
 use super::menu::Menu;
 use super::node::Node;
 use super::progress::{ProgressBar, Spinner};
 use super::radio_button::RadioButton;
 use super::render_mode::RenderMode;
-use super::scroll_view::ScrollView;
 use super::slider::Slider;
 use super::stack_grid::{Grid, Stack};
 use super::tabs::Tabs;
@@ -289,23 +286,6 @@ impl<S> Screen<S> {
         })
     }
 
-    /// 状態 `S` に束縛されたラベル・テキストウィジェット（[`Label`]）を末尾に追加する
-    /// （TASK-8.3-S10 / REQ-8 / REQ-13、Issue #105）。`.text()` は状態非依存の静的文字列
-    /// （`Node::Text`）を追加するのに対し、本メソッドは `Node::Widget(Box<dyn Widget<S>>)`
-    /// 経由で `Label::bound` を組み込み、状態変化に追随する表示を提供する。
-    ///
-    /// **未配線契約**: `render_headless` は現時点で `Node::Widget` を状態非依存の
-    /// プレースホルダとして扱い、`paint()` への委譲を行わない（`widget.rs` の
-    /// `Widget::sync_from_state` doc 参照）。そのため本メソッドが追加したラベルは、
-    /// reconcile/sync パスが確立するまでヘッドレス描画スナップショットに
-    /// 現れない。`WidgetHarness` 等を通じた `Label` の直接駆動・検証は可能。
-    pub fn label(self, id: WidgetId, get: crate::state::ReadFn<S, String>) -> Self
-    where
-        S: 'static,
-    {
-        self.with_node(Node::Widget(Box::new(Label::bound(id, get))))
-    }
-
     /// ラベル付きテキスト入力欄ウィジェットを追加する（ビルダー形式、TASK-8.3-S13 /
     /// Issue #108）。
     ///
@@ -344,33 +324,8 @@ impl<S> Screen<S> {
         ))))
     }
 
-    /// 状態 `S` に束縛されたリストウィジェット（[`ListView`]）を末尾に追加する
-    /// （TASK-8.3-S16 / REQ-8 / REQ-13、Issue #111）。`.label()` と対称の糖衣構文。
-    ///
-    /// 既存の `.list()`（`Node::List`、子 `Node<S>` を状態から展開する DSL 側の機構）
-    /// とは別物である点に注意。本メソッドは `Node::Widget(Box<dyn Widget<S>>)` 経由で
-    /// `ListView::bound` を組み込み、状態変化に追随する項目列表示を提供する
-    /// （`Widget<S>` トレイトを実装する具体ウィジェット層、S2 / #97）。
-    ///
-    /// **未配線契約**: `.label()` と同じく、`render_headless` は
-    /// `Node::Widget` を状態非依存のプレースホルダとして扱い、`paint()` への委譲を
-    /// 行わない（`widget.rs` の `Widget::sync_from_state` doc 参照）。そのため本メソッドで
-    /// 追加したリストは、reconcile/sync パスが確立するまでヘッドレス描画スナップショットに
-    /// 現れない。`WidgetHarness` 等を通じた `ListView` の直接駆動・検証は可能。
-    pub fn list_view(
-        self,
-        id: WidgetId,
-        len: crate::state::ReadFn<S, usize>,
-        item: crate::state::ReadIndexedFn<S, String>,
-    ) -> Self
-    where
-        S: 'static,
-    {
-        self.with_node(Node::Widget(Box::new(ListView::bound(id, len, item))))
-    }
-
     /// チェックボックスウィジェットを追加する（ビルダー形式、TASK-8.3-S19 /
-    /// Issue #114）。`.label()` / `.text_input()` と対称の糖衣構文。
+    /// Issue #114）。`.text_input()` と対称の糖衣構文。
     ///
     /// `Node::Widget(Box::new(Checkbox::bound(..)))` を組み立てて [`Self::with_node`] に
     /// 委譲する。`id` はツリー上で一意な識別子（[`super::widget::WidgetId`]）、
@@ -396,7 +351,7 @@ impl<S> Screen<S> {
     }
 
     /// 状態 `S` に束縛されたラジオボタンウィジェット（[`RadioButton`]）を末尾に追加する
-    /// （TASK-8.3-S22 / REQ-8 / REQ-13、Issue #117）。`.label()` / `.text_input()` と
+    /// （TASK-8.3-S22 / REQ-8 / REQ-13、Issue #117）。`.text_input()` と
     /// 対称の糖衣構文。
     ///
     /// `Node::Widget(Box::new(RadioButton::bound(..)))` を組み立てて [`Self::with_node`] に
@@ -537,24 +492,26 @@ impl<S> Screen<S> {
         self.with_node(Node::Widget(Box::new(Spinner::new(id))))
     }
 
-    /// 状態 `S` に依存しない固定のアセット識別子を持つ画像ウィジェット（[`Image`]）を
-    /// 末尾に追加する（TASK-8.3-S34 / REQ-8 / REQ-9 / REQ-13、Issue #129）。
-    /// `.label()` / `.checkbox()` 等と対称の糖衣構文。
+    /// 状態 `S` に依存しない固定のアセット識別子を持つ画像（[`ImageWidget`]）を末尾に追加する
+    /// （TASK-8.3-S34 / REQ-8 / REQ-9 / REQ-13、Issue #129・#1427）。
     ///
-    /// `Node::Widget(Box::new(Image::fixed(..)))` を組み立てて [`Self::with_node`] に
-    /// 委譲する。`id` はツリー上で一意な識別子（[`super::widget::WidgetId`]）、`source` は
-    /// 画像ソース識別子（パス・URL 等の不透明文字列。`fandhe-core` は実デコード・I/O を
-    /// 一切行わない、`image` モジュール doc 参照）、`alt` は代替テキスト（REQ-9）。
+    /// `Node::Widget(Box::new(ImageWidget::fixed(..)))` を組み立てて [`Self::with_node`] に
+    /// 委譲する糖衣構文。`id` はツリー上で一意な識別子、`source` は画像ソース識別子、`alt` は
+    /// 代替テキスト（REQ-9）。
     ///
-    /// **未配線**: `render_headless` 等は `Node::Widget` を状態非依存のプレースホルダとして
-    /// 扱う契約（[`super::widget::Widget::sync_from_state`] のドキュメンテーションコメント
-    /// 参照）を維持する。ロード中・エラー時の状態遷移とイベント処理は未接続。
-    /// `WidgetCatalog`（`catalog.rs` の `image` エントリ）には登録済み。
+    /// **画素はこのメソッドだけでは出ない**。`source` はファイルパスや URL を読み込むものではなく、
+    /// アプリ（端末機能の effect ドライバ等）が `fandhe_runtime::image_store::put`（入口 crate からは
+    /// `fandhe::runtime::image_store::put`）で同じ識別子の画素を置いたときだけ、`fandhe-render-egui` が
+    /// 実画素を描く。置けるのは同時に 1 枚。一致する画素が無く `source` が空でないときは、`alt` を
+    /// 文字で描く（`source` が空のときは何も描かない）。固定の画像を出すなら [`Self::rgba_image`]。
+    ///
+    /// Issue #1427 より、以前の [`super::image::Image`]（egui で描かれない別型）ではなく、
+    /// 描かれる [`ImageWidget`] を作る。
     pub fn image(self, id: WidgetId, source: impl Into<String>, alt: impl Into<String>) -> Self
     where
         S: 'static,
     {
-        self.with_node(Node::Widget(Box::new(Image::fixed(id, source, alt))))
+        self.with_node(Node::Widget(Box::new(ImageWidget::fixed(id, source, alt))))
     }
 
     /// 実画素（RGBA8）の画像ノード [`Node::RgbaImage`] を末尾に追加する（Issue #5）。
@@ -567,17 +524,11 @@ impl<S> Screen<S> {
         })
     }
 
-    /// 状態 `S` に束縛されたアセット識別子を持つ画像ウィジェット（[`Image`]）を
-    /// 末尾に追加する（TASK-8.3-S34 / REQ-8 / REQ-9 / REQ-13、Issue #129）。`.image()` の
-    /// 状態束縛版で、`.label()` と対称の糖衣構文。
-    ///
-    /// `Node::Widget(Box::new(Image::bound(..)))` を組み立てて [`Self::with_node`] に
-    /// 委譲する。`get` は [`crate::state`] の SSOT 型エイリアス（[`crate::state::ReadFn`]）と
-    /// 代入互換の関数ポインタで、環境キャプチャクロージャを型レベルで拒否する
-    /// （REQ-13）。`alt` は代替テキスト（REQ-9）。
-    ///
-    /// **未配線**: `.image()` と同様、状態・イベント処理は未接続。`WidgetCatalog` には
-    /// `Image<S>`（fixed 版、`catalog.rs` の `image` エントリ）が登録済み。
+    /// 状態 `S` に束縛されたアセット識別子を持つ画像（[`ImageWidget`]）を末尾に追加する
+    /// （TASK-8.3-S34 / REQ-8 / REQ-9 / REQ-13、Issue #129・#1427）。[`Self::image`] の状態束縛版。
+    /// `get` は [`crate::state::ReadFn`] と代入互換の関数ポインタ（環境キャプチャクロージャを
+    /// 型レベルで拒否する、REQ-13）。`alt` は代替テキスト（REQ-9）。
+    /// 描画の条件は [`Self::image`] と同じ。
     pub fn image_bound(
         self,
         id: WidgetId,
@@ -587,7 +538,7 @@ impl<S> Screen<S> {
     where
         S: 'static,
     {
-        self.with_node(Node::Widget(Box::new(Image::bound(id, get, alt))))
+        self.with_node(Node::Widget(Box::new(ImageWidget::bound(id, get, alt))))
     }
 
     /// 状態 `S` に依存しない固定のアイコン名を持つアイコンウィジェット（[`Icon`]）を
@@ -627,29 +578,9 @@ impl<S> Screen<S> {
         self.with_node(Node::Widget(Box::new(Icon::bound(id, get, label))))
     }
 
-    /// 単一の子コンテンツを持つスクロールビューウィジェット（[`ScrollView`]）を
-    /// 末尾に追加する（TASK-8.3-S40 / REQ-8 / REQ-9、Issue #135）。`.image()` と
-    /// 同様式の糖衣構文で、`Node::Widget(Box::new(ScrollView::new(..)))` を組み立てて
-    /// [`Self::with_node`] に委譲する。
-    ///
-    /// 本ウィジェットセット初のコンテナ型であり、`content` にはこの `Screen<S>` と
-    /// 同じ状態型 `S` を扱う任意の `Widget<S>` 実装を渡せる。既定のスクロール軸は
-    /// 縦方向のみ（[`super::widget::AccessibilityRole::ScrollView`] のモジュール doc・
-    /// `scroll_view` モジュール doc 参照）。
-    ///
-    /// **未配線**: ホイール・ドラッグ等のスクロール入力の実配線、状態 `S` に束縛された
-    /// スクロールオフセットの糖衣構文・テスト網羅拡充は未着手。`WidgetCatalog`
-    /// （`catalog.rs` の `scroll_view` エントリ）には登録済み。
-    pub fn scroll_view(self, id: WidgetId, content: impl Widget<S> + 'static) -> Self
-    where
-        S: 'static,
-    {
-        self.with_node(Node::Widget(Box::new(ScrollView::new(id, content))))
-    }
-
     /// 構築済みの [`Stack`] を末尾に追加する（TASK-8.3-S43 / REQ-8 / REQ-9、
     /// Issue #138）。本ウィジェットセット初の複数子コンテナであり、複数子は
-    /// ビルダー引数で表現しづらいため、`.image()` / `.scroll_view()` のような
+    /// ビルダー引数で表現しづらいため、`.image()` のような
     /// 引数分解形式ではなく、呼び出し側で組み立て済みの `Stack<S>` を受け取る
     /// 形とする（`stack_grid` モジュール doc §3.3 参照）。
     pub fn stack(self, stack: Stack<S>) -> Self
@@ -669,35 +600,21 @@ impl<S> Screen<S> {
         self.with_node(Node::Widget(Box::new(grid)))
     }
 
-    /// 状態 `S` に束縛されたダイアログ・モーダルウィジェット（[`Dialog`]）を末尾に
-    /// 追加する（TASK-8.3-S46 / REQ-8、Issue #141）。`.slider()` / `.scroll_view()` と
-    /// 対称の糖衣構文。
-    ///
-    /// `Node::Widget(Box::new(Dialog::bound(..)))` を組み立てて [`Self::with_node`] に
-    /// 委譲する。`id` はツリー上で一意な識別子（[`super::widget::WidgetId`]）、
-    /// `open` は開閉状態を読み取る [`crate::state::ReadFn`]（環境キャプチャクロージャを
-    /// 型レベルで拒否する、REQ-13）。既定はモーダル・子コンテンツなしで、
-    /// `Dialog::with_modal` / `Dialog::with_content` を使う場合は組み立て済みの
-    /// `Dialog<S>` を直接 [`Self::with_node`] へ渡す。
-    ///
-    /// **未配線**: `render_headless` 等は `Node::Widget` を状態非依存のプレースホルダとして
-    /// 扱う契約（`dialog` モジュール doc 参照）を維持する。開閉イベント配線は未接続。
-    /// `WidgetCatalog`（`catalog.rs` の `dialog` エントリ）には登録済み。
-    pub fn dialog(
-        self,
-        id: WidgetId,
-        title: impl Into<String>,
-        body: impl Into<String>,
-        open: crate::state::ReadFn<S, bool>,
-    ) -> Self
+    /// 構築済みの [`DialogWidget`]（ダイアログ・モーダル）を末尾に追加する（Issue #1427）。
+    /// [`Self::stack`] と同じく、組み立て済みの型を受け取り `.with_node(Node::Widget(Box::new(..)))` の
+    /// 手間を省く。`fandhe-render-egui` は開状態のとき前面パネル + スクリムで描く。
+    /// 開閉・子ノード（`with_content`）・外側タップで閉じるための `dismiss_label` と同名の
+    /// `Node::Button` の約束は `DialogWidget` と `docs/ai/SCHEMA.md` を参照。
+    /// 以前あった `.dialog(id, title, body, open)` は描かれない [`super::dialog::Dialog`] を作っていたため削除した。
+    pub fn dialog(self, dialog: DialogWidget<S>) -> Self
     where
         S: 'static,
     {
-        self.with_node(Node::Widget(Box::new(Dialog::bound(id, title, body, open))))
+        self.with_node(Node::Widget(Box::new(dialog)))
     }
 
     /// メニュー・ドロップダウンを構築して追加する糖衣構文（TASK-8.3-S49 / REQ-8、
-    /// Issue #144。[`Self::dialog`] S46 と対称のパターン）。
+    /// Issue #144。[`Self::dialog`] と対称のパターン）。
     ///
     /// `Node::Widget(Box::new(Menu::bound(..)))` を組み立てて [`Self::with_node`] に
     /// 委譲する。`id` はツリー上で一意な識別子（[`super::widget::WidgetId`]）、
@@ -1261,32 +1178,6 @@ mod tests {
         assert_eq!(visited, vec!["outer-a", "inner-a", "inner-b"]);
     }
 
-    /// `list_view()` ビルダーで `Node::Widget` がツリーに追加されることを検証する
-    /// （TASK-8.3-S16 / Issue #111）。`ListView` 自体の詳細な挙動テストは
-    /// `ui/list_view.rs` のユニットテストが担い、本テストは `Screen` 側の
-    /// ツリー構築が壊れないことのみを確認する。
-    #[test]
-    fn list_view_builder_adds_widget_node() {
-        fn read_len(_state: &CounterState) -> usize {
-            2
-        }
-        fn read_item(_state: &CounterState, index: usize) -> String {
-            format!("item-{index}")
-        }
-
-        let screen: Screen<CounterState> = Screen::new("リストウィジェット画面").list_view(
-            super::WidgetId::from_raw(1),
-            read_len,
-            read_item,
-        );
-
-        assert_eq!(screen.len(), 1);
-        match screen.iter().next() {
-            Some(Node::Widget(_)) => {}
-            _ => panic!("Widget バリアントであるべき"),
-        }
-    }
-
     /// `radio_button()` ビルダーで `Node::Widget` がツリーに追加されることを検証する
     /// （TASK-8.3-S22 / Issue #117）。`RadioButton` 自体の詳細な挙動テスト（排他選択・
     /// 描画・ヒットテスト等）は `ui/radio_button.rs` のユニットテストが担い、本テストは
@@ -1313,9 +1204,16 @@ mod tests {
         }
     }
 
-    /// `image()` ビルダーで `Node::Widget` がツリーに追加されることを検証する
-    /// （TASK-8.3-S34 / Issue #129）。`Image` 自体の詳細な挙動テスト（measure・paint・
-    /// hit_test 等）は `ui/image.rs` のユニットテストが担い、本テストは `Screen` 側の
+    /// `.image()` / `.image_bound()` が egui で描かれる `ImageWidget` を作ることの判定（Issue #1427）。
+    /// 描かれない別型 `Image` へ戻すと偽になる。
+    fn is_image_widget(node: Option<&Node<CounterState>>) -> bool {
+        matches!(node, Some(Node::Widget(w))
+            if w.as_any().is_some_and(|a| a.is::<super::ImageWidget<CounterState>>()))
+    }
+
+    /// `image()` ビルダーで `ImageWidget` の `Node::Widget` がツリーに追加されることを検証する
+    /// （TASK-8.3-S34 / Issue #129）。`ImageWidget` 自体の詳細な挙動テスト（measure・paint・
+    /// hit_test 等）は `ui/image_widget.rs` のユニットテストが担い、本テストは `Screen` 側の
     /// ツリー構築が壊れないことのみを確認する。
     #[test]
     fn image_builder_adds_widget_node() {
@@ -1323,15 +1221,12 @@ mod tests {
             Screen::new("画像画面").image(super::WidgetId::from_raw(1), "assets/logo.png", "ロゴ");
 
         assert_eq!(screen.len(), 1);
-        match screen.iter().next() {
-            Some(Node::Widget(_)) => {}
-            _ => panic!("Widget バリアントであるべき"),
-        }
+        assert!(is_image_widget(screen.iter().next()));
     }
 
     /// `image_bound()` ビルダーで `Node::Widget` がツリーに追加されることを検証する
     /// （TASK-8.3-S34 / Issue #129）。`.image()` と同じく `Screen` 側のツリー構築の
-    /// みを確認し、状態束縛の挙動詳細は `ui/image.rs` のユニットテストに委ねる。
+    /// みを確認し、状態束縛の挙動詳細は `ui/image_widget.rs` のユニットテストに委ねる。
     #[test]
     fn image_bound_builder_adds_widget_node() {
         fn get_avatar_url(_state: &CounterState) -> String {
@@ -1345,10 +1240,7 @@ mod tests {
         );
 
         assert_eq!(screen.len(), 1);
-        match screen.iter().next() {
-            Some(Node::Widget(_)) => {}
-            _ => panic!("Widget バリアントであるべき"),
-        }
+        assert!(is_image_widget(screen.iter().next()));
     }
 
     /// `icon()` ビルダーで `Node::Widget` がツリーに追加されることを検証する

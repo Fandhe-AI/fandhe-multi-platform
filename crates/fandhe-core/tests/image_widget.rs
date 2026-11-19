@@ -1,15 +1,15 @@
-//! `Image<S>`（画像ウィジェット）の結合テスト（TASK-8.3-S36 / REQ-8、Issue #131）。
+//! `Screen::image()` / `Image<S>`（画像ウィジェット）の結合テスト（TASK-8.3-S36 / REQ-8、Issue #131・#1427）。
 //!
 //! 親 issue #95（TASK-8.3）の一部。`Screen::image()` / `Screen::image_bound()` が
-//! 生成する `Node::Widget` が、既存の `WidgetHarness`（TASK-8.3-S5 / #100）を
+//! 生成する `Node::Widget`（Issue #1427 以降は `ImageWidget<S>`）が、既存の `WidgetHarness`（TASK-8.3-S5 / #100）を
 //! 通じてもフレームループ・バージョン再利用の意味論（S5 契約）を壊さないこと、および
 //! `render_headless`（`Node::Widget` プレースホルダ契約、`widget.rs` 参照）に対して
 //! 未配線のまま安全側（無出力）であることを検証する。`tests/toggle_switch_widget.rs`
 //! のパターンを画像向けに踏襲する。
 //!
-//! ロード状態遷移は自己完結の別型 `ImageWidget<S>`（`image_widget.rs`）が担い、本ファイルの
-//! 対象外（Issue #130 のスコープ）。本テストは `Image::fixed` / `Image::bound` /
-//! `Widget` トレイト直接呼び出しの範囲でのみ検証する。
+//! ロード状態遷移は `ImageWidget<S>`（`image_widget.rs`）が担い、本ファイルの
+//! 対象外（Issue #130 のスコープ）。型としての `Image::fixed` / `Image::bound`（`Screen` の
+//! ビルダーは作らなくなった別型）は `Widget` トレイト直接呼び出しの範囲でのみ検証する。
 
 use fandhe_core::{
     Image, LifecyclePhase, Measurement, Node, PaintCommand, Screen, Widget, WidgetHarness,

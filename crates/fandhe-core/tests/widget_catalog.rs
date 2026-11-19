@@ -15,11 +15,11 @@ use fandhe_core::ui::{CatalogCategory, CatalogEntry, CatalogError, WidgetCatalog
 /// Checkbox / Slider / ProgressBar / Spinner / Card / Separator の 22 エントリをこの順で
 /// 保持することを確認する。`stack` / `grid` は `Stack<S>` / `Grid<S>`（Issue #138）へ
 /// `Screen::stack` / `Screen::grid` 経由で接続するエントリ。`dialog` は `Dialog<S>`
-/// （Issue #141）へ `Screen::dialog` 経由で接続するエントリ。`menu` は `Menu<S>`
+/// （Issue #141）へ `Screen::with_node` 経由で接続するエントリ。`menu` は `Menu<S>`
 /// （Issue #144）へ `Screen::menu` 経由で接続するエントリ。`tabs` は `Tabs<S>`
 /// （Issue #147）へ `Screen::tabs` 経由で接続するエントリ。`tooltip` は `Tooltip<S>`
 /// （Issue #150）へ `Screen::tooltip` 経由で接続するエントリ。`label` は `Label<S>`
-/// （Issue #105）へ `Screen::label` 経由で接続するエントリ（`catalog.rs` の
+/// （Issue #105）へ `Screen::with_node` 経由で接続するエントリ（`catalog.rs` の
 /// `with_builtins` doc 参照）。`checkbox` は `Checkbox<S>`（Issue #114）へ
 /// `Screen::checkbox` 経由で接続するエントリ。`slider` は `Slider<S>`（Issue #123）へ
 /// `Screen::slider` 経由で接続するエントリ（状態・イベント処理は Issue #124 のスコープ、

@@ -3,7 +3,7 @@
 //!
 //! 親 issue #95（TASK-8.3「ウィジェットセット新規開発」）の一部。
 //! `crates/fandhe-core/src/ui/catalog.rs` の `dialog` エントリは `Dialog<S>`
-//! （`dialog.rs` 参照）へ `Screen::dialog` 経由で接続する（`catalog.rs` の
+//! （`dialog.rs` 参照）へ `Screen::with_node` 経由で接続する（`catalog.rs` の
 //! `with_builtins` / `dialog_preview_screen` / `preview_dialog` doc 参照）。
 //!
 //! 開閉イベント配線（背景クリック・Esc・閉じるボタンによる書き込み）・フォーカス
@@ -11,7 +11,7 @@
 //! `Dialog::bound` / `Widget<S>` トレイト直接呼び出し・`WidgetHarness`・
 //! `WidgetCatalog` の 3 経路から公開 API のみを用いて検証する:
 //!
-//! 1. `WidgetHarness` 契約（S5 / #100）: `.dialog()` を含む画面でもフレームループの
+//! 1. `WidgetHarness` 契約（S5 / #100）: `Dialog` を含む画面でもフレームループの
 //!    バージョン再利用・初回ライフサイクル順（Declared → Mounted → Layout → Paint）が
 //!    壊れないこと。
 //! 2. `render_headless` プレースホルダ契約: `Node::Widget` は未配線のまま安全側
@@ -39,12 +39,12 @@ fn get_dialog_open(state: &FormState) -> bool {
 }
 
 fn dialog_screen() -> Screen<FormState> {
-    Screen::new("フォーム画面").dialog(
+    Screen::new("フォーム画面").with_node(Node::Widget(Box::new(Dialog::bound(
         WidgetId::from_raw(1),
         "確認",
         "保存しますか？",
         get_dialog_open,
-    )
+    ))))
 }
 
 fn sized(width: f32, height: f32) -> Measurement {
@@ -53,7 +53,7 @@ fn sized(width: f32, height: f32) -> Measurement {
 
 // --- (1) WidgetHarness 契約 -------------------------------------------------
 
-/// (1) `.dialog()` を含む `Screen` を `WidgetHarness` で駆動しても、S5 契約
+/// (1) `Dialog` を含む `Screen` を `WidgetHarness` で駆動しても、S5 契約
 /// （バージョン不変ならスナップショットを再利用する）が壊れないことを検証する。
 #[test]
 fn run_frame_reuses_snapshot_when_version_is_unchanged_for_dialog_screen() {
@@ -105,16 +105,18 @@ fn render_headless_snapshot_does_not_contain_dialog_line() {
     assert_eq!(snapshot, vec!["# フォーム画面".to_string()]);
 }
 
-/// `.dialog()` 混在時も他バリアント（`.text()` 等）の描画・走査に影響しないことを
+/// `Dialog` 混在時も他バリアント（`.text()` 等）の描画・走査に影響しないことを
 /// 確認する（既存バリアントとの後方互換性、`Node::Widget` 追加時の回帰防止）。
 #[test]
 fn dialog_does_not_affect_rendering_of_other_node_variants() {
-    let screen: Screen<FormState> = Screen::new("混在画面").text("見出し").dialog(
-        WidgetId::from_raw(1),
-        "確認",
-        "本文",
-        get_dialog_open,
-    );
+    let screen: Screen<FormState> = Screen::new("混在画面")
+        .text("見出し")
+        .with_node(Node::Widget(Box::new(Dialog::bound(
+            WidgetId::from_raw(1),
+            "確認",
+            "本文",
+            get_dialog_open,
+        ))));
     let state = FormState { dialog_open: false };
 
     let snapshot = render_headless(&screen, &state);

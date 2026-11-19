@@ -2,11 +2,11 @@
 //!
 //! `FANDHE_PROXY_APP=containers` で選ばれ、`crates/fandhe-gallery/src/screens/registry.rs`
 //! から呼ばれる（`screens/mod.rs` の `pub mod containers;` と対）。`fandhe-render-egui` が
-//! 子を再帰的に描き、子の操作を状態へ書き戻すことの目視確認用。子は `Checkbox` と `ProgressBar`
-//! （`Widget` 側で描かれる部品）を使う。子 `Label` は #1427 の結論待ちで描かれないため使わない。
+//! 子を再帰的に描き、子の操作を状態へ書き戻すことの目視確認用。子は `Checkbox`・`ProgressBar`・`Label`
+//! （文字。Issue #1427 で描かれるようになった。状態を読む `Label::bound` も使う）。
 
 use crate::ui::FlexDirection;
-use crate::{Card, Checkbox, Grid, Node, ProgressBar, Screen, Stack, Tooltip, WidgetId};
+use crate::{Card, Checkbox, Grid, Label, Node, ProgressBar, Screen, Stack, Tooltip, WidgetId};
 
 /// 子のチェックボックスの値。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -104,6 +104,7 @@ pub fn containers_screen() -> Screen<ContainersState> {
         .stack(
             Stack::new(id(1))
                 .with_spacing(4.0)
+                .with_child(Label::fixed(id(10), "縦の見出し（Label）"))
                 .with_child(check(11, "縦 1", get_stack_a, set_stack_a))
                 .with_child(ProgressBar::bound(id(12), "進捗", progress)),
         )
@@ -125,6 +126,7 @@ pub fn containers_screen() -> Screen<ContainersState> {
         .card(
             Card::new(id(4))
                 .with_padding(8.0)
+                .with_child(Label::bound(id(40), summary))
                 .with_child(check(41, "カードの中", get_card, set_card))
                 .with_child(ProgressBar::bound(id(42), "カードの進捗", progress)),
         )
@@ -136,5 +138,7 @@ pub fn containers_screen() -> Screen<ContainersState> {
                 set_anchor,
             )),
         )))
+        // 画素を置いていない識別子の `.image()`。alt が文字で出る（Issue #1427）。
+        .image(id(6), "unplaced-image", "画像の代替文字（画素は未配置）")
         .dynamic_text(summary)
 }

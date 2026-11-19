@@ -62,7 +62,7 @@ L215〜223）の受け入れ基準 1「独自レンダラ方式でのフォー�
 - **フォーカス可能ノードに安定した識別子がない**: `Node::Button` / `Node::IndexedButton`（3.1 節で
   フォーカス可能と定義する 2 バリアント）は現状 `label: String` のみを識別情報として持つ。ラベルは
   兄弟間で一意である保証がなく、表示文言の変更や項目の挿入・削除・並べ替えで「同じ path が別の論理項目を
-  指す」状況を label だけでは判別できない。一方 `Node::Widget` 系列（`.label()` / `.checkbox()` /
+  指す」状況を label だけでは判別できない。一方 `Node::Widget` 系列（`.checkbox()` /
   `.radio_button()` 等、TASK-8.3-S2 以降）はすでに `WidgetId`（`widget.rs`、`u64` ラップの
   `Copy + Eq + Hash` な一意識別子で `Screen` 構築時に開発者が明示的に割り当てる）を持つ。**本書は
   この既存の `WidgetId` の考え方を `Node::Button` / `Node::IndexedButton` へ拡張し、フォーカス可能な
@@ -84,7 +84,7 @@ L215〜223）の受け入れ基準 1「独自レンダラ方式でのフォー�
 
 **型変更**: `Node::Button` / `Node::IndexedButton` へ
 `id: super::widget::WidgetId` フィールドを追加する。既存の `Node::Widget` 系ビルダー
-（`.label(id, get)` 等）とまったく同じ「開発者が `Screen` 構築時に一意な `WidgetId` を明示的に割り当てる」
+（`.checkbox(id, ..)` 等）とまったく同じ「開発者が `Screen` 構築時に一意な `WidgetId` を明示的に割り当てる」
 契約であり、新規の識別子体系ではない（2 節）。
 
 ```rust

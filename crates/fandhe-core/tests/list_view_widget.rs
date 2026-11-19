@@ -1,7 +1,7 @@
 //! `ListView`（TASK-8.3-S16 / REQ-8 / REQ-13、Issue #111）の結合テスト。
 //!
 //! 親 issue #95 の一部。`tests/label_widget.rs`・`tests/button_widget.rs` の構成を
-//! 踏襲し、`Screen::list_view` ビルダーを含む画面を `WidgetHarness` で駆動して、
+//! 踏襲し、`ListView::bound`（`.with_node()`） ビルダーを含む画面を `WidgetHarness` で駆動して、
 //! (a) フレームループ・バージョン再利用の意味論が `Node::Widget` 追加によって
 //! 壊れないこと、(b) `render_headless` スナップショットにウィジェット行が現れない
 //! （`widget.rs` の未配線契約の固定化）ことを検証する。加えて `ListView` を直接駆動
@@ -18,7 +18,7 @@ use fandhe_core::{
     WidgetId, render_headless,
 };
 
-/// 項目一覧を保持する状態。`Screen::list_view` の束縛先として使う。
+/// 項目一覧を保持する状態。`ListView::bound`（`.with_node()`） の束縛先として使う。
 #[derive(Default)]
 struct TodoList {
     items: Vec<String>,
@@ -39,11 +39,15 @@ fn add_item(state: &mut TodoList) {
 fn list_screen() -> Screen<TodoList> {
     Screen::new("home")
         .text("見出し")
-        .list_view(WidgetId::from_raw(1), read_len, read_item)
+        .with_node(Node::Widget(Box::new(ListView::bound(
+            WidgetId::from_raw(1),
+            read_len,
+            read_item,
+        ))))
         .button(WidgetId::from_raw(2), "add", add_item)
 }
 
-/// `.list_view()` を含む画面でもフレームループ・バージョン再利用の意味論
+/// `ListView` を含む画面でもフレームループ・バージョン再利用の意味論
 /// （`WidgetHarness` 共通契約、TASK-8.3-S5）が壊れないことを確認する回帰テスト。
 #[test]
 fn list_view_screen_does_not_break_harness_frame_loop_semantics() {
@@ -67,7 +71,7 @@ fn list_view_screen_does_not_break_harness_frame_loop_semantics() {
 /// 返すため、`sync_from_state` を経ていない（キャッシュが空の）状態のまま検証すると
 /// `paint()` への委譲が復活しても出力が変わらず、回帰を検知できない
 /// （Cursor Bugbot 指摘 f3f6d4a1-a385-4529-a118-3373d45fbec7）。そのため本テストは
-/// `Screen::list_view` ビルダー（キャッシュ未同期）を使わず、`ListView::bound` を
+/// `ListView::bound`（`.with_node()`） ビルダー（キャッシュ未同期）を使わず、`ListView::bound` を
 /// 直接 `sync_from_state` で同期して項目を非空にしたうえで `Node::Widget` として
 /// 組み込み、`render_headless` を直接呼び出す。これにより `paint()` への委譲が
 /// 復活すれば `PaintCommand::Text` 相当の行が追加され、完全一致が崩れて検知できる。

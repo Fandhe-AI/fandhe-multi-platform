@@ -7,7 +7,7 @@
 //!
 //! ## `DialogWidget` 方式（Issue #739）
 //!
-//! `Screen::dialog`（`Dialog<S>`、S46）は実描画・開閉イベント未配線のまま
+//! `Dialog<S>`（S46。`Screen::dialog` は Issue #1427 で削除）は実描画・開閉イベント未配線のまま
 //! （`docs/ai/SCHEMA.md` 参照）だが、[`crate::ui::DialogWidget`]（S47）に
 //! `Widget::children` 経由の子ノード降下（[`DialogWidget::with_content`]）が加わったため
 //! （`ui/widget.rs` / `ui/node.rs::expand_children` / `ui/event.rs::resolve_node_at`）、
@@ -207,7 +207,7 @@ pub fn confirm_dialog_screen(state: &ConfirmDialogState) -> Screen<ConfirmDialog
     let screen = Screen::new("メモ")
         .text("メモ一覧")
         .list(expand_memo_rows)
-        .with_node(Node::Widget(Box::new(dialog)));
+        .dialog(dialog);
 
     if confirming {
         screen.on_back(cancel_delete)

@@ -1,7 +1,7 @@
 //! `ScrollView<S>`（スクロールビューウィジェット）の結合テスト（TASK-8.3-S42 / REQ-8、
 //! Issue #137）。
 //!
-//! 親 issue #95（TASK-8.3）の一部。`Screen::scroll_view()` が生成する `Node::Widget`
+//! 親 issue #95（TASK-8.3）の一部。`ScrollView` が生成する `Node::Widget`
 //! が、既存の `WidgetHarness`（TASK-8.3-S5 / #100）を通じてもフレームループ・
 //! バージョン再利用の意味論（S5 契約）を壊さないこと、および `render_headless`
 //! （`Node::Widget` プレースホルダ契約、`widget.rs` 参照）に対して未配線のまま安全側
@@ -24,13 +24,13 @@ use fandhe_core::{
 struct FeedState;
 
 fn feed_screen() -> Screen<FeedState> {
-    Screen::new("フィード画面").scroll_view(
+    Screen::new("フィード画面").with_node(Node::Widget(Box::new(ScrollView::new(
         WidgetId::from_raw(1),
         Label::fixed(WidgetId::from_raw(2), "フィード一覧"),
-    )
+    ))))
 }
 
-/// (1) `.scroll_view()` を含む `Screen` を `WidgetHarness` で駆動しても、S5 契約
+/// (1) `ScrollView` を含む `Screen` を `WidgetHarness` で駆動しても、S5 契約
 /// （バージョン不変ならスナップショットを再利用する）が壊れないことを検証する。
 #[test]
 fn run_frame_reuses_snapshot_when_version_is_unchanged_for_scroll_view_screen() {
@@ -78,15 +78,17 @@ fn render_headless_snapshot_does_not_contain_scroll_view_line() {
     assert_eq!(snapshot, vec!["# フィード画面".to_string()]);
 }
 
-/// `.scroll_view()` を使った画面でも他バリアント（`.text()` 等）の描画・走査に
+/// `ScrollView` を使った画面でも他バリアント（`.text()` 等）の描画・走査に
 /// 影響しないことを確認する（既存バリアントとの後方互換性、`Node::Widget` 追加時の
 /// 回帰防止）。
 #[test]
 fn scroll_view_does_not_affect_rendering_of_other_node_variants() {
-    let screen: Screen<FeedState> = Screen::new("混在画面").text("見出し").scroll_view(
-        WidgetId::from_raw(1),
-        Label::fixed(WidgetId::from_raw(2), "フィード"),
-    );
+    let screen: Screen<FeedState> = Screen::new("混在画面")
+        .text("見出し")
+        .with_node(Node::Widget(Box::new(ScrollView::new(
+            WidgetId::from_raw(1),
+            Label::fixed(WidgetId::from_raw(2), "フィード"),
+        ))));
     let state = FeedState;
 
     let snapshot = render_headless(&screen, &state);

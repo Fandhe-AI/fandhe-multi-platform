@@ -25,7 +25,9 @@
 //! | `Node::Widget(Slider)` | `label` + `input type="range"`（Issue #993） |
 //! | `Node::Widget(RadioButton)` | `label` + `input type="radio"`（Issue #993） |
 //! | `Node::RgbaImage` | `img`（`src` は無圧縮 PNG の data URL、Issue #5） |
-//! | `Node::Widget(ImageWidget)`（ソースが `blob:` で始まるとき） | `img`（Issue #1103）。それ以外は空プレースホルダ |
+//! | `Node::Widget(ImageWidget)`（ソースが `blob:` で始まるとき） | `img`（Issue #1103） |
+//! | `Node::Widget(ImageWidget)`（ソースが空でなく `blob:` でない） | `div role="img" aria-label=alt`（Issue #1427。画素は出ない） |
+//! | `Node::Widget(ImageWidget)`（ソースが空。写真選択の選ぶ前など） | 属性なしの空 `div` |
 
 use fandhe_core::{
     CanvasWidget, Checkbox, ImageWidget, Measurement, Node, PaintCommand, RadioButton, Screen,
@@ -505,8 +507,9 @@ fn convert_node<S: 'static>(
 
 /// `ImageWidget` を `img` へ変換する（Issue #1103、写真選択）。`src` へ出すのは
 /// `blob:` で始まるソースだけ（橋渡し層が復号確認後に作った URL。`javascript:`・`data:`・
-/// リモート URL・未配線の識別子は出さない、A03）。それ以外は `None` を返し、呼び出し元の
-/// 空プレースホルダへ任せる。複製へ `sync_from_state` をかけて読む（`convert_input_widget` と同じ）。
+/// リモート URL・未配線の識別子は出さない、A03）。`blob:` 以外は、ソースが空なら属性なしの空 `div`、
+/// 空でなければ alt を名前にした `role="img"` の `div`（Issue #1427）にする。
+/// 複製へ `sync_from_state` をかけて読む（`convert_input_widget` と同じ）。
 fn convert_image_widget<S: 'static>(widget: &dyn Widget<S>, state: &S) -> Option<DomNode> {
     if !widget
         .as_any()
@@ -519,7 +522,21 @@ fn convert_image_widget<S: 'static>(widget: &dyn Widget<S>, state: &S) -> Option
     let img = synced.as_any()?.downcast_ref::<ImageWidget<S>>()?;
     let src = img.source_text();
     if !src.starts_with("blob:") {
-        return None;
+        let attrs = if src.is_empty() {
+            Vec::new()
+        } else {
+            vec![
+                ("role".to_string(), "img".to_string()),
+                ("aria-label".to_string(), img.alt_text().to_string()),
+            ]
+        };
+        return Some(DomNode {
+            tag: "div".to_string(),
+            attrs,
+            text: Some(String::new()),
+            children: Vec::new(),
+            event_hook: None,
+        });
     }
     Some(DomNode {
         tag: "img".to_string(),
@@ -1874,6 +1891,28 @@ mod tests {
         let widget_dom = &dom.children[1];
         assert!(has_attr(widget_dom, "role", "group"));
         assert!(has_attr(widget_dom, "aria-label", "状態からの補足"));
+    }
+
+    /// `.image()` の識別子が `blob:` でなければ `img` にはならず、alt を `aria-label` に持つ
+    /// `role="img"` のプレースホルダになる。ソースが空なら属性なしの空 `div`（Issue #1427）。
+    #[test]
+    fn image_without_blob_source_is_placeholder_with_alt() {
+        let screen: Screen<CounterState> = Screen::new("t").image(
+            fandhe_core::WidgetId::from_raw(1),
+            "assets/logo.png",
+            "ロゴ",
+        );
+        let dom = build_dom_tree(&screen, &empty_state(), 0);
+        let widget_dom = &dom.children[1];
+        assert_eq!(widget_dom.tag, "div");
+        assert!(has_attr(widget_dom, "role", "img"));
+        assert!(has_attr(widget_dom, "aria-label", "ロゴ"));
+
+        let empty: Screen<CounterState> =
+            Screen::new("t").image(fandhe_core::WidgetId::from_raw(1), "", "ロゴ");
+        let dom = build_dom_tree(&empty, &empty_state(), 0);
+        assert_eq!(dom.children[1].tag, "div");
+        assert!(dom.children[1].attrs.is_empty());
     }
 
     /// 実画素の画像ノード（Issue #5）: `img` + PNG の data URL + alt で出る。

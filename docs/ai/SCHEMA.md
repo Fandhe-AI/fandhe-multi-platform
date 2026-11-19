@@ -235,12 +235,12 @@ fn main() {
 ### `ui::Screen<S>`（`crates/fandhe-core/src/ui/screen.rs`）
 
 1 画面の宣言的 UI 記述。状態型 `S` を固定した `Node<S>` のフラットな並びを保持する。
-`Debug` / `Clone` は手動実装。ウィジェット系ビルダー（`label` 以降）は共通して `where S: 'static`
+`Debug` / `Clone` は手動実装。ウィジェット系ビルダー（`text_input` 以降）は共通して `where S: 'static`
 を要求する（借用を持つ状態型は使えない）。
 
 `impl Into<String>` / `impl Widget<S> + 'static` を引数に取るメソッド（`new` / `text` /
 `text_field` / `button` / `text_input` / `checkbox` / `radio_button` / `toggle_switch` /
-`slider` / `progress_bar` / `image(_bound)` / `icon(_bound)` / `scroll_view` / `dialog` /
+`slider` / `progress_bar` / `image(_bound)` / `icon(_bound)` /
 `menu` / `tooltip`）は、`impl Trait` 引数が生む匿名ジェネリック型が fn ポインタ coercion と
 衝突し `let _: fn(...) = Screen::<S>::method;` へ代入できない（turbofish でも明示不可）ため、
 本節は 2 部構成とする: (1) `impl Trait` を取らないメソッド（`title` 等）は fn ポインタ代入、
@@ -252,7 +252,7 @@ fn main() {
 
 ```rust
 use fandhe_core::{
-    Axis, Card, Grid, Label, Node, ReadFn, ReadIndexedFn, RenderMode, Screen, Separator, Stack,
+    Axis, Card, DialogWidget, Grid, Label, Node, ReadFn, ReadIndexedFn, RenderMode, Screen, Separator, Stack,
     WidgetId, WriteFn,
 };
 
@@ -278,12 +278,10 @@ fn assert_screen_signatures<S: 'static>() {
         Screen::<S>::virtual_list_with_axis;
 
     // ウィジェット系ビルダー（Node::Widget 経由。いずれも where S: 'static）。
-    let _: fn(Screen<S>, WidgetId, ReadFn<S, String>) -> Screen<S> = Screen::<S>::label;
-    let _: fn(Screen<S>, WidgetId, ReadFn<S, usize>, ReadIndexedFn<S, String>) -> Screen<S> =
-        Screen::<S>::list_view;
     let _: fn(Screen<S>, WidgetId) -> Screen<S> = Screen::<S>::spinner;
     let _: fn(Screen<S>, Stack<S>) -> Screen<S> = Screen::<S>::stack;
     let _: fn(Screen<S>, Grid<S>) -> Screen<S> = Screen::<S>::grid;
+    let _: fn(Screen<S>, DialogWidget<S>) -> Screen<S> = Screen::<S>::dialog;
     let _: fn(Screen<S>, WidgetId, Vec<String>, ReadFn<S, usize>, WriteFn<S, usize>) -> Screen<S> =
         Screen::<S>::tabs;
     let _: fn(Screen<S>, Card<S>) -> Screen<S> = Screen::<S>::card;
@@ -330,8 +328,6 @@ fn build_screen_via_impl_trait_builders() -> Screen<()> {
         .image_bound(WidgetId::from_raw(9), get_string, "alt")
         .icon(WidgetId::from_raw(10), "name", "label")
         .icon_bound(WidgetId::from_raw(11), get_string, "label")
-        .scroll_view(WidgetId::from_raw(12), anchor.clone())
-        .dialog(WidgetId::from_raw(13), "title", "body", get_bool)
         .menu(
             WidgetId::from_raw(14),
             "label",
@@ -341,12 +337,21 @@ fn build_screen_via_impl_trait_builders() -> Screen<()> {
             get_option_usize,
             set_usize,
         )
+        .dialog(DialogWidget::new_dynamic(
+            WidgetId::from_raw(13),
+            "title",
+            "body",
+            "close",
+            false,
+            get_bool,
+            set_bool,
+        ))
         .tooltip(WidgetId::from_raw(15), "text", anchor)
 }
 
 fn main() {
     assert_screen_signatures::<()>();
-    assert_eq!(build_screen_via_impl_trait_builders().len(), 17);
+    assert_eq!(build_screen_via_impl_trait_builders().len(), 16);
 }
 ```
 
@@ -386,14 +391,15 @@ assert_eq!(assert_iter(screen.iter()), 2);
   （色は書かない。色解決はプラットフォームレイヤの契約。「エラー:」等の接頭辞を `Text` に
   付けない）
 - `rgba_image(pixels, alt)`: `Node::RgbaImage` の糖衣構文（`S: 'static` 不要）
-- `label` 以降のウィジェット系ビルダーは `Node::Widget(Box<dyn Widget<S>>)` を組み立てる糖衣構文で、
+- `text_input` 以降のウィジェット系ビルダーは `Node::Widget(Box<dyn Widget<S>>)` を組み立てる糖衣構文で、
   いずれも `where S: 'static` を要求する。第 1 引数は 2 系統に分かれる
   - `id: WidgetId` を直接取るもの（`text_input` は egui・web-dom で描画されない。入力欄は `.text_field()` を使う）:
-    `label` / `text_input` / `list_view` / `checkbox` /
+    `text_input` / `checkbox` /
     `radio_button` / `toggle_switch` / `slider` / `progress_bar` / `spinner` / `image(_bound)` /
-    `icon(_bound)` / `scroll_view` / `dialog` / `menu` / `tabs` / `tooltip`
+    `icon(_bound)` / `menu` / `tabs` / `tooltip`
   - 組み立て済みのコンテナ型を取るもの（`WidgetId` はコンストラクタ側へ渡す）:
     `stack(Stack<S>)` / `grid(Grid<S>)` / `card(Card<S>)` / `separator(Separator<S>)`
+  - 組み立て済みの `DialogWidget<S>` を取るもの: `dialog(DialogWidget<S>)`（`WidgetId` は `DialogWidget::new_dynamic` へ渡す）
 - `visit`: 挿入順の単純走査。`List` / `VirtualList` の中身は展開しない
 - `visit_expanded`: `List` / `VirtualList` を `state` で展開して深さ優先に走査する
   （プラットフォームレイヤの描画走査が使う想定）
@@ -408,10 +414,10 @@ assert_eq!(assert_iter(screen.iter()), 2);
   （Issue #1429）: 状態を読む `ReadFn` に加えて、書き戻し先の `WriteFn` を取る。書き方はパターン 7-3。
   `set_selected` は `WriteFn<S, usize>`（利用者が選択を外す操作は無い）。`menu` は項目を選ぶと
   `set_selected(i)` に続けて `set_open(false)` も呼ぶ
-- **`.dialog()`（`Dialog<S>`、S46）は AX ノード公開のみで、描画・開閉イベントは未配線**
-  （`fandhe-render-egui` の実描画・`render_headless` のどちらからも呼ばれない）。実際に描画される
-  ダイアログは、`DialogWidget::new_dynamic(..).with_content(expand_fn)`（`DialogWidget`
-  S47、`ui::dialog_widget`）を `Node::Widget` として `.with_node()` で置いたものに限る。
+- **ダイアログは `.dialog(DialogWidget<S>)`（Issue #1427 で引数を変更）**。以前の `.dialog(id, title, body, open)` が作る
+  `Dialog<S>`（S46）は描画も開閉イベントも配線されておらず、同じ役割の `DialogWidget`（S47、`ui::dialog_widget`）が
+  描画・操作できるため。`DialogWidget::new_dynamic(..).with_content(expand_fn)` を `.dialog(..)`
+  （`.with_node(Node::Widget(Box::new(..)))` と同じ）で置く。
   `fandhe-render-egui` はこれを前面パネル + スクリムで描画する。外側タップは、`with_content` の
   子ノード列の中に `dismiss_label` と同名の `Node::Button` があるときに限り、その
   `Button` の path へ `Event::ButtonClickedAt` を dispatch する（Issue #739）。同名の
@@ -425,10 +431,10 @@ assert_eq!(assert_iter(screen.iter()), 2);
 （macOS・Android・Windows では AX ノードだけは公開される）。`crates/fandhe-render-egui/tests/widget_coverage.rs` が 1 種ずつ
 `egui::Context::run` で描画し、出力の shape が空画面と同数のままかを確かめている（根拠は
 `render.rs` の `Node::Widget` 分岐が `DialogWidget` / `Checkbox` / `ToggleSwitch` / `Slider` /
-`RadioButton` / `ProgressBar` / `Spinner` / `Separator` / `Menu` / `Tabs` / `Stack` / `Grid` / `Card` / `Tooltip` / `ImageWidget` / `CanvasWidget` の 16 種だけを `downcast_ref` していること）。
-この 16 種以外の `Widget<S>` 実装（`LabelWidget`・`CheckboxWidget`・`TabBarWidget`・`ProgressWidget` 等）は
+`RadioButton` / `ProgressBar` / `Spinner` / `Separator` / `Menu` / `Tabs` / `Stack` / `Grid` / `Card` / `Tooltip` / `ImageWidget` / `Label` / `CanvasWidget` の 17 種だけを `downcast_ref` していること）。
+この 17 種以外の `Widget<S>` 実装（`LabelWidget`・`CheckboxWidget`・`TabBarWidget`・`ProgressWidget` 等）は
 `.with_node()` で置いても描画されない。web-dom の対応は本表の対象外。
-描画の配線と API の整理は #1427（重複する書き方の整理）・#1428・#1429・#1430・#1437（icon）で扱う（#1428〜#1430 は配線済み）。
+描画の配線と API の整理は #1427・#1428・#1429・#1430・#1437（icon）で扱う（#1427〜#1430 は対応済み。#1437 が残り）。
 
 描画される（`Node` の直接バリアント。ビルダー名で示す）:
 `.text()` / `.dynamic_text()` / `.error_text()` / `.text_field()` / `.button()` / `.list()` /
@@ -440,8 +446,8 @@ assert_eq!(assert_iter(screen.iter()), 2);
 非有限値（NaN・±∞）は 0 とする。% は四捨五入で、ラベルがあれば「ラベル 42%」と出す）/ `.spinner()` /
 `.menu()` / `.tabs()`（書き方はパターン 7-3。`tabs` は見出しだけを描き、中身は描かない）/
 `.separator()`（太さは無視。縦線は親が横並び（`Node::Row`）のときだけで、画面のルートなど縦並びでは横線になる）/
-`ImageWidget::bound(..)` / `::fixed(..)`（`.with_node()` で置く。識別子が `fandhe_runtime::image_store::put` と一致するときだけ）/
-`DialogWidget`（`.with_node()` で置く）/ `CanvasWidget`（`.with_node()` で置く）/
+`.image()` / `.image_bound()`（`ImageWidget` を作る糖衣構文。下の「画像」）/
+`.dialog(DialogWidget)`（`.with_node()` で置いても同じ）/ `CanvasWidget`（`.with_node()` で置く）/
 `.stack()`・`.grid()`・`.card()`・`.tooltip()`（子を再帰して描く。下の「コンテナの子」）
 
 **コンテナの子（`Stack` / `Grid` / `Card` / `Tooltip`、Issue #1430）**:
@@ -449,9 +455,10 @@ assert_eq!(assert_iter(screen.iter()), 2);
 - 子は `Widget::children`（宣言順）と同じ並びで描かれ、子の操作は `Event::WidgetValueChanged` の path
   （`Widget::children` の添字の列）で状態へ届く。入れ子（`Stack` の中の `Card` の中の `Checkbox`）も同じ
 - 子として描かれるのは、上の「描画される（`Node::Widget`）」の部品（`Checkbox`・`ProgressBar` 等）。
-  **子が `Label` / `LabelWidget` のときは描かれない**（コンテナの枠だけが出る）。#1427 で解決予定。
-  文字を置くなら `Checkbox` 等のラベルを使うか、`Stack` の外に `.text()` を置く。
-  描かれない子（`Label`・閉じた `DialogWidget` 等）も、`with_spacing` の間隔 1 つ分の場所は取る
+  `Label`（`Label::fixed` / `Label::bound`）は文字として描かれる（Issue #1427）。
+  **`LabelWidget` は描かれない**（コンテナの子にしない。文字は `Label`）。
+  **web-dom ではコンテナの子の `Label` は出ない**（固定文字なら `aria-label` だけ）。
+  描かれない子（閉じた `DialogWidget` 等）も、`with_spacing` の間隔 1 つ分の場所は取る
 - `Stack` は `with_direction` で縦・横、`with_spacing` で間隔（既定は 0）。`Grid` は `with_columns` で列数（1 子 = 1 セル）、
   `with_spacing` で行・列の間隔。`Card` は `with_padding` の余白つきの枠で子を縦に並べる。
   `Card` の `with_tap_label`（タップ）は egui では未配線。`Grid` のセルに `Tabs`・横向きの `Stack` など
@@ -464,17 +471,36 @@ assert_eq!(assert_iter(screen.iter()), 2);
   macOS・Android・Windows のみ（読み上げは実機で未確認）。iOS・Web・Linux のタッチには本文へ届く経路が無く（既知の天井）、
   スクリーンリーダーを使わないタッチ利用者にも届かない
 
-描画されない（何も出ない）と、代わりの書き方:
+**画像（`.image()` / `.image_bound()`、Issue #1427）**: 名前は残し、描かれる `ImageWidget` を作る形へ変えた。
+**識別子はファイルパスや URL を読み込むものではない**。
+
+- 画素を出すには、アプリが `fandhe_runtime::image_store::put`（入口 crate からは `fandhe::runtime::image_store::put`）で
+  同じ識別子の画素を置く。同時に置けるのは 1 枚（保管所は 1 枠）
+- 識別子が一致する画素が無く、ソースが空でないときは、alt を文字で描く（AX を二重にしないため、読み上げは
+  合成の Image ノードだけ。web-dom は `role="img"` + `aria-label=alt` のプレースホルダ）。
+  ソースが空のとき（選ぶ前の写真選択など）は何も描かず、AX・aria にも名前を出さない
+  （直接置いた `ImageWidget`（写真選択・書類スキャン等）も同じ）
+- 固定の画像・パスの画像は出せない。画素を持っているなら `.rgba_image()` を使う
+
+**`.label()`・`.list_view()`・`.scroll_view()` は削除し、`.dialog()` は引数を `DialogWidget` に変えた（Issue #1427、破壊的変更）**。
+どれも描かれず、同じ役割の描かれる書き方が既にあったため、2 つ並べず 1 つに寄せた。
+
+| 削除したビルダー | 代わりの書き方 |
+| --- | --- |
+| `.label(id, get)` | `.dynamic_text(get)`（`Stack` 等の子にするなら `Label::bound(id, get)` / `Label::fixed(id, text)`。描かれる） |
+| `.list_view(id, len, item)` | `.list()`（`expand` が `Node::Text` 等を返す）・大量なら `.virtual_list()` |
+| `.scroll_view(id, content)` | 不要。`render_screen` のルートが縦スクロールする。大量なら `.virtual_list()` |
+| `.dialog(id, title, body, open)` | `.dialog(DialogWidget::new_dynamic(..).with_content(..))`（上の `.dialog(DialogWidget<S>)` の項） |
+
+`Image` / `ListView` / `ScrollView` / `Dialog` / `LabelWidget` の型そのものは残る（`WidgetCatalog`・`WidgetHarness` の検証用）。
+`.with_node()` で直接置いても egui では描かれない（`widget_coverage` が固定している）。画面を組むときは使わない。
+
+描画されない（何も出ない）ビルダーは、残りの 2 つ:
 
 | 部品（ビルダー） | 代わりの書き方 |
 | --- | --- |
-| `.label()` | `.text()`（固定文字列）・`.dynamic_text()`（状態から読む） |
 | `.text_input()` | `.text_field()` |
-| `.list_view()` | `.list()`（`expand` が `Node::Text` 等を返す） |
-| `.image()` / `.image_bound()` | `ImageWidget` を `.with_node()` で置く。画素を直接渡すなら `.rgba_image()` |
-| `.icon()` / `.icon_bound()` | `.text()` に記号・文言を置く |
-| `.scroll_view()` | 不要。`render_screen` のルートが縦スクロールする。大量なら `.virtual_list()` |
-| `.dialog()` | `DialogWidget::new_dynamic(..).with_content(..)`（上の `.dialog()` の注意書き） |
+| `.icon()` / `.icon_bound()` | `.text()` に記号・文言を置く（#1437） |
 
 `DialogWidget` の `dismiss_label` ボタンは、`with_content` の子ノード列にある同名の `Node::Button` が描く
 （本体だけでは出ない）。
@@ -1349,8 +1375,9 @@ std::thread::spawn(move || {
 `android.rs` に閉じ、`fandhe-core` へは持ち込まない。
 
 **画像表示（Issue #5）**: 撮影結果等の実画素は `Screen::rgba_image(RgbaPixels, alt)`
-（`Node::RgbaImage`）で出す。`Screen::image` / `image_bound`（`ui/image.rs`）は識別子
-（パス・URL の不透明文字列）を保持するだけで画素を運べないため、画素を見せたい画面には使わない。
+（`Node::RgbaImage`）で出す。`Screen::image` / `image_bound`（`ui/image_widget.rs`）は識別子
+（不透明文字列）を保持するだけで画素を運べない（画素は `fandhe_runtime::image_store::put` で別に置く）ため、
+固定の画像・撮影結果を見せたい画面には使わない。
 状態に生の RGBA を持たせず、`camera_capture.rs` の `thumbnail_from_rgba` のように長辺 160px 程度へ
 縮小してから `RgbaPixels` にする。`fandhe-render-egui` は GPU テクスチャ、`fandhe-web-dom` は
 `<img src="data:image/png;base64,…">` で描く。`fandhe-swiftui-bridge` は未対応で、alt を
