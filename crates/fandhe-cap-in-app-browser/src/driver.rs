@@ -116,6 +116,9 @@ struct Bridge {
     lost_public: Mutex<Option<(u64, Outcome)>>,
     /// これまでに登録した最大の要求 id。`active` のロック内で更新する。
     high_water: AtomicU64,
+    /// `mark_running` を画面へ適用し終えた画面側の要求 id。`Requested` の画面が自分の要求の適用待ちか、
+    /// 作り直された画面の新しい要求かを見分ける（[`Bridge::screen_dispatched`]）。
+    screen_confirmed: AtomicU64,
     deadline: Duration,
 }
 
@@ -128,6 +131,7 @@ impl Bridge {
             active: Mutex::new(None),
             lost_public: Mutex::new(None),
             high_water: AtomicU64::new(0),
+            screen_confirmed: AtomicU64::new(0),
             deadline,
         }
     }
@@ -141,10 +145,32 @@ impl Bridge {
         self.lost_public.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// 画面側の要求が発送済み（OS 呼び出し中、または結果が画面へ未反映）か。公開入口が受け取り待ちへ移した分も含める。
-    fn screen_pending(&self) -> bool {
+    /// `Requested` の画面について、画面側の前の要求のために発送を見送るか（見送らないときは前の結果を捨てる副作用あり）。
+    /// 公開入口が受け取り待ちへ移した分も見る。
+    ///
+    /// - OS で進行中: 見送る（`mark_running` の適用待ちか、作り直す前の画面の要求。完了か期限で結果が届くのを待つ）
+    /// - 結果が届いていて `mark_running` が未適用: 見送る（同じ要求の適用待ち。次のフレームで受け取る）
+    /// - 結果が届いていて `mark_running` が適用済み: 画面が作り直された新しい要求。前の結果は受け取り手が
+    ///   いないので捨て、見送らない（`consumer-app-structure.md` §8.2「画面の次の開始で解放」）
+    ///
+    /// 守らない範囲: 発送から `mark_running` の適用までの 1 フレームの間に、[`reset_pending_tracking`] を呼ばずに画面状態を
+    /// 作り直すと、未適用の `mark_running` が捨てられ、前の要求の結果が届いた後も見送り続ける。画面状態を作り直す側は
+    /// [`reset_pending_tracking`] を呼ぶ（Android の再生成はそうしている）。
+    fn screen_dispatched(&self) -> bool {
         let mine = self.screen.current();
-        mine != 0 && self.slot.snapshot_of(mine).is_some()
+        if mine == 0 {
+            return false;
+        }
+        match self.slot.snapshot_of(mine) {
+            None => false,
+            Some(None) => true,
+            Some(Some(_)) if self.screen_confirmed.load(Ordering::Acquire) != mine => true,
+            Some(Some(_)) => {
+                self.slot.clear(mine);
+                self.screen.release(mine);
+                false
+            }
+        }
     }
 
     /// 進行中の要求と未取得の結果が無いときだけ、`owner` の分として登録して id を返す。先行を置き換えず `None`。
@@ -152,8 +178,8 @@ impl Bridge {
     ///
     /// 公開入口（`owner` が `public`）は、画面側の届いた未取得の結果を捨てずに画面の受け取り待ちへ移して始める
     /// （`SlotOwner::begin_parking`、`consumer-app-structure.md` §8.2）。画面は `poll_and_finish_owned` でそのまま受け取り、
-    /// 受け取られない分は [`Bridge::reset`] で解放する（残るのは最大 1 件。`drive` は受け取り待ちを発送済みとみなして
-    /// 次の開始へ進まないため、画面の次の開始では解放されない）。公開側の未取得の結果は、
+    /// 受け取られない分は画面の次の開始（[`Bridge::screen_dispatched`]。`mark_running` の適用後に限る）か [`Bridge::reset`] で
+    /// 解放する（残るのは最大 1 件）。公開側の未取得の結果は、
     /// どちらの開始も置き換えない。
     fn begin(&self, owner: &SlotOwner) -> Option<u64> {
         let mut active = self.lock();
@@ -389,22 +415,28 @@ fn drive(
     state: &InAppBrowserShowState,
     sender: &CompletionSender<InAppBrowserShowState>,
     imp: &Arc<dyn InAppBrowser>,
-    bridge: &Bridge,
+    bridge: &'static Bridge,
 ) {
+    // 作り直す前の画面の要求が OS で応答しないまま残っても、期限で解けるよう先に判定する。
+    bridge.expire_if_due();
     if let Some((_, url)) = take_request(state) {
-        // 保留ありは発送済み（`mark_running` の適用待ち）。二重に発送しない。
-        if bridge.screen_pending() {
+        // 前の要求の結果待ち・`mark_running` の適用待ちは二重に発送しない。
+        if bridge.screen_dispatched() {
             return;
         }
-        let _ = sender.send(Box::new(mark_running));
         // 公開入口などの先行を置き換えず、画面には失敗として返す。
-        if start_request(bridge, &**imp, bridge.screen, url).is_none() {
+        let Some(request_id) = start_request(bridge, &**imp, bridge.screen, url) else {
             let generation = state.generation;
+            let _ = sender.send(Box::new(mark_running));
             let _ = sender.send(Box::new(move |s: &mut InAppBrowserShowState| {
                 finish_open(s, generation, Err(CoreFailure::Internal));
             }));
             return;
-        }
+        };
+        let _ = sender.send(Box::new(move |s: &mut InAppBrowserShowState| {
+            mark_running(s);
+            bridge.screen_confirmed.store(request_id, Ordering::Release);
+        }));
         sender.request_repaint_after(POLL_INTERVAL);
         return;
     }
@@ -412,7 +444,6 @@ fn drive(
         return;
     }
     let generation = state.generation;
-    bridge.expire_if_due();
     poll_and_finish_owned(
         bridge.slot,
         bridge.screen,
@@ -523,7 +554,7 @@ mod tests {
         sender: &CompletionSender<InAppBrowserShowState>,
         rx: &Rx,
         imp: &Arc<dyn InAppBrowser>,
-        bridge: &Bridge,
+        bridge: &'static Bridge,
     ) {
         let end = Instant::now() + Duration::from_secs(5);
         loop {
@@ -659,6 +690,62 @@ mod tests {
         pump(&mut state, &sender, &rx, &imp, bridge);
         assert_eq!(f.calls.load(Ordering::SeqCst), 1);
         assert_eq!(state.result, Some(Err(CoreFailure::Interrupted)));
+    }
+
+    /// 画面の結果が受け取り待ちへ移った後に画面が作り直されても（reset なし）、新しい画面の要求は前の結果を捨てて
+    /// 発送し、止まらない。
+    #[test]
+    fn rebuilt_screen_drops_parked_result_and_dispatches() {
+        let bridge = new_bridge(Duration::from_secs(30));
+        let f = fake(Mode::Interrupt, bridge);
+        let imp: Arc<dyn InAppBrowser> = f.clone();
+        let (sender, rx) = channel();
+        let mut state = InAppBrowserShowState::default();
+        request_open(&mut state);
+        drive(&state, &sender, &imp, bridge);
+        // 次のフレームの頭で `mark_running` が適用される。
+        while let Ok(c) = rx.try_recv() {
+            c(&mut state);
+        }
+        assert_eq!(state.phase, Phase::Running);
+        let old = bridge.screen.current();
+        let public = old + 100;
+        assert_eq!(bridge.begin_with_id(public), Ok(()));
+        // 公開入口の要求を終えて取り出し、受け取り待ちには画面の前の結果だけが残る。
+        bridge.complete_from_os(public, Err(InAppBrowserFailure::Interrupted));
+        assert!(bridge.slot.take_ready(public).is_some());
+        bridge.public.release(public);
+        // 画面を作り直して開き直す。
+        let mut fresh = InAppBrowserShowState::default();
+        request_open(&mut fresh);
+        pump(&mut fresh, &sender, &rx, &imp, bridge);
+        assert_eq!(f.calls.load(Ordering::SeqCst), 2);
+        assert_eq!(fresh.result, Some(Err(CoreFailure::Interrupted)));
+        assert!(bridge.slot.snapshot_of(old).is_none());
+    }
+
+    /// `mark_running` の適用後に画面が作り直され、前の要求が OS で応答しないままでも、期限で解けて新しい要求を発送する。
+    #[test]
+    fn rebuilt_screen_waits_for_deadline_then_dispatches() {
+        let bridge = new_bridge(Duration::from_millis(20));
+        let f = fake(Mode::Silent, bridge);
+        let imp: Arc<dyn InAppBrowser> = f.clone();
+        let (sender, rx) = channel();
+        let mut state = InAppBrowserShowState::default();
+        request_open(&mut state);
+        drive(&state, &sender, &imp, bridge);
+        while let Ok(c) = rx.try_recv() {
+            c(&mut state);
+        }
+        assert_eq!(state.phase, Phase::Running);
+        let mut fresh = InAppBrowserShowState::default();
+        request_open(&mut fresh);
+        drive(&fresh, &sender, &imp, bridge);
+        // 前の要求が進行中の間は発送しない。
+        assert_eq!(f.calls.load(Ordering::SeqCst), 1);
+        std::thread::sleep(Duration::from_millis(30));
+        drive(&fresh, &sender, &imp, bridge);
+        assert_eq!(f.calls.load(Ordering::SeqCst), 2);
     }
 
     #[test]
@@ -1046,8 +1133,8 @@ mod tests {
             b.slot.snapshot_of(screen),
             Some(Some(Ok(InAppBrowserOutcome::Closed)))
         );
-        // 受け取り待ちへ移った分も発送済みとみなし、`mark_running` の適用前の再 drive で二重に発送しない。
-        assert!(b.screen_pending());
+        // 受け取り待ちへ移った分も、`mark_running` の適用前は発送済みとみなし二重に発送しない。
+        assert!(b.screen_dispatched());
         // 公開側の進行中は次の公開要求を断る。
         assert_eq!(b.begin_with_id(public + 1), Err(InAppBrowserFailure::Busy));
     }
