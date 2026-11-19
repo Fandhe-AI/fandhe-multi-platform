@@ -410,7 +410,7 @@
 //! - [`focus::FocusRing`] / [`focus::FocusEntry`] / [`focus::FocusDirection`] /
 //!   [`focus::WindowHints`]: Android TV 等のリモコン操作向けフォーカス移動・
 //!   再解決コア（TASK-17.2 / REQ-17、`docs/architecture/tv-focus-navigation-architecture.md`
-//!   §3・§4.4・§5）。`Node::Button` / `Node::IndexedButton` のみをフォーカス可能と
+//!   §3・§4.4・§5）。`Node::Button` / `Node::IndexedButton` / `Node::CellButton` のみをフォーカス可能と
 //!   定義し（§3.1）、`Axis`（node.rs）に基づく軸解決アルゴリズムで 4 方向すべてを
 //!   単一規則で解決する（§4.4）。`id`（`WidgetId`）比較による構造変化の自動検知・
 //!   三段探索（観測キャッシュ照会 → 有界全域探索 → 先頭フォールバック）での復旧を

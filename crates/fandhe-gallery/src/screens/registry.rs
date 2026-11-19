@@ -44,6 +44,7 @@ generated_screens! {
     "form" => fandhe_core::screens::form::form_screen,
     "settings" => fandhe_core::screens::settings::settings_screen,
     "checkbox-list" => fandhe_core::screens::checkbox_list::checkbox_list_screen,
+    "row-actions" => fandhe_core::screens::row_actions::row_actions_screen,
 
     nav "list_detail" => fandhe_core::screens::list_detail::current_screen,
     nav "confirm_dialog" => fandhe_core::screens::confirm_dialog::confirm_dialog_screen,

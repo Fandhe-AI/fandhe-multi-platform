@@ -30,6 +30,11 @@ fn main() {
             fandhe_core::Node::IndexedButton { label, .. } => {
                 format!("IndexedButton(label=\"{label}\")")
             }
+            // `Row` / `CellButton`（Issue #1288）も使わない。網羅性のために明示する。
+            fandhe_core::Node::CellButton { label, .. } => {
+                format!("CellButton(label=\"{label}\")")
+            }
+            fandhe_core::Node::Row { .. } => "Row".to_string(),
             fandhe_core::Node::List { .. } => "List".to_string(),
             // `sample_screen()` は TASK-5.5-S2 時点で `VirtualList` を使わない
             // （TASK-1.1-S6 由来の代表画面のスコープ外）。到達しないはずの分岐だが、

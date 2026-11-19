@@ -4,7 +4,8 @@
 //! 実装化したもの。共通コアはレイアウト・実描画矩形を一切持たない
 //! （`responsibility-boundary.md` §3）ため、本モジュールが提供するのは
 //!
-//! - フォーカス可能ノード（`Node::Button` / `Node::IndexedButton`、§3.1）の
+//! - フォーカス可能ノード（`Node::Button` / `Node::IndexedButton` / `Node::CellButton`、§3.1。
+//!   `Node::Row` は横向きの入れ物でフォーカス対象ではない）の
 //!   ツリー順（DFS・挿入順、§3.2）に基づく近傍探索・軸解決（§4.4「軸解決アルゴリズム」）
 //! - 現在フォーカス中の 1 件（[`FocusEntry`]）のみを保持し、`id`（`WidgetId`）比較で
 //!   構造変化を自動検知・復旧する自己更新型 API（[`FocusRing::rebuild`]、§4.4）
@@ -96,7 +97,7 @@ pub enum FocusDirection {
 /// `WidgetId → 最後に観測した path` の有界マップ（観測キャッシュ、設計文書 §4.4
 /// 「観測キャッシュと再捕捉保証の層別化」）。
 ///
-/// `FocusRing` が近傍探索・path 解決・再解決で `Button`/`IndexedButton` を評価する
+/// `FocusRing` が近傍探索・path 解決・再解決で `Button`/`IndexedButton`/`CellButton` を評価する
 /// たびに、その副作用として記録する（維持コストゼロ。どのみち発生する項目評価への
 /// 相乗りであり、キャッシュのために追加の `item()` 呼び出し・走査は行わない）。
 /// verify-on-use 方式のため無効化管理を持たず、超過時は最も古い記録（FIFO）から
@@ -442,15 +443,17 @@ impl FocusRing {
     }
 }
 
-/// `node` がフォーカス可能（`Button` / `IndexedButton`、§3.1）であれば `id` を返す。
+/// `node` がフォーカス可能（`Button` / `IndexedButton` / `CellButton`、§3.1）であれば `id` を返す。
 fn focusable_id<S>(node: &Node<S>) -> Option<WidgetId> {
     match node {
-        Node::Button { id, .. } | Node::IndexedButton { id, .. } => Some(*id),
+        Node::Button { id, .. } | Node::IndexedButton { id, .. } | Node::CellButton { id, .. } => {
+            Some(*id)
+        }
         _ => None,
     }
 }
 
-/// `Node::List` / `Node::VirtualList` の分岐を正規化した列挙ビュー（#537、旧
+/// `Node::List` / `Node::VirtualList` / `Node::Row`（横向き、Issue #1288）の分岐を正規化した列挙ビュー（#537、旧
 /// `container_axis_len` / `container_child` / `container_frame_with_window` /
 /// `find_candidate_in_container` の window_bound 判定に散在していた同型 match の
 /// 集約先）。[`container_kind`] が生成する。
@@ -470,7 +473,7 @@ enum ContainerKind<S> {
     },
 }
 
-/// `node` を [`ContainerKind`] へ正規化する。`node` が `List`/`VirtualList` 以外
+/// `node` を [`ContainerKind`] へ正規化する。`node` が `List`/`VirtualList`/`Row` 以外
 /// （構造不整合、または `Button` 等の葉ノード）の場合は `None`。
 ///
 /// `List` は `expand(state)` をここで 1 回だけ評価する（呼び出し元が同じ内容を
@@ -488,6 +491,12 @@ fn container_kind<S>(node: &Node<S>, state: &S) -> Option<ContainerKind<S>> {
             axis: *axis,
             len: len(state),
             item: *item,
+        }),
+        // `Row`（Issue #1288）は横向きの入れ物。行の地（行タップ）はフォーカス対象にせず、
+        // 入口のボタンから同じ操作へ届く。
+        Node::Row { children, .. } => Some(ContainerKind::Slice {
+            axis: Axis::Horizontal,
+            children: children.clone(),
         }),
         _ => None,
     }
@@ -2295,5 +2304,52 @@ mod tests {
         );
         assert_eq!(ring.current().unwrap().path, vec![0, new_target_index]);
         assert_eq!(ring.current().unwrap().id, WidgetId::from_raw(42));
+    }
+
+    // ------------------------------------------------------------------
+    // `Row` / `CellButton`（Issue #1288）。
+    // ------------------------------------------------------------------
+
+    fn row_no_op(_state: &mut AxisTreeState, _cell: (usize, usize)) {}
+
+    fn row_list(_state: &AxisTreeState) -> Vec<Node<AxisTreeState>> {
+        (0..2u64)
+            .map(|r| Node::Row {
+                children: vec![
+                    Node::Button {
+                        label: "open".to_string(),
+                        on_click: axis_no_op,
+                        id: WidgetId::from_raw(100 + r * 10),
+                    },
+                    Node::CellButton {
+                        label: "rate".to_string(),
+                        row: r as usize,
+                        col: 1,
+                        on_click: row_no_op,
+                        id: WidgetId::from_raw(101 + r * 10),
+                    },
+                ],
+                tap: Some(0),
+            })
+            .collect()
+    }
+
+    /// 行内は左右、行をまたぐのは下（縦の入れ物へ抜ける）。
+    #[test]
+    fn row_children_move_horizontally_and_down_to_next_row() {
+        let screen: Screen<AxisTreeState> =
+            Screen::new("rows").list_with_axis(row_list, Axis::Vertical);
+        let state = AxisTreeState;
+        let mut ring = FocusRing::new();
+        ring.rebuild(&screen, &state, &WindowHints::new());
+        assert_eq!(ring.current().unwrap().path, vec![0, 0, 0]);
+
+        assert!(ring.move_focus(&screen, &state, FocusDirection::Right));
+        assert_eq!(ring.current().unwrap().path, vec![0, 0, 1]);
+        assert_eq!(ring.current().unwrap().id, WidgetId::from_raw(101));
+        assert!(!ring.move_focus(&screen, &state, FocusDirection::Right));
+
+        assert!(ring.move_focus(&screen, &state, FocusDirection::Down));
+        assert_eq!(ring.current().unwrap().path, vec![0, 1, 0]);
     }
 }

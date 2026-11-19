@@ -18,7 +18,8 @@
 //!   （`role` はヘッドレス出力には含めない。色解決は #813 のプラットフォームレイヤの
 //!   スコープであり、本関数はテキスト表現のみを返す契約のため）
 //! - `Node::TextField` は `[{label}: {get(state)}]`
-//! - `Node::Button` / `Node::IndexedButton`（Issue #491）は `({label})`
+//! - `Node::Button` / `Node::IndexedButton` / `Node::CellButton`（Issue #491・#1288）は `({label})`
+//! - `Node::Row` 自身は行を出力しない。子が左から順に 1 行ずつ出る（Issue #1288）
 //! - `Node::List` 自身は行を出力しない。子ノードは `visit_expanded` の再帰展開により
 //!   本関数へ後続して渡され、各バリアントに応じたアームで処理される
 //!   （ネストした `List` も深さ優先で展開される）。
@@ -72,6 +73,11 @@ pub fn render_headless<S>(screen: &Screen<S>, state: &S) -> Vec<String> {
         Node::TextField { label, get, .. } => out.push(format!("[{}: {}]", label, get(state))),
         Node::Button { label, .. } => out.push(format!("({label})")),
         Node::IndexedButton { label, .. } => out.push(format!("({label})")),
+        Node::CellButton { label, .. } => out.push(format!("({label})")),
+        Node::Row { .. } => {
+            // `List` と同様、自身は行を出力しない。子は `visit_expanded` が
+            // `expand_children` 経由で順に渡す（Issue #1288）。
+        }
         Node::List { .. } => {
             // `List` 自身は行を出力しない。子ノードは `visit_expanded` の再帰展開に
             // より本クロージャへ後続して渡され、各アームで処理される。
@@ -385,6 +391,35 @@ mod tests {
         assert_eq!(
             render_headless(&screen, &state),
             vec!["# ウィジェット画面".to_string(), "見出し".to_string()]
+        );
+    }
+
+    /// `Row` の子が順に出る（Issue #1288）。
+    #[test]
+    fn row_renders_children_in_order() {
+        fn rows(_: &CounterState) -> Vec<Node<CounterState>> {
+            vec![Node::Row {
+                children: vec![
+                    Node::Text("題名".to_string()),
+                    Node::CellButton {
+                        label: "★3".to_string(),
+                        row: 0,
+                        col: 3,
+                        on_click: |_, _| {},
+                        id: WidgetId::from_raw(1),
+                    },
+                ],
+                tap: None,
+            }]
+        }
+        let screen: Screen<CounterState> = Screen::new("r").list(rows);
+        let state = CounterState {
+            memo: String::new(),
+            items: Vec::new(),
+        };
+        assert_eq!(
+            render_headless(&screen, &state),
+            vec!["# r".to_string(), "題名".to_string(), "(★3)".to_string()]
         );
     }
 }

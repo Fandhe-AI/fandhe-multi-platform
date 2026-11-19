@@ -20,7 +20,8 @@
 //! `path` / `child_path` と一致させている: `path[0]` はトップレベルノードの挿入順
 //! index、以降のセグメントは直前ノードが `List` なら `expand(state)` の列挙 index、
 //! `VirtualList` なら絶対項目 index、`Widget`（[`super::widget::Widget`] 実装、
-//! 例 `DialogWidget`）なら `Widget::children(state)` の列挙 index（Issue #739）。
+//! 例 `DialogWidget`）なら `Widget::children(state)` の列挙 index（Issue #739）、
+//! `Row` なら `children` の添字（Issue #1288。`Row` を挟むぶん path が 1 段増える）。
 //! 降下は反復ループで行い（再帰によるスタック枯渇を避ける、A05 対策・
 //! security.md 準拠）、`VirtualList` は該当セグメントの
 //! `item(state, index)` を 1 回だけ呼ぶ（全展開しない、仮想化を維持する）。
@@ -70,7 +71,14 @@ pub(super) fn resolve_node_at<S>(screen: &Screen<S>, path: &[usize], state: &S) 
             // 状態依存の子ノード列（`DialogWidget::content` 等）を降下する（Issue #739）。
             // これによりダイアログのパネル内ボタンへ `ButtonClickedAt` の path 解決が届く。
             Node::Widget(widget) => widget.children(state).into_iter().nth(segment)?,
-            // `Button` / `IndexedButton` / `Text` / `TextField` は子を持たないため、
+            // `Row`（Issue #1288）は評価済みの子を値で持つ。セグメントは `children` の添字。
+            Node::Row { mut children, .. } => {
+                if segment >= children.len() {
+                    return None;
+                }
+                children.swap_remove(segment)
+            }
+            // `Button` / `IndexedButton` / `CellButton` / `Text` / `TextField` は子を持たないため、
             // path がまだ続くのに到達した場合は中間ノード不整合として `None` を返す。
             _ => return None,
         };
@@ -151,6 +159,16 @@ pub fn click_button_at<S>(screen: &Screen<S>, path: &[usize], label: &str, state
             on_click(state, index);
             true
         }
+        Node::CellButton {
+            label: node_label,
+            row,
+            col,
+            on_click,
+            ..
+        } if node_label == label => {
+            on_click(state, (row, col));
+            true
+        }
         _ => false,
     }
 }
@@ -198,6 +216,16 @@ pub fn activate_focus_at<S>(
             ..
         } if node_id == id => {
             on_click(state, index);
+            true
+        }
+        Node::CellButton {
+            row,
+            col,
+            on_click,
+            id: node_id,
+            ..
+        } if node_id == id => {
+            on_click(state, (row, col));
             true
         }
         _ => false,
@@ -303,6 +331,16 @@ pub fn click_button<S>(screen: &Screen<S>, label: &str, state: &mut S) -> bool {
                 ..
             } if button_label == label => {
                 on_click(state, *index);
+                return true;
+            }
+            Node::CellButton {
+                label: button_label,
+                row,
+                col,
+                on_click,
+                ..
+            } if button_label == label => {
+                on_click(state, (*row, *col));
                 return true;
             }
             _ => continue,
@@ -1105,5 +1143,99 @@ mod tests {
 
         assert!(!handled);
         assert!(!state.agreed);
+    }
+
+    // ------------------------------------------------------------------
+    // `Row` / `CellButton`（Issue #1288）のテスト。
+    // ------------------------------------------------------------------
+
+    #[derive(Default)]
+    struct RowState {
+        deleted: Vec<usize>,
+        rated: Option<(usize, usize)>,
+    }
+
+    fn delete_row(state: &mut RowState, row: usize) {
+        state.deleted.push(row);
+    }
+
+    fn rate(state: &mut RowState, cell: (usize, usize)) {
+        state.rated = Some(cell);
+    }
+
+    fn rows(_: &RowState) -> Vec<Node<RowState>> {
+        (0..3)
+            .map(|i| Node::Row {
+                children: vec![
+                    Node::IndexedButton {
+                        label: "削除".to_string(),
+                        index: i,
+                        on_click: delete_row,
+                        id: WidgetId::from_raw(10 + i as u64),
+                    },
+                    Node::CellButton {
+                        label: "★3".to_string(),
+                        row: i,
+                        col: 3,
+                        on_click: rate,
+                        id: WidgetId::from_raw(20 + i as u64),
+                    },
+                ],
+                tap: Some(0),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn click_button_at_fires_through_row_with_row_index() {
+        let screen: Screen<RowState> = Screen::new("t").list(rows);
+        let mut state = RowState::default();
+        // [list, 2 行目, 0 番目の子]
+        assert!(click_button_at(&screen, &[0, 1, 0], "削除", &mut state));
+        assert_eq!(state.deleted, vec![1]);
+        // ラベル不一致・範囲外は発火しない。
+        assert!(!click_button_at(&screen, &[0, 1, 0], "x", &mut state));
+        assert!(!click_button_at(&screen, &[0, 1, 5], "削除", &mut state));
+        assert_eq!(state.deleted, vec![1]);
+    }
+
+    #[test]
+    fn cell_button_passes_row_and_col() {
+        let screen: Screen<RowState> = Screen::new("t").list(rows);
+        let mut state = RowState::default();
+        assert!(click_button_at(&screen, &[0, 1, 1], "★3", &mut state));
+        assert_eq!(state.rated, Some((1, 3)));
+
+        let mut state = RowState::default();
+        assert!(!click_button_at(&screen, &[0, 1, 1], "★4", &mut state));
+        assert_eq!(state.rated, None);
+
+        assert!(activate_focus_at(
+            &screen,
+            &[0, 2, 1],
+            WidgetId::from_raw(22),
+            &mut state
+        ));
+        assert_eq!(state.rated, Some((2, 3)));
+        assert!(!activate_focus_at(
+            &screen,
+            &[0, 2, 1],
+            WidgetId::from_raw(99),
+            &mut state
+        ));
+    }
+
+    #[test]
+    fn click_button_fires_top_level_cell_button() {
+        let screen: Screen<RowState> = Screen::new("t").with_node(Node::CellButton {
+            label: "★5".to_string(),
+            row: 4,
+            col: 5,
+            on_click: rate,
+            id: WidgetId::from_raw(1),
+        });
+        let mut state = RowState::default();
+        assert!(click_button(&screen, "★5", &mut state));
+        assert_eq!(state.rated, Some((4, 5)));
     }
 }

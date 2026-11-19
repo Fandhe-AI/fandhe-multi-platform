@@ -21,6 +21,31 @@
 3. 状態で文言が変わるボタンへ `ButtonClicked` を送る側は、dispatch のたびに画面を組み直し、
    その時点の文言を使う
 
+一覧の行内に複数の操作を横に並べられるようにする（Issue #1288）。
+
+### 追加
+
+- `Node::Row { children, tap }`: 子を左から右へ並べる行。`tap` が指すボタンの当たり判定を行全体へ
+  広げる（egui。ボタン以外の所＝文字・余白のタップが入口を押す）。`Node::row_tap_target()` が指す子の位置とラベルを返す
+- `Node::CellButton { label, row, col, on_click, id }`: 行と列を値で埋め込んだボタン。
+  `on_click` は `WriteFn<S, (usize, usize)>`（関数ポインタ限定。REQ-13）
+- `click_button` / `click_button_at` / `activate_focus_at` が `CellButton` を発火する。
+  `click_button_at` の path 解決が `Row` の子へ降りる。`FocusRing` は `Row` を横向きの入れ物として扱う
+- `fandhe-render-egui`: `Node::List` の `axis`（`Vertical` / `Horizontal` / `Grid`）を描画へ配線。横並び（`Row`・`Horizontal`）は幅を超えると折り返す
+- `fandhe-web-dom`: `Row` は `div.fandhe-row`（flex）。`ul` には軸が縦以外のときだけ style を付ける
+
+### 破壊的変更（BREAKING CHANGE）
+
+- 公開 enum `Node` に `Row` と `CellButton` バリアントを追加。`Node` を網羅 match している
+  呼び出し側はコンパイルが壊れる
+- `Node::List` に `Horizontal` / `Grid` を指定した画面は、egui での並びが縦から変わる
+  （これまで描画は軸を無視していた）。縦の `List` も `ui.vertical` で包むため egui の自動 id が変わる
+
+### 移行手順
+
+1. `Node` の網羅 match に `Node::Row { .. }` / `Node::CellButton { .. }` 分岐を追加するか、`_` で受ける
+2. 意図せず軸を指定していた `List` は `Axis::Vertical`（既定）へ戻す
+
 実画素の画像ノード `Node::RgbaImage` を追加し、カメラ撮影のサムネイルを実画素にする（Issue #5）。
 
 ### 追加

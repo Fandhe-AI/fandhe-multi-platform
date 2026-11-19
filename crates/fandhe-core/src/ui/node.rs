@@ -63,9 +63,9 @@
 ///
 /// 実描画後の矩形（レイアウトエンジンの計測結果）とは別種の情報であり、開発者が
 /// `Screen` 構築時に明示的に宣言する意味情報である（共通コアは実測ジオメトリを
-/// 持たない、`responsibility-boundary.md` §3 の責務分界を参照）。TASK-17.2 本体の
-/// フォーカス移動解決（方向キーがこのコンテナの意味論をどう扱うか）が参照する
-/// 唯一の判断材料となる想定で、本 sub-issue では型定義とフィールド追加のみを行う。
+/// 持たない、`responsibility-boundary.md` §3 の責務分界を参照）。フォーカス移動解決
+/// （方向キーがこのコンテナの意味論をどう扱うか、TASK-17.2）と、`fandhe-render-egui` の
+/// 描画（`List` の並び、Issue #1288）の双方が読む。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Axis {
     /// 子要素が縦一列に並ぶ（既定）。既存の縦一列前提の挙動を変えない安全側の
@@ -256,9 +256,9 @@ pub enum Node<S> {
         expand: crate::state::ReadFn<S, Vec<Node<S>>>,
         /// 子要素の配置軸（TASK-17.2 の前提移行、
         /// `docs/architecture/tv-focus-navigation-architecture.md` §4.3）。
-        /// 実測ジオメトリではなく開発者が宣言する意味情報であり、後続の
-        /// フォーカス移動解決（TASK-17.2 本体）が方向キーの解決規則として
-        /// 参照する。既定は [`Axis::Vertical`]。
+        /// 実測ジオメトリではなく開発者が宣言する意味情報であり、フォーカス移動解決
+        /// （方向キーの解決規則）と egui の描画（子の並び）が参照する。
+        /// 既定は [`Axis::Vertical`]。
         axis: Axis,
     },
     /// index ベースで項目を遅延展開するリスト（`Node::List` の仮想化版、
@@ -318,6 +318,36 @@ pub enum Node<S> {
         /// 得るため識別子として使うと再解決の意味が崩れる、設計文書同節）。
         id: super::widget::WidgetId,
     },
+    /// 子を左から右へ並べる行（Issue #1288）。一覧の行内に複数の操作を並べる入れ物。
+    ///
+    /// 子は評価済みの値で持つ（関数の欄を持たない）。行の添字は `List::expand` /
+    /// `VirtualList::item` の中で子（[`Node::IndexedButton`] / [`Node::CellButton`]）へ
+    /// 値として埋め込む。REQ-13 の関数ポインタ限定は子のハンドラが担う。
+    Row {
+        /// 横に並べる子。
+        children: Vec<Node<S>>,
+        /// 行全体のタップで押したことにする子の位置（`children` の添字）。
+        /// 指す子がボタンでない・範囲外のときは行タップなしとして扱う
+        /// （[`Node::row_tap_target`]）。
+        tap: Option<usize>,
+    },
+    /// 添字を 2 つ（行と行内の位置）埋め込んだボタン（Issue #1288）。
+    ///
+    /// 同じ操作で値だけ違うもの（評価 1〜5 等）を 1 つのハンドラ
+    /// `fn(&mut S, (row, col))` で受ける。`on_click` は [`crate::state::WriteFn`] で
+    /// 関数ポインタに限定する（REQ-13、`IndexedButton` と同じ）。
+    CellButton {
+        /// ボタンのラベル。path 解決後の整合性ガードに使う。
+        label: String,
+        /// 行の添字。
+        row: usize,
+        /// 行内の位置（列）。
+        col: usize,
+        /// 押下時に `on_click(state, (row, col))` の形で呼ばれる。
+        on_click: crate::state::WriteFn<S, (usize, usize)>,
+        /// フォーカス識別・決定操作の安定識別子（`IndexedButton::id` と同じ契約）。
+        id: super::widget::WidgetId,
+    },
     /// 共通トレイト [`super::widget::Widget`] を実装するウィジェット実体
     /// （TASK-8.3-S2 / REQ-8、Issue #97）。
     ///
@@ -361,7 +391,26 @@ impl<S> Node<S> {
             // 展開する（Issue #739）。`Widget::children` の既定実装は空 `Vec` の
             // ため、オーバーライドしないウィジェットは従来どおり子を持たない。
             Node::Widget(widget) => widget.children(state),
+            Node::Row { children, .. } => children.clone(),
             _ => Vec::new(),
+        }
+    }
+
+    /// `Row` の行タップが指す子の `(children の添字, ラベル)`。
+    ///
+    /// `tap` が指す子が `Button` / `IndexedButton` / `CellButton` のときだけ `Some`。
+    /// `Row` 以外・`tap: None`・範囲外・ボタンでない子は `None`（行タップなし）。
+    /// 描画層が行の当たり判定を広げる先を決めるために呼ぶ（Issue #1288）。
+    pub fn row_tap_target(&self) -> Option<(usize, &str)> {
+        let Node::Row { children, tap } = self else {
+            return None;
+        };
+        let i = (*tap)?;
+        match children.get(i)? {
+            Node::Button { label, .. }
+            | Node::IndexedButton { label, .. }
+            | Node::CellButton { label, .. } => Some((i, label.as_str())),
+            _ => None,
         }
     }
 }
@@ -391,6 +440,24 @@ impl<S> std::fmt::Debug for Node<S> {
                 .field("label", label)
                 .field("index", index)
                 .field("id", id)
+                .finish(),
+            Node::CellButton {
+                label,
+                row,
+                col,
+                id,
+                ..
+            } => f
+                .debug_struct("CellButton")
+                .field("label", label)
+                .field("row", row)
+                .field("col", col)
+                .field("id", id)
+                .finish(),
+            Node::Row { children, tap } => f
+                .debug_struct("Row")
+                .field("children", children)
+                .field("tap", tap)
                 .finish(),
             Node::List { axis, .. } => f.debug_struct("List").field("axis", axis).finish(),
             Node::VirtualList { item_extent, .. } => f
@@ -444,6 +511,23 @@ impl<S> Clone for Node<S> {
                 index: *index,
                 on_click: *on_click,
                 id: *id,
+            },
+            Node::CellButton {
+                label,
+                row,
+                col,
+                on_click,
+                id,
+            } => Node::CellButton {
+                label: label.clone(),
+                row: *row,
+                col: *col,
+                on_click: *on_click,
+                id: *id,
+            },
+            Node::Row { children, tap } => Node::Row {
+                children: children.clone(),
+                tap: *tap,
             },
             Node::List { expand, axis } => Node::List {
                 expand: *expand,
@@ -838,5 +922,69 @@ mod tests {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<Node<CounterState>>();
         assert_send_sync::<crate::ui::screen::Screen<CounterState>>();
+    }
+
+    fn cell(_: &mut CounterState, _: (usize, usize)) {}
+    fn idx(_: &mut CounterState, _: usize) {}
+    fn noop(_: &mut CounterState) {}
+
+    fn row_with(tap: Option<usize>) -> Node<CounterState> {
+        Node::Row {
+            children: vec![
+                Node::Text("題名".to_string()),
+                Node::IndexedButton {
+                    label: "開く".to_string(),
+                    index: 2,
+                    on_click: idx,
+                    id: WidgetId::from_raw(1),
+                },
+                Node::CellButton {
+                    label: "★3".to_string(),
+                    row: 2,
+                    col: 3,
+                    on_click: cell,
+                    id: WidgetId::from_raw(2),
+                },
+                Node::Button {
+                    label: "x".to_string(),
+                    on_click: noop,
+                    id: WidgetId::from_raw(3),
+                },
+            ],
+            tap,
+        }
+    }
+
+    #[test]
+    fn row_expand_children_returns_children() {
+        let state = CounterState {
+            count: 0,
+            note: String::new(),
+        };
+        assert_eq!(row_with(None).expand_children(&state).len(), 4);
+    }
+
+    #[test]
+    fn row_tap_target_resolves_button_children_only() {
+        assert_eq!(row_with(Some(1)).row_tap_target(), Some((1, "開く")));
+        assert_eq!(row_with(Some(2)).row_tap_target(), Some((2, "★3")));
+        assert_eq!(row_with(Some(3)).row_tap_target(), Some((3, "x")));
+        // Text を指す・範囲外・None は行タップなし。
+        assert_eq!(row_with(Some(0)).row_tap_target(), None);
+        assert_eq!(row_with(Some(9)).row_tap_target(), None);
+        assert_eq!(row_with(None).row_tap_target(), None);
+        // Row 以外は None。
+        assert_eq!(
+            Node::<CounterState>::Text("a".into()).row_tap_target(),
+            None
+        );
+    }
+
+    #[test]
+    fn row_and_cell_button_clone_and_debug() {
+        let node = row_with(Some(1));
+        let cloned = node.clone();
+        assert_eq!(format!("{node:?}"), format!("{cloned:?}"));
+        assert!(format!("{node:?}").contains("CellButton"));
     }
 }

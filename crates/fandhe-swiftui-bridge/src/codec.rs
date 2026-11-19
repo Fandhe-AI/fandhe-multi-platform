@@ -166,8 +166,8 @@ fn to_snapshot_node<S>(node: &Node<S>, state: &S) -> SnapshotNode {
         Node::Button { label, .. } => SnapshotNode::Button {
             label: label.clone(),
         },
-        Node::IndexedButton { label, .. } => {
-            // 動的生成子内のボタン（Issue #491）。Swift 側へは既存 `SnapshotNode::Button`
+        Node::IndexedButton { label, .. } | Node::CellButton { label, .. } => {
+            // 動的生成子内のボタン（Issue #491。`CellButton`〔#1288〕も同じ）。Swift 側へは既存 `SnapshotNode::Button`
             // と区別せずマッピングする（見た目・スナップショット構造は同一）。
             // イベントデコード側（`EventPayload` への `ButtonClickedAt` 追加）は
             // 本モジュールの対象外（out-of-scope-tracking.md 対象）。
@@ -175,7 +175,9 @@ fn to_snapshot_node<S>(node: &Node<S>, state: &S) -> SnapshotNode {
                 label: label.clone(),
             }
         }
-        Node::List { .. } => {
+        // `Row`（Issue #1288）は `SnapshotNode::List` として渡す（スキーマの版は上げない。
+        // Swift 側は縦に並ぶ。横並びの配線は対象外）。
+        Node::List { .. } | Node::Row { .. } => {
             let children = node
                 .expand_children(state)
                 .iter()
@@ -364,6 +366,35 @@ mod tests {
         match &snapshot.nodes[0] {
             SnapshotNode::Text { text } => assert_eq!(text, "カウント: 7"),
             other => panic!("Text であるべき: {other:?}"),
+        }
+    }
+
+    /// `Row` は `SnapshotNode::List`、`CellButton` は `Button` として出る（Issue #1288）。
+    #[test]
+    fn row_and_cell_button_encode_as_list_and_button() {
+        struct S;
+        fn cell(_: &mut S, _: (usize, usize)) {}
+        let screen: Screen<S> = Screen::new("r").with_node(Node::Row {
+            children: vec![
+                Node::Text("題名".to_string()),
+                Node::CellButton {
+                    label: "★3".to_string(),
+                    row: 0,
+                    col: 3,
+                    on_click: cell,
+                    id: fandhe_core::WidgetId::from_raw(1),
+                },
+            ],
+            tap: None,
+        });
+        let bytes = encode_snapshot(&screen, &S, 0).unwrap();
+        let snapshot: RenderSnapshot = serde_json::from_slice(&bytes).unwrap();
+        match &snapshot.nodes[0] {
+            SnapshotNode::List { children } => {
+                assert!(matches!(&children[0], SnapshotNode::Text { text } if text == "題名"));
+                assert!(matches!(&children[1], SnapshotNode::Button { label } if label == "★3"));
+            }
+            other => panic!("List であるべき: {other:?}"),
         }
     }
 

@@ -4,8 +4,8 @@
 //! [`crate::launch`]、アプリ本体（`StateStore` の保持と毎フレームの駆動）は [`crate::app`]。
 
 use fandhe_core::{
-    CanvasWidget, Checkbox, DialogWidget, Event, ImageWidget, Measurement, Node, PaintCommand,
-    RadioButton, Screen, Slider, StateStore, ToggleSwitch, Widget, WidgetValue,
+    Axis, CanvasWidget, Checkbox, DialogWidget, Event, ImageWidget, Measurement, Node,
+    PaintCommand, RadioButton, Screen, Slider, StateStore, ToggleSwitch, Widget, WidgetValue,
 };
 
 use crate::recyclers::VirtualListRecyclers;
@@ -20,7 +20,7 @@ use crate::{rgba_image, text_role};
 /// `Node::Widget(DialogWidget)` のパネル外タップ dismiss（Issue #739、`render_node` の
 /// 該当アーム参照）も同じ `Event::ButtonClickedAt` を `ctx.pending_events` へ積むだけで、
 /// この契約から逸脱しない。
-/// `Node::Button` / `Node::IndexedButton` はいずれも位置解決
+/// `Node::Button` / `Node::IndexedButton` / `Node::CellButton` はいずれも位置解決
 /// （`Event::ButtonClickedAt` / `ui::click_button_at`）で dispatch する
 /// （Issue #491。動的生成子内のボタンをラベル一致の非展開走査では解決できない
 /// 制約の解消。`render_node` の該当アーム参照）。
@@ -458,7 +458,8 @@ fn render_node<S: 'static>(
                 });
             }
         }
-        Node::IndexedButton { label, .. } => {
+        Node::IndexedButton { label, .. } | Node::CellButton { label, .. } => {
+            // `CellButton`（Issue #1288）も同じ。行・列は葉ノードが持つ。
             // 動的生成子が埋め込んだ index はノード自身が保持しているため、
             // dispatch 側は `path` のみで対象ノードへ再到達すればよい
             // （`click_button_at` が葉ノードから `index` を取り出して `on_click` へ渡す）。
@@ -469,19 +470,44 @@ fn render_node<S: 'static>(
                 });
             }
         }
-        Node::List { expand, .. } => {
-            // `List` 自身は行を描かない。子ノードを都度全展開し、事前順で再帰的に
-            // 描画する（`Screen::visit_node_expanded` と同じ契約、node.rs 参照）。
-            // `child_path` はループ外で 1 度だけ確保し、末尾要素の書き換えで
-            // 使い回す（子ごとの再確保を避ける。深いネスト・大量要素での無駄な
-            // アロケーション削減）。
-            let mut child_path = path.to_vec();
-            child_path.push(0);
-            for (child_index, child) in expand(state).into_iter().enumerate() {
-                if let Some(last) = child_path.last_mut() {
-                    *last = child_index;
+        Node::List { expand, axis } => {
+            // `List` 自身は行を描かない。子ノードを都度全展開し、`axis` に従って並べる
+            // （Issue #1288。`Screen::visit_node_expanded` と同じ事前順の契約）。
+            render_children(ui, *axis, &expand(state), state, path, ctx);
+        }
+        Node::Row { children, .. } => {
+            // 行タップ: `tap` が指す入口ボタンの当たり判定を行全体へ広げる。FOCUSABLE は
+            // 付けない（行の地をキーの停止位置や名前のない AX ノードにしない。入口の
+            // ボタンから同じ操作へ届く）。内側のボタンは scope の sense より上に登録される
+            // ため、押したボタンだけが反応する。
+            let tap = node.row_tap_target().map(|(i, label)| {
+                let mut p = path.to_vec();
+                p.push(i);
+                Event::ButtonClickedAt {
+                    label: label.to_owned(),
+                    path: p,
                 }
-                render_node(ui, &child, state, &child_path, ctx);
+            });
+            let sense = if tap.is_some() {
+                egui::Sense::CLICK
+            } else {
+                egui::Sense::hover()
+            };
+            let row = ui.scope_builder(egui::UiBuilder::new().sense(sense), |ui| {
+                if tap.is_some() {
+                    // 文字（Label）は既定で選択可能でクリックを自分で受けるため、行タップが
+                    // 届かなくなる。行タップがある行の中では選択不可にする。
+                    ui.style_mut().interaction.selectable_labels = false;
+                    // 当たり判定を行の幅いっぱいにするのは縦の親の中だけ。横の親や入れ子の
+                    // Row の中では親が広がってしまう（ダイアログの中では幅が広がる）。
+                    if ui.layout().is_vertical() {
+                        ui.set_min_width(ui.available_width());
+                    }
+                }
+                render_children(ui, Axis::Horizontal, children, state, path, ctx);
+            });
+            if row.response.clicked() {
+                ctx.pending_events.extend(tap);
             }
         }
         Node::VirtualList {
@@ -950,6 +976,60 @@ fn toggle_switch(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
 /// overscan 引数の契約）。値そのものは実測に基づく調整余地があるため定数化し、
 /// 呼び出し箇所を 1 つに保つ。
 const VIRTUAL_LIST_OVERSCAN: usize = 3;
+
+/// 子ノード列を `axis` に従って並べる（`Node::List` / `Node::Row` 共通、Issue #1288）。
+///
+/// 子の path は `path` + 子の添字（`event::resolve_node_at` の降下規則と一致）。
+/// 子が空なら何も確保しない（空の一覧で余白が増えない）。`Grid` は 1 子を 1 セルとし、
+/// `columns` は `max(1)`。
+fn render_children<S: 'static>(
+    ui: &mut egui::Ui,
+    axis: Axis,
+    children: &[Node<S>],
+    state: &S,
+    path: &[usize],
+    ctx: &mut RenderContext<S>,
+) {
+    if children.is_empty() {
+        return;
+    }
+    let mut child_path = path.to_vec();
+    child_path.push(0);
+    let mut each = |ui: &mut egui::Ui, i: usize, child: &Node<S>| {
+        if let Some(last) = child_path.last_mut() {
+            *last = i;
+        }
+        render_node(ui, child, state, &child_path, ctx);
+    };
+    match axis {
+        Axis::Vertical => {
+            ui.vertical(|ui| {
+                for (i, child) in children.iter().enumerate() {
+                    each(ui, i, child);
+                }
+            });
+        }
+        Axis::Horizontal => {
+            // 長い題名で子が画面外へ出ないよう折り返す。
+            ui.horizontal_wrapped(|ui| {
+                for (i, child) in children.iter().enumerate() {
+                    each(ui, i, child);
+                }
+            });
+        }
+        Axis::Grid { columns } => {
+            let columns = columns.max(1);
+            egui::Grid::new(("fandhe-list-grid", path.to_vec())).show(ui, |ui| {
+                for (i, child) in children.iter().enumerate() {
+                    ui.vertical(|ui| each(ui, i, child));
+                    if (i + 1) % columns == 0 {
+                        ui.end_row();
+                    }
+                }
+            });
+        }
+    }
+}
 
 /// `Node::VirtualList` を `egui::ScrollArea::show_viewport` で可視範囲のみ描画する
 /// （TASK-5.5 残課題、Issue #487・親 issue #83）。

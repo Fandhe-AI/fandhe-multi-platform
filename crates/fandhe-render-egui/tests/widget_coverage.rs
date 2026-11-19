@@ -163,6 +163,25 @@ fn rendered_or_not() {
             true,
         ),
         (
+            "Node::Row",
+            Screen::new("t").with_node(fandhe_core::Node::Row {
+                children: vec![fandhe_core::Node::Text("X".into())],
+                tap: None,
+            }),
+            true,
+        ),
+        (
+            "Node::CellButton",
+            Screen::new("t").with_node(fandhe_core::Node::CellButton {
+                label: "X".into(),
+                row: 0,
+                col: 0,
+                on_click: |_, _| {},
+                id: id(1),
+            }),
+            true,
+        ),
+        (
             "Node::RgbaImage",
             Screen::new("t").rgba_image(RgbaPixels::new(1, 1, vec![255u8; 4]).unwrap(), "X"),
             true,

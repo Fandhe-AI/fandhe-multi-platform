@@ -112,6 +112,25 @@ fn describe<S>(node: &Node<S>) -> &'static str {
             let _: &WidgetId = id;
             "IndexedButton"
         }
+        Node::CellButton {
+            label,
+            row,
+            col,
+            on_click,
+            id,
+        } => {
+            let _: &String = label;
+            let _: &usize = row;
+            let _: &usize = col;
+            let _: &WriteFn<S, (usize, usize)> = on_click;
+            let _: &WidgetId = id;
+            "CellButton"
+        }
+        Node::Row { children, tap } => {
+            let _: &Vec<Node<S>> = children;
+            let _: &Option<usize> = tap;
+            "Row"
+        }
         Node::Widget(w) => {
             let _: &Box<dyn Widget<S>> = w;
             "Widget"
@@ -150,16 +169,28 @@ fn main() {
   代替テキスト。ビルダーは `.rgba_image(pixels, alt)`
 - `List { expand, axis }`: 状態 `S` から子ノード一覧を都度生成する関数ポインタ。子ノードの型は
   `Node<S>` 自身に固定され、ネストした `List` を持てる。`axis` は子要素の配置軸（既定 `Axis::Vertical`）。
-  ただし `render_screen` は `List` の axis を配置に使わない（#1288）
+  `render_screen` は `Vertical` / `Horizontal` / `Grid { columns }` のとおりに並べる（`Grid` は 1 子を 1 セル）
 - `VirtualList { len, item, item_extent, axis }`: index ベースで項目を遅延展開する `List` の
   仮想化版。`len` で総項目数、`item` で index から 1 項目分を生成する
 - `IndexedButton { label, index, on_click, id }`: `List::expand` / `VirtualList::item` 内で
   生成する、index を埋め込んだボタン。`click_button` の非展開走査では解決できないため
   `click_button_at` で path 解決して呼び出す
+- `CellButton { label, row, col, on_click, id }`: 行と行内の位置を値で埋め込んだボタン。
+  `on_click` は `fn(&mut S, (row, col))`。同じ操作で値だけ違うもの（評価 1〜5 等）を 1 つの
+  ハンドラで受ける。環境をキャプチャするクロージャはコンパイルで弾かれる
+- `Row { children, tap }`: 子を左から右へ並べる行。子は評価済みの値で持つ（関数の欄なし）。
+  egui では幅を超えると次の段へ折り返す（`Axis::Horizontal` の `List` も同じ）。
+  `tap` は、行のボタン以外の所（文字・余白）のタップで押したことにする子の添字。指す子が
+  `Button` / `IndexedButton` / `CellButton` のときだけ有効（それ以外・範囲外・`None` は行タップなし）。
+  egui では縦の親の中で当たり判定が行の幅いっぱいに広がる（ダイアログの中でも広がる。横の親や
+  入れ子の `Row` の中では広げない）。子に `TextField` を置かない（入力はトップレベルの
+  `TextField` にしか届かない）。行そのものはフォーカス対象にならず、入口のボタンから同じ操作へ届く。
+  web-dom は `div.fandhe-row`（flex）、swiftui-bridge は `SnapshotNode::List`（Swift 側は縦に並ぶ）。
+  web と Swift の行タップは未配線
 - `Widget(Box<dyn Widget<S>>)`: 共通トレイト `Widget<S>` を実装するウィジェット実体の受け皿
   （`Screen` のウィジェット系ビルダー経由で使う）
 - `expand_children(&self, state: &S) -> Vec<Node<S>>`: `List` / `VirtualList` は子ノード一覧を、
-  それ以外は空の `Vec` を返す（panic を API 契約にしない）
+  `Row` は `children` の複製を、それ以外は空の `Vec` を返す（panic を API 契約にしない）
 
 `Axis`（`crates/fandhe-core/src/ui/node.rs`）は `List` / `VirtualList` の子要素配置軸を表す列挙体。
 
@@ -394,7 +425,8 @@ assert_eq!(assert_iter(screen.iter()), 2);
 
 描画される（`Node` の直接バリアント。ビルダー名で示す）:
 `.text()` / `.dynamic_text()` / `.error_text()` / `.text_field()` / `.button()` / `.list()` /
-`.virtual_list()` / `.rgba_image()`
+`.virtual_list()` / `.rgba_image()` / `Node::Row` / `Node::CellButton`
+（後ろ 2 つは `.with_node()` か `.list()` の `expand` の中で置く。`.list()` の軸も描画に効く）
 
 描画される（`Node::Widget`）:
 `.checkbox()` / `.toggle_switch()` / `.radio_button()` / `.slider()` /
@@ -413,8 +445,8 @@ assert_eq!(assert_iter(screen.iter()), 2);
 | `.image()` / `.image_bound()` | `ImageWidget` を `.with_node()` で置く。画素を直接渡すなら `.rgba_image()` |
 | `.icon()` / `.icon_bound()` | `.text()` に記号・文言を置く |
 | `.scroll_view()` | 不要。`render_screen` のルートが縦スクロールする。大量なら `.virtual_list()` |
-| `.stack()` | `Screen` に `.with_node()` で順に並べる（縦並び）。横並びは `.virtual_list_with_axis(.., Axis::Horizontal)`（`.list_with_axis` の軸はフォーカス移動用で、配置は縦一列のまま。#1288） |
-| `.grid()` | `.virtual_list_with_axis(.., Axis::Grid { columns })` |
+| `.stack()` | `Screen` に `.with_node()` で順に並べる（縦並び）。横並びは `Node::Row`、または `.list_with_axis(.., Axis::Horizontal)` |
+| `.grid()` | `.list_with_axis(.., Axis::Grid { columns })`（大量なら `.virtual_list_with_axis`） |
 | `.card()` | 子のノードを直接並べる。枠は出せない |
 | `.separator()` | なし。空の `.text("")` や区切り文字で代用するか、省く |
 | `.dialog()` | `DialogWidget::new_dynamic(..).with_content(..)`（上の `.dialog()` の注意書き） |
@@ -495,12 +527,13 @@ fn main() {
 }
 ```
 
-- `click_button`: ラベル一致で `Button` / `IndexedButton` を探索し `on_click` を呼ぶヘルパー。
+- `click_button`: ラベル一致で `Button` / `IndexedButton` / `CellButton` を探索し `on_click` を呼ぶヘルパー。
   `Screen::iter`（非展開走査）経由のため `List` / `VirtualList` の中身は辿らない。見つからなければ
   `false`。同一ラベル複数時は先頭の 1 件のみ発火
 - `click_button_at`: `path`（トップレベル挿入順 index → 展開順 index）を降下して
-  `List` / `VirtualList` 中の `Button` / `IndexedButton` を解決し、ラベル一致時のみ発火する
-  （動的生成子内のボタンを解決する経路）
+  `List` / `VirtualList` / `Row` 中の `Button` / `IndexedButton` / `CellButton` を解決し、
+  ラベル一致時のみ発火する（動的生成子内のボタンを解決する経路）。`Row` を挟むと path が 1 段増える
+  （`[list, 行, 行内の子]`）
 - `activate_focus_at`: `click_button_at` の `id`（`WidgetId`）版。ラベルの代わりに `id` 一致で判定
 - `request_back`（Issue #726）: `screen.back_handler()`（`.on_back()` で設定したハンドラ）を
   発火する。未設定なら状態を変更せず `false`
@@ -962,6 +995,79 @@ fn task_screen_renders_and_handles_actions() {
     assert!(click_button_at(&screen, &[2, 1], "完了", &mut state));
     assert!(render_headless(&screen, &state).contains(&"[x] 牛乳を買う".to_string()));
 }
+```
+
+### パターン 7-2: 一覧の行に複数の操作を横に並べる（Issue #1288）
+
+`List::expand` / `VirtualList::item` の 1 行を `Node::Row` で返し、子に `IndexedButton`（操作ごとに
+関数を分ける）と `CellButton`（同じ操作で値だけ違う）を並べる。行の添字は `expand` の中で値として
+埋め込む（`Row` は関数の欄を持たないので REQ-13 を保つ）。`tap: Some(0)` ならボタン以外の所（文字・余白）の
+タップが 0 番目の子（入口のボタン）を押したことになる。
+
+```rust
+use fandhe_core::{click_button_at, Node, Screen, WidgetId};
+
+#[derive(Default)]
+struct Items {
+    names: Vec<String>,
+    opened: Option<usize>,
+    rated: Option<(usize, usize)>,
+}
+
+fn open(s: &mut Items, row: usize) {
+    s.opened = Some(row);
+}
+fn delete(s: &mut Items, row: usize) {
+    if row < s.names.len() {
+        s.names.remove(row);
+    }
+}
+fn rate(s: &mut Items, (row, stars): (usize, usize)) {
+    s.rated = Some((row, stars));
+}
+
+fn rows(s: &Items) -> Vec<Node<Items>> {
+    (0..s.names.len())
+        .map(|i| {
+            let base = 100 * i as u64;
+            Node::Row {
+                children: vec![
+                    Node::IndexedButton {
+                        label: s.names[i].clone(),
+                        index: i,
+                        on_click: open,
+                        id: WidgetId::from_raw(base + 1),
+                    },
+                    Node::CellButton {
+                        label: "★3".to_string(),
+                        row: i,
+                        col: 3,
+                        on_click: rate,
+                        id: WidgetId::from_raw(base + 2),
+                    },
+                    Node::IndexedButton {
+                        label: "削除".to_string(),
+                        index: i,
+                        on_click: delete,
+                        id: WidgetId::from_raw(base + 3),
+                    },
+                ],
+                tap: Some(0),
+            }
+        })
+        .collect()
+}
+
+let screen: Screen<Items> = Screen::new("一覧").list(rows);
+let mut state = Items {
+    names: vec!["a".into(), "b".into()],
+    ..Default::default()
+};
+// path = [list, 2 行目, 2 番目の子]
+assert!(click_button_at(&screen, &[0, 1, 1], "★3", &mut state));
+assert_eq!(state.rated, Some((1, 3)));
+assert!(click_button_at(&screen, &[0, 1, 2], "削除", &mut state));
+assert_eq!(state.names, vec!["a".to_string()]);
 ```
 
 ### パターン 8: 画面遷移スタック（積む/戻る、Issue #726）
