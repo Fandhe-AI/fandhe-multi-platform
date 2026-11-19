@@ -47,7 +47,7 @@
 // 方針）。`UNUserNotificationCenter` の completion ブロックは呼ばれるスレッドが
 // 契約上未規定のため、`fandhe_rust_notification_outcome` の呼び出し自体も
 // `dispatch_async(main)` でラップし、Rust 側へは常に main queue から届ける
-// （呼び出し元本 crate の `ios.rs::present` の `@autoreleasepool` 前提と
+// （呼び出し元（本 crate の `ios.rs::present`）の `@autoreleasepool` 前提と
 // 揃える）。各経路で Rust への通知がちょうど 1 回になるよう、分岐ごとに
 // 完了パスを 1 本に絞ってある（下記コメント参照）。
 //

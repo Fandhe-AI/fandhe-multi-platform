@@ -11,7 +11,7 @@
 //! `fandhe_runtime::request_repaint` の明示呼び出しは要らない（4）。
 //!
 //! FFI / 本体は `cfg(target_os = "ios")` に閉じ、純関数 `result_from_code` はホストで
-//! テストできる（`lib.rs` が `mod ios` を全ターゲットで載せ、iOS 以外は `allow(dead_code)` にするのはそのため）。
+//! テストできる（`lib.rs` の `cfg(any(target_os = "ios", test))` はそのため）。
 //! 既知の天井: 初回の許可ダイアログに期限内に答えないと `NoReading`。シミュレータは常に非対応。
 
 use std::sync::Arc;

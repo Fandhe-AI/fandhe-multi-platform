@@ -4,7 +4,7 @@
 //! コールバック型で非同期に届く）で、iOS/macOS（実装済み）は本トレイトを
 //! **通らず**、`fandhe_core::screens::mic_record`（端末依存ゼロの状態機械）へ
 //! 本 crate の `driver` の `RequestSlot`/`poll_and_finish`（pull 型 bridge）から
-//! 直接書き戻す（`fandhe-cap-biometric-auth` の `driver.rs` モジュール doc の「本トレイトを通らず」節と
+//! 直接書き戻す（`fandhe-cap-biometric-auth` の `contract.rs` モジュール doc の「本トレイトを通らない」記述と
 //! 同じ判断）。Windows は同一フレーム内で `start`→`stop` を呼び切る同期呼び出しが
 //! 録音時間 0 ms を生み必ず失敗するため（`windows.rs`
 //! の モジュール doc 参照）、本トレイトはセッション管理を持たない

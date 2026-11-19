@@ -25,8 +25,8 @@
 //! iOS はバンドル化されたプロセスから起動するため `UNUserNotificationCenter` を
 //! 使える（上記「macOS が使わない理由」と対照）。`requestAuthorizationWithOptions:`
 //! （権限ダイアログ）は利用者の操作を待つため時間に上限がなく、`Notifier` trait
-//! （同期呼び出し）+ ワーカースレッドでブロックする形は採れない。`device/
-//! biometric_auth.rs` の Apple 経路と同型（[`bridge`] は `fandhe-runtime/src/request_slot.rs::
+//! （同期呼び出し）+ ワーカースレッドでブロックする形は採れない。`fandhe-cap-biometric-auth` の
+//! `driver.rs` の Apple 経路と同型（[`bridge`] は `fandhe-runtime/src/request_slot.rs::
 //! RequestSlot` の facade、[`drive_callback`] が毎フレーム観測する pull 型）にする。
 //! Android は `ActivityResultContracts.RequestPermission`（`POST_NOTIFICATIONS`、
 //! Android 13+ のみ）が同じくコールバック型のため、iOS と同じ [`bridge`]/

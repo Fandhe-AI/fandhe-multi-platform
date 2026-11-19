@@ -26,7 +26,7 @@ Web（wasm32-unknown-unknown）ターゲットの描画バックエンドは **`
 
 結果として、WebGL2 コンテキストの生成に失敗する環境（WebGL2 非対応ブラウザ等）では、
 黙って劣化した描画（WebGL1）を出さず、`eframe::WebRunner::start()` がエラーを返し
-`fandhe-render-egui` の `launch.rs`（`start_web`）の既存エラーハンドリング（`web_sys::console::error_1` への出力）で
+`fandhe` の `src/entry/web.rs` の既存エラーハンドリング（`start_web` が返す `Err` の `web_sys::console::error_1` への出力）で
 明示的に起動失敗を通知します。
 
 ## 3. 根拠

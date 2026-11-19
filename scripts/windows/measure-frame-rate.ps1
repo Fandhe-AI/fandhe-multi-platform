@@ -48,7 +48,7 @@ param(
     [int]$RefreshRateHz = 0,
 
     # 60Hz 近傍以外のリフレッシュレートでも計測を続行する。既定では失敗させる。
-    # 理由: `frame_metrics.rs` の計測プロトコルは固定 60Hz 環境を前提としており
+    # 理由: `crates/fandhe-gallery/src/demo/frame_metrics.rs` の計測プロトコルは固定 60Hz 環境を前提としており
     # （warmup 120 + 600 フレーム、budget 16.6ms）、Android 版スクリプトは
     # `peak_refresh_rate` を 60 へ強制固定してから計測する。144Hz パネルで実行すると
     # p50 が半分以下の「見かけ上優秀な」値になり、同じ形式で出力されるため他
@@ -269,7 +269,7 @@ try {
         if (-not $AllowNonStandardRefreshRate) {
             Write-Error @"
 リフレッシュレート $refresh Hz は 60Hz 近傍（$($script:RefreshRateMin)〜$($script:RefreshRateMax) Hz）ではない。
-本計測のプロトコル（frame_metrics.rs）は固定 60Hz 環境を前提としており、他プラットフォーム
+本計測のプロトコル（crates/fandhe-gallery/src/demo/frame_metrics.rs）は固定 60Hz 環境を前提としており、他プラットフォーム
 （Android は peak_refresh_rate を 60 へ固定して計測）と比較可能な値にならない。
 ディスプレイ設定を 60Hz へ変更して再実行するか、参考値として記録する場合は
 -AllowNonStandardRefreshRate を指定すること。

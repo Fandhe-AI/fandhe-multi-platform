@@ -328,7 +328,7 @@ pub struct ProxyApp<S = SampleState> {
     /// `render_screen_with_recyclers` へ毎フレーム渡す契約（`recyclers` モジュール doc
     /// 参照。egui 側の永続領域は使わず、呼び出し側であるここが保持する設計判断）。
     recyclers: VirtualListRecyclers<S>,
-    /// native 自動撮影モード（`main.rs` の `FANDHE_PROXY_AUTOSHOT`）専用の状態。
+    /// native 自動撮影モード（`fandhe-gallery` の `select.rs` の `FANDHE_PROXY_AUTOSHOT`）専用の状態。
     /// wasm 側では常に `None` で本フィールドは使われない。
     autoshot: Option<AutoShot>,
     /// window insets 供給関数（Issue #579）。`fandhe` の `src/entry/android.rs` が `with_inset_margin_supplier`
@@ -353,15 +353,15 @@ pub struct ProxyApp<S = SampleState> {
 }
 
 /// Xvfb 上での自動起動確認用: 起動から一定フレーム後にスクリーンショットを要求し、
-/// 応答を受け取った時点で PNG 保存して終了コマンドを送る（`main.rs` からのみ使用）。
+/// 応答を受け取った時点で PNG 保存して終了コマンドを送る（`fandhe-gallery` の `select.rs` からのみ使用）。
 struct AutoShot {
     output_path: std::path::PathBuf,
     frames_waited: u32,
     requested: bool,
     done: bool,
-    /// PNG 保存の成否を `main.rs` 側へ伝える共有フラグ。
+    /// PNG 保存の成否を `fandhe-gallery` 側へ伝える共有フラグ。
     /// `eframe::App::logic` は戻り値でプロセス終了コードへ介入できないため、
-    /// `run_native` 完了後に `main.rs` がこのフラグを読み、失敗時は非ゼロで終了する
+    /// `run_native` 完了後に `fandhe-gallery` の `main.rs` がこのフラグを読み、失敗時は非ゼロで終了する
     /// （Bugbot 指摘: 保存失敗時も成功終了していた不整合の是正）。
     save_failed: Arc<AtomicBool>,
 }
@@ -399,10 +399,10 @@ impl ProxyApp<SampleState> {
     }
 
     /// native 自動撮影モードを有効にした状態でアプリを構築する
-    /// （`FANDHE_PROXY_AUTOSHOT=<path>` 指定時に `main.rs` から呼ばれる）。
+    /// （`FANDHE_PROXY_AUTOSHOT=<path>` 指定時に `fandhe-gallery` の `select.rs` から呼ばれる）。
     ///
-    /// `save_failed` は `main.rs` が保持する共有フラグで、PNG 保存に失敗した場合に
-    /// `true` がセットされる。`run_native` 完了後に `main.rs` 側で読み出し、
+    /// `save_failed` は `fandhe-gallery` が保持する共有フラグで、PNG 保存に失敗した場合に
+    /// `true` がセットされる。`run_native` 完了後に `fandhe-gallery` の `main.rs` 側で読み出し、
     /// プロセスの終了コードへ反映する契約（`AutoShot::save_failed` 参照）。
     pub fn new_with_autoshot(
         ctx: &egui::Context,
@@ -569,7 +569,7 @@ impl<S: 'static> EguiApp for ProxyApp<S> {
                             if let Err(err) = crate::save_color_image(image, &autoshot.output_path)
                             {
                                 // 自動運転モード: 失敗を panic にせず標準エラーへ記録した上で、
-                                // `save_failed` フラグを立てて `main.rs` に伝播させる。
+                                // `save_failed` フラグを立てて `fandhe-gallery` に伝播させる。
                                 // フラグを立てるだけでは `done`/`Close` の配線は変えず、
                                 // ウィンドウは通常どおり閉じつつプロセスの終了コードで
                                 // 失敗を検知できるようにする（coding-rust.md の

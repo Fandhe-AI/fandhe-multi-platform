@@ -330,7 +330,7 @@ fn request_stop(request_id: u64) -> bool {
     crate::apple::request_stop(request_id)
 }
 
-/// 直近の `mic_record_effect` 呼び出し時刻（経過時間の実測用、`fandhe-cap-tilt` の `driver.rs::
+/// 直近の `mic_record_effect` 呼び出し時刻（経過時間の実測用、`fandhe-cap-tilt-motion` の `driver.rs::
 /// LAST_TICK` と同じ役割）。`Recording` を離れたら `None` に戻す
 /// （[`measure_dt_ms`] 参照）ことで、次に録音を始めた瞬間に古い時刻との差分を
 /// 使ってしまう飛びを防ぐ。macOS/iOS/Android/Windows の `drive_callback` からのみ

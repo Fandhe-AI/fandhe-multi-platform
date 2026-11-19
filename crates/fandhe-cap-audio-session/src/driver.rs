@@ -98,7 +98,7 @@ pub fn reset_pending_tracking() {
     }
 }
 
-/// アプリ終了時にセッションを解放する（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`） から呼ばれる）。
+/// アプリ終了時にセッションを解放する（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）から呼ばれる）。
 pub fn shutdown() {
     reset_pending_tracking();
 }

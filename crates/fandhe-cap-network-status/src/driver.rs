@@ -3,7 +3,7 @@
 //! `fandhe_core::screens::network_status_show`（端末依存ゼロ）へ注入する
 //! （`registry.rs` の `effect` 区画から毎フレーム同期に呼ばれる）。
 //!
-//! **間隔つき pull**（`gamepad.rs` と同型）: 最終読取時刻から `READ_INTERVAL` 未満なら OS を
+//! **間隔つき pull**（`fandhe-cap-gamepad` の `driver.rs` と同型）: 最終読取時刻から `READ_INTERVAL` 未満なら OS を
 //! 読まず残り時間で再描画を予約する。読んだら次回の再描画を必ず予約し（入力が無いと egui が
 //! 描画せずポーリングが止まる、契約表 4）、状態が変わらなければ送信を省略する。
 //!
@@ -91,7 +91,7 @@ fn to_result(r: Result<NetworkSnapshot, NetworkStatusError>) -> Result<Reading, 
     }
 }
 
-/// 最終読取時刻（プロセス全体で 1 つ。`gamepad.rs::LAST_TICK` と同じ位置づけ）。
+/// 最終読取時刻（プロセス全体で 1 つ。`fandhe-cap-gamepad` の `driver.rs::LAST_TICK` と同じ位置づけ）。
 static LAST_READ: Mutex<Option<Instant>> = Mutex::new(None);
 
 /// 間隔判定・読取・送信省略を行う本体（テストから時刻と実装を差し込めるよう切り出す）。

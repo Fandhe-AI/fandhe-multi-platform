@@ -189,7 +189,7 @@ pub(crate) fn cleanup(tray: &dyn SystemTray) {
 
 /// `fandhe-gallery` の終了フックから呼ぶ。プロセス終了時に Windows の
 /// 通知領域アイコンが残る（`NIM_DELETE` 忘れ）のを防ぐ（モジュール doc「終了時」
-/// 契約、`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`） 参照）。
+/// 契約、`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）参照）。
 pub fn stop_shared_system_tray() {
     cleanup(&*platform_system_tray());
 }

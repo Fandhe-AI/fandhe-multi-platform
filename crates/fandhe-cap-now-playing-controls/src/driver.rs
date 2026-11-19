@@ -235,7 +235,7 @@ pub fn reset_pending_tracking() {
     }
 }
 
-/// アプリ終了時に表示を取り下げる（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`） から呼ばれる）。
+/// アプリ終了時に表示を取り下げる（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）から呼ばれる）。
 pub fn shutdown() {
     commands().disarm();
     platform_now_playing().shutdown();

@@ -299,7 +299,7 @@ pub(crate) fn implementation() -> Arc<dyn SpellChecker> {
     Arc::new(WindowsSpellChecker)
 }
 
-/// 非 Windows ビルド用の入口（`lib.rs` の `mod` 列 が OS を問わず置かれているため残す。呼ばれない）。
+/// 非 Windows ビルド用の入口（`lib.rs` の `mod windows` が `cfg(any(target_os = "windows", test))` でテストビルドにも載るため残す。呼ばれない）。
 #[cfg(not(target_os = "windows"))]
 pub(crate) fn implementation() -> std::sync::Arc<dyn crate::contract::SpellChecker> {
     std::sync::Arc::new(crate::contract::UnsupportedSpellChecker)

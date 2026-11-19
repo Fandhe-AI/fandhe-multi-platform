@@ -3,7 +3,7 @@
 //! `Motion`/`Location` と同じく OS 設定を都度読む同期 API（push ではなく pull）。
 //! 戻り値は `1.0` を OS 既定として、それより大きい/小さい値が拡大/縮小方向を表す倍率
 //! （値域は [`SCALE_MIN`]`..=`[`SCALE_MAX`]）。**「読めない」を `1.0` で代用しない**契約が
-//! 本モジュールの核（`fandhe-cap-biometric-auth` の `driver.rs` の 4 値区別と同じ再発防止方針）。読めない
+//! 本モジュールの核（`fandhe-cap-biometric-auth` の `contract.rs` の 4 値区別と同じ再発防止方針）。読めない
 //! プラットフォーム・機種は必ず `Err(DynamicTypeError::Unsupported)` を返し、
 //! 呼び出し側（本 crate の `driver`）はこれを「使えない」として
 //! 「失敗」と区別して画面へ伝える。

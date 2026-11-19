@@ -1,7 +1,7 @@
 //! Windows 向け Bluetooth Classic 実装（Issue #660、親 #130。骨格は #659）。
 //!
 //! 呼び出し元: 本 crate の `driver` の Windows 経路が、一覧で [`implementation`]、検索で
-//! [`present`] を呼び、終了時（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`） → `stop_shared_discovery`）に [`stop_shared`] を呼ぶ。
+//! [`present`] を呼び、終了時（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）→ `stop_shared_discovery`）に [`stop_shared`] を呼ぶ。
 //! dispatch・`lib.rs` の `mod` 列・共通コアの画面には触らない。契約の SSOT は
 //! `crate::contract`（0 件は成功・失敗の区別・部分結果の破棄・`Cancelled` を返さない）。
 //!

@@ -17,7 +17,7 @@
 //! 代替入力（スライダー・チェックボックス）は `fandhe_core::screens::gamepad_show::
 //! GamepadShowState` 自身の `alt_x`/`alt_y`/`alt_button` フィールドとして画面側で
 //! 直接バインドされている（`gamepad_show_screen` の `.slider()`/`.checkbox()`
-//! 参照）ため、`fandhe-cap-tilt-motion` の `driver.rs`/`fandhe-cap-location` の `driver.rs` の `DummyMotion`/`SharedLocation` のような
+//! 参照）ため、`fandhe-cap-tilt-motion` の `contract.rs`/`fandhe-cap-location` の `contract.rs` の `DummyMotion`/`SharedLocation` のような
 //! 別建ての共有ダミーオブジェクトは本ドライバでは持たない（実装が非対応・未接続の
 //! ときに [`fandhe_core::screens::gamepad_show::apply_disconnected`]/[`apply_unsupported`]
 //! が状態の `alt_x`/`alt_y`/`alt_button` をそのまま読む設計、ponytail: 不要な抽象を
@@ -81,7 +81,7 @@ impl Gamepad for UnsupportedGamepad {
 }
 
 /// 実行対象プラットフォームに応じた `Gamepad` 実装を返す（`fandhe-cap-clipboard` の `driver.rs::
-/// shared_clipboard` と同型の cfg カスケード。状態を持たない実装のみのため
+/// platform_clipboard` と同型の cfg カスケード。状態を持たない実装のみのため
 /// `OnceLock` は使わず、呼び出しごとに構築する）。
 pub fn platform_gamepad() -> Box<dyn Gamepad> {
     #[cfg(target_os = "windows")]

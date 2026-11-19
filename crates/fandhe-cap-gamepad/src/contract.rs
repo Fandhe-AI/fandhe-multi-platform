@@ -14,7 +14,7 @@
 //!   統一であり、「上を正にする」慣例をここでは採らない。
 //! - **未接続 vs 非対応 vs 読み取り失敗**: [`Gamepad::read`] は 3 通りを型で区別する。
 //!   - 接続中のコントローラが無い: `Ok(None)`（全 0 の [`GamepadSnapshot`] を
-//!     「未接続」の代用にしない。`fandhe-cap-location` の `driver.rs` の「(0, 0) に測位できた」と
+//!     「未接続」の代用にしない。`fandhe-cap-location` の `contract.rs` の「(0, 0) に測位できた」と
 //!     「まだ測位できていない」の区別と同じ設計判断）。
 //!   - 現在のプラットフォームでは未対応: `Err(GamepadError::Unsupported("gamepad"))`。
 //!   - 接続はしているが読み取りが一時的に失敗した: `Err(GamepadError::Internal("gamepad read"))`。
