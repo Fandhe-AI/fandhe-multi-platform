@@ -5,6 +5,42 @@
 
 ## [Unreleased]
 
+`.icon()` / `.icon_bound()` を egui・web-dom で描かれるようにし、名前を文字列から列挙型 `IconName` へ変える（Issue #1437）。
+
+名前の語彙が決まっておらず、図柄を引く仕組みも無かったため egui で何も描かれなかった。閉じた語彙にして、
+未知の名前を型で作れなくした。図柄は egui の既定フォントの Unicode 記号に写す（新しい依存・資産なし）。
+
+### 破壊的変更（BREAKING CHANGE）
+
+- `Screen::icon` の `name` を `impl Into<String>` から `IconName` へ、`Screen::icon_bound` の `get` を `ReadFn<S, String>` から
+  `ReadFn<S, IconName>` へ変更
+- `Icon::fixed` / `Icon::bound` / `IconSource` も同様。`Icon::name_text() -> &str` を `Icon::name() -> Option<IconName>` へ置換
+  （`bound` の初回 sync 前は `None`）
+
+### 追加
+
+- `IconName`（`fandhe_core::IconName`。`ALL`・`glyph()`。`#[non_exhaustive]`）
+- `Icon` が `Widget::accessibility_label`（ラベル。空なら `None`）と `Widget::as_any` を実装
+- `fandhe-render-egui` が `Icon` を記号で描く。記号専用の font family `fandhe-icon`（emoji-icon-font・Noto Emoji。CJK を入れない。
+  `font::apply_fonts` が CJK の有無にかかわらず登録（Web でフォント取得に失敗しても登録）し、未登録の context では `Proportional`）で描くので、CJK が一部の字を取らない
+- web-dom は `span.fandhe-icon`（本文は記号 + U+FE0E、`font-variant-emoji:text`。ラベルあり: `role="img"` + `aria-label`、空: `aria-hidden="true"`）。
+  Emoji_Presentation=Yes の字はブラウザによりカラーのまま残りうる
+- gallery の `icons` 画面
+
+### 挙動の変更
+
+- egui: ラベルが空の `Icon` は AX ノードを作らない（装飾用）。それ以外は role Image・名前はラベル
+- swiftui-bridge: 変化なし（`Node::Widget` は従来どおり共通の変換）
+- `IconWidget` / `IconWidgetSource` は文字列のままで、`.with_node()` で置いても描かれない（`Icon` を使う）
+
+### 移行手順
+
+1. `.icon(id, "settings", label)` を `.icon(id, IconName::Settings, label)` へ。名前の対応は `IconName` の各変種（`Settings`・`Search`・`Home` 等）。
+   語彙に無い名前を使っていた場合は、近い変種へ置き換えるか issue で語彙の追加を依頼する
+2. `.icon_bound(id, get, label)` の `get` を `fn(&S) -> IconName` に変える（状態に名前の文字列を持っていたなら `IconName` を持つ）
+3. `icon.name_text()` を `icon.name()` へ（`Option<IconName>`。文字は `name.glyph()`）
+4. 装飾用のアイコン（読み上げ不要）は第 3 引数を `""` にする
+
 `.label()`・`.list_view()`・`.scroll_view()` を削除し、`.dialog()` と `.image()` / `.image_bound()` を描かれる型へ変える（Issue #1427）。
 
 どれも egui で何も描かれず、同じ役割の描かれる書き方が既にあった。「置いても何も出ない」書き方を残さず、

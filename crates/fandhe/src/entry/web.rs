@@ -5,7 +5,7 @@
 //! （`scripts/web/build-wasm-proxy.sh` が `wasm-bindgen --target web` で glue コードを作る）。
 //!
 //! CJK フォント（`sample_screen()` の日本語ラベル向け）は `fonts/` 配信ディレクトリから
-//! `fetch` で取得し、取得できた場合のみ `font::apply_font_bytes` で差し替える。
+//! `fetch` で取得し、取得の成否にかかわらず `font::apply_fonts` で差し替える（失敗時は CJK なしで、アイコン用の family だけ登録する）。
 //! TASK-10.1（Issue #218）でコピー元を `crates/fandhe-fonts` 同梱の Noto Sans JP へ
 //! 変更し（`scripts/web/build-wasm-proxy.sh` 参照）、システムフォント非依存とした。
 //! wasm32 向けバイナリへ直接 `include_bytes!` しないのは、配信サイズ（REQ-4 の 3MB 基準）
@@ -53,9 +53,8 @@ pub(crate) fn start(build: super::BuildFn) -> Result<(), JsValue> {
         // WebGL2 固定・WebRunner の起動は `fandhe_render_egui::launch::start_web` が持つ。
         let start_result = fandhe_render_egui::launch::start_web(canvas, move |lc| {
             let ctx = lc.egui_ctx();
-            if let Some(bytes) = font_bytes {
-                fandhe_render_egui::font::apply_font_bytes(ctx, bytes);
-            }
+            // 取得に失敗（`None`）しても、アイコンの記号専用 family は登録する（Issue #1437）。
+            fandhe_render_egui::font::apply_fonts(ctx, font_bytes);
             let app: Box<dyn fandhe_render_egui::EguiApp> = build(ctx);
             app
         })

@@ -12,7 +12,7 @@
 use super::card::{Card, Separator};
 use super::checkbox::Checkbox;
 use super::dialog_widget::DialogWidget;
-use super::icon::Icon;
+use super::icon::{Icon, IconName};
 use super::image_widget::ImageWidget;
 use super::menu::Menu;
 use super::node::Node;
@@ -548,10 +548,9 @@ impl<S> Screen<S> {
     ///
     /// `Node::Widget(Box::new(Icon::fixed(..)))` を組み立てて [`Self::with_node`] に
     /// 委譲する。`id` はツリー上で一意な識別子（[`super::widget::WidgetId`]）、`name` は
-    /// アイコン名（"settings"・"search" 等のセマンティック識別子。不透明文字列であり、
-    /// `fandhe-core` はグリフ解決・フォント・アセット I/O を一切行わない）、`label` は
-    /// アクセシビリティラベル（REQ-9）。
-    pub fn icon(self, id: WidgetId, name: impl Into<String>, label: impl Into<String>) -> Self
+    /// アイコン名（閉じた語彙 [`IconName`]、#1437）、`label` はアクセシビリティラベル（REQ-9。
+    /// 空文字列は装飾用で、読み上げに出ない）。
+    pub fn icon(self, id: WidgetId, name: IconName, label: impl Into<String>) -> Self
     where
         S: 'static,
     {
@@ -569,7 +568,7 @@ impl<S> Screen<S> {
     pub fn icon_bound(
         self,
         id: WidgetId,
-        get: crate::state::ReadFn<S, String>,
+        get: crate::state::ReadFn<S, IconName>,
         label: impl Into<String>,
     ) -> Self
     where
@@ -1249,8 +1248,11 @@ mod tests {
     /// ツリー構築が壊れないことのみを確認する。
     #[test]
     fn icon_builder_adds_widget_node() {
-        let screen: Screen<CounterState> =
-            Screen::new("アイコン画面").icon(super::WidgetId::from_raw(1), "settings", "設定");
+        let screen: Screen<CounterState> = Screen::new("アイコン画面").icon(
+            super::WidgetId::from_raw(1),
+            super::IconName::Settings,
+            "設定",
+        );
 
         assert_eq!(screen.len(), 1);
         match screen.iter().next() {
@@ -1264,8 +1266,8 @@ mod tests {
     /// みを確認し、状態束縛の挙動詳細は `ui/icon.rs` のユニットテストに委ねる。
     #[test]
     fn icon_bound_builder_adds_widget_node() {
-        fn get_active_icon(_state: &CounterState) -> String {
-            "search".to_string()
+        fn get_active_icon(_state: &CounterState) -> super::IconName {
+            super::IconName::Search
         }
 
         let screen: Screen<CounterState> = Screen::new("アイコン画面（状態束縛）").icon_bound(

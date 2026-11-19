@@ -487,7 +487,7 @@ pub use focus::{FocusDirection, FocusEntry, FocusRing, WindowHints};
 pub use geometry::{Point, Rect, Size};
 pub use harness::{LifecyclePhase, WidgetHarness};
 pub use hit_test::{HitRegion, HitTarget, hit_test};
-pub use icon::{Icon, IconSource};
+pub use icon::{Icon, IconName, IconSource};
 pub use icon_widget::{IconWidget, IconWidgetSource};
 pub use image::{Image, ImageSource};
 pub use image_widget::{ImageLoadPhase, ImageWidget, ImageWidgetSource};

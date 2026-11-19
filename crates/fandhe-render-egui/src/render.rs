@@ -4,9 +4,10 @@
 //! [`crate::launch`]、アプリ本体（`StateStore` の保持と毎フレームの駆動）は [`crate::app`]。
 
 use fandhe_core::{
-    Axis, CanvasWidget, Card, Checkbox, DialogWidget, Event, Grid, ImageWidget, Label, Measurement,
-    Menu, Node, PaintCommand, ProgressBar, RadioButton, Screen, Separator, SeparatorOrientation,
-    Slider, Spinner, Stack, StateStore, Tabs, ToggleSwitch, Tooltip, Widget, WidgetValue,
+    Axis, CanvasWidget, Card, Checkbox, DialogWidget, Event, Grid, Icon, ImageWidget, Label,
+    Measurement, Menu, Node, PaintCommand, ProgressBar, RadioButton, Screen, Separator,
+    SeparatorOrientation, Slider, Spinner, Stack, StateStore, Tabs, ToggleSwitch, Tooltip, Widget,
+    WidgetValue,
 };
 
 use crate::recyclers::VirtualListRecyclers;
@@ -554,7 +555,7 @@ fn render_node<S: 'static>(
             // Issue #739）と `Checkbox` / `ToggleSwitch` / `Slider` / `RadioButton`
             // （Issue #806・親 #804）・`ProgressBar` / `Spinner` / `Separator`（Issue #1428）・
             // `Menu` / `Tabs`（Issue #1429）・`Stack` / `Grid` / `Card` / `Tooltip`（Issue #1430）・
-            // `Label` / `ImageWidget`（Issue #1427）を egui 標準部品へ配線済み（下記ブロック参照）。
+            // `Label` / `ImageWidget`（Issue #1427）・`Icon`（Issue #1437）を配線済み（下記ブロック参照）。
             // それ以外の具象型（レイアウトプロトコル S4 等が未確定）は引き続き
             // AX ノード公開のみに留める（TASK-8.3-S2、Issue #97、
             // out-of-scope-tracking.md 対象）。
@@ -616,15 +617,23 @@ fn render_node<S: 'static>(
                 let role = widget.accessibility_role();
                 let label = synced_accessibility_label(widget.as_ref(), state);
                 let interaction = widget.interaction_state();
-                ui.ctx().accesskit_node_builder(ax_id, |node| {
-                    *node =
-                        crate::accessibility::widget_ax_node(role, label.as_deref(), interaction);
-                });
+                // Issue #1437: ラベルが空の `Icon` は装飾用。名前のない Image ノードを作って読み上げに混ぜない。
+                let decorative_icon =
+                    label.is_none() && widget.as_any().is_some_and(|any| any.is::<Icon<S>>());
+                if !decorative_icon {
+                    ui.ctx().accesskit_node_builder(ax_id, |node| {
+                        *node = crate::accessibility::widget_ax_node(
+                            role,
+                            label.as_deref(),
+                            interaction,
+                        );
+                    });
+                }
             }
 
             // `DialogWidget`（S47）・`Checkbox` / `ToggleSwitch` / `Slider` /
             // `RadioButton`（Issue #806）・`ProgressBar` / `Spinner` / `Separator`（Issue #1428）・
-            // `Menu` / `Tabs`（Issue #1429）・`Label` / `ImageWidget`（Issue #1427）を実描画する。`Checkbox` とは別系統の自己完結型
+            // `Menu` / `Tabs`（Issue #1429）・`Label` / `ImageWidget`（Issue #1427）・`Icon`（Issue #1437）を実描画する。`Checkbox` とは別系統の自己完結型
             // `CheckboxWidget`（`checkbox.rs`）は未配線のまま（#806 のスコープ外）。reconcile 契約
             // （`Widget::sync_from_state` は `&mut self` を要求し `&Node<S>` の
             // 共有参照走査からは呼べない、`widget.rs` doc 参照）を満たすため
@@ -1114,6 +1123,27 @@ fn render_node<S: 'static>(
                     let (rect, _) = ui.allocate_exact_size(galley.size(), egui::Sense::hover());
                     ui.painter()
                         .galley(rect.min, galley, ui.visuals().text_color());
+                }
+            } else if let Some(icon) = synced
+                .as_any()
+                .and_then(|any| any.downcast_ref::<Icon<S>>())
+            {
+                // Issue #1437: `IconName` の記号（`IconName::glyph`）を記号専用の family
+                // （`font::icon_font_family`。CJK を入れず emoji-icon-font・Noto Emoji だけ。全名前に字形があることは `icon_render` が確かめる）で
+                // 一辺 `icon_size` の正方形の中央に描く。`bound` の sync 前（名前なし）は場所だけ取って描かない。
+                // 文字は painter で直接描くので AX ノードは増えず、読み上げは上の合成ノード
+                // （role Image + ラベル。ラベルが空なら装飾用でノードなし）だけになる。
+                let side = icon.icon_size();
+                let (rect, _) =
+                    ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::hover());
+                if let Some(name) = icon.name() {
+                    ui.painter().text(
+                        rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        name.glyph(),
+                        egui::FontId::new(side, crate::font::icon_font_family(ui.ctx())),
+                        ui.visuals().text_color(),
+                    );
                 }
             } else if let Some(label) = synced
                 .as_any()
