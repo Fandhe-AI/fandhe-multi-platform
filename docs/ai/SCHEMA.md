@@ -149,7 +149,8 @@ fn main() {
   （`RgbaPixels::new(width, height, rgba)` が長さ不一致・寸法 0・一辺 2048 超で `None`）、`alt` は
   代替テキスト。ビルダーは `.rgba_image(pixels, alt)`
 - `List { expand, axis }`: 状態 `S` から子ノード一覧を都度生成する関数ポインタ。子ノードの型は
-  `Node<S>` 自身に固定され、ネストした `List` を持てる。`axis` は子要素の配置軸（既定 `Axis::Vertical`）
+  `Node<S>` 自身に固定され、ネストした `List` を持てる。`axis` は子要素の配置軸（既定 `Axis::Vertical`）。
+  ただし `render_screen` は `List` の axis を配置に使わない（#1288）
 - `VirtualList { len, item, item_extent, axis }`: index ベースで項目を遅延展開する `List` の
   仮想化版。`len` で総項目数、`item` で index から 1 項目分を生成する
 - `IndexedButton { label, index, on_click, id }`: `List::expand` / `VirtualList::item` 内で
@@ -378,6 +379,51 @@ assert_eq!(assert_iter(screen.iter()), 2);
   `Button` の path へ `Event::ButtonClickedAt` を dispatch する（Issue #739）。同名の
   `Button` が子ノード列に無ければ外側タップは何もしない（トップレベルの `.button()` への
   フォールバックは無い）。参照実装: `crates/fandhe-core/src/screens/confirm_dialog.rs`
+
+### egui で描画される部品・されない部品（Issue #1290）
+
+`fandhe-render-egui` の `render_screen` が実際に描く部品の一覧。`Screen` に置いても、描画されない部品は
+画面に何も出ず、エラーにもならない
+（macOS・Android・Windows では AX ノードだけは公開される）。`crates/fandhe-render-egui/tests/widget_coverage.rs` が 1 種ずつ
+`egui::Context::run` で描画し、出力の shape が空画面と同数のままかを確かめている（根拠は
+`render.rs` の `Node::Widget` 分岐が `DialogWidget` / `Checkbox` / `ToggleSwitch` / `Slider` /
+`RadioButton` / `ImageWidget` / `CanvasWidget` の 7 種だけを `downcast_ref` していること）。
+この 7 種以外の `Widget<S>` 実装（`LabelWidget`・`CheckboxWidget`・`TabBarWidget`・`ProgressWidget` 等）は
+`.with_node()` で置いても描画されない。web-dom の対応は本表の対象外。
+描画の配線と API の整理は #1427（重複する書き方の整理）・#1428・#1429・#1430 で扱う。
+
+描画される（`Node` の直接バリアント。ビルダー名で示す）:
+`.text()` / `.dynamic_text()` / `.error_text()` / `.text_field()` / `.button()` / `.list()` /
+`.virtual_list()` / `.rgba_image()`
+
+描画される（`Node::Widget`）:
+`.checkbox()` / `.toggle_switch()` / `.radio_button()` / `.slider()` /
+`ImageWidget::bound(..)` / `::fixed(..)`（`.with_node()` で置く。識別子が `fandhe_runtime::image_store::put` と一致するときだけ）/
+`DialogWidget`（`.with_node()` で置く）/ `CanvasWidget`（`.with_node()` で置く）
+
+描画されない（何も出ない）と、代わりの書き方:
+
+| 部品（ビルダー） | 代わりの書き方 |
+| --- | --- |
+| `.label()` | `.text()`（固定文字列）・`.dynamic_text()`（状態から読む） |
+| `.text_input()` | `.text_field()` |
+| `.list_view()` | `.list()`（`expand` が `Node::Text` 等を返す） |
+| `.progress_bar()` | `.dynamic_text()` で「42%」のように文字で出す。棒が要るときは `CanvasWidget` |
+| `.spinner()` | `.text("読み込み中")` |
+| `.image()` / `.image_bound()` | `ImageWidget` を `.with_node()` で置く。画素を直接渡すなら `.rgba_image()` |
+| `.icon()` / `.icon_bound()` | `.text()` に記号・文言を置く |
+| `.scroll_view()` | 不要。`render_screen` のルートが縦スクロールする。大量なら `.virtual_list()` |
+| `.stack()` | `Screen` に `.with_node()` で順に並べる（縦並び）。横並びは `.virtual_list_with_axis(.., Axis::Horizontal)`（`.list_with_axis` の軸はフォーカス移動用で、配置は縦一列のまま。#1288） |
+| `.grid()` | `.virtual_list_with_axis(.., Axis::Grid { columns })` |
+| `.card()` | 子のノードを直接並べる。枠は出せない |
+| `.separator()` | なし。空の `.text("")` や区切り文字で代用するか、省く |
+| `.dialog()` | `DialogWidget::new_dynamic(..).with_content(..)`（上の `.dialog()` の注意書き） |
+| `.menu()` | 開くボタンは `.button()`。項目は `.list()` の `expand` が開いているときだけ `Node::IndexedButton` を返す（`.button()` は `.list()` の中に置けない） |
+| `.tabs()` | 見出しごとに `.button()`（押すと選択を書き換える）+ 選択中の中身を返す `.list()` |
+| `.tooltip()` | 補足を `.text()` で隣に置く（ホバー表示は無い） |
+
+`DialogWidget` の `dismiss_label` ボタンは、`with_content` の子ノード列にある同名の `Node::Button` が描く
+（本体だけでは出ない）。
 
 ### `Stack<S>` / `Grid<S>` / `Card<S>` / `Separator<S>`（`ui/stack_grid.rs`・`ui/card.rs`）
 
