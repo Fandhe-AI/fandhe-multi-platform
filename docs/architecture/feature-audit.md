@@ -169,7 +169,7 @@ rustc 1.88.0 固定、6.1 節参照）から選定されたものであり、既
 | dev-dependencies（Android 以外） | `accesskit` | `egui_kittest`（`wgpu` 依存）との feature 整合用 |
 
 `crates/fandhe-egui-proxy` 自身の crate feature（依存を増やさない既定 off）: `frame-metrics` /
-`debug-proxy-app` / `cold-start-probe`。
+`debug-proxy-app` / `cold-start-probe`。3 つとも今は `crates/fandhe-gallery` の feature（#1200 で移した）。
 
 かつて例外として、端末機能を一括で切り替える `device`（Phase 8 / Issue #746、既定 **on**）があった。
 機能を 1 機能 1 crate へ分け、使う機能は依存の有無で選ぶ形にしたため撤去した（#1194）。
