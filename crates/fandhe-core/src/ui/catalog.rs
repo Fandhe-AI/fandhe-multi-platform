@@ -21,11 +21,13 @@
 
 use super::button::Button;
 use super::card::{Card, Separator, SeparatorOrientation};
+use super::dialog::Dialog;
 use super::label::Label;
 use super::list_view::ListView;
 use super::node::Node;
 use super::render::render_headless;
 use super::screen::Screen;
+use super::scroll_view::ScrollView;
 use super::stack_grid::{Grid, Stack};
 use super::text_input::TextInput;
 use super::widget::WidgetId;
@@ -147,9 +149,8 @@ impl WidgetCatalog {
     /// 各 preview は `sample.rs` と同じ様式で関数ポインタのみを用いて構築する。
     /// `radio_button` エントリは `RadioButton<S>`（TASK-8.3-S24 / Issue #119）を登録する。
     /// `toggle_switch` エントリは `ToggleSwitch<S>`（TASK-8.3-S27 / Issue #122）を登録する。
-    /// `image` エントリは `Image<S>`（TASK-8.3-S36 / Issue #131）を登録する（ロード状態・
-    /// イベント処理は別モジュール `ImageWidget<S>` のスコープであり、本エントリは公開 API
-    /// のみに依存する）。`icon` エントリは `Icon<S>`（TASK-8.3-S39 / Issue #134）を
+    /// `image` エントリは `Screen::image` が作る `ImageWidget<S>`（TASK-8.3-S36 / Issue #131。
+    /// Issue #1427 で `Image<S>` から変更。`image_widget.rs` 参照）を登録する。`icon` エントリは `Icon<S>`（TASK-8.3-S39 / Issue #134）を
     /// 登録する（`icon.rs` モジュール doc 参照）。`scroll_view` エントリは `ScrollView<S>`
     /// （コンテナ型、`Label::fixed` を子コンテンツとして配置。TASK-8.3-S42 / Issue #137）を
     /// 登録する（`scroll_view.rs` モジュール doc 参照。状態束縛オフセットは
@@ -158,8 +159,8 @@ impl WidgetCatalog {
     /// `Screen::grid` 経由で登録する（[`preview_stack`] / [`preview_grid`] 参照。状態・
     /// イベント処理は Issue #139 のスコープとして引き続き未接続、
     /// out-of-scope-tracking.md 対象）。`dialog` エントリは `Dialog<S>`（TASK-8.3-S48 /
-    /// Issue #143）を `Screen::dialog` 経由で登録する（初の [`CatalogCategory::Overlay`]
-    /// エントリ）。`Screen::dialog` が生成する `Dialog<S>` の `sync_from_state` は本
+    /// Issue #143）を `Screen::with_node` 経由で登録する（初の [`CatalogCategory::Overlay`]
+    /// エントリ）。`Dialog<S>` の `sync_from_state` は本
     /// モジュールの preview 経路（`Screen::visit` の共有参照走査）からは呼び出せない契約
     /// （`widget.rs` 参照）のため、開閉イベント処理は Issue #142 のスコープとして引き続き
     /// 未接続とする（out-of-scope-tracking.md 対象）。`menu` エントリは `Menu<S>`
@@ -173,9 +174,9 @@ impl WidgetCatalog {
     /// `Screen::tooltip` 経由で登録する、`Overlay` カテゴリの 4 件目のエントリ。`dialog` /
     /// `menu` / `tabs` と同じ理由で hover/focus 連動の表示・非表示配線は Issue #151 の
     /// スコープとして引き続き未接続とする）。`label` エントリは `Label<S>`（`label.rs`
-    /// 参照。TASK-8.3-S12 / Issue #107）を `Screen::label` 経由で登録する、`Display`
+    /// 参照。TASK-8.3-S12 / Issue #107）を `Screen::with_node` 経由で登録する、`Display`
     /// カテゴリの 3 件目のエントリ。`LabelWidget<S>`（インタラクション状態の実配線、
-    /// Issue #106）は `Screen::label` が構築する `Label<S>` とは別型であり（`label.rs`
+    /// Issue #106）は `Label<S>` とは別型であり（`label.rs`
     /// モジュール doc 参照）、preview 経路からは呼び出せないため引き続き未接続とする）。
     /// `checkbox` エントリは `Checkbox<S>`（`checkbox.rs` 参照。TASK-8.3-S21 /
     /// Issue #116）を `Screen::checkbox` 経由で登録する、`Input` カテゴリの 4 件目の
@@ -230,7 +231,7 @@ impl WidgetCatalog {
 /// カテゴリの 2 件目のエントリ。`tabs` は `Tabs<S>`（TASK-8.3-S54 / Issue #149）を
 /// 利用する、`Overlay` カテゴリの 3 件目のエントリ。`tooltip` は `Tooltip<S>`
 /// （TASK-8.3-S57 / Issue #152）を利用する、`Overlay` カテゴリの 4 件目のエントリ。
-/// `label` は `Label<S>`（TASK-8.3-S12 / Issue #107）を `Screen::label` 経由で
+/// `label` は `Label<S>`（TASK-8.3-S12 / Issue #107）を `Screen::with_node` 経由で
 /// 利用する、`Display` カテゴリの 3 件目のエントリ。`checkbox` は `Checkbox<S>`
 /// （TASK-8.3-S21 / Issue #116）を `Screen::checkbox` 経由で利用する、`Input`
 /// カテゴリの 4 件目のエントリ。
@@ -542,7 +543,7 @@ fn preview_toggle_switch() -> Vec<String> {
     render_headless(&screen, &PreviewState)
 }
 
-/// `image` エントリの preview（TASK-8.3-S36 / Issue #131。`Image<S>`（Issue #129）を
+/// `image` エントリの preview（TASK-8.3-S36 / Issue #131。`.image()` が作る `ImageWidget<S>`（Issue #1427）を
 /// 1 件だけ配置したデモ画面）。`render_headless` は `Node::Widget` を
 /// 未配線のままプレースホルダ扱いする契約（`widget.rs` 参照）のため、タイトル行のみを
 /// 返す。ソース識別子はカタログの静的プレビュー用の固定値であり外部入力ではない。
@@ -571,10 +572,11 @@ fn preview_icon() -> Vec<String> {
 /// `Node::Widget` を未配線のままプレースホルダ扱いする契約（`widget.rs` 参照）のため、
 /// タイトル行のみを返す。ラベル文字列は preview 専用の固定リテラルであり外部入力ではない。
 fn preview_scroll_view() -> Vec<String> {
-    let screen: Screen<PreviewState> = Screen::new("ScrollView プレビュー").scroll_view(
-        WidgetId::from_raw(1),
-        Label::fixed(WidgetId::from_raw(2), "フィード一覧"),
-    );
+    let screen: Screen<PreviewState> =
+        Screen::new("ScrollView プレビュー").with_node(Node::Widget(Box::new(ScrollView::new(
+            WidgetId::from_raw(1),
+            Label::fixed(WidgetId::from_raw(2), "フィード一覧"),
+        ))));
     render_headless(&screen, &PreviewState)
 }
 
@@ -630,18 +632,18 @@ fn preview_dialog_open(_state: &PreviewState) -> bool {
 /// `dialog` エントリの preview 画面を組み立てる（TASK-8.3-S48 / Issue #143）。
 ///
 /// `Dialog<S>`（`dialog.rs` 参照、Issue #141）を
-/// `Screen::dialog` 経由で 1 件だけ配置したデモ画面を返す。[`preview_dialog`]
+/// `Screen::with_node` 経由で 1 件だけ配置したデモ画面を返す。[`preview_dialog`]
 /// （`render_headless` 経由）と、`#[cfg(test)] mod tests` 側で `Widget<S>` トレイト
 /// メソッド（`accessibility_role`）越しに実配線を検証する用途の双方から参照する
 /// （`dialog_preview_widget_is_backed_by_real_dialog` 参照）。表示文言は preview 専用の
 /// 固定リテラルであり外部入力ではない（A03 対策）。
 fn dialog_preview_screen() -> Screen<PreviewState> {
-    Screen::new("Dialog プレビュー").dialog(
+    Screen::new("Dialog プレビュー").with_node(Node::Widget(Box::new(Dialog::bound(
         WidgetId::from_raw(1),
         "確認",
         "この操作を実行しますか？",
         preview_dialog_open,
-    )
+    ))))
 }
 
 /// `dialog` エントリの preview（TASK-8.3-S48 / Issue #143）。`render_headless` は
@@ -769,14 +771,15 @@ fn preview_label_get(_state: &PreviewState) -> String {
 }
 
 /// `label` エントリの preview（TASK-8.3-S12 / Issue #107。
-/// `Label<S>`（`label.rs` 参照、Issue #105）を `Screen::label` 経由で 1 件だけ配置したデモ画面）。
+/// `Label<S>`（`label.rs` 参照、Issue #105）を `Screen::with_node` 経由で 1 件だけ配置したデモ画面）。
 /// `render_headless` は `Node::Widget` を未配線のままプレースホルダ扱いする契約
 /// （`widget.rs` 参照）のため、他の `Widget<S>` 系エントリと同様にタイトル行のみを返す
 /// （`Label<S>` は `sync_from_state` が呼ばれるまで `Bound` テキストは空文字列のまま、
 /// `label.rs` 参照）。
 fn preview_label() -> Vec<String> {
-    let screen: Screen<PreviewState> =
-        Screen::new("Label プレビュー").label(WidgetId::from_raw(1), preview_label_get);
+    let screen: Screen<PreviewState> = Screen::new("Label プレビュー").with_node(Node::Widget(
+        Box::new(Label::bound(WidgetId::from_raw(1), preview_label_get)),
+    ));
     render_headless(&screen, &PreviewState)
 }
 
@@ -1635,7 +1638,7 @@ mod tests {
         assert_eq!(display_entries.len(), 7);
     }
 
-    /// `label` エントリの preview（[`preview_label`]）が `Screen::label` 経由で
+    /// `label` エントリの preview（[`preview_label`]）が `Screen::with_node` 経由で
     /// `Label<S>`（`Node::Widget` 経由）を実際に配置していることを固定化する
     /// （TASK-8.3-S12 / Issue #107）。`render_headless` は `Node::Widget` を不透過に
     /// 扱う契約（`preview_label` doc 参照）のため
@@ -1651,8 +1654,9 @@ mod tests {
     /// 現れず本テストは失敗する）。
     #[test]
     fn label_preview_widget_is_backed_by_real_label() {
-        let screen: Screen<PreviewState> =
-            Screen::new("Label プレビュー").label(WidgetId::from_raw(1), preview_label_get);
+        let screen: Screen<PreviewState> = Screen::new("Label プレビュー").with_node(Node::Widget(
+            Box::new(Label::bound(WidgetId::from_raw(1), preview_label_get)),
+        ));
         let mut widget_count = 0;
         let available = Measurement {
             width: 200.0,

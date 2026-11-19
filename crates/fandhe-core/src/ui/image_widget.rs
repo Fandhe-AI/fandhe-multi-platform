@@ -388,6 +388,16 @@ impl<S: 'static> Widget<S> for ImageWidget<S> {
         AccessibilityRole::Image
     }
 
+    /// 代替テキスト（alt）をアクセシブルネームとして公開する（REQ-9、Issue #1427）。空なら `None`。
+    /// ソース識別子は外部入力になり得るため出さない（`paint` と同じ方針）。
+    fn accessibility_label(&self) -> Option<String> {
+        if self.alt.is_empty() {
+            None
+        } else {
+            Some(self.alt.clone())
+        }
+    }
+
     fn interaction_state(&self) -> InteractionState {
         self.interaction
     }

@@ -5,6 +5,54 @@
 
 ## [Unreleased]
 
+`.label()`・`.list_view()`・`.scroll_view()` を削除し、`.dialog()` と `.image()` / `.image_bound()` を描かれる型へ変える（Issue #1427）。
+
+どれも egui で何も描かれず、同じ役割の描かれる書き方が既にあった。「置いても何も出ない」書き方を残さず、
+役割ごとに書き方を 1 つへ寄せる。
+
+### 破壊的変更（BREAKING CHANGE）
+
+- `Screen::label` / `Screen::list_view` / `Screen::scroll_view` を削除
+- `Screen::dialog` の引数を `(id, title, body, open)` から `DialogWidget<S>` 1 つへ変更（描かれない `Dialog<S>` ではなく
+  描かれる `DialogWidget<S>` を置く。`Screen::stack` と同じ形）
+- `Screen::image` / `Screen::image_bound` が作る型を `Image<S>` から `ImageWidget<S>` へ変更（呼び出しの書き方は同じ。
+  `Node::Widget` の中身を `Image<S>` へ downcast していた場合は `ImageWidget<S>` へ）。`Image<S>` の型自体は残る
+
+### 追加
+
+- `Label<S>` が `Widget::as_any` を実装。`fandhe-render-egui` が `Label` を文字として描く。
+  `Stack` / `Grid` / `Card` / `Tooltip` の子が `Label` のときも描かれる（#1430 の「子 `Label` は描かれない」を解消）
+- `ImageWidget<S>` が `Widget::accessibility_label`（alt）を実装
+- `.image()` は、識別子と一致する画素が `fandhe_runtime::image_store::put` で置かれていないとき（ソースが空でない場合）、
+  alt を文字で描く（AX ノードは作らず、読み上げは合成の Image ノード 1 つだけ）。識別子はパスや URL を
+  読み込むものではなく、置けるのは同時に 1 枚
+- `screens::containers`（gallery の `containers`）に子 `Label`（固定・状態束縛）を足した
+
+### 挙動の変更
+
+- egui: 子 `Label` を描く。`Label` の AX は、合成ノードから egui の label ノードに変わった
+  （macOS・Android・Windows。ノードは 1 つのまま）。`ImageWidget` の AX は alt をラベルとして持つ。
+  ただしソースが空のとき（写真選択・書類スキャン・scanner_devices_import の選ぶ前の表示など、直接置いた
+  `ImageWidget` も含む）は従来どおり名前を出さない。直接置いた `ImageWidget` も、ソースが空でなく画素が無いときは
+  alt が名前になる（以前は名前なし）
+- egui: `LabelWidget`・`Image`・`ListView`・`ScrollView`・`Dialog` の型を `.with_node()` で直接置いても描かれない
+  （ビルダーを無くしたので、通常の画面の組み方では置かない）
+- web-dom: `.image()` / `.image_bound()` のソースが `blob:` のとき `img` になる（それ以前は `Image<S>` だったため
+  常に空プレースホルダ）。それ以外は、ソースが空でなければ `role="img"` + alt の `aria-label` の `div`、
+  空なら属性なしの空 `div`（直接置いた `ImageWidget` も同じ。以前は `blob:` 以外は属性なしの `div`）。`Label` は web-dom で出ない
+  （従来どおり。固定文字の `Label` は `aria-label` だけが出る。コンテナの子も同じ）
+- swiftui-bridge: 変化なし（`Node::Widget` は従来どおり型を問わず共通の変換）
+
+### 移行手順
+
+1. `.label(id, get)` を `.dynamic_text(get)` へ（コンテナの子にするなら `Label::bound(id, get)` / `Label::fixed(id, text)`）
+2. `.list_view(id, len, item)` を `.list()`（`expand` が `Node::Text` 等を返す）、大量なら `.virtual_list()` へ
+3. `.scroll_view(id, content)` を削除し、`content` を直接置く（`render_screen` のルートが縦スクロールする）
+4. `.dialog(id, title, body, open)` を `.dialog(DialogWidget::new_dynamic(..).with_content(..))` へ
+   （`.dialog(..)` の引数が `DialogWidget` に変わった。`screens::confirm_dialog` が参照実装）
+5. `.image(id, "assets/x.png", alt)` でパスの画像が出ると期待していた場合は、`fandhe_runtime::image_store::put` で
+   同じ識別子の画素を置くか、画素を持っているなら `.rgba_image()` を使う
+
 `Stack`・`Grid`・`Card`・`Tooltip` の子を egui で描画する（Issue #1430）。
 
 ### 追加

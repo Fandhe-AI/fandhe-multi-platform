@@ -4,9 +4,9 @@
 //! [`crate::launch`]、アプリ本体（`StateStore` の保持と毎フレームの駆動）は [`crate::app`]。
 
 use fandhe_core::{
-    Axis, CanvasWidget, Card, Checkbox, DialogWidget, Event, Grid, ImageWidget, Measurement, Menu,
-    Node, PaintCommand, ProgressBar, RadioButton, Screen, Separator, SeparatorOrientation, Slider,
-    Spinner, Stack, StateStore, Tabs, ToggleSwitch, Tooltip, Widget, WidgetValue,
+    Axis, CanvasWidget, Card, Checkbox, DialogWidget, Event, Grid, ImageWidget, Label, Measurement,
+    Menu, Node, PaintCommand, ProgressBar, RadioButton, Screen, Separator, SeparatorOrientation,
+    Slider, Spinner, Stack, StateStore, Tabs, ToggleSwitch, Tooltip, Widget, WidgetValue,
 };
 
 use crate::recyclers::VirtualListRecyclers;
@@ -73,6 +73,15 @@ fn synced_accessibility_label<S: 'static>(widget: &dyn Widget<S>, state: &S) -> 
     }
     let mut synced = widget.clone_box();
     synced.sync_from_state(state);
+    // Issue #1427: ソースが空の `ImageWidget`（写真選択の選ぶ前など。何も描かない）は alt の名前も出さない。
+    // `bound` は sync 前のキャッシュが空なので、sync 済みの複製で判定する。
+    if synced
+        .as_any()
+        .and_then(|any| any.downcast_ref::<ImageWidget<S>>())
+        .is_some_and(|img| img.source_text().is_empty())
+    {
+        return None;
+    }
     synced.accessibility_label()
 }
 
@@ -544,8 +553,8 @@ fn render_node<S: 'static>(
             // `Widget<S>` トレイトオブジェクトの実描画配線は、`DialogWidget`（S47、
             // Issue #739）と `Checkbox` / `ToggleSwitch` / `Slider` / `RadioButton`
             // （Issue #806・親 #804）・`ProgressBar` / `Spinner` / `Separator`（Issue #1428）・
-            // `Menu` / `Tabs`（Issue #1429）・`Stack` / `Grid` / `Card` / `Tooltip`（Issue #1430）を
-            // egui 標準部品へ配線済み（下記ブロック参照）。
+            // `Menu` / `Tabs`（Issue #1429）・`Stack` / `Grid` / `Card` / `Tooltip`（Issue #1430）・
+            // `Label` / `ImageWidget`（Issue #1427）を egui 標準部品へ配線済み（下記ブロック参照）。
             // それ以外の具象型（レイアウトプロトコル S4 等が未確定）は引き続き
             // AX ノード公開のみに留める（TASK-8.3-S2、Issue #97、
             // out-of-scope-tracking.md 対象）。
@@ -596,6 +605,7 @@ fn render_node<S: 'static>(
                     || any.is::<Spinner<S>>()
                     || any.is::<Menu<S>>()
                     || any.is::<Tabs<S>>()
+                    || any.is::<Label<S>>()
             });
             // `Stack` / `Grid` / `Card` / `Tooltip`（Issue #1430）は egui のレイアウト部品で描くが、
             // AX は上の合成ノード（Stack・Grid・Card は Group、Tooltip は Tooltip の役割）を残す。
@@ -614,7 +624,7 @@ fn render_node<S: 'static>(
 
             // `DialogWidget`（S47）・`Checkbox` / `ToggleSwitch` / `Slider` /
             // `RadioButton`（Issue #806）・`ProgressBar` / `Spinner` / `Separator`（Issue #1428）・
-            // `Menu` / `Tabs`（Issue #1429）を実描画する。`Checkbox` とは別系統の自己完結型
+            // `Menu` / `Tabs`（Issue #1429）・`Label` / `ImageWidget`（Issue #1427）を実描画する。`Checkbox` とは別系統の自己完結型
             // `CheckboxWidget`（`checkbox.rs`）は未配線のまま（#806 のスコープ外）。reconcile 契約
             // （`Widget::sync_from_state` は `&mut self` を要求し `&Node<S>` の
             // 共有参照走査からは呼べない、`widget.rs` doc 参照）を満たすため
@@ -1080,15 +1090,40 @@ fn render_node<S: 'static>(
                 .and_then(|any| any.downcast_ref::<ImageWidget<S>>())
             {
                 // Issue #1103: 識別子が `image_store` の画像と一致するときだけ実画素を描く
-                // （復号確認済みの画像のみが置かれる）。無ければ何も描かない。AX は上の
-                // 合成ノード（role Image + alt）を使うため `is_natively_rendered` には足さない。
+                // （復号確認済みの画像のみが置かれる）。無ければ alt を文字で描く（下記。ソースが空なら何も描かない）。
+                // AX は上の合成ノード（role Image + `ImageWidget::accessibility_label` の alt）を使うため
+                // `is_natively_rendered` には足さない。
                 if let Some(tex) = crate::image_store::texture(ui.ctx(), img.source_text()) {
                     ui.add(
                         egui::Image::new(&tex)
                             .max_width(ui.available_width())
                             .max_height(320.0),
                     );
+                } else if !img.source_text().is_empty() {
+                    // Issue #1427: 識別子を示したのに画素が置かれていないとき（保管所は 1 枠で、パスや
+                    // URL は読み込まない）、何も出さず黙らせず alt を文字で出す。ソースが空のとき
+                    // （写真選択の選ぶ前など）は従来どおり何も描かない。
+                    // `ui.label` は AX に Label ノードを出し、合成の Image ノード（alt）と二重に読まれるため、
+                    // AX ノードを作らずに galley を直接描く。
+                    let galley = egui::WidgetText::from(img.alt_text()).into_galley(
+                        ui,
+                        None,
+                        ui.available_width(),
+                        egui::TextStyle::Body,
+                    );
+                    let (rect, _) = ui.allocate_exact_size(galley.size(), egui::Sense::hover());
+                    ui.painter()
+                        .galley(rect.min, galley, ui.visuals().text_color());
                 }
+            } else if let Some(label) = synced
+                .as_any()
+                .and_then(|any| any.downcast_ref::<Label<S>>())
+            {
+                // Issue #1427: `Label`（`Stack` 等のコンテナの子として置く文字）。`Node::Text` /
+                // `Node::DynamicText` と同じ `ui.label` で、`sync_from_state` 済みの複製から読むため
+                // `Label::bound` は状態変化に追随する。egui の label が自前で AX ノードを出すので
+                // 合成ノードは重ねない（上の `is_natively_rendered`）。
+                ui.label(label.text());
             } else if let Some(canvas) = synced
                 .as_any()
                 .and_then(|any| any.downcast_ref::<CanvasWidget<S>>())

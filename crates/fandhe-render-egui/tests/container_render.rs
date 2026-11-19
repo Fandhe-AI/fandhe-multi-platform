@@ -4,11 +4,15 @@
 //! 経路は 再帰描画（`render.rs` の `Node::Widget` 分岐 → `render_children`）→
 //! `Event::WidgetValueChanged { path }`（path は `Widget::children` の添字の列）→
 //! `set_widget_value_at` → 利用者の `WriteFn`。子には `Checkbox`（Widget 側で描かれる部品）を使う。
-//! 子 `Label`（`.label()` 系）は #1427 の結論待ちで描かれないため、ここでは使わない。
+//! 子 `Label`（文字）は Issue #1427 で描かれるようになった（`label_children_render_text` で確かめる）。
 
+#[cfg(any(target_os = "macos", target_os = "android", target_os = "windows"))]
+use egui_kittest::kittest::NodeT;
 use egui_kittest::kittest::Queryable;
 use fandhe_core::ui::FlexDirection;
-use fandhe_core::{Card, Checkbox, Grid, Node, Screen, Stack, StateStore, Tabs, Tooltip, WidgetId};
+use fandhe_core::{
+    Card, Checkbox, Grid, Label, Node, Screen, Stack, StateStore, Tabs, Tooltip, WidgetId,
+};
 
 #[derive(Default)]
 struct St {
@@ -392,4 +396,47 @@ fn bound_tooltip_text_reaches_ax_label() {
     let tip = Tooltip::bound(id(3), rd_tip).with_anchor(cb_a());
     let h = harness(Screen::new("t").with_node(Node::Widget(Box::new(tip))));
     h.get_by_label("状態からの補足");
+}
+
+fn rd_text(_: &St) -> String {
+    "状態の文字".into()
+}
+
+/// 子 `Label`（固定・状態束縛）が文字として描かれ、入れ子の `Card` の中でも出る（Issue #1427）。
+/// `Label` の描画分岐を外すと、どの文字も出なくなって落ちる。
+#[test]
+fn label_children_render_text() {
+    let h = harness(
+        Screen::new("t")
+            .stack(
+                Stack::new(id(1))
+                    .with_child(Label::fixed(id(2), "固定の文字"))
+                    .with_child(Label::bound(id(3), rd_text)),
+            )
+            .card(Card::new(id(4)).with_child(Label::fixed(id(5), "枠の中の文字")))
+            .tooltip(id(6), "本文", Label::<St>::fixed(id(7), "アンカーの文字")),
+    );
+    for t in ["固定の文字", "状態の文字", "枠の中の文字", "アンカーの文字"] {
+        // 文字は Label ノードと TextRun の 2 つで出るため、1 つ以上あれば足りる。
+        assert!(h.query_all_by_value(t).next().is_some(), "{t}");
+    }
+}
+
+/// `Label` の AX ノードは egui の label 1 つだけで、合成ノードを重ねない（`is_natively_rendered`）。
+/// 合成ノードが重なると、同じ文字の Label ノードが 2 つ以上になって落ちる。
+#[cfg(any(target_os = "macos", target_os = "android", target_os = "windows"))]
+#[test]
+fn label_exposes_one_ax_node() {
+    use egui::accesskit::Role;
+    let h = harness(
+        Screen::new("t").stack(Stack::new(id(1)).with_child(Label::fixed(id(2), "重複なし"))),
+    );
+    let n = h
+        .query_all_by_role(Role::Label)
+        .filter(|n| {
+            let ax = n.accesskit_node();
+            ax.value().as_deref() == Some("重複なし") || ax.label().as_deref() == Some("重複なし")
+        })
+        .count();
+    assert_eq!(n, 1);
 }

@@ -17,6 +17,13 @@
 //! 型統合（重複する描画・計測ロジックの一本化）は別 issue のスコープとし、
 //! `.claude/rules/out-of-scope-tracking.md` のフロー対象として追跡する。
 //!
+//! **実描画の経路**（Issue #1427）: `fandhe-render-egui`（`Node::Widget` の `Label` 分岐）は
+//! [`Widget::as_any`] で [`Label`] へ downcast し、クローンを `sync_from_state` してから
+//! `text()` を読んで `ui.label` で描く。`Stack` / `Grid` / `Card` / `Tooltip` の子としても描かれる。
+//! **[`LabelWidget`] は描かれない**（`Screen` のビルダーも無い。文字は `Label` か `.text()` /
+//! `.dynamic_text()` を使う）。下記の「未配線契約」は `render_headless` / `to_snapshot_node` の話で、
+//! この経路は含まない。
+//!
 //! **未配線契約（widget.rs 参照）**: `render_headless`（本クレート）・`convert_node`
 //! （`fandhe-web-dom`）・`to_snapshot_node`（`fandhe-swiftui-bridge`）は `&Node<S>`
 //! 共有参照のみを持ち `sync_from_state` を呼べないため、`Node::Widget` 経由で
@@ -223,6 +230,12 @@ impl<S: 'static> Widget<S> for Label<S> {
 
     fn clone_box(&self) -> Box<dyn Widget<S>> {
         Box::new(self.clone())
+    }
+
+    /// 描画バックエンド（`fandhe-render-egui`）が具象型へ downcast して `text()` を読み、
+    /// コンテナの子の文字を描くための口（Issue #1427）。
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
     }
 
     /// トークン解決込みの描画列（TASK-8.4-S14）。Display カテゴリの既定マッピング

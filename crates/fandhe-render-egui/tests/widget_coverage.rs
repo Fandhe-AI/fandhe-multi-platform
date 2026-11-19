@@ -123,7 +123,7 @@ fn walk(shape: &egui::Shape, count: &mut usize, text: &mut String) {
 
 #[test]
 fn rendered_or_not() {
-    // `.image()` が描かれず `ImageWidget` だけ描かれることを見るため、識別子を保管所へ置く。
+    // `.image()` が描くのは識別子が保管所に一致するときだけなので、先に置く。
     fandhe_render_egui::image_store::put(
         "img-1290".into(),
         RgbaPixels::new(1, 1, vec![255u8; 4]).unwrap(),
@@ -208,9 +208,15 @@ fn rendered_or_not() {
         ),
         (
             "DialogWidget(new_dynamic)",
-            Screen::new("t").with_node(fandhe_core::Node::Widget(Box::new(
-                DialogWidget::new_dynamic(id(1), "X", "Y", "Z", true, rd_open, wr_bool),
-            ))),
+            Screen::new("t").dialog(DialogWidget::new_dynamic(
+                id(1),
+                "X",
+                "Y",
+                "Z",
+                true,
+                rd_open,
+                wr_bool,
+            )),
             true,
         ),
         (
@@ -234,13 +240,37 @@ fn rendered_or_not() {
             true,
         ),
         (
-            "Image(.image())",
+            "ImageWidget(.image())",
             Screen::new("t").image(id(1), "img-1290", "X"),
+            true,
+        ),
+        (
+            "ImageWidget(.image_bound())",
+            Screen::new("t").image_bound(id(1), rd_img, "X"),
+            true,
+        ),
+        (
+            "ImageWidget（識別子が保管所に無い。alt を文字で出す）",
+            Screen::new("t").image(id(1), "no-such-image", "X"),
+            true,
+        ),
+        (
+            "ImageWidget（ソースが空）",
+            Screen::new("t").image(id(1), "", "X"),
             false,
         ),
         (
-            "Image(.image_bound())",
-            Screen::new("t").image_bound(id(1), rd_img, "X"),
+            "Image<S>（型を直接置く）",
+            Screen::new("t").with_node(fandhe_core::Node::Widget(Box::new(
+                fandhe_core::Image::<St>::fixed(id(1), "img-1290", "X"),
+            ))),
+            false,
+        ),
+        (
+            "LabelWidget（型を直接置く）",
+            Screen::new("t").with_node(fandhe_core::Node::Widget(Box::new(
+                fandhe_core::LabelWidget::<St>::new_static(id(1), "X"),
+            ))),
             false,
         ),
         (
@@ -248,15 +278,26 @@ fn rendered_or_not() {
             Screen::new("t").icon_bound(id(1), rd_img, "X"),
             false,
         ),
-        ("Label", Screen::new("t").label(id(1), rd_label), false),
+        (
+            "Label",
+            Screen::new("t").with_node(fandhe_core::Node::Widget(Box::new(Label::bound(
+                id(1),
+                rd_label,
+            )))),
+            true,
+        ),
         (
             "TextInput",
             Screen::new("t").text_input(id(1), "X", rd_str, wr_str),
             false,
         ),
+        // ListView・ScrollView・Dialog はビルダーを削除した（Issue #1427）。型を `.with_node()` で
+        // 直接置くと今も描かれない（`.list()`・ルートのスクロール・`DialogWidget` を使う）。
         (
-            "ListView",
-            Screen::new("t").list_view(id(1), rd_len, rd_item),
+            "ListView（型を直接置く）",
+            Screen::new("t").with_node(fandhe_core::Node::Widget(Box::new(
+                fandhe_core::ListView::bound(id(1), rd_len, rd_item),
+            ))),
             false,
         ),
         (
@@ -267,11 +308,13 @@ fn rendered_or_not() {
         ("Spinner", Screen::new("t").spinner(id(1)), true),
         ("Icon", Screen::new("t").icon(id(1), "star", "X"), false),
         (
-            "ScrollView",
-            Screen::new("t").scroll_view(id(1), Label::<St>::fixed(id(2), "X")),
+            "ScrollView（型を直接置く）",
+            Screen::new("t").with_node(fandhe_core::Node::Widget(Box::new(
+                fandhe_core::ScrollView::new(id(1), Label::<St>::fixed(id(2), "X")),
+            ))),
             false,
         ),
-        // 子は `Widget` 側で描かれる `Checkbox`。子 `Label`（`.label()` 系）は #1427 の結論待ちで描かれない。
+        // 子は `Checkbox` と `Label`（Issue #1427 で `Label` も描かれる）。
         (
             "Stack",
             Screen::new("t").stack(
@@ -284,7 +327,7 @@ fn rendered_or_not() {
         (
             "Stack（子が Label）",
             Screen::new("t").stack(Stack::new(id(1)).with_child(Label::fixed(id(2), "X"))),
-            false,
+            true,
         ),
         (
             "Grid",
@@ -306,7 +349,7 @@ fn rendered_or_not() {
             ))),
             true,
         ),
-        // 子 `Label` は描かれないが、枠は描かれる（枠そのものは container_render の card_draws_a_stroked_frame で確かめる）。
+        // 枠は子が無くても描かれる（枠そのものは container_render の card_draws_a_stroked_frame で確かめる）。
         (
             "Card（子が Label、padding あり）",
             Screen::new("t").card(
@@ -322,8 +365,10 @@ fn rendered_or_not() {
             true,
         ),
         (
-            "Dialog",
-            Screen::new("t").dialog(id(1), "X", "Y", rd_open),
+            "Dialog（型を直接置く）",
+            Screen::new("t").with_node(fandhe_core::Node::Widget(Box::new(
+                fandhe_core::Dialog::bound(id(1), "X", "Y", rd_open),
+            ))),
             false,
         ),
         (
@@ -352,7 +397,7 @@ fn rendered_or_not() {
         (
             "Tooltip（子が Label）",
             Screen::new("t").tooltip(id(1), "Y", Label::<St>::fixed(id(2), "X")),
-            false,
+            true,
         ),
     ];
     let mut report = String::new();

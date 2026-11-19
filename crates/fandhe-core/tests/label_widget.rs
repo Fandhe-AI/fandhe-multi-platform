@@ -1,7 +1,7 @@
 //! `Label` / `LabelWidget`（TASK-8.3-S10 / S11 / S12、REQ-8 / REQ-13、
 //! Issue #105 / #106 / #107）の結合テスト。
 //!
-//! 親 issue #95 の一部。`Screen::label` ビルダーを含む画面を `WidgetHarness` で
+//! 親 issue #95 の一部。`Label::bound`（`.with_node()`） ビルダーを含む画面を `WidgetHarness` で
 //! 駆動し、(a) フレームループ・バージョン再利用の意味論が `Node::Widget` 追加によって
 //! 壊れないこと、(b) `render_headless` スナップショットにウィジェット行が現れない
 //! （`widget.rs` の未配線契約の固定化）ことを検証する。加えて `Label` / `LabelWidget`
@@ -9,11 +9,11 @@
 //! （公開 API 経由）で検証する（Issue #107）。
 
 use fandhe_core::{
-    AccessibilityRole, HitRegion, InteractionInput, Label, LabelWidget, Measurement, PaintCommand,
-    Point, Rect, Screen, Size, Widget, WidgetHarness, WidgetId,
+    AccessibilityRole, HitRegion, InteractionInput, Label, LabelWidget, Measurement, Node,
+    PaintCommand, Point, Rect, Screen, Size, Widget, WidgetHarness, WidgetId,
 };
 
-/// カウンタ状態。`Screen::label` の束縛先として使う。
+/// カウンタ状態。`Label::bound`（`.with_node()`） の束縛先として使う。
 #[derive(Default)]
 struct Counter {
     count: u32,
@@ -30,11 +30,14 @@ fn read_count(state: &Counter) -> String {
 fn label_screen() -> Screen<Counter> {
     Screen::new("home")
         .text("見出し")
-        .label(WidgetId::from_raw(1), read_count)
+        .with_node(Node::Widget(Box::new(Label::bound(
+            WidgetId::from_raw(1),
+            read_count,
+        ))))
         .button(WidgetId::from_raw(2), "increment", increment)
 }
 
-/// `.label()` を含む画面でもフレームループ・バージョン再利用の意味論（`WidgetHarness`
+/// `Label` を含む画面でもフレームループ・バージョン再利用の意味論（`WidgetHarness`
 /// 共通契約、TASK-8.3-S5）が壊れないことを確認する回帰テスト。
 #[test]
 fn label_screen_does_not_break_harness_frame_loop_semantics() {
@@ -54,7 +57,7 @@ fn label_screen_does_not_break_harness_frame_loop_semantics() {
 /// （`widget.rs` の `Widget::sync_from_state` doc に明記された未配線契約）。本テストは
 /// この契約を固定化し、`paint()` への委譲復活を回帰として検知する。
 ///
-/// `Screen::label` で束縛したラベルは `sync_from_state` が一度も呼ばれないため
+/// `Label::bound`（`.with_node()`） で束縛したラベルは `sync_from_state` が一度も呼ばれないため
 /// `cached_text` は常に空文字列になる。そのため「`count:` を含む行が無い」という
 /// 部分一致の否定だけでは、`render_headless` が将来 `paint()` へ委譲するよう
 /// 変更されても空文字列の `PaintCommand::Text` が出力されるだけで検知できない
@@ -231,10 +234,10 @@ fn label_and_label_widget_accessibility_role_and_hit_test_are_fixed_via_trait_ob
     }
 }
 
-/// ハーネス経由の回帰: 複数ラベル（`Screen::label` × 2 + button）画面で、`tap` に
+/// ハーネス経由の回帰: 複数ラベル（`Label::bound`（`.with_node()`） × 2 + button）画面で、`tap` に
 /// よるボタンイベント発火 → 状態バージョン更新 → 次フレームで `frames_rendered` が
 /// 増える一方、スナップショットにウィジェット行が現れない（未配線契約の完全一致固定）
-/// ことを検証する（TASK-8.3-S12 / Issue #107）。`Screen::label` を 2 件配置し、
+/// ことを検証する（TASK-8.3-S12 / Issue #107）。`Label::bound`（`.with_node()`） を 2 件配置し、
 /// 複数 `Node::Widget` が同時に存在する場合でも未配線契約が崩れないことを固定化する。
 #[test]
 fn multiple_labels_harness_regression_button_tap_updates_frame_count_without_widget_output() {
@@ -246,8 +249,14 @@ fn multiple_labels_harness_regression_button_tap_updates_frame_count_without_wid
     }
 
     let screen: Screen<Counter> = Screen::new("multi-label")
-        .label(WidgetId::from_raw(10), read_count_label)
-        .label(WidgetId::from_raw(11), read_doubled_label)
+        .with_node(Node::Widget(Box::new(Label::bound(
+            WidgetId::from_raw(10),
+            read_count_label,
+        ))))
+        .with_node(Node::Widget(Box::new(Label::bound(
+            WidgetId::from_raw(11),
+            read_doubled_label,
+        ))))
         .button(WidgetId::from_raw(12), "increment", increment);
 
     let mut harness = WidgetHarness::new(screen, Counter::default());
