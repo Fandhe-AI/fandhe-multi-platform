@@ -15,6 +15,7 @@
 //! 書けない。無いと実機で起動直後に終了する、#1292）。機能の `info-plist` が殻のキーを上書きする宣言はエラーにする。
 //!
 //! アプリ自身の追記（`fandhe-app.<os>.info-plist`・`entitlements`）は生成値へ同じ統合規則で足し、食い違えばエラーにする（#1202）。
+//! Android は `fandhe-app.android` を擬似の宣言者（id `[package.metadata.fandhe-app]`）として機能と同じ `merge` へ入れる（#1202）。
 //!
 //! 出力先は `<アプリの crate>/gen/` に固定する（consumer-app-structure.md §4、gitignore する）。
 //! Info.plist の説明文（`*UsageDescription`）は既定値を持たず、アプリ側の
@@ -32,9 +33,9 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::declaration::{
-    backup_exclusion_problems, entitlements_problems, info_plist_problems,
-    main_activity_attribute_allows, no_ctrl, strip_qualifier, BackupDomain, BackupExclusion,
-    ComponentKind, MetaData,
+    android_problems, check_paths, entitlements_problems, info_plist_problems,
+    main_activity_attribute_allows, no_ctrl, strip_qualifier, Android, BackupDomain, ComponentKind,
+    Declaration, MetaData,
 };
 use crate::merge::{merge, merge_app_map, AndroidMerged, AppleMerged};
 use crate::reach::{lib_name, reachable};
@@ -94,17 +95,70 @@ pub(crate) struct AppConfig {
     android: AndroidConfig,
 }
 
-/// アプリが自前で足すバックアップ除外。機能の分と和集合にして同じ XML へ出す。
+/// `[package.metadata.fandhe-app.android]`。`application-id`・`application-attributes`（殻への入力）を除いた残りは、
+/// 機能の宣言と同じ [`Android`] として読み、アプリを「もう 1 つの宣言者」として機能の分と統合する
+/// （`capability-declaration.md` §4 の規則のまま。食い違いはエラー）。
 /// アプリの Manifest に `dataExtractionRules`／`fullBackupContent` を手書きすると、overlay の属性と
 /// manifest merger で競合してビルドが失敗する（`tools:replace` は出さない。黙って片方が消えるより失敗させる）。
+/// serde の `flatten` は `deny_unknown_fields` と併用できないので、キーを手で分けてから読む。
 #[derive(Debug, Default, Deserialize)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+#[serde(try_from = "Map<String, Value>")]
 struct AndroidConfig {
-    #[serde(default)]
-    backup_exclusions: Vec<BackupExclusion>,
+    decl: Android,
     /// `applicationId`。`cargo fandhe run|build --os android` で必須（殻の Gradle へ渡す。gen の出力には入らない）。
     application_id: Option<String>,
+    /// 殻の `<application>` へ足す属性（`android:` を除いた名前 → 値）。殻の既定はキー単位で置き換える。
+    /// 殻への入力で、gen の overlay には出さない。
+    application_attributes: BTreeMap<String, String>,
 }
+
+impl TryFrom<Map<String, Value>> for AndroidConfig {
+    type Error = String;
+
+    fn try_from(mut m: Map<String, Value>) -> Result<Self, String> {
+        let mut take = |k: &str| m.remove(k);
+        let application_id = take("application-id");
+        let attrs = take("application-attributes");
+        Ok(AndroidConfig {
+            application_id: application_id
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|e| format!("application-id: {e}"))?,
+            application_attributes: attrs
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|e| format!("application-attributes: {e}"))?
+                .unwrap_or_default(),
+            decl: serde_json::from_value(Value::Object(m)).map_err(|e| {
+                format!(
+                    "android: {e}（`android` 欄は機能の宣言と同じ欄に加えて、`application-id`・`application-attributes` を書けます）"
+                )
+            })?,
+        })
+    }
+}
+
+/// アプリを宣言者として統合へ入れるときの id。kebab-case でないので機能の id と衝突しない。
+pub(crate) const APP_DECL_ID: &str = "[package.metadata.fandhe-app]";
+
+/// `application-attributes` に書けないキーと誘導先。overlay が持つ・ビルド種別が決める値は、殻から足せない。
+const RESERVED_APP_ATTRIBUTES: &[(&str, &str)] = &[
+    (
+        "dataExtractionRules",
+        "`backup-exclusions` に書いてください",
+    ),
+    ("fullBackupContent", "`backup-exclusions` に書いてください"),
+    ("debuggable", "ビルド種別（debug・release）が決めます"),
+];
+
+/// Android の `<application>` の既定の属性（殻の Manifest）。`application-attributes` がキー単位で置き換える。
+/// 値は仮の既定値で、アプリが `application-attributes` で確定する。
+pub(crate) const SHELL_APPLICATION_ATTRIBUTES: &[(&str, &str)] = &[
+    ("allowBackup", "false"),
+    ("icon", "@android:drawable/sym_def_app_icon"),
+    ("label", "@string/fandhe_app_name"),
+    ("theme", "@style/FandheAppTheme"),
+];
 
 /// アプリの基礎 manifest。名前・アイコン・`start_url` などアプリが持つ値だけを書く。
 /// 機能が持つメンバー（`share_target` 等）は書けず、`gen` が到達した機能の宣言から足す。
@@ -179,10 +233,12 @@ pub(crate) struct AppInfo {
     pub bins: Vec<String>,
     /// 生成先（`<アプリの crate>/gen`）の絶対パス。Gradle から参照する。
     pub gen_dir: PathBuf,
+    /// アプリの crate のディレクトリ。アプリ自身の `res`・`java` の基準になる。
+    pub dir: PathBuf,
 }
 
 impl AppInfo {
-    pub(crate) fn from_package(pkg: &Value, gen_dir: PathBuf) -> Self {
+    pub(crate) fn from_package(pkg: &Value, dir: PathBuf, gen_dir: PathBuf) -> Self {
         let targets: Vec<&Value> = pkg["targets"].as_array().into_iter().flatten().collect();
         let has = |t: &Value, key: &str, want: &str| {
             t[key]
@@ -205,6 +261,7 @@ impl AppInfo {
                 .filter_map(|t| t["name"].as_str().map(String::from))
                 .collect(),
             gen_dir,
+            dir,
         }
     }
 }
@@ -269,6 +326,18 @@ fn plist_input_problems(field: &str, m: &Map<String, Value>) -> Vec<String> {
 }
 
 impl AppConfig {
+    /// アプリの `android` 欄を宣言者として統合へ入れるための擬似宣言（`render_for`・`verify-scope` が使う）。
+    pub(crate) fn android_decl(&self) -> Declaration {
+        Declaration {
+            id: APP_DECL_ID.to_string(),
+            ios: None,
+            macos: None,
+            android: Some(self.android.decl.clone()),
+            windows: None,
+            web: None,
+        }
+    }
+
     /// 追記した `info-plist`・`entitlements` のキー（`verify-scope` が選んだ機能の外でも許す値）。
     /// アプリが追記した `info-plist` のキー（修飾子を落とした素のキーを含む）と `entitlements` のキー。
     /// verify-scope が種別つきで禁止から除く（`scope.rs`）。
@@ -318,13 +387,28 @@ impl AppConfig {
             }
         }
         errs.extend(
-            backup_exclusion_problems(
-                "fandhe-app.android.backup-exclusions",
-                &cfg.android.backup_exclusions,
-            )
-            .iter()
-            .map(|p| p.to_string()),
+            android_problems(&cfg.android.decl)
+                .iter()
+                .map(|p| format!("fandhe-app.{p}")),
         );
+        for (k, v) in &cfg.android.application_attributes {
+            let at = format!("fandhe-app.android.application-attributes.{k}");
+            if let Some((_, hint)) = RESERVED_APP_ATTRIBUTES
+                .iter()
+                .find(|(r, _)| r.eq_ignore_ascii_case(k))
+            {
+                errs.push(format!("{at}: `{k}` は書けません（{hint}）"));
+            } else if !k.starts_with(|c: char| c.is_ascii_alphabetic())
+                || !k.chars().all(|c| c.is_ascii_alphanumeric())
+            {
+                errs.push(format!(
+                    "{at}: 属性名は先頭が英字で、残りは英数字にしてください（`android:` は付けません）"
+                ));
+            }
+            if !no_ctrl(v) {
+                errs.push(format!("{at}: 制御文字は使えません"));
+            }
+        }
         if let Some(b) = &cfg.macos.bundle_id {
             if !is_reverse_dns(b) {
                 errs.push(format!("fandhe-app.macos.bundle-id: `{b}` はドット区切り（2 セグメント以上）の英数字とハイフンにしてください"));
@@ -1058,6 +1142,13 @@ pub(crate) fn render_for(
     app: &AppInfo,
 ) -> Result<BTreeMap<String, String>, Vec<String>> {
     let want = |os: &str| only.is_none_or(|o| o == os);
+    // アプリの `android` 欄は、擬似の宣言者（id `[package.metadata.fandhe-app]`、dir はアプリの crate）として機能の分と統合する。
+    let app_found = Found {
+        pkg_id: String::new(),
+        dir: app.dir.clone(),
+        decl: cfg.android_decl(),
+    };
+    let android: Vec<&Found> = android.iter().copied().chain([&app_found]).collect();
     let mut errs: Vec<String> = Vec::new();
     let mut files = BTreeMap::new();
     // 対象 OS 以外の欄を落としてから統合する（未到達 OS の欄の競合で全体を失敗させない）。
@@ -1086,19 +1177,9 @@ pub(crate) fn render_for(
     };
 
     if let Some(m) = want("android")
-        .then(|| merged("android", android, &mut errs))
+        .then(|| merged("android", &android, &mut errs))
         .flatten()
-        .map(|m| {
-            // アプリの自前の除外を機能の分へ足す統合点。
-            let mut a = m.android;
-            a.backup_exclusions.extend(
-                cfg.android
-                    .backup_exclusions
-                    .iter()
-                    .map(|e| (e.domain, e.path.clone())),
-            );
-            a
-        })
+        .map(|m| m.android)
     {
         match &app.cdylib {
             // Android の入口（`android_main`）は cdylib にしか置けない。cdylib の無いアプリは Android を対象にしない
@@ -1214,19 +1295,27 @@ pub fn generate(manifest: Option<&Path>) -> Result<Generated, Vec<String>> {
 }
 
 /// Android の分だけ生成する（`cargo fandhe run|build --os android` 用の内部入口）。iOS・macOS の殻の必須条件を検査しない。
-/// 出力先は `gen_dir`（アプリの `gen/` には触れない）。戻りは生成結果と `fandhe-app.android.application-id`。
+/// 出力先は `gen_dir`（アプリの `gen/` には触れない）。戻りは生成結果と、殻への入力
+/// （`fandhe-app.android` の `application-id`・`application-attributes`）。
 pub(crate) fn generate_android(
     manifest: Option<&Path>,
     gen_dir: PathBuf,
-) -> Result<(Generated, Option<String>), Vec<String>> {
+) -> Result<(Generated, AndroidShellInput), Vec<String>> {
     generate_for(manifest, Some("android"), Some(gen_dir))
+}
+
+/// 殻（run・build が target 配下に作る Gradle プロジェクト）へ渡すアプリの入力。gen の出力には入らない。
+#[derive(Debug, Default, Clone)]
+pub(crate) struct AndroidShellInput {
+    pub application_id: Option<String>,
+    pub application_attributes: BTreeMap<String, String>,
 }
 
 fn generate_for(
     manifest: Option<&Path>,
     only: Option<&str>,
     gen_dir: Option<PathBuf>,
-) -> Result<(Generated, Option<String>), Vec<String>> {
+) -> Result<(Generated, AndroidShellInput), Vec<String>> {
     let mut sets: Vec<Vec<Found>> = Vec::new();
     let mut app: Option<(PathBuf, Value, Value)> = None;
     for (os, triple) in [
@@ -1252,8 +1341,16 @@ fn generate_for(
     }
     let (dir, cfg, pkg) = app.expect("ループで必ず設定される");
     let cfg = AppConfig::parse(&cfg)?;
+    // アプリ自身の `res`・`java` の実在は、機能の宣言と同じ規則（crate の外への脱出も拒否）で確かめる。
+    let path_errs: Vec<String> = check_paths(&cfg.android_decl(), &dir)
+        .iter()
+        .map(|p| format!("fandhe-app.{p}"))
+        .collect();
+    if !path_errs.is_empty() {
+        return Err(path_errs);
+    }
     let gen_dir = gen_dir.unwrap_or_else(|| dir.join("gen"));
-    let info = AppInfo::from_package(&pkg, gen_dir.clone());
+    let info = AppInfo::from_package(&pkg, dir.clone(), gen_dir.clone());
     let r = |i: usize| sets[i].iter().collect::<Vec<_>>();
     let files = render_for(only, &r(0), &r(1), &r(2), &cfg, &info)?;
     let notes = if info.cdylib.is_none() {
@@ -1267,7 +1364,10 @@ fn generate_for(
             files,
             notes,
         },
-        cfg.android.application_id,
+        AndroidShellInput {
+            application_id: cfg.android.application_id,
+            application_attributes: cfg.android.application_attributes,
+        },
     ))
 }
 
@@ -1443,6 +1543,7 @@ mod tests {
     const BID: &str = "com.example.app";
     fn app() -> AppInfo {
         AppInfo {
+            dir: PathBuf::from("/a"),
             name: "my-app".into(),
             version: "1.2.3".into(),
             cdylib: Some("my_app".into()),

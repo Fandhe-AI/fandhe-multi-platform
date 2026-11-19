@@ -112,7 +112,7 @@ fn app(ctx: &fandhe::egui::Context) -> Box<dyn fandhe::app::ProxyAppDyn> {
 - 対応表（`docs/device/capabilities/`）は計画情報だけを持ちます。権限は書かず、`build-capabilities.mjs` が crate の宣言と id で結合して一覧の権限欄を出します（別名の crate は `crate` キー、crate を持たない基盤の機能は `"crate": null`。食い違えば検証が拒否します。#1195）
 - 生成先は `gen/` で、gitignore します。利用者が手を入れる逃げ道は、TOML の追記と `--eject` の 2 つだけにします（#1202）。
   追記は機能の宣言と同じ欄名を `[package.metadata.fandhe-app.*]` に書く形で、生成値と食い違えば上書きせずエラーにします。
-  Apple の `info-plist`・`entitlements` は実装済みで、Android の追記と `--eject` は後続です
+  Apple の `info-plist`・`entitlements` と、Android の宣言（機能の宣言と同じ欄。アプリを宣言者として統合）・`application-attributes`（殻の `<application>`）は実装済みで、`--eject` は後続です
 - 権限の説明文は既定値を持たず、利用者が書きます。有効な機能の説明文が無ければエラーにします。
   既定の文言のまま審査に出る事故を避けるためです
 - Java はソース配布にします（#1216 で同梱を確かめます）。アプリの applicationId と独立した固定パッケージ `com.fandhe.platform`（仮名、公開前に確定）へ移しました（#1167）。

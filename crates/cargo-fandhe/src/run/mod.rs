@@ -156,6 +156,8 @@ pub struct App {
     pub web_manifest: Option<String>,
     /// `fandhe-app.android.application-id`（Android のときだけ読む）。
     pub application_id: Option<String>,
+    /// `fandhe-app.android.application-attributes`（Android のときだけ読む）。殻の `<application>` の属性を置き換える・足す。
+    pub application_attributes: BTreeMap<String, String>,
     /// `cargo fandhe gen`（Android の分だけ）の出力。Android のときだけ作る。
     pub android_gen: Option<BTreeMap<String, String>>,
 }
@@ -300,7 +302,7 @@ fn cargo_step(app: &App, opts: &Options, env: &Env, extra: &[&str]) -> Step {
 pub fn load_app(opts: &Options, os: Os) -> Result<App, Vec<String>> {
     let meta = run_metadata(opts.manifest.as_deref(), os.triple())?;
     let (dir, cfg, pkg) = app_root(&meta)?;
-    let info = AppInfo::from_package(&pkg, dir.join("gen"));
+    let info = AppInfo::from_package(&pkg, dir.clone(), dir.join("gen"));
     let manifest = pkg["manifest_path"]
         .as_str()
         .map(PathBuf::from)
@@ -330,6 +332,7 @@ pub fn load_app(opts: &Options, os: Os) -> Result<App, Vec<String>> {
         font: None,
         web_manifest: None,
         application_id: None,
+        application_attributes: BTreeMap::new(),
         android_gen: None,
     };
     match os {
@@ -365,9 +368,10 @@ pub fn load_app(opts: &Options, os: Os) -> Result<App, Vec<String>> {
         Os::Android => {
             // gen の出力はアプリの `gen/` ではなく成果物の置き場へ出す（アプリの iOS・macOS の生成物を消さない）。
             let gen_dir = out_dir(&app, Os::Android).join("gen");
-            let (g, id) = generate_android(opts.manifest.as_deref(), gen_dir)?;
+            let (g, shell) = generate_android(opts.manifest.as_deref(), gen_dir)?;
             app.android_gen = Some(g.files);
-            app.application_id = id;
+            app.application_id = shell.application_id;
+            app.application_attributes = shell.application_attributes;
         }
         Os::Macos | Os::Windows | Os::Linux => {}
     }

@@ -15,7 +15,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use super::{output_of, Action, App, Env, Op, Options, Os, Step};
-use crate::native::{esc_xml, MAIN_ACTIVITY};
+use crate::native::{esc_xml, MAIN_ACTIVITY, SHELL_APPLICATION_ATTRIBUTES};
 
 pub(crate) const AGP_VERSION: &str = "9.3.1";
 pub(crate) const COMPILE_SDK: u32 = 35;
@@ -380,6 +380,24 @@ fn kt(s: &str) -> String {
         .replace('$', "\\$")
 }
 
+/// 殻の Manifest。`<application>` は殻の既定に `application-attributes` をキー単位で重ねる（既定の置き換え・追加）。
+/// MainActivity の宣言・LAUNCHER・権限・バックアップ規則は gen の Manifest を overlay で重ねる。
+fn shell_manifest(app: &App) -> String {
+    let mut attrs: BTreeMap<&str, &str> = SHELL_APPLICATION_ATTRIBUTES.iter().copied().collect();
+    attrs.extend(
+        app.application_attributes
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str())),
+    );
+    let attrs: String = attrs
+        .iter()
+        .map(|(k, v)| format!("\n        android:{k}=\"{}\"", esc_xml(v)))
+        .collect();
+    format!(
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- cargo fandhe run|build が生成。MainActivity の宣言・LAUNCHER・権限は gen の Manifest を overlay で重ねる -->\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <application{attrs} />\n</manifest>\n"
+    )
+}
+
 /// 殻のファイル（殻のルートからの相対パス → 内容）。
 fn shell_files(app: &App, id: &str, gen_dir: &Path) -> Vec<(&'static str, String)> {
     let gradle = gen_dir
@@ -452,31 +470,18 @@ apply(from = "{gradle}")
                 gradle = kt(&gradle),
             ),
         ),
-        (
-            "app/src/main/AndroidManifest.xml",
-            r#"<?xml version="1.0" encoding="utf-8"?>
-<!-- cargo fandhe run|build が生成。MainActivity の宣言・LAUNCHER・権限は gen の Manifest を overlay で重ねる -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application
-        android:allowBackup="false"
-        android:icon="@android:drawable/sym_def_app_icon"
-        android:label="@string/app_name"
-        android:theme="@style/AppTheme" />
-</manifest>
-"#
-            .to_string(),
-        ),
+        ("app/src/main/AndroidManifest.xml", shell_manifest(app)),
         (
             "app/src/main/java/com/fandhe/platform/MainActivity.java",
             "// cargo fandhe run|build が生成。編集しない\npackage com.fandhe.platform;\n\nimport com.google.androidgamesdk.GameActivity;\n\npublic class MainActivity extends GameActivity {\n    static {\n        System.loadLibrary(FandheLibrary.NAME);\n    }\n}\n".to_string(),
         ),
         (
             "app/src/main/res/values/themes.xml",
-            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- GameActivity は AppCompatActivity のため Theme.AppCompat 系が要る -->\n<resources>\n    <style name=\"AppTheme\" parent=\"Theme.AppCompat.NoActionBar\" />\n</resources>\n".to_string(),
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- GameActivity は AppCompatActivity のため Theme.AppCompat 系が要る -->\n<resources>\n    <style name=\"FandheAppTheme\" parent=\"Theme.AppCompat.NoActionBar\" />\n</resources>\n".to_string(),
         ),
         (
             "app/src/main/res/values/strings.xml",
-            format!("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n    <string name=\"app_name\">{}</string>\n</resources>\n", esc_xml(&app.name)),
+            format!("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n    <string name=\"fandhe_app_name\">{}</string>\n</resources>\n", esc_xml(&app.name)),
         ),
     ]
 }
