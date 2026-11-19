@@ -185,9 +185,17 @@ pub(crate) fn entitlements_problems(field: &str, m: &Map<String, Value>) -> Vec<
     c.0
 }
 
+/// アプリの `android` 欄（`fandhe-app.android`。機能の宣言と同じ型）の検証。機能の宣言と同じ `validate_android` を通す。
+/// 欄のパスは `android.` 始まり（呼び出し側が `fandhe-app.` を前置する）。
+pub(crate) fn android_problems(a: &Android) -> Vec<Problem> {
+    let mut c = Ctx(Vec::new());
+    validate_android(&mut c, a);
+    c.0
+}
+
 /// `backup-exclusions` の検証。機能の宣言（`android.backup-exclusions`）とアプリの入力
 /// （`fandhe-app.android.backup-exclusions`）が同じ規則を通す。
-pub(crate) fn backup_exclusion_problems(field: &str, list: &[BackupExclusion]) -> Vec<Problem> {
+fn backup_exclusion_problems(field: &str, list: &[BackupExclusion]) -> Vec<Problem> {
     let mut c = Ctx(Vec::new());
     let mut seen = BTreeSet::new();
     for (i, e) in list.iter().enumerate() {

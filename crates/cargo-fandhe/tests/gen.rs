@@ -1106,3 +1106,145 @@ fn macos_append_emits_without_features_or_bundle_id() {
     assert!(g.files["macos/Info.plist"].contains("<key>LSUIElement</key>"));
     assert!(g.files["macos/App.entitlements"].contains("com.apple.security.app-sandbox"));
 }
+
+/// アプリの `android` 欄は機能の宣言と同じ型で読み、擬似の宣言者として統合される（Issue #1202）。
+/// 権限が overlay に出て、`res`・`java` はアプリの crate が基準になり、食い違いは宣言者の id つきでエラーになる。
+#[test]
+fn app_android_declaration_merges_like_a_feature() {
+    let (dir, toml) = cap("cam");
+    let body = "[dependencies]\nfandhe-cap-cam = { path = \"../fandhe-cap-cam\" }\n[package.metadata.fandhe-app.ios.usage-descriptions]\nNSCameraUsageDescription = \"撮影\"\n\
+         [package.metadata.fandhe-app.android]\n\
+         permissions = [{ name = \"android.permission.INTERNET\" }, { name = \"android.permission.CAMERA\" }]\n\
+         res = [\"android/res\"]\njava = [\"android/java\"]\n";
+    let m = make_ws(
+        "app-android",
+        "app",
+        &[(&dir, toml.clone()), ("app", app_pkg(body))],
+    );
+    let app_dir = m.parent().unwrap();
+    fs::create_dir_all(app_dir.join("android/res")).unwrap();
+    fs::create_dir_all(app_dir.join("android/java")).unwrap();
+    let f = generate(Some(&m)).unwrap().files;
+    let man = &f["android/AndroidManifest.xml"];
+    assert!(
+        man.contains("android:name=\"android.permission.INTERNET\""),
+        "{man}"
+    );
+    // 同じ権限は機能と 1 つに統合される。
+    assert_eq!(man.matches("android.permission.CAMERA").count(), 1, "{man}");
+    let base = app_dir.to_string_lossy().replace('\\', "/");
+    let g = &f["android/fandhe.gradle"];
+    assert!(
+        g.contains(&format!("res.srcDirs += ['{base}/android/res']")),
+        "{g}"
+    );
+    assert!(
+        g.contains(&format!("java.srcDirs += ['{base}/android/java']")),
+        "{g}"
+    );
+    // アプリが何も書かなければ従来どおり（宣言者が増えても出力は変わらない）。
+    let m = make_ws(
+        "app-android-none",
+        "app",
+        &[
+            (&dir, toml.clone()),
+            (
+                "app",
+                app_pkg("[dependencies]\nfandhe-cap-cam = { path = \"../fandhe-cap-cam\" }\n[package.metadata.fandhe-app.ios.usage-descriptions]\nNSCameraUsageDescription = \"撮影\"\n"),
+            ),
+        ],
+    );
+    let g = generate(Some(&m)).unwrap().files["android/fandhe.gradle"].clone();
+    assert!(!g.contains("srcDirs +="), "{g}");
+
+    // 同名の権限で flags が違えば、アプリを指す id つきのエラー（機能同士と同じ規則）。
+    let body = "[dependencies]\nfandhe-cap-cam = { path = \"../fandhe-cap-cam\" }\n[package.metadata.fandhe-app.ios.usage-descriptions]\nNSCameraUsageDescription = \"撮影\"\n\
+         [package.metadata.fandhe-app.android]\n\
+         permissions = [{ name = \"android.permission.CAMERA\", flags = [\"neverForLocation\"] }]\n";
+    let m = make_ws(
+        "app-android-conflict",
+        "app",
+        &[(&dir, toml), ("app", app_pkg(body))],
+    );
+    let e = errs(generate(Some(&m)));
+    assert!(
+        e.contains("[package.metadata.fandhe-app]")
+            && e.contains("`cam`")
+            && e.contains("android.permission.CAMERA"),
+        "{e}"
+    );
+}
+
+/// アプリの `android` 欄も機能の宣言と同じ検証を通る。実在しないパス・crate の外・未知のキーは拒否する。
+#[test]
+fn app_android_declaration_rejects_bad_paths_and_unknown_keys() {
+    for (tag, body, want) in [
+        (
+            "missing-res",
+            "res = [\"android/res\"]\n",
+            "fandhe-app.android.res[0]",
+        ),
+        (
+            "missing-java",
+            "java = [\"nope\"]\n",
+            "fandhe-app.android.java[0]",
+        ),
+        ("outside", "res = [\"..\"]\n", "fandhe-app.android.res[0]"),
+        (
+            "unknown",
+            "colour = \"red\"\n",
+            "`application-id`・`application-attributes` を書けます",
+        ),
+        ("unknown-name", "colour = \"red\"\n", "colour"),
+        (
+            "attr-ctrl",
+            "application-attributes = { label = \"a\\u0001b\" }\n",
+            "application-attributes.label: 制御文字",
+        ),
+        (
+            "attr-digit-first",
+            "application-attributes = { \"1x\" = \"v\" }\n",
+            "application-attributes.1x",
+        ),
+        (
+            "reserved-case",
+            "application-attributes = { Debuggable = \"true\" }\n",
+            "Debuggable",
+        ),
+        (
+            "bad-perm",
+            "permissions = [{ name = \"1x\" }]\n",
+            "fandhe-app.android.permissions[0].name",
+        ),
+        (
+            "bad-attr",
+            "application-attributes = { \"android:icon\" = \"x\" }\n",
+            "application-attributes",
+        ),
+        (
+            "reserved-backup",
+            "application-attributes = { dataExtractionRules = \"@xml/x\" }\n",
+            "backup-exclusions",
+        ),
+        (
+            "reserved-debug",
+            "application-attributes = { debuggable = \"true\" }\n",
+            "debuggable",
+        ),
+    ] {
+        let app = app_pkg(&format!("[package.metadata.fandhe-app.android]\n{body}"));
+        let m = make_ws(&format!("app-android-{tag}"), "app", &[("app", app)]);
+        let e = errs(generate(Some(&m)));
+        assert!(e.contains(want), "{tag}: {e}");
+    }
+}
+
+/// `application-attributes` のキーは先頭が英字なら英数字を含められる（`use32bitAbi` 等）。
+#[test]
+fn app_application_attributes_accept_alphanumeric_keys() {
+    let app = app_pkg(
+        "[package.metadata.fandhe-app.android]\napplication-attributes = { use32bitAbi = \"true\" }\n",
+    );
+    let m = make_ws("app-android-attr-digit", "app", &[("app", app)]);
+    generate(Some(&m)).unwrap();
+}

@@ -753,7 +753,9 @@ fn android_build_sequence_for_gallery() {
         main.contains("extends GameActivity")
             && main.contains("System.loadLibrary(FandheLibrary.NAME)")
     );
-    assert!(written(&ops, "app/src/main/AndroidManifest.xml", &sh).contains("@style/AppTheme"));
+    assert!(
+        written(&ops, "app/src/main/AndroidManifest.xml", &sh).contains("@style/FandheAppTheme")
+    );
 }
 
 #[test]
@@ -1236,4 +1238,73 @@ fn write_refuses_paths_outside_or_through_symlinks() {
         assert_eq!(std::fs::read_to_string(&target).expect("読む"), "orig");
     }
     assert!(w(within.join("ok2/b.txt")).is_ok());
+}
+
+/// `application-attributes` は殻の `<application>` の既定をキー単位で置き換え、足す。gen の overlay には出ない（Issue #1202）。
+#[test]
+fn android_application_attributes_override_shell_defaults_and_stay_out_of_overlay() {
+    let m = android_only(
+        "droid-attrs",
+        "[package.metadata.fandhe-app.android]\napplication-id = \"com.example.droid\"\n\
+         application-attributes = { localeConfig = \"@xml/locale_config\", icon = \"@mipmap/ic_launcher\", label = \"A&B\" }\n\
+         res = [\"android/res\"]\n",
+    );
+    std::fs::create_dir_all(m.parent().unwrap().join("android/res")).expect("作成");
+    let app = load(&m, Os::Android).unwrap_or_else(|e| panic!("{e:?}"));
+    let ops = prepare(&app, &android_opts(Action::Build, false), &aenv(false)).expect("通る");
+    let man = written(&ops, "app/src/main/AndroidManifest.xml", &shell(&app));
+    assert!(
+        man.contains("android:localeConfig=\"@xml/locale_config\""),
+        "{man}"
+    );
+    assert!(
+        man.contains("android:icon=\"@mipmap/ic_launcher\""),
+        "{man}"
+    );
+    assert!(!man.contains("sym_def_app_icon"), "{man}");
+    assert!(man.contains("android:label=\"A&amp;B\""), "{man}");
+    // 置き換えなかった既定は残る。
+    assert!(
+        man.contains("android:allowBackup=\"false\"")
+            && man.contains("android:theme=\"@style/FandheAppTheme\""),
+        "{man}"
+    );
+    // gen の overlay には出ない。アプリの res は Gradle の srcDirs に入る。
+    let Op::Gen { files, .. } = &ops[0] else {
+        panic!("先頭は Gen のはず")
+    };
+    assert!(!files["android/AndroidManifest.xml"].contains("localeConfig"));
+    assert!(files["android/fandhe.gradle"].contains("/android/res"));
+}
+
+/// 属性を書かなければ殻の Manifest は従来のまま。予約キー（overlay・ビルド種別の持ち分）は拒否する。
+#[test]
+fn android_application_attributes_default_and_reserved_keys() {
+    let m = android_only(
+        "droid-attrs-none",
+        "[package.metadata.fandhe-app.android]\napplication-id = \"com.example.droid\"\n",
+    );
+    let app = load(&m, Os::Android).unwrap_or_else(|e| panic!("{e:?}"));
+    assert!(app.application_attributes.is_empty());
+    let ops = prepare(&app, &android_opts(Action::Build, false), &aenv(false)).expect("通る");
+    let man = written(&ops, "app/src/main/AndroidManifest.xml", &shell(&app));
+    assert!(
+        man.contains("android:icon=\"@android:drawable/sym_def_app_icon\""),
+        "{man}"
+    );
+    for (k, hint) in [
+        ("dataExtractionRules", "backup-exclusions"),
+        ("fullBackupContent", "backup-exclusions"),
+        ("debuggable", "ビルド種別"),
+    ] {
+        let m = android_only(
+            "droid-attrs-bad",
+            &format!(
+                "[package.metadata.fandhe-app.android]\napplication-id = \"com.example.droid\"\n\
+                 application-attributes = {{ {k} = \"x\" }}\n"
+            ),
+        );
+        let e = load(&m, Os::Android).expect_err(k).join("\n");
+        assert!(e.contains(k) && e.contains(hint), "{k}: {e}");
+    }
 }

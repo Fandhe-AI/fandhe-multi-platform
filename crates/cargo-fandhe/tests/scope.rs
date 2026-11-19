@@ -590,3 +590,40 @@ fn app_appended_key_keeps_framework_ban_regardless_of_order() {
     .unwrap_err();
     assert!(e.contains("framework") && e.contains("CoreNFC"), "{e}");
 }
+
+/// アプリ自身の Android の宣言は、未選択の機能が同じ権限を宣言していても違反にしない（Issue #1202）。
+#[test]
+fn app_android_declaration_is_not_forbidden() {
+    let observed = format!("{ANDROID_CLEAN}E: uses-permission (name=\"android.permission.NFC\")\n");
+    // アプリが書いていなければ、未選択の nfc の値として違反になる。
+    let m = make_ws("app-android-none", SELECT_CAM, &[]);
+    let e = check("android", &m, &observed).unwrap_err();
+    assert!(e.contains("android.permission.NFC"), "{e}");
+    // アプリが宣言すれば通る。書いていない権限は従来どおり違反。
+    let app = format!(
+        "{SELECT_CAM}[package.metadata.fandhe-app.android]\npermissions = [{{ name = \"android.permission.NFC\" }}]\n"
+    );
+    let m = make_ws("app-android", &app, &[]);
+    check("android", &m, &observed).unwrap();
+    let e = check(
+        "android",
+        &m,
+        &format!("{observed}E: uses-permission (name=\"android.permission.BLUETOOTH_SCAN\")\n"),
+    )
+    .unwrap_err();
+    assert!(e.contains("BLUETOOTH_SCAN"), "{e}");
+}
+
+/// 構造照合（権限のフラグ）にもアプリの Android の宣言が効く。未選択の ble が持つフラグを、アプリが自分で宣言していれば通る。
+#[test]
+fn app_android_declaration_allows_permission_flags() {
+    let obs = format!("{ANDROID_CLEAN}{}", scan_perm(Some("0x00010000")));
+    let m = make_ws("app-flag-none", SELECT_CAM, &[]);
+    let e = check("android", &m, &obs).unwrap_err();
+    assert!(e.contains("neverForLocation"), "{e}");
+    let app = format!(
+        "{SELECT_CAM}[package.metadata.fandhe-app.android]\npermissions = [{{ name = \"android.permission.BLUETOOTH_SCAN\", flags = [\"neverForLocation\"] }}]\n"
+    );
+    let m = make_ws("app-flag", &app, &[]);
+    check("android", &m, &obs).unwrap();
+}

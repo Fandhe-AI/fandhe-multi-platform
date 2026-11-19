@@ -45,12 +45,16 @@ cargo fandhe run|build [--os macos|windows|linux|web|android] [--release] [--man
 - `versionCode` は 1 固定です。Play へ 2 回目の提出（同じ applicationId で版を上げる）はできません。版を上げる設定は未対応で、必要になった時点で別 Issue にします
 - 殻は最小です。`MainActivity`（`GameActivity` の継承と `System.loadLibrary(FandheLibrary.NAME)` だけ）・
   Manifest（`application` の属性だけ。MainActivity の宣言・LAUNCHER・権限は gen の Manifest を overlay で重ねる）・
-  テーマ・`app_name`。
+  テーマ（`FandheAppTheme`）・アプリ名（`fandhe_app_name`。アプリの `res` と衝突しないよう接頭辞を付けています）。
   AGP・compileSdk・minSdk・targetSdk・build-tools は `platforms/android` と `scripts/android/versions.env` に揃えます
   （`tests/run.rs` が突き合わせます）。
   GameActivity の版は gen の `fandhe.gradle`
   （`fandhe-platform-android` の宣言）から入ります
 - `applicationId` は `[package.metadata.fandhe-app.android] application-id` に書きます（必須。書式は `com.example.app`）。gen の出力には入りません
+- `<application>` の属性は `application-attributes`（`android:` を除いた名前 → 値）で足します。殻の既定（`icon`・`label`・`theme`・`allowBackup`）はキー単位で置き換わります。
+  `dataExtractionRules`・`fullBackupContent`・`debuggable` は書けません（前 2 つは `backup-exclusions`、`debuggable` はビルド種別が決めます）。
+  `localeConfig`・`networkSecurityConfig` は、この欄に `@xml/...` の参照を書き、参照先の XML をアプリの `res`（`[package.metadata.fandhe-app.android] res`）に置けば足せます。
+  権限・`res`・`java`・`gradle` などの欄は機能の宣言と同じで、gen の overlay に統合されます（`capability-declaration.md` §7）
 - gen は Android の分だけ生成します（内部の絞り込み。`gen --os` の公開オプションではありません）。bin や iOS の bundle-id が無い Android 専用アプリでも止まりません。
   出力先はアプリの `gen/` ではなく `<target_dir>/fandhe/<package 名>/android/gen/` です。アプリの `gen/`（iOS・macOS の生成物や、印の無い利用者のディレクトリ）には触れません
 - run は adb につながった端末 1 台の ABI だけ、build は arm64-v8a・armeabi-v7a・x86_64 を作ります。
@@ -81,5 +85,5 @@ cargo fandhe run|build [--os macos|windows|linux|web|android] [--release] [--man
 ## 範囲外
 
 - Windows の signtool による署名とパッケージ ID（#1208）
-- 生成物の追記と `--eject`（#1202）
+- 生成物の `--eject`（#1202 の後続）。追記は Apple の `info-plist`・`entitlements` と Android の宣言・`application-attributes` が実装済み
 - 既存の `scripts/` を CLI 呼び出しへ寄せること

@@ -4,6 +4,7 @@
 //! （aapt2・codesign・otool・Gradle 等）で取り出したテキストに、禁止集合の値が 1 つでも
 //! 現れたら違反とする。ツールの実行は `scripts/audit/verify-capability-scope.sh` の担当で、
 //! 本モジュールはテキストの照合だけを行う（ネットワーク・外部コマンドは `cargo metadata` のみ）。
+//! アプリ自身の Android の宣言（`fandhe-app.android`）は到達した宣言（reached）に足し、未選択の機能が同じ値を宣言していても禁止にしない。
 //! アプリ自身が追記した Info.plist・entitlements のキー（修飾子を落とした素のキーを含む）も、禁止集合から除く。
 //! 到達した宣言と値が重なるもの（複数機能が同じ権限を宣言する等）は、正当に現れるため禁止にしない。
 //! 宣言から禁止集合を作るので、機能が増えても検査側の修正は要らない。
@@ -427,11 +428,19 @@ pub fn verify_scope(
     }
     let reach = reachable(&meta);
     let app_found = collect(&meta)?;
-    let reached: Vec<&Declaration> = app_found
+    let (_, app_cfg, _) = app_root(&meta)?;
+    let cfg = AppConfig::parse(&app_cfg)?;
+    // アプリ自身の Android の宣言（権限・meta-data 等）も到達した宣言として扱う。未選択の機能と同じ値を
+    // アプリが書いても、違反にしない（`appended_keys` と同じ趣旨）。
+    let app_decl = cfg.android_decl();
+    let mut reached: Vec<&Declaration> = app_found
         .iter()
         .filter(|f| reach.contains(&f.pkg_id))
         .map(|f| &f.decl)
         .collect();
+    if os == "android" {
+        reached.push(&app_decl);
+    }
     let catalog_decls: Vec<&Declaration> = all.iter().map(|f| &f.decl).collect();
     let reached_ids: BTreeSet<&str> = reached.iter().map(|d| d.id.as_str()).collect();
     let unselected = catalog_decls
@@ -446,8 +455,7 @@ pub fn verify_scope(
     // アプリ自身が追記した Info.plist・entitlements のキーは、未選択の機能と同名でも違反にしない。
     let mut app = BTreeSet::new();
     if os != "android" {
-        let (_, app_cfg, _) = app_root(&meta)?;
-        let (plist, entitlements) = AppConfig::parse(&app_cfg)?.appended_keys(os);
+        let (plist, entitlements) = cfg.appended_keys(os);
         for k in plist {
             app.insert((k.clone(), "Info.plist キー"));
             app.insert((k, "説明文キー"));

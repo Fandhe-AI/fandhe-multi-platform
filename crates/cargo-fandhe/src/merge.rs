@@ -12,9 +12,9 @@ use crate::declaration::{
     BackupDomain, Component, Declaration, Extension, IntentFilter, MetaData, PermissionFlag,
 };
 
-/// 統合できない不一致。どの欄で、どの 2 機能が食い違ったかを含む。
+/// 統合できない不一致。どの欄で、どの 2 つの宣言（機能またはアプリ）が食い違ったかを含む。
 #[derive(Debug, thiserror::Error, PartialEq)]
-#[error("{field}: 機能 `{a}` と `{b}` の宣言が食い違います（{detail}）")]
+#[error("{field}: 宣言 `{a}` と `{b}` が食い違います（{detail}）")]
 pub struct MergeError {
     pub field: String,
     pub a: String,
