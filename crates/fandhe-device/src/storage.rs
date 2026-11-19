@@ -151,9 +151,14 @@ mod tests {
     use super::*;
 
     fn temp_storage() -> FsStorage {
+        // 並列実行のテスト同士が同じ時刻（macOS の時計は実質マイクロ秒単位）で
+        // 同名を奪い合わないよう、プロセス内の連番も名前に含める（drag_drop.rs と同じ）。
+        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!(
-            "fandhe-device-test-{}-{}",
+            "fandhe-device-test-{}-{}-{}",
             std::process::id(),
+            seq,
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("システム時刻は UNIX epoch 以降")

@@ -348,10 +348,15 @@ mod tests {
     use super::*;
 
     fn write_temp_file(contents: &[u8]) -> std::path::PathBuf {
+        // 並列実行のテスト同士が同じ時刻（macOS の時計は実質マイクロ秒単位）で
+        // 同名を奪い合わないよう、プロセス内の連番も名前に含める（drag_drop.rs と同じ）。
+        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let mut path = std::env::temp_dir();
         path.push(format!(
-            "fandhe-file-picker-test-{}-{}",
+            "fandhe-file-picker-test-{}-{}-{}",
             std::process::id(),
+            seq,
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
@@ -609,9 +614,14 @@ mod picked_from_tests {
     use super::*;
 
     fn temp_file_with(contents: &[u8]) -> (std::path::PathBuf, File) {
+        // 並列実行のテスト同士が同じ時刻（macOS の時計は実質マイクロ秒単位）で
+        // 同名を奪い合わないよう、プロセス内の連番も名前に含める（drag_drop.rs と同じ）。
+        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "fandhe-picked-from-test-{}-{}",
+            "fandhe-picked-from-test-{}-{}-{}",
             std::process::id(),
+            seq,
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
