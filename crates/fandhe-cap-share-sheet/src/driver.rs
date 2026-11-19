@@ -138,7 +138,6 @@ pub(crate) fn outcome_from_code(code: i32) -> Result<DeviceShareOutcome, ShareSh
     target_os = "windows",
     test
 ))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub(crate) mod bridge {
     use crate::contract::ShareOutcome as DeviceShareOutcome;
     use crate::error::ShareSheetError;
@@ -149,6 +148,7 @@ pub(crate) mod bridge {
     /// 画面へ反映する完了結果（`super::to_outcome` 後の形）。
     pub(crate) type Outcome = Result<CoreShareOutcome, String>;
 
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
     /// 画面 effect が追う自分の分の要求。
     pub(crate) static SCREEN_OWNER: SlotOwner = SlotOwner::new();
@@ -162,12 +162,14 @@ pub(crate) mod bridge {
         SCREEN_OWNER.begin_replacing(&SLOT, &[&PUBLIC_OWNER])
     }
 
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     /// 公開入口の開始。進行中の要求と、自分の未取得の結果があれば `None`（busy）。画面側の届いた未取得の結果は
     /// 捨てずに画面の受け取り待ちへ移す（`SlotOwner::begin_parking`。受け取られない分は画面の次の開始で解放、残るのは最大 1 件）。
     pub(crate) fn begin_public() -> Option<u64> {
         PUBLIC_OWNER.begin_parking(&SLOT, &SCREEN_OWNER)
     }
 
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     /// 公開入口の依頼自体が失敗したときの後片付け（結果は届かないので slot と印を空ける）。
     pub(crate) fn abort_public(request_id: u64) {
         SLOT.clear(request_id);
@@ -186,6 +188,7 @@ pub(crate) mod bridge {
             })
     }
 
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     /// [`super::poll_share_sheet`] の本体。持ち主が `request_id` のときだけ見る。結果待ちの間は `on_waiting` を
     /// 呼ぶ（Windows のキャンセル検知）。届いていれば 1 度だけ `Some` で持ち主を外す。slot の要求が失われた
     /// （別の要求に替わった・消えた）ときは `Err(Internal)` を 1 度だけ返す。
@@ -214,6 +217,7 @@ pub(crate) mod bridge {
         Some(Err(ShareSheetError::Internal))
     }
 
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     /// [`super::discard_share_sheet`] の本体。持ち主が `request_id` のときだけ、slot の記録と持ち主を外して `true`。
     /// 共有 UI は閉じない。Windows の共有 UI は閉じた通知が無く、捨てた要求を観測し続ける口も無いため、進行中でも
     /// 記録を消す（後から届く `TargetApplicationChosen` は id の照合で捨てる）。
@@ -448,14 +452,23 @@ impl Share for CallbackShare {
 ///
 /// - ウィンドウを作った UI スレッドから呼ぶ（`DataTransferManager` の STA 前提）。HWND は
 ///   `fandhe_platform_windows::remember_window` で控えたものを使う（無ければ `Internal`）
-/// - 進行中の要求（画面経由を含む）と、自分の結果が未取得のうちは `Internal` で断る（busy）
+/// - 進行中の要求（画面経由を含む）と、自分の結果が未取得のうちは `Internal` で断る（busy）。画面 effect 側も、
+///   この入口の要求が進行中・未取得なら処理中の失敗で終える
+/// - メインウィンドウが前面でない（共有 UI が開いている等）ときも `Internal` で断る。discard の直後で、共有 UI が
+///   まだ前面を取る前の開始は防げない（天井）
 /// - 画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める（画面はそのまま受け取る）
+/// - 失われた旧 id を poll せずに begin すると、喪失は通知されない
 /// - 依頼自体の失敗は `Err`（結果は届かない）。`DataTransferManager` が使えない環境は `Unsupported`
 ///
 /// macOS・iOS・Android は同期の [`platform_share_sheet`] を使い、この入口は Windows 以外では `Unsupported`。
 pub fn begin_share_sheet(request: &ShareRequest) -> Result<u64, ShareSheetError> {
     #[cfg(target_os = "windows")]
     {
+        // 共有 UI が前面にある（前の要求を discard した後もまだ開いている等）間は始めない。閉じた通知が無いため、
+        // 前面の観測で OS 側の進行中を見る（§8.2「OS 側でまだ進行中なら次の begin を busy にする」）。
+        if !crate::windows::window_is_foreground() {
+            return Err(ShareSheetError::Internal);
+        }
         let request_id = bridge::begin_public().ok_or(ShareSheetError::Internal)?;
         if let Err(e) = crate::windows::present(request_id, request) {
             bridge::abort_public(request_id);
@@ -475,7 +488,8 @@ pub fn begin_share_sheet(request: &ShareRequest) -> Result<u64, ShareSheetError>
 ///
 /// `DataTransferManager` には共有 UI を閉じた通知が無いため、結果待ちの間は呼ぶたびにメインウィンドウが前面か
 /// （`GetForegroundWindow`）を観測し、前面を失ってから戻り、猶予を過ぎても届かなければ `Ok(Cancelled)` にする
-/// （画面のキャンセル検知と同じ判定）。結果が出るまで、描画のたびなど繰り返し呼ぶ。
+/// （画面のキャンセル検知と同じ判定）。結果が出るまで、前面を失っている間も含めて一定の間隔（100ms 程度）で呼ぶ。
+/// 前面を失った状態を一度も観測できなければキャンセルは確定しないので、そのときは [`discard_share_sheet`] で捨てる。
 pub fn poll_share_sheet(request_id: u64) -> Option<Result<DeviceShareOutcome, ShareSheetError>> {
     #[cfg(target_os = "windows")]
     {
@@ -870,6 +884,23 @@ mod bridge_tests {
             bridge::to_device(Err("x".to_string())),
             Err(ShareSheetError::Internal)
         );
+        clear();
+    }
+
+    /// 公開側のキャンセル検知（`on_waiting`）が届けた取り消しは、同じ poll で 1 度だけ返り、画面が始められる。
+    #[test]
+    fn public_cancel_from_waiting_is_returned_by_same_poll() {
+        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        clear();
+        let public = bridge::begin_public().unwrap();
+        assert_eq!(
+            bridge::poll_public(public, |rid| {
+                assert!(bridge::deliver(rid, Ok(DeviceShareOutcome::Cancelled)));
+            }),
+            Some(Ok(DeviceShareOutcome::Cancelled))
+        );
+        assert_eq!(bridge::poll_public(public, |_| {}), None);
+        assert!(bridge::begin_screen().is_some());
         clear();
     }
 

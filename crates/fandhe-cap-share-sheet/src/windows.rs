@@ -6,8 +6,8 @@
 //! 持てる本クレート（プラットフォーム最適化レイヤ）側から直接 `windows` クレートを叩く
 //! （`lib.rs` の Windows `deny(unsafe_code)` 緩和・coding-rust.md の FFI 例外規定準拠）。
 //!
-//! `unsafe` は [`present`] 内の `GetForWindow` / `ShowShareUIForWindow` 呼び出し 2 箇所に
-//! 閉じる（`// SAFETY:` を各呼び出し直前に付与）。それ以外の WinRT 呼び出し
+//! `unsafe` は [`present`] 内の `GetForWindow` / `ShowShareUIForWindow` と [`window_is_foreground`] の
+//! `GetForegroundWindow` の 3 箇所に閉じる（`// SAFETY:` を各呼び出し直前に付与）。それ以外の WinRT 呼び出し
 //! （`DataRequested` / `TargetApplicationChosen` の登録、`DataPackage` への書き込み）は
 //! `windows` クレート側で safe fn としてラップ済みのため `unsafe` を要しない。
 //!
@@ -50,8 +50,8 @@ struct Held {
 }
 
 // `DataTransferManager`（COM オブジェクト）は `Send`/`Sync` を実装しないため
-// `static Mutex` に置けない。`present` は `driver.rs` の effect ドライバから
-// egui の update ループ（UI/メインスレッド）上でのみ呼ばれる契約（`GetForWindow` /
+// `static Mutex` に置けない。`present` は `driver.rs` の effect ドライバ（egui の update ループ）と
+// 公開入口 `begin_share_sheet` から、ウィンドウを作った UI スレッド上でのみ呼ばれる契約（`GetForWindow` /
 // `ShowShareUIForWindow` も同じスレッドで呼ぶ必要がある WinRT の STA 前提）のため、
 // スレッドローカルで足りる（`Mutex` のような他スレッドとの排他は不要）。
 thread_local! {
@@ -85,9 +85,8 @@ pub(crate) fn present(request_id: u64, request: &ShareRequest) -> Result<(), Sha
             .RemoveTargetApplicationChosen(held.target_chosen);
     }
 
-    // SAFETY: `hwnd` は `remember_window` が `eframe::CreationContext`（`ProxyApp`
-    // 構築時、winit が生成したウィンドウ）から得た HWND で、`ProxyApp` の生存中は
-    // ウィンドウも生存する（`update` から呼ばれる effect の実行中に閉じられない）。
+    // SAFETY: `hwnd` は `remember_window` で控えた値渡しのハンドルで、ポインタとして読み書きしない
+    // （ウィンドウが既に閉じていれば OS が失敗を返し、`Internal` へ畳む）。UI スレッドから呼ぶのは呼び出し側の契約。
     // `interop` は上で取得した有効な COM ポインタ。
     let manager: DataTransferManager =
         unsafe { interop.GetForWindow(hwnd) }.map_err(|_| ShareSheetError::Internal)?;
