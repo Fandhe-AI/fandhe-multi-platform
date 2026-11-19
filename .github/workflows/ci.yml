@@ -434,6 +434,7 @@ jobs:
   # 実装パスの不在・crate の宣言との id の結合と、生成が例外なく通ることを検査する。
   # あわせて migrate-capability.mjs sync --check で、gallery の機能 crate の依存のずれと、
   # 機能 crate の公開入口 platform_<stem>() の欠けを検査する（#1366）。
+  # scripts/device のスクリプト自体のテスト（node --test）もここで回す（#1385）。
   # --------------------------------------------------
   capabilities:
     name: capabilities 対応表の検査
@@ -471,6 +472,14 @@ jobs:
 
       - name: 機能 crate の一覧・公開入口を検査
         run: node scripts/device/migrate-capability.mjs sync --check
+
+      # node の組み込みテスト（手元で約 4 秒）。build-capabilities のテストは import 時に
+      # cargo metadata（--offline）を呼ぶため Rust toolchain の導入より後に置く。外部ネットワークは
+      # 使わない（ループバックと一時ディレクトリのみ）。テストが 0 件一致なら failglob で落とす。
+      - name: scripts/device のテスト
+        run: |
+          shopt -s failglob
+          node --test scripts/device/*.test.mjs
 
   # --------------------------------------------------
   # 完遂判定用の集約ジョブ。branch protection / ruleset の required status check には
