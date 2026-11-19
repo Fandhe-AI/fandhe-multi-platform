@@ -235,7 +235,7 @@ jobs:
         if: steps.detect.outputs.has_cargo == 'true'
         uses: ./.github/actions/ensure-rust-toolchain
 
-      # 親 Issue #630: `fandhe-egui-proxy` の desktop_render テストバイナリは GUI 依存の
+      # 親 Issue #630: `fandhe-render-egui` の desktop_render テストバイナリ（#1200 で移した）は GUI 依存の
       # 大量 rlib を静的リンクするためメモリ消費が大きく、GNU ld が OOM killer に kill される
       # 障害が過去に実測された（`ld terminated with signal 9`）。rustc 1.99.1 toolchain 同梱の
       # rust-lld へリンカを切り替えてリンク時メモリを削減する（Issue #631 / #577）。
@@ -380,7 +380,7 @@ jobs:
       # verify-android-artifacts.sh --aab を別ステップで実行する（zip 構造・
       # AndroidManifest.xml 収載・ABI 別 .so 収載。verify-android-artifacts.sh
       # 冒頭コメント参照）。PR #483 CI 是正（Issue #228 フォローアップ）: fandhe-core は
-      # 直前の build-aab.sh 実行時に fandhe-egui-proxy の依存として release ビルド
+      # 直前の build-aab.sh 実行時に fandhe-gallery（当時は fandhe-egui-proxy）の依存として release ビルド
       # 済みだが uplift（target/<triple>/release/libfandhe_core.rlib への配置）は
       # されない事象を実 CI で確認したため、fingerprint キャッシュに依存せず
       # 対象成果物を都度作り直す対策を verify-android-artifacts.sh 側に実装した
