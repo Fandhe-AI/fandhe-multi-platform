@@ -6,8 +6,9 @@
 //! 撮影中の背景遷移の扱い（OS 任せ）、撮影中のプロセス死（詳細は `contract`）。
 //!
 //! 契約（`contract`）・失敗の種類（`error`）・effect ドライバ（`driver`）・OS 実装を 1 つに集める。
-//! 画面の状態型を参照してよいのは `driver` だけ（Windows の撮影パネルの状態型を除く）。
-//! 入口 `pub fn platform_video_capture()` は状態型に依存しないため、フレームワークの外のアプリも使える。
+//! 画面の状態型を参照してよいのは `driver` だけ。
+//! 入口 `platform_video_capture()`・`take_capture_result()` と、Windows の撮影パネルの口 `capture_panel()`・
+//! `send_panel_command()`（本 crate の `PanelState` / `PanelOp`）は状態型に依存しないため、フレームワークの外のアプリも使える。
 
 // unsafe は OS 実装の FFI・JNI エクスポートに限る（`// SAFETY:` を付ける）。該当 OS だけ deny へ緩める。
 #![cfg_attr(
@@ -39,7 +40,10 @@ mod macos;
 mod windows;
 
 pub use contract::*;
-pub use driver::{platform_video_capture, reset_pending_tracking, take_capture_result};
+pub use driver::{
+    capture_panel, platform_video_capture, reset_pending_tracking, send_panel_command,
+    take_capture_result,
+};
 // OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
 #[allow(unused_imports)]
 pub(crate) use driver::*;
