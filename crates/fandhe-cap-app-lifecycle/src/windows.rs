@@ -3,7 +3,7 @@
 //!
 //! メインウィンドウ（`fandhe_platform_windows::window()`）へ `SetWindowSubclass` で観測専用のサブクラスを付け、
 //! `WM_ACTIVATEAPP`（操作の対象になった・外れた）と `WM_SIZE`（最小化・最小化からの復帰）を
-//! `crate::contract::event_from_windows` で出来事にする（`windows_pen_stylus.rs` と同じ手法）。
+//! `crate::contract::event_from_windows` で出来事にする（`fandhe-cap-pen-stylus` の `windows.rs` と同じ手法）。
 //! サブクラスは常に `DefSubclassProc` へ流し、メッセージを消費しない。refdata は購読 `id` で、
 //! 生ポインタは持たない。
 //!

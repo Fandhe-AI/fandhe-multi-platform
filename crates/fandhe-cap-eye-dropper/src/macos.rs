@@ -2,7 +2,7 @@
 //! `macos/fandhe_macos_eye_dropper.m`（`NSColorSampler`。`build.rs` が
 //! コンパイルする）を `unsafe extern "C"` 1 関数（[`present`]）で呼ぶ。
 //! `unsafe` はこの呼び出しと受け口に閉じ `// SAFETY:` で契約を明記する
-//! （`apple_contact_picker.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
+//! （`fandhe-cap-contacts` の `apple.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `.m` 側のハンドラから [`fandhe_rust_eye_dropper_outcome`] が呼ばれ、
 //! `driver` の `bridge` へ結果を push する（pull 型。画面 effect と公開入口が同じ slot を共有する）。コード → 結果の写像は

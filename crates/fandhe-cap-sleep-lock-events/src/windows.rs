@@ -10,14 +10,14 @@
 //!   （`WS_EX_TOOLWINDOW`・`WS_VISIBLE` なし）を作って、`WTSRegisterSessionNotification`
 //!   （ロック・解除）と `RegisterSuspendResumeNotification`（スリープ・復帰）を登録する。
 //!   `HWND_MESSAGE` は使わない（`WM_POWERBROADCAST` はトップレベルウィンドウ向けで、message-only へ
-//!   届く保証が無い。`windows_system_tray.rs` と同じ判断）
+//!   届く保証が無い。`fandhe-cap-system-tray` の `windows.rs` と同じ判断）
 //! - ウィンドウプロシージャは `event_from_windows` で出来事に写し、スレッドローカルの `id` で
 //!   `fire` を呼ぶだけ（すぐ戻る）。`PBT_APMRESUMESUSPEND` は数えない（利用者の操作での復帰は
 //!   `PBT_APMRESUMEAUTOMATIC` に続いて届き、二重計上になるため）
 //! - 停止（[`WinGuard`] の drop）は「登録解除 → `PostThreadMessageW` で停止を依頼 → join」の順。
 //!   スレッドは `UnregisterSuspendResumeNotification` → `WTSUnRegisterSessionNotification`
 //!   （登録と 1 対 1）→ `DestroyWindow` を行ってループを抜ける。ローカルの Win32 呼び出しだけなので
-//!   join に期限は設けない（`windows_global_hotkey.rs` と同じ理由）
+//!   join に期限は設けない（`fandhe-cap-global-hotkey` の `windows.rs` と同じ理由）
 //! - `GetMessageW` が -1 を返したら後片付けをしてから `Signal::Failed` を送る（実行中の失敗）
 //! - 開始の途中で失敗したら、それまでの登録を逆順に解除してウィンドウを壊し、`Err` を返す
 //!

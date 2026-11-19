@@ -3,7 +3,7 @@
 //! （`apple/fandhe_apple_bluetooth_le.m`、`build.rs` が iOS / macOS で
 //! コンパイル・リンクする）を `unsafe extern "C"` 2 関数（[`present`] /
 //! [`stop`]）で呼ぶ。`unsafe` はこの呼び出しと `CStr::from_ptr` に閉じ `// SAFETY:` で
-//! 契約を明記する（`apple_speech_recognition.rs` と同型、coding-rust.md の FFI 例外規定）。
+//! 契約を明記する（`fandhe-cap-speech-recognition` の `apple.rs` と同型、coding-rust.md の FFI 例外規定）。
 //!
 //! `.m` 側のコールバックから [`fandhe_rust_ble_device`] / [`fandhe_rust_ble_finished`]
 //! （本モジュールが公開する `extern "C"` 関数）が呼ばれ、`device/bluetooth_le` の観測

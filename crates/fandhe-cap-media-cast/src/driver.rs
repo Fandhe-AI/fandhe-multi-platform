@@ -342,7 +342,7 @@ pub fn cast_show_effect(state: &CastShowState, sender: &CompletionSender<CastSho
     );
 }
 
-/// アプリ終了時に資源を解放する（`device::shutdown` から呼ばれる）。
+/// アプリ終了時に資源を解放する（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`） から呼ばれる）。
 pub fn shutdown() {
     platform_media_cast().release();
 }

@@ -5,18 +5,15 @@
 //! registry` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として呼ばれる契約、
 //! `fandhe-cap-clipboard` の `driver.rs` と同型）。
 //!
-//! 非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。
-//!
 //! # 別スレッドで OS を呼ぶ理由（codex-review P1 指摘の是正）
 //!
 //! Keychain Services（`SecItem*`）・Android Keystore・Windows PasswordVault は
 //! いずれも同期 API だが、OS 側がユーザー確認ダイアログ（Keychain アクセス許可等）を
-//! 出す経路があり、`clipboard.rs`（3 OS とも即座に返る同期 API）とは異なりブロック
+//! 出す経路があり、`fandhe-cap-clipboard` の `driver.rs`（3 OS とも即座に返る同期 API）とは異なりブロック
 //! 時間の上限が無い。`ProxyApp::update`（UI スレッド）からそのまま呼ぶとユーザー応答
-//! 待ちで画面全体が固まるため、`http_fetch.rs::spawn_fetch` と同型に別スレッドへ
+//! 待ちで画面全体が固まるため、`fandhe-cap-http-get` の `driver.rs::spawn_fetch` と同型に別スレッドへ
 //! 逃がす。`credential_vault::store/load/delete`（`fandhe-core` 側）は `pending` が
-//! 立っている間は二重要求を防ぐため、`tts.rs` のような複数要求の順序保証キューは
+//! 立っている間は二重要求を防ぐため、`fandhe-cap-tts` の `driver.rs` のような複数要求の順序保証キューは
 //! 不要（常に高々 1 件）。
 
 use std::sync::Arc;
@@ -34,7 +31,7 @@ use fandhe_runtime::CompletionSender;
 /// （`fandhe-core` 側が `Outcome::Unavailable` へ畳む判定に使う SSOT 文字列）へ写し、
 /// それ以外は `Display` の文言のみを転送する（`SecureCredentialError` の内部構造は漏らさない、
 /// security.md A09。秘密値は `SecureCredentialError` のどのバリアントにも含まれない、
-/// `secure_credential.rs::validate_secret` は値そのものをエラーへ含めない設計）。
+/// 本 crate の `contract.rs::validate_secret` は値そのものをエラーへ含めない設計）。
 fn to_message(e: SecureCredentialError) -> String {
     match e {
         SecureCredentialError::Unsupported => UNAVAILABLE_MARKER.to_string(),

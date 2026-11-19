@@ -5,7 +5,7 @@
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・
 //! 期限・守る範囲）の SSOT は `crate::contract`。
 //!
-//! 非 wasm32 でのみコンパイル対象になる。Web は対象外。
+//! Web は対象外。
 //!
 //! # OS 別の分担（dispatch は #917 で最終形。後続の子は自分の OS のモジュールだけを埋める）
 //!

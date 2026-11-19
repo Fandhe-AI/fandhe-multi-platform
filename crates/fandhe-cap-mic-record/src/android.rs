@@ -207,5 +207,5 @@ extern "system" fn Java_com_fandhe_platform_MicRecordHelper_nativeOnMicRecordRes
 // ターゲットのみでコンパイルされる（`lib.rs` の `#[cfg(target_os = "android")]`
 // 参照）ため host `cargo test` では検証できない。写像表の SSOT
 // （`crate::driver::error_from_code`）は host で常時コンパイル・テストされる
-// （`mic_record.rs::tests::error_from_code_maps_table` 参照）ため、二重にテストを
+// （本 crate の `driver.rs` の `tests::error_from_code_maps_table` 参照）ため、二重にテストを
 // 置かない。

@@ -56,7 +56,7 @@ pub enum OsScale {
 
 /// [`finish_read`] へ渡す結果（`fandhe-cap-dynamic-type` の effect ドライバが `DeviceError` から写像する。
 /// `fandhe-core` は `fandhe-device` に依存しないため、両者の型を橋渡しするのは
-/// 呼び出し元の責務、`device.rs::to_note_storage_error` と同じ判断）。
+/// 呼び出し元の責務、`fandhe-cap-local-storage-kv` の `driver.rs::to_note_storage_error` と同じ判断）。
 #[derive(Debug, Clone, PartialEq)]
 pub enum OsScaleError {
     /// OS の文字サイズ設定を読めない（`DeviceError::Unsupported`）。

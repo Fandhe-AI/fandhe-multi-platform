@@ -377,7 +377,7 @@ mod imp {
 
         let input = stream.0.GetInputStreamAt(0).map_err(e)?;
         let reader = DataReader::CreateDataReader(&input).map_err(e)?;
-        // メモリ上のストリームの読み出しで機器には触れない（`windows_media_transcode.rs::read_all` と同じ）。
+        // メモリ上のストリームの読み出しで機器には触れない（`fandhe-cap-media-transcode` の `windows.rs::read_all` と同じ）。
         let loaded = reader.LoadAsync(size as u32).map_err(e)?.get().map_err(e)?;
         if u64::from(loaded) != size {
             return Err(ScannerImportFailure::Failed);

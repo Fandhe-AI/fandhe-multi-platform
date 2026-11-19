@@ -4,8 +4,6 @@
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。契約本体は
 //! `crate::contract` のモジュール doc。
 //!
-//! 非 wasm32 でのみコンパイル対象になる。
-//!
 //! # macOS / iOS: pull 型 `bridge`
 //!
 //! `CNContactPicker`（macOS）/ `CNContactPickerViewController`（iOS、Issue #1221）のデリゲートは非同期に届くため、`ContactPicker` トレイトを通さず

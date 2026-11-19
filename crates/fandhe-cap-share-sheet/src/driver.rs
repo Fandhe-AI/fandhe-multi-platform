@@ -89,7 +89,7 @@ fn to_outcome(
 /// | 4 | `Ok(Unknown)` | （使わない） | （使わない） | chooser 終了・broadcast 未受信 |
 ///
 /// 呼び出し元（`apple.rs`/`android.rs`）が macOS/iOS/Android の 3 OS にのみ
-/// 存在する（`device.rs` の `mod` cfg 参照）ため、それ以外のターゲット（例:
+/// 存在する（`lib.rs` の `mod` の cfg 参照）ため、それ以外のターゲット（例:
 /// Linux CI runner 上の clippy）では本関数も未使用になり `dead_code` で
 /// `-D warnings` に落ちる。呼び出し元と同じ cfg を付けて対象を揃える。
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
@@ -601,7 +601,7 @@ mod tests {
 /// [`bridge`] の単体テスト。要求の追跡そのもの（採番・first-wins・照合）は
 /// `fandhe-runtime/src/request_slot.rs::RequestSlot` 側で検証済みのため、ここでは facade が
 /// 担う「`deliver` 境界での `to_outcome` 変換」だけを固定する（Issue #943 で
-/// 3 機能の `bridge_tests` を統合、`biometric_auth.rs` も同型）。OS 側実装
+/// 3 機能の `bridge_tests` を統合、`fandhe-cap-biometric-auth` の `driver.rs` も同型）。OS 側実装
 /// （`.m`/`.java`/Windows COM interop）のビルドを要さず host 上の `cargo test` で
 /// 回せる。iOS/Android の実装は本 host（macOS/Windows 前提の開発機）では
 /// コンパイル対象外だが、`bridge` モジュール自体は `cfg(any(...))` で 4 OS 共通の

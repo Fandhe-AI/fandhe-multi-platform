@@ -649,7 +649,7 @@ implement-issue-tree へ渡す issue・指示には、契約表 `.claude/rules/d
 | CI が全 pass なのでマージ可能と判断する | 未解決レビュースレッドを GraphQL で必ず併せて確認する |
 | codex の指摘を鵜呑みにして直す | 指摘の前提をコードで裏取りする。既に直っていてスレッドが残っているだけのことがある |
 | 生成物（`capabilities.md` / `.html`）をコミットする | 生成物は git に入れない（`.gitignore`）。SSOT は `capabilities/<id>.json` だけ |
-| 生成物をコミットしないので兄弟 PR は競合しないと考える | 共通ファイル（dispatch の cfg・`device.rs`・`android.rs`・`MainActivity.java`・共通コア画面）で競合する。(a) で骨格を先に置き（Step 2）、残った競合は再実行で解かせる（Step 4） |
+| 生成物をコミットしないので兄弟 PR は競合しないと考える | 共通ファイル（dispatch の cfg・機能 crate の `lib.rs`・`android.rs`・`MainActivity.java`・共通コア画面）で競合する。(a) で骨格を先に置き（Step 2）、残った競合は再実行で解かせる（Step 4） |
 | 競合した PR の状態ファイル項目を消して再実行する | 再開できず実装からやり直しになる。`pr` と `branch` を持つ項目は残す（Step 4） |
 | 終わった run の worktree を放置して次の run を起動する | 容量ゲートで新規着手が止まる。Step 9 の手順で片付けてから起動する |
 | 再実行が `state-unverified` で全件空振りする | 状態ファイルの項目の照合（読み込み時のハッシュ）が 2 巡しても合わなかった。7 周目は、容量ゲートで止まった run が長い note 付きで書いた未着手項目が原因だった。`cp` で控えを取り、**`pr` が 0 か無く・`branch` が空で・worktree の実体が無い項目だけ** `jq 'del(.items["<n>"])'` で消して再実行する。ファイル全体の照合が合わないと言われた場合（implement-issue-tree は `mv <file> <file>.aside` を指示する）は、退避すると open な PR を持つ項目の記録も失われるため、止めて人間へ報告する |

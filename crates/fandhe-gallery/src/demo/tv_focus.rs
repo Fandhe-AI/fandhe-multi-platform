@@ -8,7 +8,7 @@
 //!
 //! **入力ブリッジの実装方式**: Android の GameActivity（`android-activity` クレート）が
 //! 配信する `KeyEvent`（`KEYCODE_DPAD_UP`/`DOWN`/`LEFT`/`RIGHT`/`CENTER`）は、
-//! `android.rs` が `eframe::run_native` へ委譲するブート経路の内部（`eframe` が使う
+//! `fandhe-render-egui` の `launch.rs`（`run_android`）が `eframe::run_native` へ委譲するブート経路の内部（`eframe` が使う
 //! winit の Android バックエンド）で、既に `egui::Event::Key { key: egui::Key::Arrow* /
 //! Enter, .. }` へ正規化されている（`egui-winit` が担う既存の変換経路であり、本クレートが
 //! 独自の Android FFI・`unsafe` を追加する必要はない）。本モジュールはこの正規化済み
@@ -55,7 +55,7 @@
 //! `store: &mut StateStore<S>` を受け取り、読み取りは `store.state()`、決定操作は
 //! [`fandhe_core::Event::ButtonActivatedAt`]（id ベースの決定操作、`ButtonClickedAt` と
 //! 対称）を `store.dispatch(screen, &Event::ButtonActivatedAt { .. })` へ通す設計に統一する
-//! （`TvFocusApp`（`app.rs`）参照）。
+//! （`TvFocusApp`（`apps.rs`）参照）。
 
 use fandhe_core::{
     clamp_scroll_offset, compute_visible_range, grid_item_range, total_content_extent, Axis, Event,
@@ -101,7 +101,7 @@ struct TvRenderCtx<'a, S> {
 /// コントローラ（TASK-17.2）。`FocusRing`（共通コア）・探索窓ヒント
 /// （[`WindowHints`]、§4.4）・`VirtualList` 項目のフレーム間再利用プール
 /// （[`VirtualListRecyclers`]）をフレームをまたいで保持する（呼び出し側 =
-/// `TvFocusApp`（`app.rs`）がフィールドとして持つ、既存の `VirtualListRecyclers` と
+/// `TvFocusApp`（`apps.rs`）がフィールドとして持つ、既存の `VirtualListRecyclers` と
 /// 同じ設計判断）。
 pub struct TvFocusController<S> {
     ring: FocusRing,
@@ -131,7 +131,7 @@ impl<S> TvFocusController<S> {
     }
 
     /// 1 フレーム分の入力処理・フォーカス解決・描画をまとめて行う
-    /// （`TvFocusApp::update`（`app.rs`）から毎フレーム呼ばれる想定）。
+    /// （`TvFocusApp::update`（`apps.rs`）から毎フレーム呼ばれる想定）。
     ///
     /// 手順（設計文書 §4.4・§5・§6.2 の接続順序）:
     /// 1. 入力ブリッジで方向キー/決定操作を読む。
@@ -267,7 +267,7 @@ fn render_node<S>(
             ui.label(get(state));
         }
         Node::StyledText { role, get } => {
-            // `DynamicText` と同じ非フォーカス可能なラベル描画に、`text_role.rs`
+            // `DynamicText` と同じ非フォーカス可能なラベル描画に、`fandhe-render-egui` の `text_role.rs`
             // による色解決（#813 で解決済み）を重ねる。
             fandhe_render_egui::text_role::styled_label(ui, *role, get(state));
         }

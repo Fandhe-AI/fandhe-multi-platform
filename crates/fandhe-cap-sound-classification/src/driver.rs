@@ -2,7 +2,7 @@
 //! `fandhe_core::screens::sound_classification_show`（端末依存ゼロ）の `wanted` の立ち上がりで
 //! `crate::contract::SoundClassifier::start`、立ち下がりで `stop` を呼び、
 //! 聞き取り中は [`READ_INTERVAL`] ごとに `read` して結果を注入する（`registry.rs` の `effect` 区画から
-//! 毎フレーム同期に呼ばれる。`activity_recognition.rs` と同型）。
+//! 毎フレーム同期に呼ばれる。`fandhe-cap-activity-recognition` の `driver.rs` と同型）。
 //!
 //! **間隔つき pull**: 最終読取から `READ_INTERVAL` 未満なら OS を読まず残り時間で再描画を予約する。
 //! 読んだら送信を省く分岐でも次回を必ず予約する（入力が無いと egui が描画せずポーリングが止まる、
@@ -14,8 +14,8 @@
 //! 許可待ちは期限に数えない。結果の番号が [`STALE_AFTER_MS`] を超えて進まなければ、古い結果を
 //! 消して「聞き取り中」を送る。
 //!
-//! dispatch（[`implementation`]）は全対象 OS の最終形。macOS は `apple_sound_classification.rs`、
-//! iOS は `ios_sound_classification.rs`（b-ios まではスタブ）、それ以外は `UnsupportedSoundClassifier`。
+//! dispatch（[`implementation`]）は全対象 OS の最終形。macOS は本 crate の `apple.rs`、
+//! iOS は本 crate の `ios.rs`（b-ios まではスタブ）、それ以外は `UnsupportedSoundClassifier`。
 
 use std::sync::{Arc, Mutex};
 use std::time::Instant;

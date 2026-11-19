@@ -1,7 +1,7 @@
 // Phase 11 の拡充ループ（親 #102）型サンプル「ファイルの関連付け」: macOS 実装（Issue #416）。
 // `NSAppleEventManager` の `kAEOpenDocuments`（odoc）ハンドラでファイルを受ける。
 // winit の application delegate は差し替えず、url-scheme（`macos/fandhe_macos_url_scheme.m`）と
-// 同じ Apple Event 方式にする。macOS・iOS で受け口（Rust 側 `apple_file_association.rs`）を共用
+// 同じ Apple Event 方式にする。macOS・iOS で受け口（Rust 側の本 crate の `apple.rs`）を共用
 // するため `apple/` に置く。iOS 側（`TARGET_OS_IOS`、Issue #417）は scene の通知から同じ C ABI 関数を呼ぶ。
 //
 // `crates/fandhe-cap-file-association/src/apple.rs` から C ABI 経由で呼ばれる。

@@ -9,7 +9,7 @@
 # crates/fandhe-fonts/assets/README.md 参照）から dist/fonts/ へコピーする。
 # native 分岐（`fandhe-render-egui` の `cfg(not(target_arch = "wasm32"))`）は
 # `include_bytes!` で直接埋め込むが、wasm32 は配信サイズ（REQ-4 の 3MB 基準）と
-# 衝突するため埋め込まず、本スクリプトによる `fonts/` への配置 + `web.rs` の
+# 衝突するため埋め込まず、本スクリプトによる `fonts/` への配置 + `fandhe` の `src/entry/web.rs` の
 # `fetch` で自己完結させる（crates/fandhe/src/entry/web.rs のモジュールコメント参照）。
 #
 # 使い方: scripts/web/build-wasm-proxy.sh

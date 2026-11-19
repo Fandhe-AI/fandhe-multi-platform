@@ -6,7 +6,7 @@
 //! # 流れ（専用ワーカーの待たない状態機械）
 //!
 //! 開始手順の各段は WinRT の非同期操作で、完了を `SetCompleted` から [`Cmd`] としてキューへ積む
-//! （`windows_pedometer.rs` と同じ形）。ワーカーが待つのは `rx.recv()` だけで、ワーカー上で
+//! （`fandhe-cap-pedometer` の `windows.rs` と同じ形）。ワーカーが待つのは `rx.recv()` だけで、ワーカー上で
 //! `.get()` は使わない。
 //!
 //! 1. `BluetoothAdapter::GetDefaultAsync`: null（code 0）と `IsPeripheralRoleSupported() ==

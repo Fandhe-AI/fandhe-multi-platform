@@ -4,7 +4,7 @@
 //! 実装（`apple/fandhe_apple_gamepad.m`、`build.rs` が iOS・macOS 双方で
 //! コンパイル・リンクする）を `unsafe extern "C"` 1 関数
 //! （[`AppleGamepad::read`]）で呼ぶ。`unsafe` はこの FFI 呼び出し 1 箇所に閉じ
-//! `// SAFETY:` で契約を明記する（`ios.rs::IosMotion`/`apple_location.rs::start` と
+//! `// SAFETY:` で契約を明記する（`fandhe-cap-tilt-motion` の `ios.rs::IosMotion`/`fandhe-cap-location` の `apple.rs::start` と
 //! 同型、`lib.rs` の iOS/macOS `deny(unsafe_code)` 緩和・coding-rust.md の FFI
 //! 例外規定準拠）。
 //!
@@ -69,7 +69,7 @@ impl Gamepad for AppleGamepad {
         // SAFETY: `fandhe_apple_gamepad_read` の契約（`.m` ファイル冒頭コメント）:
         // out 引数はこの関数呼び出し中のみ有効なスタック上の領域（`axes` は 6 要素、
         // `buttons` は 1 個の `u16`）で、`.m` 側が読み書きする長さと一致する。
-        // 所有権移転・malloc は無く、呼び出し後に解放処理は不要（`ios.rs::IosMotion`
+        // 所有権移転・malloc は無く、呼び出し後に解放処理は不要（`fandhe-cap-tilt-motion` の `ios.rs::IosMotion`
         // と同型）。戻り値が 0 以外のとき `.m` 側は out 引数を書き換えない契約のため、
         // その場合は呼び出し直前の初期値 `[0.0; 6]`/`0` のまま扱う（実際には
         // `result_from_code` が 0 以外の code では axes/buttons を一切見ないため、

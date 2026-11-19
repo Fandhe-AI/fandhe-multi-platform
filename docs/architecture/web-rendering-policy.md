@@ -26,7 +26,7 @@ Web（wasm32-unknown-unknown）ターゲットの描画バックエンドは **`
 
 結果として、WebGL2 コンテキストの生成に失敗する環境（WebGL2 非対応ブラウザ等）では、
 黙って劣化した描画（WebGL1）を出さず、`eframe::WebRunner::start()` がエラーを返し
-`web.rs` の既存エラーハンドリング（`web_sys::console::error_1` への出力）で
+`fandhe-render-egui` の `launch.rs`（`start_web`）の既存エラーハンドリング（`web_sys::console::error_1` への出力）で
 明示的に起動失敗を通知します。
 
 ## 3. 根拠
@@ -55,7 +55,7 @@ Web（wasm32-unknown-unknown）ターゲットの描画バックエンドは **`
   担当範囲です。本タスクでは、既存の Chrome headless 検証で WebGL2 固定後も実描画が
   継続することのみを確認しています。
 - Safari 対策（canvas CSS サイズ明示、TASK-4.1・#75）は別タスクであり、本書・本タスクの
-  変更対象（`web.rs` の `WebOptions` 構築 1 箇所）とは競合しません。
+  変更対象（`launch.rs` の `WebOptions` 構築 1 箇所）とは競合しません。
 
 ## 5. REQ-4 受け入れ基準・M3 完了基準との整合確認
 

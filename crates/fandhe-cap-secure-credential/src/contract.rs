@@ -5,7 +5,7 @@
 //! 読み出し / 削除を抽象化する。
 //!
 //! 契約: 「無い」は `Ok(None)`（`load`）、削除は冪等（`delete` は無くても `Ok(())`）、
-//! 失敗は `Err`（`biometric_auth.rs` と同じ「使えない/失敗を成功に化けさせない」方針）。
+//! 失敗は `Err`（`fandhe-cap-biometric-auth` の `driver.rs` と同じ「使えない/失敗を成功に化けさせない」方針）。
 //! macOS/iOS の実装は本 crate の `apple`（FFI）、Android は `android`、Windows は `windows` に置く
 //! （`lib.rs` doc 参照）。
 //!

@@ -12,18 +12,18 @@
 //! `build_recording` の `duration_ms == 0` 拒否で必ず `Err` になる。Windows は
 //! macOS と同じ pull 型 `bridge`（`fandhe-runtime/src/request_slot.rs::RequestSlot`）へ乗せ、
 //! `present`/`request_stop` を `crate::driver::drive_callback` の
-//! Windows 分岐から呼ぶ（`biometric_auth.rs` の Windows 分岐と同型）。
+//! Windows 分岐から呼ぶ（`fandhe-cap-biometric-auth` の `driver.rs` の Windows 分岐と同型）。
 //!
 //! # WinRT 呼び出しはワーカースレッド + `.get()` で同期待ち
 //!
 //! `InitializeWithSettingsAsync`/`StartRecordToStreamAsync`/`StopRecordAsync`/
-//! `DataReader::LoadAsync` は `windows-future` の `.get()`（`windows_biometric.rs`
+//! `DataReader::LoadAsync` は `windows-future` の `.get()`（`fandhe-cap-biometric-auth` の `windows.rs`
 //! 参照）でブロック待ちできるが、egui update ループ（UI スレッド）をブロックしない
-//! よう `std::thread::spawn` のワーカー上で呼ぶ（`secure_credential.rs::drive` の
+//! よう `std::thread::spawn` のワーカー上で呼ぶ（`fandhe-cap-secure-credential` の `driver.rs::drive` の
 //! スレッド方式と同型）。`RoInitialize` は呼ばない（`windows-core` の
 //! `CO_E_NOTINITIALIZED` → MTA フォールバック、#898/#907/#913/#923 と同じ前提）。
 //! `windows` クレート側が safe fn としてラップ済みのため `unsafe` は不要
-//! （`windows_secure_credential.rs`/`windows_system_sound.rs` と同型。`lib.rs` の
+//! （`fandhe-cap-secure-credential` の `windows.rs`/`fandhe-cap-system-sound` の `windows.rs` と同型。`lib.rs` の
 //! Windows `deny(unsafe_code)` に対する `allow` も付けない）。
 //!
 //! # 期限はワーカーのタイマで一致させる
@@ -90,7 +90,7 @@ static SESSION: Mutex<Option<Session>> = Mutex::new(None);
 /// `MicRecorder: Send + Sync` を満たす [`WindowsMicRecorder`] の構造体フィールドには
 /// 置けない。[`present`] のワーカースレッドは `start` から `stop` まで単一スレッド上
 /// で完結する契約（モジュール doc 参照）のため、スレッドローカル
-/// （[`ACTIVE`]、`windows_biometric.rs::HELD` と同じ方針）へ保持する。
+/// （[`ACTIVE`]、`fandhe-cap-biometric-auth` の `windows.rs::HELD` と同じ方針）へ保持する。
 struct Active {
     capture: MediaCapture,
     stream: InMemoryRandomAccessStream,

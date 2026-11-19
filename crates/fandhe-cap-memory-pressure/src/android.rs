@@ -133,7 +133,7 @@ enum Call {
 
 /// `MainActivity.memoryPressureStart(long)`（戻り値は結果コード）/ `memoryPressureStop(long)` /
 /// `memoryPressureRead()`（戻り値は状態）を JNI で呼ぶ。`None` は呼び出し失敗。
-/// `unsafe` 2 箇所は `android_app_lifecycle.rs::call_activity` と同一の根拠。
+/// `unsafe` 2 箇所は `fandhe-cap-app-lifecycle` の `android.rs::call_activity` と同一の根拠。
 #[cfg(target_os = "android")]
 fn call_activity(call: Call) -> Option<i32> {
     use fandhe_platform_android::{JniCallFailed, android_app, with_activity_class};
@@ -206,7 +206,7 @@ pub(crate) fn implementation() -> Arc<dyn MemoryPressure> {
     Arc::new(AndroidMemoryPressure)
 }
 
-/// `device.rs` の `cfg(any(android, test))` でホストのテストビルドにも載るための形。
+/// `lib.rs` が `mod android` を全ターゲットで載せる（Android 以外は `allow(dead_code)`）ため、ホスト向けビルドにも要る形。
 /// dispatch は Android でしか呼ばない。非対応を返し、成功へは倒さない。
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]

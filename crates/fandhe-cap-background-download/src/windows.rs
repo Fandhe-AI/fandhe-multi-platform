@@ -5,14 +5,14 @@
 //!
 //! `crates/fandhe-cap-background-download/src/driver.rs::implementation` の Windows 経路から [`implementation`] が
 //! 呼ばれ、返った `crate::contract::BackgroundDownload` を effect ドライバが
-//! 別スレッドから `start` / `cancel`、UI スレッドから `status` で使う。dispatch と `device.rs` は
-//! 触らない。macOS の `apple_background_download.rs` と同じ契約・同じ失敗文言で揃える。
+//! 別スレッドから `start` / `cancel`、UI スレッドから `status` で使う。dispatch と `lib.rs` は
+//! 触らない。macOS の本 crate の `apple.rs` と同じ契約・同じ失敗文言で揃える。
 //!
 //! # 構造（契約表 11）
 //!
 //! 専用ワーカースレッド 1 本が COM（MTA）と BITS のジョブを持ち、`start` / `cancel` を直列キューで
 //! 受けて、追跡中は 500ms ごとにジョブを 1 回ポーリングする。`status()` は共有状態の clone を返す
-//! だけで COM を呼ばない（UI スレッドが STA の可能性があるため。`windows_background_task.rs` と同じ）。
+//! だけで COM を呼ばない（UI スレッドが STA の可能性があるため。`fandhe-cap-background-task` の `windows.rs` と同じ）。
 //! 状態を書くのはワーカーだけで、OS からのコールバックは使わないため古い通知が届く経路が無く、
 //! 世代番号は持たない（契約表 2）。`start` / `cancel` に期限は設けない（期限切れの後にワーカーが
 //! OS の状態を変える窓を作らないため。契約表 3）。
@@ -40,7 +40,7 @@
 //! 再起動で失われる。複数プロセス。
 //!
 //! `unsafe` は `com` サブモジュールの COM 呼び出しに限り、各呼び出しの直前に `// SAFETY:` を付ける
-//! （`windows_background_task.rs` と同型）。
+//! （`fandhe-cap-background-task` の `windows.rs` と同型）。
 
 #[cfg(any(target_os = "windows", test))]
 use std::ffi::OsString;
@@ -168,7 +168,7 @@ fn mark_enumerated(enum_failed: bool) {
     }
 }
 
-/// 列挙待ちか。画面ドライバ（`background_download.rs`）が `drive_poll` の継続判定と開始要求の保留に使う。
+/// 列挙待ちか。画面ドライバ（本 crate の `driver.rs`）が `drive_poll` の継続判定と開始要求の保留に使う。
 #[cfg(any(target_os = "windows", test))]
 pub(crate) fn enumeration_pending() -> bool {
     cfg!(target_os = "windows") && !ENUMERATED.load(std::sync::atomic::Ordering::Acquire)

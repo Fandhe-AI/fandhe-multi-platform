@@ -18,7 +18,7 @@ import java.nio.ByteBuffer;
 // 扱う範囲は「モノラル PCM 16bit を AAC-LC の m4a へ 1 回変換する」ことだけ
 // （`MediaCodec` + `MediaMuxer`。動画・進捗・取り消しは扱わない）。
 //
-// コード表の SSOT はここで、Rust 側 `android_media_transcode.rs` が同じ値で解釈する。
+// コード表の SSOT はここで、Rust 側の本 crate の `android.rs` が同じ値で解釈する。
 //   戻り値 byte[] の先頭 1 バイト: 0=完了（残りが m4a 本体）/ 1=期限切れ / 2=失敗
 //   Java は成功を判定しない。m4a の妥当性は Rust の `check_m4a` が決める。
 //

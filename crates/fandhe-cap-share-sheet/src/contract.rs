@@ -197,7 +197,7 @@ mod tests {
     }
 
     /// モック `Share`（`Cancelled` 固定）が `Shared` へ化けないことを固定する
-    /// （契約の 3 値を取り違えない、`clipboard.rs` の `UnsupportedClipboard` と
+    /// （契約の 3 値を取り違えない、`fandhe-cap-clipboard` の `driver.rs` の `UnsupportedClipboard` と
     /// 同じ「契約側の経路を固定する」目的のテスト）。
     struct AlwaysCancelledShare;
 

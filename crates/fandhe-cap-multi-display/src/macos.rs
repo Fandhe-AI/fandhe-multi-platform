@@ -8,7 +8,7 @@
 //! テストできるようモジュールは `cfg(any(macos, test))`。`.m` は main thread 以外では失敗を返す
 //! （`cargo test` のワーカースレッドで実 FFI を呼ぶと `Internal` になる。成功系は #1340 の Mac 目視）。
 //!
-//! `Raw` / `from_raw` / `CAP` は iOS 実装（`ios_multi_display.rs`、Issue #27）と共用する
+//! `Raw` / `from_raw` / `CAP` は iOS 実装（本 crate の `ios.rs`、Issue #27）と共用する
 //! （`.m` の `FandheScreenRaw` が両 OS で同じレイアウトのため）。
 //!
 //! # 既知の天井

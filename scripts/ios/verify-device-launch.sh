@@ -981,7 +981,7 @@ phase_bundle() {
 
   # FANDHE_ITEMS_URL 指定時のみ、LAN 限定の ATS 例外を .app 側の Info.plist へ
   # 追加する（リポジトリの plist ファイル自体は変更しない、Issue #660）。
-  # http_fetch.rs の FANDHE_ITEMS_URL 形式検証（http://<host>...、ビルド時 assert）に
+  # `fandhe-cap-http-get` の `driver.rs` の FANDHE_ITEMS_URL 形式検証（http://<host>...、ビルド時 assert）に
   # 加えて、ここでも許容文字のホワイトリストで弾く（A03 対策、
   # FANDHE_IOS_CARGO_FEATURES の検査に倣う）。値をログへ出す場合はホスト部を
   # マスクする（security.md ログ方針）。

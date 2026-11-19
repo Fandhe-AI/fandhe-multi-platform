@@ -5,7 +5,7 @@
 //!
 //! # ライフサイクル
 //!
-//! 要求 id・コールバック・保留状態を持たない同期 pull 型（`android_focus_mode_status.rs` と同型）。
+//! 要求 id・コールバック・保留状態を持たない同期 pull 型（`fandhe-cap-focus-mode-status` の `android.rs` と同型）。
 //! 一度だけの登録は呼び出し側の static `InstallCell` が持つので、Activity 再生成後に旧結果が
 //! 新しい要求を消費する経路は構造上ない。
 //!

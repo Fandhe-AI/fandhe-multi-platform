@@ -1,7 +1,7 @@
 //! iOS 向け音声再生実装（Issue #269。#267 の枠を埋める）。
 //! 本 crate の `driver::platform_playback` の iOS 経路から呼ばれ、macOS と共用の
 //! `apple`（`apple/fandhe_apple_media_playback.m`、`AVAudioPlayer`）を返す。
-//! `ios_network_status.rs` と同様、Linux ホストの `cargo test` では共用実装が存在しないため、
+//! `fandhe-cap-network-status` の `ios.rs` と同様、Linux ホストの `cargo test` では共用実装が存在しないため、
 //! 関数と import は iOS 限定にしている。
 //!
 //! # iOS 固有の挙動

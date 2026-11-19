@@ -3,14 +3,14 @@
 //! `fandhe_core::screens::multi_display_show`（端末依存ゼロ）へ注入する
 //! （`registry.rs` の `effect` 区画から毎フレーム同期に呼ばれる）。
 //!
-//! **間隔つき pull**（`network_status.rs` と同型）: 最終読取時刻から `READ_INTERVAL` 未満なら OS を
+//! **間隔つき pull**（`fandhe-cap-network-status` の `driver.rs` と同型）: 最終読取時刻から `READ_INTERVAL` 未満なら OS を
 //! 読まず残り時間で再描画を予約する。読んだら次回の再描画を必ず予約し（契約表 4）、
 //! 状態が変わらなければ送信を省略する。OS の結果は必ず `validate` を通す（空の一覧・サイズ 0 を
 //! 成功にしない）。
 //!
 //! dispatch（[`platform_multi_display`]）は全対象 OS の最終形。Android は
-//! `android_multi_display.rs`（`DisplayManager` を JNI で読む実装）、Web は `fandhe-web-dom` 側（#1344）、
-//! iOS は `ios_multi_display.rs`（scene の `UIScreen`、Issue #27）、Linux 等は
+//! 本 crate の `android.rs`（`DisplayManager` を JNI で読む実装）、Web は `fandhe-web-dom` 側（#1344）、
+//! iOS は本 crate の `ios.rs`（scene の `UIScreen`、Issue #27）、Linux 等は
 //! `UnsupportedMultiDisplay` 固定でダミーの成功へ倒さない。
 
 use std::sync::Mutex;

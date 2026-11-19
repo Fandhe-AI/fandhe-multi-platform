@@ -11,13 +11,13 @@
 //!   （`DBT_DEVICEARRIVAL` / `DBT_DEVICEREMOVECOMPLETE`）はトップレベルウィンドウへ自動で配られる。
 //!   `RegisterDeviceNotification` は `DBT_DEVTYP_VOLUME` では失敗する（公式）ため使わない。
 //!   `HWND_MESSAGE` は使わない（ブロードキャストはトップレベルウィンドウ向けで、message-only へ届く保証が無い。
-//!   `windows_sleep_lock_events.rs` と同じ判断）
+//!   `fandhe-cap-sleep-lock-events` の `windows.rs` と同じ判断）
 //! - ウィンドウプロシージャは lParam の null とヘッダのサイズを確かめてから `dbch_devicetype` を読み、
 //!   `event_from_windows` で出来事に写して、スレッドローカルの `id` で `fire` を呼ぶだけ（すぐ戻る）。
 //!   `dbcv_unitmask` は読まない（一覧は OS へ問い直す）
 //! - 停止（[`WinGuard`] の drop）は「登録解除 → `PostThreadMessageW` で停止を依頼 → join」の順。
 //!   スレッドは `DestroyWindow` してループを抜ける。ローカルの Win32 呼び出しだけなので join に期限は
-//!   設けない（`windows_sleep_lock_events.rs` と同じ理由）
+//!   設けない（`fandhe-cap-sleep-lock-events` の `windows.rs` と同じ理由）
 //! - `GetMessageW` が -1 を返したら `DestroyWindow` してから `Signal::Failed` を送る（実行中の失敗）
 //! - 開始の途中で失敗したら `DestroyWindow` → join → 登録解除の順に片付けて `Err` を返す
 //!

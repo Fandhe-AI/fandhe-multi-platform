@@ -1,7 +1,7 @@
 //! Windows 向け画面キャプチャの防止実装（Issue #582）。`driver` の Windows
 //! 経路から呼ばれ、自プロセスのトップレベルウィンドウに `SetWindowDisplayAffinity`
 //! （`WDA_EXCLUDEFROMCAPTURE`）を掛け / 外し、`GetWindowDisplayAffinity` で読み戻す
-//! （`windows_share.rs` と同じく FFI・`unsafe` を持てる本クレート側から `windows` クレートを直接叩く）。
+//! （`fandhe-cap-share-sheet` の `windows.rs` と同じく FFI・`unsafe` を持てる本クレート側から `windows` クレートを直接叩く）。
 //!
 //! `unsafe` は Set / Get の 2 呼び出しだけに閉じ、`// SAFETY:` を付ける。
 //! 録画・スクリーンショットの検知は Windows に公開 API が無いので `support()` で非対応と返し、

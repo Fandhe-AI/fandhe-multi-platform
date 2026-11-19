@@ -58,7 +58,7 @@ import java.util.concurrent.TimeUnit;
 // 守る範囲: 全経路での資源解放・失敗を成功に畳まないこと。守らない範囲: 受け手アプリが実際に表示したか、
 // 色・アルファの正確さ、所要時間。パス・画素・id・結果コード・例外メッセージはログに出さない。
 final class FilePreviewHelper {
-    // kind コード。Rust 側 `android_file_preview.rs` の KIND_* と対（`FileKind::file_name` とも対）。
+    // kind コード。Rust 側の本 crate の `android.rs` の KIND_* と対（`FileKind::file_name` とも対）。
     private static final int KIND_SAMPLE_IMAGE = 0;
     private static final int KIND_UNKNOWN = 1;
 

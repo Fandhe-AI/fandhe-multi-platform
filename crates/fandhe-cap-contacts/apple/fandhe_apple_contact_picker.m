@@ -8,7 +8,7 @@
 //   fandhe_apple_contact_picker_present(uint64_t request_id) -> int32_t
 //     戻り値: 0 = 提示依頼を受理（結果は非同期に fandhe_rust_contact_picker_outcome で届く）。
 //   fandhe_rust_contact_picker_outcome(uint64_t request_id, int32_t code, const char *name)
-//     -> Rust 側（`apple_contact_picker.rs`）が公開する `extern "C"` 関数。
+//     -> Rust 側（本 crate の `apple.rs`）が公開する `extern "C"` 関数。
 //        code 表: 0 = 選択（name は NUL 終端 UTF-8。空文字列もありうる）、1 = キャンセル、
 //        2 = 権限拒否、3 = 提示失敗。name は code 0 のときだけ非 NULL で、呼び出しの間だけ
 //        有効（Rust 側が呼び出し中にコピーする）。コード → 結果の写像は Rust 側

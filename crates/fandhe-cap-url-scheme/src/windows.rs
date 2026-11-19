@@ -1,6 +1,6 @@
 //! Windows 向けカスタム URL scheme 受信（Issue #1216、親 #1116）。`driver::platform_url_scheme` の Windows 分岐と
 //! `fandhe-gallery` の `main.rs`（起動時の [`win::startup`]）から使われる。
-//! macOS の `apple_url_scheme.rs` と同じく、検査・保持は共通側の
+//! macOS の本 crate の `apple.rs` と同じく、検査・保持は共通側の
 //! `crate::contract::UrlInbox` に任せ、本モジュールは「Windows 固有の届き方」だけを持つ。
 //!
 //! # 届き方

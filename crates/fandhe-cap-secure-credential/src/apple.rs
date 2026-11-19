@@ -6,7 +6,7 @@
 //! （分岐なし、Issue #924 調査）。
 //!
 //! `unsafe` はこのファイルの 3 呼び出しに閉じ、各 `// SAFETY:` で契約を明記する
-//! （`apple_biometric.rs::present` と同型、coding-rust.md の FFI 例外規定準拠）。
+//! （`fandhe-cap-biometric-auth` の `apple.rs::present` と同型、coding-rust.md の FFI 例外規定準拠）。
 
 use std::ffi::CString;
 use std::os::raw::c_char;

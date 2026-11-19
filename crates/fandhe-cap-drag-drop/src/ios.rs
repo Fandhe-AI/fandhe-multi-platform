@@ -3,14 +3,14 @@
 //! （`ios/fandhe_ios_drag_drop.m`、`build.rs` が iOS のときだけ
 //! コンパイル・リンクする）を `unsafe extern "C"` 1 関数（[`ensure_installed`] が
 //! 呼ぶ [`fandhe_ios_drag_drop_install`]）で呼ぶ。`unsafe` はこの呼び出し 1 箇所に
-//! 閉じ `// SAFETY:` で契約を明記する（`ios_notification.rs::present` と同型、
+//! 閉じ `// SAFETY:` で契約を明記する（`fandhe-cap-notification` の `ios.rs::present` と同型、
 //! coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `.m` 側は `UIDropInteractionDelegate` のホバー/ドロップ開始/1 件ずつの読み込み
 //! 完了を、本モジュールが公開する 3 つの `extern "C"` 関数
 //! （[`fandhe_rust_drag_drop_hover`]・[`fandhe_rust_drag_drop_begin`]・
 //! [`fandhe_rust_drag_drop_item`]）経由で push する（pull 型ではない。
-//! `ios_notification.rs::fandhe_rust_notification_outcome` と同じ橋渡し方式）。
+//! `fandhe-cap-notification` の `ios.rs::fandhe_rust_notification_outcome` と同じ橋渡し方式）。
 //! 受けた内容は [`crate::drop_session`]（ターゲット非依存の集約器）へそのまま渡し、
 //! 状態機械への反映は `driver::drive_events` が毎フレーム
 //! [`crate::drop_session::take_events`] を drain して行う（本モジュールでは
@@ -123,7 +123,7 @@ pub(crate) fn ensure_installed() -> Option<InstallResult> {
             // `drag_drop_effect` は egui が repaint した時だけ呼ばれるため、
             // アイドル中（利用者操作なし）は次フレームが保証されない。残りの
             // 再試行間隔ぶん明示的に repaint を予約し、送信を省略する分岐でも
-            // 次回のポーリングを保証する（契約表 4、`location.rs::drive` と
+            // 次回のポーリングを保証する（契約表 4、`fandhe-cap-location` の `driver.rs::drive` と
             // 同じ考え方）。
             fandhe_runtime::request_repaint_after(std::time::Duration::from_millis(
                 INSTALL_RETRY_INTERVAL_MS - elapsed,
@@ -206,7 +206,7 @@ extern "C" fn fandhe_rust_drag_drop_is_active() -> i32 {
 ///
 /// egui の描画ループとは非同期の経路（UIKit のジェスチャ処理スレッド）のため、
 /// [`fandhe_runtime::request_repaint`] で次フレームを明示的に起こす
-/// （`ios_notification.rs::fandhe_rust_notification_outcome` と同じ理由）。
+/// （`fandhe-cap-notification` の `ios.rs::fandhe_rust_notification_outcome` と同じ理由）。
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 extern "C" fn fandhe_rust_drag_drop_hover(entered: i32) {

@@ -362,7 +362,7 @@ fi
 log "  - プロセス生存確認 OK（pid=${pid}）"
 
 # --- フェーズ 7: 結果 JSON 回収・エビデンス取得 -------------------------------
-# `frame_metrics.rs::run_android` が AndroidApp::internal_data_path() 配下へ
+# `crates/fandhe-gallery/src/demo/frame_metrics.rs` の `run_android` が AndroidApp::internal_data_path() 配下へ
 # 書き出した frame-metrics.json を run-as 経由で回収する（Android では stdout/stderr が
 # logcat に直結しないため、ファイル経由の回収が唯一の確実な手段）。
 log "adb shell run-as ${application_id} cat files/frame-metrics.json"

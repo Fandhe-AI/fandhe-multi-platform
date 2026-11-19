@@ -1,5 +1,5 @@
 //! macOS / iOS 向けファイルの関連付け受信（Issue #416。親 #102 の a・b-ios）。
-//! `crates/fandhe-cap-file-association/src/driver.rs::platform` の macOS 分岐と `main.rs`（登録）から使われる。
+//! `crates/fandhe-cap-file-association/src/driver.rs::platform` の macOS 分岐と 入口（`fandhe` の `src/entry/lifecycle.rs`、登録）から使われる。
 //! macOS は `apple/fandhe_apple_file_association.m` が登録する Apple Event `kAEOpenDocuments`
 //! ハンドラから [`fandhe_rust_file_association_received`] が呼ばれる。iOS（Issue #417）は同じ `.m` の
 //! `TARGET_OS_IOS` 分岐が scene の通知（`FandheSceneOpenURLNotification`）から同じ関数を呼ぶ。

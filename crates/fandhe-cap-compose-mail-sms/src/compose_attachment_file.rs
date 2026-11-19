@@ -200,7 +200,7 @@ impl Store {
     }
 }
 
-/// `STORE` のロックを取る。poison は中身を使い続ける（`request_slot.rs` と同じ）。
+/// `STORE` のロックを取る。poison は中身を使い続ける（`fandhe-runtime` の `request_slot.rs` と同じ）。
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // Windows は引数つきの `Mutex<Store>` を直接ロックする
 pub(crate) fn lock() -> std::sync::MutexGuard<'static, Store> {
     STORE.lock().unwrap_or_else(|e| e.into_inner())

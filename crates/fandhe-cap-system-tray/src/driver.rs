@@ -4,12 +4,9 @@
 //! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`fandhe-cap-notification` の `driver.rs` と同型）。
 //!
-//! 非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。
-//!
 //! # `show`/`hide` を別スレッドへ逃がす理由（P1 是正、PR #1041 codex 指摘）
 //!
-//! Windows 実装（`windows_system_tray.rs`）の `show` はアイコン専用スレッドの
+//! Windows 実装（本 crate の `windows.rs`）の `show` はアイコン専用スレッドの
 //! 起動完了を、`hide` は後始末メッセージの処理完了を、いずれも期限無しで待つ
 //! （同モジュール doc「待ち時間切れを持たない理由」参照）。macOS 実装
 //! （`apple.rs`）は AppKit 呼び出しのため main thread 必須だが、
@@ -17,7 +14,7 @@
 //! 寄せる（`fandhe_apple_system_tray.m` 冒頭コメント参照）ため、呼び出し元は
 //! main でなくてよい。これらの待ちを UI スレッド（[`drive`] の呼び出し元、
 //! eframe のイベントループ）で行うと、待ちが長引く間 UI 全体が固まる。
-//! `notification.rs::drive` と同型に `std::thread::spawn` した作業スレッドへ
+//! `fandhe-cap-notification` の `driver.rs::drive` と同型に `std::thread::spawn` した作業スレッドへ
 //! OS 呼び出し（`tray.show`/`tray.hide`）を逃がし、結果を `sender.send(...)` で
 //! 返す。固まるのは作業スレッドだけで、UI スレッドは固まらない。
 //!
@@ -28,7 +25,7 @@
 //! ごとに 0 始まりで進むため、画面を作り直す（新しい `SystemTrayState` を作る）と
 //! 別インスタンスの dispatch 済み世代と衝突し、新しい「出す」要求が
 //! `ShowRequested` のまま固着しうった（codex-review 指摘、Issue #1039 是正、
-//! `device-bridge-contracts.md`「2. 並行性・世代」）。`notification.rs::drive` と
+//! `device-bridge-contracts.md`「2. 並行性・世代」）。`fandhe-cap-notification` の `driver.rs::drive` と
 //! 同型に、OS 呼び出し前へ `sender.send(Box::new(mark_showing))`/
 //! `mark_hiding` を挟んで状態側を「要求済み→処理中」（`Showing`/`Hiding`）へ
 //! 進めることで、二重 dispatch 防止をプロセス全体の static ではなく各
@@ -53,7 +50,7 @@ use fandhe_runtime::request_slot::POLL_INTERVAL;
 
 /// `SystemTrayError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
 /// それ以外は `Display` の文言のみを転送する（`SystemTrayError` の内部構造は漏らさない、
-/// security.md A09。`notification.rs::to_message` と同型）。
+/// security.md A09。`fandhe-cap-notification` の `driver.rs::to_message` と同型）。
 fn to_message(e: SystemTrayError) -> String {
     match e {
         SystemTrayError::Unsupported => {
@@ -82,7 +79,7 @@ fn to_hide_result(outcome: HideOutcome) -> HideResult {
 /// `UnsupportedSystemTray` 固定（`fandhe-cap-gamepad` の `platform_gamepad` と同型の cfg
 /// カスケード）。`Arc` で返すのは [`drive`] が `show`/`hide` を作業スレッドへ
 /// 逃がすため（`'static` 参照ではなく `std::thread::spawn` へ move できる所有権が
-/// 要る、`notification.rs::implementation` と同型）。
+/// 要る、`fandhe-cap-notification` の `driver.rs::implementation` と同型）。
 pub fn platform_system_tray() -> Arc<dyn SystemTray> {
     #[cfg(target_os = "macos")]
     {
@@ -111,7 +108,7 @@ fn tray_menu() -> Result<TrayMenu, SystemTrayError> {
 }
 
 /// `system_tray` の要求 1 件を処理する effect ドライバ本体（テストのため `tray`
-/// を差し込めるよう `system_tray_effect` 本体から切り出す、`notification.rs::drive`
+/// を差し込めるよう `system_tray_effect` 本体から切り出す、`fandhe-cap-notification` の `driver.rs::drive`
 /// と同型）。
 pub(crate) fn drive(
     state: &SystemTrayState,
@@ -120,7 +117,7 @@ pub(crate) fn drive(
 ) {
     if let Some(action) = take_action(state) {
         // 起動済みマーキング（二重 dispatch 防止、モジュール doc「二重 dispatch
-        // を防ぐ理由」参照。`notification.rs::drive` の `mark_sending` と同型）。
+        // を防ぐ理由」参照。`fandhe-cap-notification` の `driver.rs::drive` の `mark_sending` と同型）。
         // OS 呼び出しは作業スレッドへ逃がす（モジュール doc「別スレッドへ逃がす
         // 理由」参照）ため、mark の送信はスレッド生成前にここで済ませる。
         let generation = action.generation;
@@ -181,7 +178,7 @@ pub fn system_tray_effect(state: &SystemTrayState, sender: &CompletionSender<Sys
     drive(state, sender, platform_system_tray());
 }
 
-/// アプリ終了時（`device.rs::shutdown`）に呼ぶ。表示中のアイコンを消す
+/// アプリ終了時（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`））に呼ぶ。表示中のアイコンを消す
 /// （`hide()` の結果は無視する純関数、テストから呼べるよう `stop_shared_system_tray`
 /// 本体から切り出す。`HIDE_ITEM_INDEX` を使わず直接 `hide` を呼ぶのは、終了時は
 /// 画面状態（`SystemTrayState`）が既に破棄されている可能性があり、状態機械を
@@ -192,7 +189,7 @@ pub(crate) fn cleanup(tray: &dyn SystemTray) {
 
 /// `fandhe-gallery` の終了フックから呼ぶ。プロセス終了時に Windows の
 /// 通知領域アイコンが残る（`NIM_DELETE` 忘れ）のを防ぐ（モジュール doc「終了時」
-/// 契約、`device.rs::shutdown` 参照）。
+/// 契約、`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`） 参照）。
 pub fn stop_shared_system_tray() {
     cleanup(&*platform_system_tray());
 }

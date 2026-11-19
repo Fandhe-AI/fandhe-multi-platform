@@ -1,7 +1,7 @@
 //! `Node::StyledText` の役割（`TextRole`）をトークン色へ解決し、egui ラベルとして
 //! 描画するプラットフォーム統合レイヤ（Issue #813、親 #811 の 2/3）。
 //!
-//! 呼び出し元は `lib.rs` / `tv_focus.rs` の各 `render_node`（`StyledText` 分岐）。
+//! 呼び出し元は `render.rs` / `fandhe-gallery` の `demo/tv_focus.rs` の各 `render_node`（`StyledText` 分岐）。
 //! `fandhe-core` の `TextRole` / `Screen::error_text`（#812）は色を持たない意味情報
 //! のみを宣言し、実際の色（`color.error` 等）への解決は本モジュールが
 //! `fandhe_core::token::TokenResolver` 経由で行う（DSL に色を書かせない方針、#811）。

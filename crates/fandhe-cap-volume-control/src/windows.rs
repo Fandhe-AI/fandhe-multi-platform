@@ -25,7 +25,7 @@
 //!
 //! # unsafe
 //!
-//! COM 呼び出しに閉じ、各呼び出しの直前に `// SAFETY:` を付ける（`windows_audio_devices.rs` と
+//! COM 呼び出しに閉じ、各呼び出しの直前に `// SAFETY:` を付ける（`fandhe-cap-audio-devices` の `windows.rs` と
 //! 同型。`lib.rs` の Windows `deny(unsafe_code)` は関数単位の `allow` で緩める）。
 
 use std::sync::Arc;

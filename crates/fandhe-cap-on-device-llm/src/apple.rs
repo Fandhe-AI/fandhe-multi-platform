@@ -2,7 +2,7 @@
 //! `fandhe-cap-on-device-llm/src/driver.rs` の macOS 経路と iOS 経路（`ios_on_device_llm` 経由）から呼ばれ、`apple/fandhe_apple_on_device_llm.swift`
 //! （FoundationModels。`build.rs` が swiftc で静的ライブラリ化）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。`unsafe` はこの呼び出し 1 か所に閉じる
-//! （coding-rust.md の FFI 例外規定準拠）。`build.rs` のコンパイル条件・`device.rs` の mod cfg と
+//! （coding-rust.md の FFI 例外規定準拠）。`build.rs` のコンパイル条件・`lib.rs` の `mod` の cfg と
 //! 同じ OS 集合に保つ。
 //!
 //! 契約の SSOT は `fandhe_cap_on_device_llm`。戻りコード → `OnDeviceLlmError` の写像の SSOT は

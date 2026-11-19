@@ -25,7 +25,7 @@ import java.util.Set;
 // 結果を `nativeOnMidi*` で受ける）。範囲は USB 等で `getDevices` に出る入力（出力ポートを持つ
 // デバイス）の受信のみ。BLE の接続（`openBluetoothDevice`）、出力、デバイス名は扱わない。
 //
-// 結果コード（`start` の戻り値）。SSOT はここで、Rust 側 `android_midi.rs::decode_start` が同じ値で写像する。
+// 結果コード（`start` の戻り値）。SSOT はここで、Rust 側の本 crate の `android.rs::decode_start` が同じ値で写像する。
 //   0 = 受け付けた（確定は非同期の nativeOnMidiStarted）/ 1 = 非対応 / 2 = 失敗
 //
 // 世代（epoch）: Rust が採番した値を `start` で受け、全 native コールバックへそのまま添える。

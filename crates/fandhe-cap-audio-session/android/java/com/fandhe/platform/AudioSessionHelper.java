@@ -25,7 +25,7 @@ import java.util.WeakHashMap;
 // 選べる種別は StopOthers（AUDIOFOCUS_GAIN）と DuckOthers（GAIN_TRANSIENT_MAY_DUCK）だけ。MixWithOthers は
 // 「フォーカスを要求しない」ことにあたり要求の API が無いので、Rust 側が Java を呼ぶ前に拒否する。
 //
-// コードの SSOT はここで、Rust 側 `android_audio_session.rs` が同じ値で写像する。
+// コードの SSOT はここで、Rust 側の本 crate の `android.rs` が同じ値で写像する。
 //   kind: 0 = StopOthers / 1 = DuckOthers
 //   start の戻り値: 1 = GRANTED / 0 = FAILED / 2 = DELAYED（遅延獲得を要求しないので来ない想定）/
 //                   -1 = API 26 未満 / -2 = 例外・破棄済み・未知の kind /

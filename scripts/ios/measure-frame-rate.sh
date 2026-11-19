@@ -200,7 +200,7 @@ xcrun simctl install "${device_udid}" "${app_dir}" >/dev/null
 # `FANDHE_FRAME_METRICS=<json>` を出力してからアプリを終了させる必要がある。
 # 本スクリプトはタイムアウト付きで出力を捕捉し、行を検出し次第 `simctl terminate`
 # する（アプリ自体は計測完了後もオーバーレイ表示を継続する設計、
-# `frame_metrics.rs` の `FrameMetricsApp::update` 参照）。
+# `crates/fandhe-gallery/src/demo/frame_metrics.rs` の `FrameMetricsApp::update` 参照）。
 timeout_seconds=60
 console_log="${out_dir}/console.log"
 log "xcrun simctl launch --console ${device_udid} ${bundle_id}（最大 ${timeout_seconds} 秒待機）"
@@ -221,7 +221,7 @@ while kill -0 "${console_pid}" 2>/dev/null && [[ "${waited}" -lt "${timeout_seco
   fi
 done
 
-# ここではまだアプリを終了させない。`FrameMetricsApp::update`（frame_metrics.rs）は
+# ここではまだアプリを終了させない。`FrameMetricsApp::update`（`crates/fandhe-gallery/src/demo/frame_metrics.rs`）は
 # 計測完了後もオーバーレイウィンドウの表示を継続する設計のため、検出直後の
 # アプリ生存中にスクリーンショットを撮ることで、これから記録する metrics_line と
 # 完全に同じ計測ランのオーバーレイをエビデンスにできる（アプリを一旦終了して

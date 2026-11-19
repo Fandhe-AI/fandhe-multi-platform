@@ -3,7 +3,7 @@
 //! UIKit（`UIActivityViewController`）実装（`apple/fandhe_apple_share.m`、`build.rs` が
 //! iOS 全体・macOS でコンパイル・リンクする）を
 //! `unsafe extern "C"` 1 関数（[`present`]）で呼ぶ。`unsafe` はこの呼び出し 1 箇所に閉じ
-//! `// SAFETY:` で契約を明記する（`apple_location.rs` の `start` と同型、`lib.rs` の
+//! `// SAFETY:` で契約を明記する（`fandhe-cap-location` の `apple.rs` の `start` と同型、`lib.rs` の
 //! iOS/macOS `deny(unsafe_code)` 緩和・coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `.m` 側の delegate コールバックから [`fandhe_rust_share_outcome`]（本モジュールが
@@ -64,7 +64,7 @@ pub(crate) fn present(request_id: u64, request: &ShareRequest) -> bool {
 /// （macOS: `sharingServicePicker:didChooseSharingService:`、iOS:
 /// `completionWithItemsHandler`）から呼ばれる `extern "C"` 関数。結果を
 /// [`crate::driver::bridge`] へ push する（pull 型、
-/// `apple_location.rs::fandhe_rust_location_fix` と同じ橋渡し方式）。
+/// `fandhe-cap-location` の `apple.rs::fandhe_rust_location_fix` と同じ橋渡し方式）。
 ///
 /// iOS では delegate コールバックが egui の `update` 外（UIKit の completion）から
 /// 届くため、[`fandhe_runtime::request_repaint`] で明示的に次フレームを起こす

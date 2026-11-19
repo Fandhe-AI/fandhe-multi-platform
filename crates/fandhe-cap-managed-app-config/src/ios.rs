@@ -8,7 +8,7 @@
 //!
 //! 同期 getter で、OS コールバックが共有状態へ結果を書く経路が無い。結果は effect ドライバの
 //! `CompletionSender::send` が `ctx.request_repaint()` で届けるため、`fandhe_runtime::request_repaint`
-//! は呼ばない（`ios_device_info.rs` と同じ）。
+//! は呼ばない（`fandhe-cap-device-info` の `ios.rs` と同じ）。
 //!
 //! # 守る範囲・守らない範囲
 //!

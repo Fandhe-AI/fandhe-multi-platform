@@ -3,7 +3,7 @@
 //! `UISettings.GetColorValue(UIColorType.Accent)` を UI スレッドで同期に読む
 //! （1 秒に 1 回。`ColorValuesChanged` は購読しない）。
 //!
-//! `unsafe` と `RoInitialize` は使わない（`windows_text_scale.rs` / `windows_accessibility_prefs.rs`
+//! `unsafe` と `RoInitialize` は使わない（`fandhe-cap-dynamic-type` の `windows.rs` / `fandhe-cap-accessibility-prefs` の `windows.rs`
 //! と同じ前提）。HRESULT と色の値はログにも画面にも出さず、固定ラベルの `Internal` へ畳む
 //! （security.md A09）。アルファは捨てる。
 //!

@@ -5,8 +5,6 @@
 //! 呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・期限・守る範囲）の SSOT は
 //! `crate::contract`。
 //!
-//! 非 wasm32 でのみコンパイル対象になる。
-//!
 //! # OS 別の分担（dispatch は #677 で最終形。後続の子は自分の OS のモジュールだけを埋める）
 //!
 //! - Android: `android`（#678。`AndroidKeyStore` の Key Attestation）

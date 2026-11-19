@@ -9,7 +9,7 @@
 //! [`platform_live_activity`] が OS ごとに実装を選ぶ。iOS は `ios_live_activity::implementation()`、
 //! Android は `android_live_activity::implementation()`、それ以外（macOS・Windows・Linux）は
 //! `UnsupportedLiveActivity` 固定。**後続の b 層は各 OS モジュールの `implementation()` だけを埋め**、
-//! 本ファイル・`device.rs` の `pub mod` 列・共通コア画面には触らない。実装は完了時に
+//! 本ファイル・`lib.rs` の `mod` 列・共通コア画面には触らない。実装は完了時に
 //! [`bridge::deliver`] を 1 回だけ呼ぶ（pull 型。`request_slot::RequestSlot` の facade）。
 //!
 //! # 並行性

@@ -18,7 +18,7 @@ import java.util.WeakHashMap;
 // 段階は今後増えうるため大小・特定値の判定はせず、未知値も捨てない。onLowMemory は API 34 以上で呼ばれず
 // 対応する種類も無いため何もしない（trim 値を捏造しない）。
 //
-// コードの SSOT はここで、Rust 側 `android_memory_pressure.rs` が同じ値を写像する。
+// コードの SSOT はここで、Rust 側の本 crate の `android.rs` が同じ値を写像する。
 //   start の戻り値: 0 = 受け付けた / 1 = 失敗
 //   read の戻り値: 1 = lowMemory / 0 = 不足ではない / -1 = 失敗
 //

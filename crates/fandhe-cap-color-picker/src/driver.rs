@@ -4,8 +4,6 @@
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。契約の SSOT は
 //! `crate::contract` のモジュール doc。
 //!
-//! 非 wasm32 でのみコンパイル対象になる。
-//!
 //! # dispatch（最終形）
 //!
 //! - macOS・iOS: コールバック型。pull 型 `bridge`（`RequestSlot` の facade）と [`drive_callback`]。

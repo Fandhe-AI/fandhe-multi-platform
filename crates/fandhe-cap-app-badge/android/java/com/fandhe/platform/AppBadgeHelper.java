@@ -26,7 +26,7 @@ import androidx.lifecycle.Lifecycle;
 // 旧ダイアログの結果を拾わない。旧インスタンスの Runnable は入口の破棄判定で FAILED を返し、その結果も
 // Rust 側の `reset_pending_tracking()` と id 照合で捨てられる。
 //
-// 結果コードの SSOT はここで、Rust 側 `android_app_badge.rs::decode` が同じ値で写像する。
+// 結果コードの SSOT はここで、Rust 側の本 crate の `android.rs::decode` が同じ値で写像する。
 // 値・例外メッセージはログに出さない。全処理は UI スレッドで直列化する。
 final class AppBadgeHelper {
     static final int RESULT_SUBMITTED = 0;

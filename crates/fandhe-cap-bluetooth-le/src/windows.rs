@@ -1,7 +1,7 @@
 //! Windows 向け BLE スキャン実装（Issue #1060）。本 crate の `driver` の Windows
 //! 経路から呼ばれ、WinRT `BluetoothLEAdvertisementWatcher` を [`present`] /
 //! [`stop_shared`] のセッション管理（ワーカースレッド・期限タイマ・停止合図）で駆動する
-//! （`BluetoothLe` トレイトは通さない。`windows_speech_recognition.rs` と同型）。
+//! （`BluetoothLe` トレイトは通さない。`fandhe-cap-speech-recognition` の `windows.rs` と同型）。
 //!
 //! # 流れ（ワーカースレッド上で同期的に）
 //!

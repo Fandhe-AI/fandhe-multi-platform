@@ -5,7 +5,7 @@
 //!
 //! 呼び出し元: `driver` の Windows 経路が [`implementation`] を呼ぶ。契約の SSOT は
 //! `crate::contract` で、往復ループ `round_trip` は共用でここには持たない。dispatch・
-//! `device.rs`・共通コアの画面には触らない。
+//! `lib.rs`・共通コアの画面には触らない。
 //!
 //! # 構成
 //!

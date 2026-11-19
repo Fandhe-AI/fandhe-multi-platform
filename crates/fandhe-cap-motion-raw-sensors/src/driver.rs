@@ -2,7 +2,7 @@
 //! `fandhe_core::screens::motion_raw_sensors_show`（端末依存ゼロ）の種類ごとの `wanted` の立ち上がりで
 //! `crate::contract::MotionRawSensors::start`、立ち下がりで `stop` を呼び、購読中は
 //! [`READ_INTERVAL`] ごとに `read` して結果を注入する（`registry.rs` の `effect` 区画から
-//! 毎フレーム同期に呼ばれる）。`environment_sensors.rs` と同型の間隔つき pull を種類ごとに回す。
+//! 毎フレーム同期に呼ばれる）。`fandhe-cap-environment-sensors` の `driver.rs` と同型の間隔つき pull を種類ごとに回す。
 //!
 //! **間隔つき pull**: 最終読取から `READ_INTERVAL` 未満なら OS を読まず残り時間で再描画を予約する。
 //! 読んだら送信を省く分岐でも次回を必ず予約する（契約表 4）。待機（購読なし）では予約しない。

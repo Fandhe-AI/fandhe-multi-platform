@@ -39,9 +39,9 @@
 //! （デスクトップと Web で期限を揃える、device-bridge-contracts.md 3 節）。`signal` は
 //! `fetch` と本文の読み取り（`array_buffer()`）の両方に効く。フェッチが先に終わる
 //! 通常経路では `clear_timeout_with_handle` でタイマーを解除して `Closure` を drop する
-//! （`mic_record.rs::Session` と同じ「`forget` しない」方針。`Closure::once_into_js` は
+//! （`fandhe-web-dom` の `mic_record.rs::Session` と同じ「`forget` しない」方針。`Closure::once_into_js` は
 //! 発火しない場合に `Closure` を解放しない既知の制約があるため使わない、
-//! `tts.rs::SpeakHandlers` の doc 参照）。
+//! `fandhe-web-dom` の `tts.rs::SpeakHandlers` の doc 参照）。
 //!
 //! # 本文上限（`MAX_BODY_BYTES`）
 //!
@@ -60,7 +60,7 @@
 /// 通信失敗・CORS 拒否時の案内（両者をブラウザ側で区別できないため同じ文言、
 /// モジュール doc「ブラウザ側の失敗の畳み込み」節参照）。
 /// native ビルドでは `mod web`（唯一の呼び出し元）が存在しないため未使用警告が出る
-/// （`location.rs::failure_kind_from_code` と同じ理由）。
+/// （`fandhe-web-dom` の `location.rs::failure_kind_from_code` と同じ理由）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) const NETWORK_FAILURE: &str = "通信に失敗しました（ネットワークまたは CORS）";
 /// `AbortController` による期限切れの案内。
@@ -71,7 +71,7 @@ pub(crate) const TIMEOUT_MESSAGE: &str = "時間切れ（15 秒）";
 pub(crate) const TOO_LARGE: &str = "応答が大きすぎます";
 
 /// 2xx 以外の応答コードを失敗として畳む純関数（ブラウザ API を呼ばないため native からも
-/// テストできる、`location.rs::failure_kind_from_code` と同じ理由で `wasm32` gate の
+/// テストできる、`fandhe-web-dom` の `location.rs::failure_kind_from_code` と同じ理由で `wasm32` gate の
 /// 外に置く）。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn check_status(status: u16) -> Result<(), String> {

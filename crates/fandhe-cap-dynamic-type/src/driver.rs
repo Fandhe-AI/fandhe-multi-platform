@@ -78,7 +78,7 @@ pub fn platform_dynamic_type() -> &'static dyn TextScale {
 
 /// `crate::error::DynamicTypeError` を
 /// `fandhe_core::screens::text_scale_preview::OsScaleError` へ写像する
-/// （`device.rs::to_note_storage_error` と同じ判断。内部構造は漏らさず `Display`
+/// （`fandhe-cap-local-storage-kv` の `driver.rs::to_note_storage_error` と同じ判断。内部構造は漏らさず `Display`
 /// 文言のみを転送する、security.md A09）。
 fn to_os_error(err: DynamicTypeError) -> OsScaleError {
     match err {

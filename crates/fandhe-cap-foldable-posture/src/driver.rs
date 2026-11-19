@@ -3,7 +3,7 @@
 //! `fandhe_core::screens::foldable_posture_show`（端末依存ゼロ）へ注入する
 //! （`registry.rs` の `effect` 区画から毎フレーム同期に呼ばれる）。
 //!
-//! **間隔つき pull**（`safe_area_insets.rs` と同型）: 最終読取から `READ_INTERVAL` 未満なら
+//! **間隔つき pull**（`fandhe-cap-safe-area-insets` の `driver.rs` と同型）: 最終読取から `READ_INTERVAL` 未満なら
 //! 読まない。状態が変わらなければ送信を省くが、次の読み取りまでの再描画は予約する
 //! （入力が無いと egui が描画せずポーリングが止まる、契約表 4）。ただし直近の結果が
 //! `Unsupported` のときは予約しない（ネイティブの非対応はプロセス中に変わらず、

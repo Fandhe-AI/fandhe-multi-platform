@@ -1,6 +1,6 @@
 //! iOS 向けファイルの関連付け受信（Issue #417。親 #102 の b-ios）。
 //! `crates/fandhe-cap-file-association/src/driver.rs::platform` の iOS 経路から呼ばれ、macOS と共用の受け口
-//! （`apple_file_association.rs` の `INBOX`）を返す。受信は `apple/fandhe_apple_file_association.m`
+//! （本 crate の `apple.rs` の `INBOX`）を返す。受信は `apple/fandhe_apple_file_association.m`
 //! の `TARGET_OS_IOS` 分岐が scene の通知から行う。
 
 use crate::contract::FileAssociation;

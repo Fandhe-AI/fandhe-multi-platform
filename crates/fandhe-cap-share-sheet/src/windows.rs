@@ -26,7 +26,7 @@
 //! `DataTransferManager` には「共有 UI を閉じた」イベントが無い（公知の制約）。共有 UI は
 //! フォーカスを奪う別ウィンドウのため、`driver.rs` 側が「フォーカス喪失 → 復帰後も
 //! `TargetApplicationChosen` 未着」をキャンセルとみなすヒューリスティックで補う
-//! （`share.rs` のポーリング処理を参照。本モジュールは `TargetApplicationChosen` の
+//! （本 crate の `driver.rs` のポーリング処理を参照。本モジュールは `TargetApplicationChosen` の
 //! 到着だけを `bridge::deliver` へ伝える）。
 
 use std::cell::RefCell;

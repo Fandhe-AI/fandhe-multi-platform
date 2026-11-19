@@ -5,7 +5,7 @@
 //! # 流れ
 //!
 //! 1. `HumanPresenceSensor::GetDefaultAsync()` を呼び、`SetCompleted` ハンドラから `mpsc` に結果を送る
-//!    （`windows_pedometer.rs` と同じ書き方）
+//!    （`fandhe-cap-pedometer` の `windows.rs` と同じ書き方）
 //! 2. `recv_timeout(timeout)` で待つ。期限切れなら `Cancel()` して `NoReading`
 //! 3. センサーの null（`e.code().0 == 0`）→ `Unsupported`。`GetCurrentReading()` の null → `NoReading`
 //!    （センサー側と null の意味が違う）。`E_ACCESSDENIED` → `PermissionDenied`、

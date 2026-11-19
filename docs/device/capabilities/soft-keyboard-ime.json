@@ -17,7 +17,7 @@
         "ソフトキーボード入力"
       ],
       "implStatus": "実装済み・実機確認済み",
-      "impl": "`crates/fandhe/src/entry/ios_text_input.rs`・`soft_keyboard.rs`、`crates/fandhe-winit-ime`"
+      "impl": "`crates/fandhe/src/entry/ios_text_input.rs`・`crates/fandhe/src/entry/soft_keyboard.rs`、`crates/fandhe-winit-ime`"
     },
     "android": {
       "status": "done",

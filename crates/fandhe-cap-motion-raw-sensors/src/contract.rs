@@ -41,7 +41,7 @@
 //!   `NotPresent`、`E_ACCESSDENIED` は `PermissionDenied`。線形加速度の取り方は #899 で確定する
 //!   - **`ReportInterval` は設定しない**（既定のまま。戻す処理が要らず、停止失敗の経路が無い）。停止・最小化・
 //!     破棄は WinRT オブジェクトの drop だけで行う
-//!   - **最小化の検出**は `windows_environment_sensors.rs` の `ensure_minimize_watcher`（`IsIconic` を 200ms 周期）。
+//!   - **最小化の検出**は `fandhe-cap-environment-sensors` の `windows.rs` の `ensure_minimize_watcher`（`IsIconic` を 200ms 周期）。
 //!     HWND 不明・ウォッチャーの起動失敗なら `start` は `Failed` にし、何も保持しない
 //!   - **最小化**: ウォッチャーがロックの内側で suspended を立て、保持を take して drop する
 //!   - **復元**: ウォッチャーは suspended を下ろし「取り直し要」の印を立てるだけ。`GetDefault` は UI スレッドの

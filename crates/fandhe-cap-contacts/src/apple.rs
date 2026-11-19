@@ -4,7 +4,7 @@
 //! `build.rs` がコンパイル・リンクする）を
 //! `unsafe extern "C"` 1 関数（[`present`]）で呼ぶ。
 //! `unsafe` はこの呼び出しと受け口に閉じ `// SAFETY:` で契約を明記する
-//! （`apple_biometric.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
+//! （`fandhe-cap-biometric-auth` の `apple.rs` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `.m` 側のデリゲートから [`fandhe_rust_contact_picker_outcome`] が呼ばれ、
 //! `crate::driver::bridge` へ結果を push する（pull 型）。コード → 結果の写像は

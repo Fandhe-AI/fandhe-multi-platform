@@ -3,7 +3,7 @@
 # ナビゲーション最小動作確認スクリプト。
 #
 # 位置づけ: `docs/architecture/tv-focus-navigation-architecture.md` 8 節が定める
-# 後続タスク（TASK-17.2）の確認事項 1〜9 のうち、単一画面（`tv_sample.rs` の
+# 後続タスク（TASK-17.2）の確認事項 1〜9 のうち、単一画面（`crates/fandhe-gallery/src/demo/tv_sample.rs` の
 # `tv_sample_screen()`）で機械的に再現できるものを、D-pad キーイベント送出 →
 # スクリーンショット/logcat 回収まで自動化する。判定そのもの（合否）は証跡を見た
 # 人間・レポート作成側が行う（機械的な pass/fail 判定は行わない。egui は独自
@@ -28,7 +28,7 @@
 #   (a) 実機ではなくエミュレータ（AVD `fandhe-tv-test`）を起動対象にする
 #       （`FANDHE_ANDROID_SERIAL` 指定時は実機/既存エミュレータへの接続も可能）。
 #   (b) `FANDHE_PROXY_APP=tv-focus` を `adb shell am start` の環境変数注入では実現できない
-#       （Android に env var 注入の標準手段がない）ため、`android.rs` が読む
+#       （Android に env var 注入の標準手段がない）ため、`fandhe-gallery` の `select.rs` が読む
 #       `debug.fandhe.proxy_app` システムプロパティを `adb shell setprop` で設定してから
 #       起動する。このプロパティ読み取りは `debug-proxy-app` feature でしかコンパイル
 #       されない（Issue #718、ストア提出物に切替経路を残さないため）ので、フェーズ 3 の
@@ -120,7 +120,7 @@ cleanup() {
   # 検証用に設定した debug.fandhe.proxy_app を必ずクリアする。system property は
   # アプリの uninstall 後も端末に残留するため、放置すると以後の通常起動まで恒常的に
   # TvFocusApp が選択され続ける（端末のグローバル状態を汚染しない）。空文字への
-  # setprop は「未設定」と同じ扱いになる（android.rs 側は空文字で既定経路へ落ちる）。
+  # setprop は「未設定」と同じ扱いになる（`select.rs` 側は空文字で既定経路へ落ちる）。
   if [ -n "${proxy_app_property_was_set}" ]; then
     adb_cmd shell setprop "${proxy_app_property}" "" >/dev/null 2>&1 || true
   fi

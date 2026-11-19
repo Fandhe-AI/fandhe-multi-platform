@@ -4,8 +4,7 @@
 //! 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //!
-//! 非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。Web（wasm32）は本経路を通らず
+//! Web（wasm32）は本経路を通らず
 //! `fandhe-web-dom` の `haptics.rs` が `navigator.vibrate` へ直接配線する。
 //! 契約（`Ok` の意味・`Unsupported` の条件・連打）の SSOT は `crate::contract`。
 //!
@@ -15,7 +14,7 @@
 //! update ループ = main）でそのまま呼ぶ（`.m` 側は main 以外なら触れずに失敗を返す）。
 //! Android の `Vibrator` はスレッド制約が無く、JNI で同期に呼ぶ。Windows は WinRT の `.get()` が
 //! 同期待ちになるため、UI を止めないようワーカースレッドで呼ぶ
-//! （`windows_speech_recognition.rs` と同じ）。
+//! （`fandhe-cap-speech-recognition` の `windows.rs` と同じ）。
 //!
 //! # 対応 OS
 //!

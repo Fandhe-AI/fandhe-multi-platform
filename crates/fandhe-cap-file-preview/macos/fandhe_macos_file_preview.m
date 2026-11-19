@@ -10,7 +10,7 @@
 //     path を NSString にコピーしてから main queue へ dispatch し、すぐ 0 を返す。
 //     結果は非同期に下の関数で届く。
 //   fandhe_rust_file_preview_outcome(uint64_t request_id, int32_t code)
-//     -> Rust 側（`macos_file_preview.rs`）が公開する `extern "C"` 関数。
+//     -> Rust 側（本 crate の `macos.rs`）が公開する `extern "C"` 関数。
 //        code 表: 0 = 窓が閉じた、1 = 提示できなかった（NSApp が無い・URL や view を作れない）。
 //        code → 結果の写像の SSOT は Rust の `fandhe_cap_file_preview::preview_from_macos_code`。
 //

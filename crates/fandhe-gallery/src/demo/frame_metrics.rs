@@ -10,8 +10,8 @@
 //! （`Cargo.toml` 参照）が有効な場合のみコンパイル対象になる加法的（additive）な
 //! 追加であり、通常ビルド（feature 無効）の挙動・依存関係を一切変更しない
 //! （`.claude/rules/coding-rust.md` の feature 設計方針）。呼び出し元は feature 有効時の
-//! `main.rs`（デスクトップ相当）・`ios.rs`（`run` 内の feature 分岐）・`android.rs`
-//! （`android_main` の feature 分岐）の 3 箇所のみで、いずれも計測専用ビルドへ
+//! `main.rs`（デスクトップ相当・iOS の feature 分岐）・`lib.rs`
+//! （Android の `android_main` の feature 分岐）の 3 箇所のみで、いずれも計測専用ビルドへ
 //! エントリそのものを差し替える（既存の `ProxyApp` 経路とは共存しない別ビルド）。
 //! wasm32 は対象外（Web の計測は既存の `web/index.html` `?measure=1` 計装、TASK-4.5 を使う）。
 //!
@@ -35,7 +35,7 @@
 //! (a) 画面内オーバーレイ（`egui::Window`。実機でのスクリーンショット記録用）、
 //! (b) 構造化ログ 1 行 `FANDHE_FRAME_METRICS=<json>` を stderr へ（デスクトップ/
 //! シミュレータでの `--console` 捕捉用）、(c) Android のみ `result_path`
-//! （`AndroidApp::internal_data_path()` 配下、`android.rs` の feature 分岐が設定）へ
+//! （`AndroidApp::internal_data_path()` 配下、[`run_android`] が設定）へ
 //! JSON ファイル書き出し。
 
 use std::cell::Cell;
@@ -224,7 +224,7 @@ impl FrameMetricsCollector {
 
 /// 計測ワークロードを描画しつつフレーム間隔を収集する `EguiApp` 実装。
 ///
-/// `main.rs` / `ios.rs` / `android.rs` の feature 分岐からのみ構築される
+/// `main.rs`（デスクトップ・iOS）/ `lib.rs`（Android）の feature 分岐からのみ構築される
 /// （モジュール doc の「feature ゲート契約」参照）。
 pub struct FrameMetricsApp {
     screen: Screen<FrameMetricsState>,
@@ -314,7 +314,7 @@ pub fn run_desktop() -> Result<(), fandhe_render_egui::LaunchError> {
 
 /// iOS（wgpu/Metal）向けの計測アプリ起動エントリ。
 ///
-/// 呼び出し元は `ios.rs` の `run` 内 feature 分岐のみ。
+/// 呼び出し元は `main.rs` の iOS 版 `main` の feature 分岐のみ。
 #[cfg(target_os = "ios")]
 pub fn run_ios() -> Result<(), fandhe_render_egui::LaunchError> {
     fandhe_render_egui::launch::run_ios("fandhe-egui-proxy-frame-metrics", |lc| {
@@ -324,7 +324,7 @@ pub fn run_ios() -> Result<(), fandhe_render_egui::LaunchError> {
 
 /// Android（wgpu/Vulkan、NativeActivity）向けの計測アプリ起動エントリ。
 ///
-/// 呼び出し元は `android.rs` の `android_main` feature 分岐のみ。`android.rs` と同様に
+/// 呼び出し元は `lib.rs` の `android_main` feature 分岐のみ。通常起動と同様に
 /// Vulkan 固定（REQ-1）を維持する（`fandhe_render_egui::launch::run_android` が固定する）。
 /// `AndroidApp::internal_data_path()` 配下へ結果 JSON を
 /// 書き出す（`adb shell run-as <package> cat files/frame-metrics.json` で回収する運用、

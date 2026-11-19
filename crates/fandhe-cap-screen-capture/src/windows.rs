@@ -22,7 +22,7 @@
 //!
 //! [`WindowsScreenCapturer::start`] は `screen_capture::drive_callback`（UI スレッド）から呼ばれ、
 //! ピッカーを出して完了ハンドラを登録したら即戻る（`IAsyncOperation` は [`HELD`] に保持、
-//! `windows_biometric.rs` と同型）。項目が得られたらワーカースレッドが D3D11・フレームプール・
+//! `fandhe-cap-biometric-auth` の `windows.rs` と同型）。項目が得られたらワーカースレッドが D3D11・フレームプール・
 //! セッション・トランスコードを生成から解放まで受け持つ。状態は [`SESSION`] 1 本で、
 //! 「現在の要求か」の判定と更新は同じロックの内側で行い（契約表 2）、結果の配送前に
 //! 自分の要求のときだけ解除する（解除が遅れると次の開始が busy になる）。
@@ -87,7 +87,7 @@ use windows::Win32::System::WinRT::Direct3D11::{
 };
 use windows::Win32::UI::Shell::IInitializeWithWindow;
 use windows::core::Interface;
-// `IAsyncOperation` 等は `windows::Foundation` へ再エクスポートされない（windows_biometric.rs 参照）。
+// `IAsyncOperation` 等は `windows::Foundation` へ再エクスポートされない（`fandhe-cap-biometric-auth` の `windows.rs` 参照）。
 use windows_future::{AsyncActionWithProgressCompletedHandler, AsyncOperationCompletedHandler};
 use windows_future::{AsyncStatus, IAsyncOperation};
 
@@ -117,7 +117,7 @@ static SESSION: Mutex<Option<Session>> = Mutex::new(None);
 thread_local! {
     /// 直近の `start` が発行したピッカーの `IAsyncOperation`（完了ハンドラが呼ばれる前に
     /// ドロップされないよう保持する。`start` は UI スレッドからのみ呼ばれる契約、
-    /// `windows_biometric.rs::HELD` と同じ）。
+    /// `fandhe-cap-biometric-auth` の `windows.rs::HELD` と同じ）。
     static HELD: RefCell<Option<IAsyncOperation<GraphicsCaptureItem>>> =
         const { RefCell::new(None) };
 }
@@ -555,7 +555,7 @@ fn build_source(
 fn init_picker_window(picker: &GraphicsCapturePicker, hwnd: HWND) -> windows::core::Result<()> {
     let init: IInitializeWithWindow = picker.cast()?;
     // SAFETY: `hwnd` は `fandhe_platform_windows::window()`（`remember_window` が控えた有効なウィンドウ）
-    // 由来で、`init` は直前に取得した有効な COM ポインタ（`windows_biometric.rs` と同じ根拠）。
+    // 由来で、`init` は直前に取得した有効な COM ポインタ（`fandhe-cap-biometric-auth` の `windows.rs` と同じ根拠）。
     unsafe { init.Initialize(hwnd) }
 }
 

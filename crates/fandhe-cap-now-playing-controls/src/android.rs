@@ -224,7 +224,7 @@ pub(crate) fn implementation() -> Arc<dyn NowPlaying> {
     Arc::new(AndroidNowPlaying)
 }
 
-/// `device.rs` の `cfg(any(android, test))` でホストのテストビルドにも載るための形。
+/// `lib.rs` が `mod android` を全ターゲットで載せる（Android 以外は `allow(dead_code)`）ため、ホスト向けビルドにも要る形。
 /// dispatch は Android でしか呼ばない。非対応を返し、成功へは倒さない。
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)]

@@ -261,7 +261,7 @@ median() {
 extract_cold_start_ms() {
   # `--console` の出力から `COLD_START_MS=<数値>;` の数値部分のみを抽出する。
   # `script`（疑似 TTY 経由の記録、下記 run_trials 参照）は CR を挟むことがあるため
-  # 先に取り除く。末尾の `;`（fandhe 側 `ios.rs`・ネイティブ側 `ContentView.swift`
+  # 先に取り除く。末尾の `;`（fandhe 側 `crates/fandhe-gallery/src/demo/cold_start.rs`・ネイティブ側 `ContentView.swift`
   # 双方が出力する行終端マーカー）を正規表現へ必須で含めることで、pty の折り返し幅で
   # 数値が途中改行された場合に断片（例: `COLD_START_MS=12`）を誤って正しい値として
   # 抽出することを防ぎ、抽出失敗として fail-fast させる（Bugbot 指摘対応、

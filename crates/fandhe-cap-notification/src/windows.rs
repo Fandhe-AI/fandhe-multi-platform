@@ -36,7 +36,7 @@
 //! [`show_toast`] 内の `SetCurrentProcessExplicitAppUserModelID`）に限り、
 //! 各呼び出しの直前に `// SAFETY:` を付けて最小範囲の関数に閉じる
 //! （`lib.rs` の Windows `deny(unsafe_code)` 緩和・coding-rust.md の FFI 例外規定準拠。
-//! `windows_share.rs`/`windows_biometric.rs` と同型）。PROPVARIANT の解放・COM の
+//! `fandhe-cap-share-sheet` の `windows.rs`/`fandhe-cap-biometric-auth` の `windows.rs` と同型）。PROPVARIANT の解放・COM の
 //! 参照カウント解放は `windows` クレートの `Drop` に任せ、手動では行わない。
 //!
 //! Toast が実際に画面へ出たかどうかは確かめられない（`Failed` イベントは購読
@@ -67,7 +67,7 @@ use windows::Win32::UI::Shell::{IShellLinkW, SetCurrentProcessExplicitAppUserMod
 use windows::core::{HSTRING, Interface};
 
 /// 本アプリ固有の AUMID。他アプリ（PowerShell 等）の識別子は借用しない
-/// （モジュール doc 参照）。`windows_secure_credential.rs::RESOURCE` と同じ識別子を
+/// （モジュール doc 参照）。`fandhe-cap-secure-credential` の `windows.rs::RESOURCE` と同じ識別子を
 /// 流用し、Windows 側の資源識別子を 1 か所に揃える。
 pub const APP_AUMID: &str = "com.fandhe.egui-proxy-desktop";
 
@@ -76,7 +76,7 @@ pub const APP_AUMID: &str = "com.fandhe.egui-proxy-desktop";
 const SHORTCUT_FILE: &str = "Fandhe egui proxy.lnk";
 
 /// `ToastNotifier::Setting()` の値を契約上のエラー種別へ写す純関数。`cfg` を
-/// 付けず（`windows_secure_credential.rs::is_not_found` と異なりホスト非依存の
+/// 付けず（`fandhe-cap-secure-credential` の `windows.rs::is_not_found` と異なりホスト非依存の
 /// 整数比較のみのため）どのホストでもテストできるようにする。
 /// `NotificationSetting` の discriminant は WinRT の固定値
 /// （0=Enabled, 1=DisabledForApplication, 2=DisabledForUser,
@@ -86,7 +86,7 @@ fn setting_result(code: i32) -> Result<(), NotificationError> {
 }
 
 /// [`setting_result`] を機能ラベル付きに一般化したもの。同じ送り手（AUMID）の
-/// トーストを使う `windows_alarm.rs`（Issue #721）が、自機能のラベルで同じ写像を
+/// トーストを使う `fandhe-cap-alarm` の `windows.rs`（Issue #721）が、自機能のラベルで同じ写像を
 /// 共用する。未知の値の `Internal` ラベルは呼び出し元が `internal` で渡す
 /// （機能名の文字列比較で切り替えない）。
 pub fn setting_result_for(
@@ -336,7 +336,7 @@ fn write_shortcut(path: &Path, exe: &Path) -> Result<(), NotificationError> {
 }
 
 /// スタートメニューのショートカットで [`APP_AUMID`] を登録済みにする（無ければ作る）。
-/// `notify` と `windows_alarm.rs`（Issue #721）が同じ送り手を使うための共通入口。
+/// `notify` と `fandhe-cap-alarm` の `windows.rs`（Issue #721）が同じ送り手を使うための共通入口。
 /// `feature` は APPDATA・実行ファイルが取れないときの `Unsupported` のラベル。
 /// 呼び出し元が [`ComInit`] で COM を初期化済みのスレッド上でのみ呼ぶ契約。
 pub fn ensure_app_aumid(feature: &'static str) -> Result<(), NotificationError> {

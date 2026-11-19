@@ -4,9 +4,6 @@
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`app::EffectFn` 参照）。
 //! 契約の SSOT は `crate::contract`（10 秒・上限 50 件・`normalize_scan`）。
 //!
-//! 非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。
-//!
 //! # iOS / macOS / Windows / Android: pull 型 `bridge`
 //!
 //! 広告は OS のスレッドから非同期に届き、完了も非同期のため、`BluetoothLe` トレイトを

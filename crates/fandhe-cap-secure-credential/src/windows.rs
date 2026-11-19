@@ -1,9 +1,9 @@
 //! Windows 向け資格情報保存実装（Issue #923）。本 crate の `driver.rs` の
 //! Windows 経路から呼ばれ、`crate::contract::SecureCredential` を
 //! WinRT `Windows.Security.Credentials.PasswordVault`（Credential Locker）で
-//! 実装する。macOS 実装（`apple_secure_credential.rs`、Keychain FFI）と異なり
+//! 実装する。macOS 実装（本 crate の `apple.rs`、Keychain FFI）と異なり
 //! `windows` クレート側が safe fn としてラップ済みのため `unsafe` は不要
-//! （`windows_system_sound.rs` と同型。`lib.rs` の Windows `deny(unsafe_code)` に対する
+//! （`fandhe-cap-system-sound` の `windows.rs` と同型。`lib.rs` の Windows `deny(unsafe_code)` に対する
 //! `#[allow(unsafe_code)]` も付けない）。RoInitialize も呼ばない
 //! （`windows-core` が `CO_E_NOTINITIALIZED` 時に MTA へフォールバックする既定挙動、
 //! #898/#907/#913 と同じ前提）。
@@ -18,8 +18,8 @@
 //! 「失敗」を区別する）。
 //!
 //! HRESULT の生値・秘密値をログ・エラー文言へ出さず、固定ラベルの
-//! `SecureCredentialError::Internal` へ畳む（`windows_share.rs`/`windows_biometric.rs`/
-//! `windows_system_sound.rs` と同じ方針、security.md A09）。
+//! `SecureCredentialError::Internal` へ畳む（`fandhe-cap-share-sheet` の `windows.rs`/`fandhe-cap-biometric-auth` の `windows.rs`/
+//! `fandhe-cap-system-sound` の `windows.rs` と同じ方針、security.md A09）。
 //!
 //! # 既知の天井
 //!
@@ -49,7 +49,7 @@ fn is_not_found(error: &windows::core::Error) -> bool {
 }
 
 /// `PasswordVault` インスタンスを生成する。状態を持たないため呼び出しごとに
-/// 生成する（`windows_text_scale.rs::WindowsTextScale` と同じ方針。resource 単位の
+/// 生成する（`fandhe-cap-dynamic-type` の `windows.rs::WindowsTextScale` と同じ方針。resource 単位の
 /// 操作頻度は低く常駐コストを避ける）。
 fn vault() -> Result<PasswordVault, SecureCredentialError> {
     PasswordVault::new().map_err(|_| SecureCredentialError::Internal("secure_credential vault"))

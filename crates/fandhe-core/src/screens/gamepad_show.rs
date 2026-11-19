@@ -45,7 +45,7 @@ const ALT_BUTTON_LABEL: &str = "代替ボタン";
 /// STICK_EPSILON` と同じ値）。[`apply_alt_frame`] が [`tilt_ball::step`] に渡す前に
 /// この閾値以下を 0.0 として畳む。effect ドライバ側は接続時のみこの畳み込みを行い
 /// [`apply_disconnected`]/[`apply_unsupported`] へは生の `alt_x`/`alt_y` をそのまま
-/// 渡す契約（`gamepad.rs::drive` 参照）のため、ここで畳まないとスライダーの残留値が
+/// 渡す契約（`fandhe-cap-gamepad` の `driver.rs::drive` 参照）のため、ここで畳まないとスライダーの残留値が
 /// 玉に力を与え続け、静止しきらず effect ドライバの skip-send 判定が永久に成立しない
 /// （Cursor Bugbot 指摘 Medium、PR #937）。
 const ALT_STICK_EPSILON: f32 = 0.02;

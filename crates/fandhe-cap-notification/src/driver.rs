@@ -4,17 +4,14 @@
 //! `CompletionSender` 経由で結果を返す（`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から
 //! `fn(&S, &CompletionSender<S>)` として呼ばれる契約、`secure_credential` と同型）。
 //!
-//! 非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。
-//!
 //! # 別スレッドで OS を呼ぶ理由
 //!
 //! macOS の `osascript`（子プロセス起動、最大 `crate::macos` の
 //! `SEND_TIMEOUT` だけブロック）・Windows の WinRT Toast はいずれも
 //! `ProxyApp::update`（UI スレッド）から直接呼ぶと画面が固まるため、
-//! `secure_credential.rs::drive` と同型に別スレッドへ逃がす。`notification_send`
+//! `fandhe-cap-secure-credential` の `driver.rs::drive` と同型に別スレッドへ逃がす。`notification_send`
 //! （`fandhe-core` 側）は `Requested`/`Sending` の間は二重要求を防ぐため、
-//! 複数要求の順序保証キュー（`tts.rs`）は不要（常に高々 1 件）。
+//! 複数要求の順序保証キュー（`fandhe-cap-tts` の `driver.rs`）は不要（常に高々 1 件）。
 //!
 //! # macOS が `UNUserNotificationCenter` を使わない理由
 //!
@@ -33,7 +30,7 @@
 //! RequestSlot` の facade、[`drive_callback`] が毎フレーム観測する pull 型）にする。
 //! Android は `ActivityResultContracts.RequestPermission`（`POST_NOTIFICATIONS`、
 //! Android 13+ のみ）が同じくコールバック型のため、iOS と同じ [`bridge`]/
-//! [`drive_callback`] へ相乗りする（`biometric_auth.rs` が Apple/Android で
+//! [`drive_callback`] へ相乗りする（`fandhe-cap-biometric-auth` の `driver.rs` が Apple/Android で
 //! `bridge` を共有しているのと同型、Issue #1006）。iOS/Android の分岐だけをこの形に
 //! し、macOS/Windows/その他の既存 [`drive`]（スレッド + `Notifier`）は変えない。
 //!
@@ -154,7 +151,7 @@ fn implementation_desktop() -> Arc<dyn Notifier> {
 /// から渡される）、および Android 側の `NotificationHelper.RESULT_*` 定数
 /// （`nativeOnNotificationResult`）→ 画面へ反映する結果の写像（iOS/Android 共通の
 /// SSOT。cfg は付けず全ターゲットでコンパイル・テスト対象にする
-/// （`biometric_auth.rs::outcome_from_verification` と同じ理由。呼び出し元
+/// （`fandhe-cap-biometric-auth` の `driver.rs::outcome_from_verification` と同じ理由。呼び出し元
 /// （[`bridge::deliver`] 経由）は iOS/Android 限定だが、host（macOS/Windows/Linux）上の
 /// `cargo test`/clippy でも失敗系を検証できるようにする）。
 ///
@@ -402,7 +399,7 @@ fn drive(
         return;
     };
 
-    // 起動済みマーキング（二重起動防止、`secure_credential.rs::drive` と同型）。
+    // 起動済みマーキング（二重起動防止、`fandhe-cap-secure-credential` の `driver.rs::drive` と同型）。
     let _ = sender.send(Box::new(mark_sending));
 
     let generation = request.generation;
@@ -439,7 +436,7 @@ pub fn notification_send_effect(
 }
 
 /// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照。
-/// `device::biometric_auth::reset_pending_tracking` と同じ命名・位置づけ）。
+/// `fandhe_cap_biometric_auth::driver::reset_pending_tracking` と同じ命名・位置づけ）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
     bridge::reset();

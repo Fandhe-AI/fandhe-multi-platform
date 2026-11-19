@@ -233,7 +233,7 @@ pub(crate) fn enumeration_pending() -> bool {
     cfg!(target_os = "macos") && !ENUMERATED.load(Ordering::Acquire)
 }
 
-/// macOS で OS コールバックから egui を起こす closure。画面ドライバ（`background_download.rs`）が
+/// macOS で OS コールバックから egui を起こす closure。画面ドライバ（本 crate の `driver.rs`）が
 /// effect の初回に 1 度だけ登録する（`Context` は `Send + Sync` で、どのスレッドからでも起こせる）。
 #[cfg(target_os = "macos")]
 static WAKE: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>> = std::sync::OnceLock::new();

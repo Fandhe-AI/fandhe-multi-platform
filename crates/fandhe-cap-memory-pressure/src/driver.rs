@@ -333,7 +333,7 @@ fn do_start(
     }
 }
 
-/// 保持中の購読を止める（`device::shutdown` と `ProxyApp` の drop から呼ばれる）。画面を離れる / 終了する
+/// 保持中の購読を止める（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`） と `ProxyApp` の drop から呼ばれる）。画面を離れる / 終了する
 /// とき、停止ボタンや次回の `drive` を待たずに guard・通知登録・待機スレッドを解放する。
 /// 解除はロックの外で行う（OS コールバックが同じロックを取りうるため）。
 pub fn shutdown() {

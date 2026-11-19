@@ -4,11 +4,11 @@
 //! （`LAContext`）実装（`apple/fandhe_apple_biometric.m`、`build.rs` が iOS 全体・
 //! macOS でコンパイル・リンクする）を `unsafe extern "C"`
 //! 1 関数（[`present`]）で呼ぶ。`unsafe` はこの呼び出し 1 箇所に閉じ `// SAFETY:` で
-//! 契約を明記する（`apple_share.rs::present` と同型、coding-rust.md の FFI 例外規定準拠）。
+//! 契約を明記する（`fandhe-cap-share-sheet` の `apple.rs::present` と同型、coding-rust.md の FFI 例外規定準拠）。
 //!
 //! `.m` 側の reply コールバックから [`fandhe_rust_biometric_outcome`]（本モジュールが
 //! 公開する `extern "C"` 関数）が呼ばれ、`crate::driver::bridge` へ結果を push
-//! する（pull 型、`apple_share.rs::fandhe_rust_share_outcome` と同じ橋渡し方式）。
+//! する（pull 型、`fandhe-cap-share-sheet` の `apple.rs::fandhe_rust_share_outcome` と同じ橋渡し方式）。
 //! `LAError` の生コード → 結果の写像は本 crate の `driver.rs::outcome_from_reply`
 //! （iOS/macOS 共通の SSOT）に一本化する。
 //!
@@ -28,7 +28,7 @@ unsafe extern "C" {
 /// `.m` 側の `fandhe_apple_biometric_authenticate` を呼び、生体認証 UI の提示を依頼する
 /// （本 crate の `driver.rs` の macOS/iOS 経路から呼ばれる契約）。`request_id` は
 /// `crate::driver::bridge::begin` が払い出したプロセス内一意な ID（画面の
-/// `generation` ではない、`apple_share.rs::present` と同じ設計）。
+/// `generation` ではない、`fandhe-cap-share-sheet` の `apple.rs::present` と同じ設計）。
 ///
 /// `reason` の `CString` 化が失敗する（内部 NUL 混入）ことは通常起きない
 /// （`fandhe_device::biometric_auth::validate_reason` が事前に NUL を弾く契約のため）。
@@ -53,7 +53,7 @@ pub(crate) fn present(request_id: u64, reason: &str) -> bool {
 /// （本 crate の `driver.rs::outcome_from_reply`、iOS/macOS 共通の表）へ委譲する。
 /// `.m` 側の `LAContext.evaluatePolicy` reply ブロックから呼ばれる `extern "C"` 関数。
 /// 結果を [`crate::driver::bridge`] へ push する（pull 型、
-/// `apple_share.rs::fandhe_rust_share_outcome` と同じ橋渡し方式）。
+/// `fandhe-cap-share-sheet` の `apple.rs::fandhe_rust_share_outcome` と同じ橋渡し方式）。
 ///
 /// iOS では reply コールバックが egui の `update` 外（`LAContext` の private queue）
 /// から届くため、[`fandhe_runtime::request_repaint`] で明示的に次フレームを起こす

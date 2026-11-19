@@ -5,7 +5,7 @@
 //!
 //! `driver.rs` の Windows 経路から [`WindowsBackgroundTask`] を使う
 //! （`crate::contract::BackgroundTask` 実装、`macos.rs`
-//! と同型）。実行そのものは別プロセス（タスク起動時に専用引数付きで `main.rs` が
+//! と同型）。実行そのものは別プロセス（タスク起動時に専用引数付きで入口（`fandhe` の `src/entry/lifecycle.rs`）が
 //! 再度立つ）が行うため発火コールバックは無く、[`WindowsBackgroundTask::state`] は
 //! 保存済みの実行記録と自分が出した予約時刻を比較するだけで判定する
 //! （下記「状態判定」節）。
@@ -108,7 +108,7 @@ pub(crate) fn task_arguments() -> String {
     BACKGROUND_ARG.to_string()
 }
 
-/// [`task_arguments`] の逆変換。`main.rs` が `std::env::args_os()` から渡した引数列が
+/// [`task_arguments`] の逆変換。入口（`fandhe` の `src/entry/lifecycle.rs`）が `std::env::args_os()` から渡した引数列が
 /// `[フラグ]` の完全一致のときだけ `true` を返す（入力検証、security.md A03）。
 pub fn parse_scheduled_args(args: &[OsString]) -> bool {
     matches!(args, [flag] if flag == BACKGROUND_ARG)
@@ -448,7 +448,7 @@ mod com {
     }
 }
 
-/// 専用引数（[`parse_scheduled_args`]）付きで起動されたときの入口。`main.rs` の
+/// 専用引数（[`parse_scheduled_args`]）付きで起動されたときの入口。`fandhe` の `src/entry/lifecycle.rs` の
 /// 通常分岐より前に呼ばれ、画面を出さずに実行結果を書いて終了する（モジュール doc
 /// 「契約の簡略化」節参照。登録済みタスク定義との世代照合はしない――起動された
 /// 時点で実行とみなし、常に記録を書く）。戻り値はプロセスの終了コード

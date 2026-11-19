@@ -35,7 +35,7 @@
 // 前面表示（`willPresent`）: `UNUserNotificationCenterDelegate` を実装し、
 // Banner + List で表示する（バナー通知が実際に出るかは利用者の OS 設定次第。
 // 画面文言は「表示されるかは OS の通知設定次第です」に留める、`Shown` を
-// 返さない設計は `notification.rs` モジュール doc 参照）。delegate の設定は
+// 返さない設計は本 crate の `driver.rs` モジュール doc 参照）。delegate の設定は
 // Apple ドキュメント上は「起動完了前」が要件だが、それは通知タップからの
 // アプリ起動（本実装はスコープ外、タップ応答は `didReceiveNotificationResponse`
 // を実装しない）に対する要件であり、前面表示には遅れて設定しても効く
@@ -47,7 +47,7 @@
 // 方針）。`UNUserNotificationCenter` の completion ブロックは呼ばれるスレッドが
 // 契約上未規定のため、`fandhe_rust_notification_outcome` の呼び出し自体も
 // `dispatch_async(main)` でラップし、Rust 側へは常に main queue から届ける
-// （呼び出し元 `ios_notification.rs::present` の `@autoreleasepool` 前提と
+// （呼び出し元本 crate の `ios.rs::present` の `@autoreleasepool` 前提と
 // 揃える）。各経路で Rust への通知がちょうど 1 回になるよう、分岐ごとに
 // 完了パスを 1 本に絞ってある（下記コメント参照）。
 //

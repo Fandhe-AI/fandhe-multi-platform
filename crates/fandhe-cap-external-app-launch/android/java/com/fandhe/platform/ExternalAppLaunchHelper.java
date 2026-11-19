@@ -32,7 +32,7 @@ import java.util.WeakHashMap;
 // 守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止。守らない範囲: 他アプリへ渡した後の利用者の操作。
 // id・結果コード・例外メッセージはログに出さない。
 final class ExternalAppLaunchHelper {
-    // target コード。Rust 側 `android_external_app_launch.rs` の TARGET_* と対。
+    // target コード。Rust 側の本 crate の `android.rs` の TARGET_* と対。
     static final int TARGET_PHONE = 0;
     static final int TARGET_MAP = 1;
 

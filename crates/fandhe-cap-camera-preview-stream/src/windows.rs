@@ -13,7 +13,7 @@
 //! 3. 色のフレームソース（`VideoPreview` を優先）から `CreateFrameReaderWithSubtypeAsync(Bgra8)`
 //! 4. `FrameArrived` を登録して `StartAsync`。**映像中の確定は status が `Success` のとき**
 //!
-//! 各段の完了は `SetCompleted` から [`Cmd`] としてキューへ積む（`windows_ble_peripheral.rs` と同じ形）。
+//! 各段の完了は `SetCompleted` から [`Cmd`] としてキューへ積む（`fandhe-cap-ble-peripheral` の `windows.rs` と同じ形）。
 //! ワーカーが待つのは `rx.recv()` だけで、ワーカー上で `.get()` は使わない。`FrameArrived` は
 //! `AtomicBool` で畳み込み、`FrameReady` を 1 件だけ積む。
 //!

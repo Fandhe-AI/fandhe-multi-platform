@@ -4,9 +4,6 @@
 //! （`fandhe-gallery` の `screens/registry.rs` の `effect` 区画から `fn(&S, &CompletionSender<S>)` として
 //! 呼ばれる契約、`fandhe-cap-share-receive` の `drive` と同型）。
 //!
-//! 非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。
-//!
 //! # pull 型のポーリングと別スレッド読み出し
 //!
 //! 押下は OS 側の拡張が書くため、画面へは本ドライバが [`POLL_INTERVAL`] ごとに回数を読んで届ける。

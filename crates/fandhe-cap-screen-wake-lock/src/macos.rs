@@ -1,7 +1,7 @@
 //! macOS 向け画面スリープ抑止実装（Issue #1278）。IOKit の電源アサーション
 //! （`macos/fandhe_macos_screen_wake_lock.m`、本 crate の `build.rs` が macOS ターゲットで
 //! コンパイル・リンクする）を `unsafe extern "C"` 2 関数で取る / 外す。`unsafe` は
-//! この呼び出しに閉じ `// SAFETY:` で契約を明記する（`macos_background_task.rs` と同型、
+//! この呼び出しに閉じ `// SAFETY:` で契約を明記する（`fandhe-cap-background-task` の `macos.rs` と同型、
 //! coding-rust.md の FFI 例外規定準拠）。`driver.rs` の macOS 経路から使われる。
 //!
 //! # 状態
@@ -13,7 +13,7 @@
 //!
 //! # アプリ終了時
 //!
-//! プロセスが終わると OS がアサーションを解放するため、`device::shutdown` への追加は不要
+//! プロセスが終わると OS がアサーションを解放するため、`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`） への追加は不要
 //! （`.m` ファイル冒頭コメントと対応）。
 
 use std::sync::{Arc, Mutex};

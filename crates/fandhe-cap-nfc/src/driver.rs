@@ -5,8 +5,6 @@
 //! 呼ばれる契約、`app::EffectFn` 参照）。契約（結果の種類・期限・守る範囲）の SSOT は
 //! `crate::contract`。
 //!
-//! 非 wasm32 でのみコンパイル対象になる。
-//!
 //! # OS 別の分担（dispatch は #1044 で最終形。後続の子は自分の OS のモジュールだけを埋める）
 //!
 //! - Android: `crate::android`（Issue #1045。`NfcReadHelper` を JNI で橋渡し）

@@ -20,12 +20,12 @@
 //        その他=内部エラー。
 //   fandhe_apple_secure_credential_delete(const char *key) -> int32_t。
 //     0=成功（削除できた）、1=該当項目が無い（Rust 側は冪等 `Ok(())` として扱う契約、
-//     `secure_credential.rs::SecureCredential::delete` の doc 参照）、
+//     本 crate の `contract.rs::SecureCredential::delete` の doc 参照）、
 //     2=入力不正、その他=内部エラー。
 //
 // 識別子: `kSecAttrService` は固定文字列（下記 `kFandheService`、
 // `macos/Info.plist` の `CFBundleIdentifier` と同じ値）、`kSecAttrAccount` は
-// `"fandhe." + key`（`key` は呼び出し元 `apple_secure_credential.rs` が
+// `"fandhe." + key`（`key` は呼び出し元本 crate の `apple.rs` が
 // `fandhe_device::secure_credential::validate_key` で検証済みの
 // 英数字・`.`/`_`/`-` のみの文字列、外部入力をそのまま OS 識別子へ連結しない
 // 契約、security.md A03）。

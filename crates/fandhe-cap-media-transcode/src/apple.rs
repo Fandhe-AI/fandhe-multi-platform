@@ -3,7 +3,7 @@
 //! （`AVAudioFile` で AAC の m4a を書く。`build.rs` がコンパイル）を
 //! `unsafe extern "C"` 1 関数で呼ぶ。出力は `.m` からコールバックで Rust の `Vec<u8>` へコピーし、
 //! 所有権とアロケータは境界を越えない。`unsafe` はこの呼び出しとコールバックの 2 箇所に閉じる
-//! （coding-rust.md の FFI 例外規定準拠）。`build.rs` のコンパイル条件・`device.rs` の mod cfg と
+//! （coding-rust.md の FFI 例外規定準拠）。`build.rs` のコンパイル条件・`lib.rs` の `mod` の cfg と
 //! 同じ OS 集合に保つ。
 //!
 //! 契約の SSOT は `fandhe_cap_media_transcode`。出力の検証（`check_m4a`）はドライバが行う。

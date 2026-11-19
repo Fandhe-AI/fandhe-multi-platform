@@ -226,12 +226,12 @@ fn lock() -> std::sync::MutexGuard<'static, DropSessions> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// [`DropSessions::hover`] へ委譲する（`ios_drag_drop.rs::fandhe_rust_drag_drop_hover` から）。
+/// [`DropSessions::hover`] へ委譲する（本 crate の `ios.rs::fandhe_rust_drag_drop_hover` から）。
 pub fn hover(entered: bool) {
     lock().hover(entered);
 }
 
-/// [`DropSessions::begin`] へ委譲する（`ios_drag_drop.rs::fandhe_rust_drag_drop_begin` から）。
+/// [`DropSessions::begin`] へ委譲する（本 crate の `ios.rs::fandhe_rust_drag_drop_begin` から）。
 pub fn begin(total: usize) -> (u64, usize) {
     lock().begin(total)
 }

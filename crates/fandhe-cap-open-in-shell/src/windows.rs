@@ -50,7 +50,7 @@
 //! `SEE_MASK_FLAG_NO_UI` 下で関連付けなしの「アプリを選ぶ」ダイアログが出ないことは実機で未確認（確認用 issue #744）。
 //! 出た場合は表示が一時的に食い違うだけで、守備範囲の外として扱う。
 //!
-//! モジュールは純関数をホストでテストできるよう `cfg(any(windows, test))` でコンパイルする（`device.rs`）。
+//! モジュールは純関数をホストでテストできるよう全ターゲットでコンパイルする（`lib.rs`。Windows 以外は `allow(dead_code)`）。
 
 #[cfg(not(target_os = "windows"))]
 use crate::contract::UnsupportedOpenInShell;

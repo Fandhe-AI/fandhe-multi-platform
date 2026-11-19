@@ -10,7 +10,7 @@
 //! main queue で 1 ステップずつ動き、期限（`remaining`）を超えたら Rust のバッファへ書かずに戻る。
 //!
 //! 再描画（契約表 4）: OS のコールバックが Rust の共有状態へ書く経路は無く、結果を置くのは
-//! ワーカー（`spell_check.rs` の `slot.deliver`）だけ。待っている間は `poll_and_finish` が毎フレーム
+//! ワーカー（本 crate の `driver.rs` の `slot.deliver`）だけ。待っている間は `poll_and_finish` が毎フレーム
 //! `request_repaint_after` を予約するので画面は止まらない。念のため検査から戻った直後にも
 //! `fandhe_runtime::request_repaint` を呼ぶ。
 //!

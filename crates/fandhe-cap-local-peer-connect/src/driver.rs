@@ -5,9 +5,6 @@
 //! 契約の SSOT は `contract.rs`（30 秒の窓・200 バイト・`sanitize_received`・
 //! `should_invite`・`decode_code`）。`fandhe-cap-bluetooth-le` などと同型の pull 型。
 //!
-//! 非 wasm32 でのみコンパイル対象になる
-//! （`device.rs` モジュール doc と同じ理由）。
-//!
 //! # iOS / macOS / Android: pull 型 `bridge`
 //!
 //! 相手の発見と受信は OS のスレッドから非同期に届くため、`LocalPeer` トレイトを通さずコアの状態機械へ

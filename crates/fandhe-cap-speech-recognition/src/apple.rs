@@ -41,7 +41,7 @@ extern "C" fn fandhe_rust_speech_started(request_id: u64) {
 /// `.m` 側の聞き取り開始を依頼する（`crate::driver` の effect
 /// ドライバから呼ばれる契約）。`request_id` は `crate::driver::
 /// bridge::begin` が払い出したプロセス内一意な ID（画面の `generation` ではない、
-/// `apple_mic_record.rs::present` と同じ設計）。`.m` 側は常に 0（受理）を返す契約の
+/// `fandhe-cap-mic-record` の `apple.rs::present` と同じ設計）。`.m` 側は常に 0（受理）を返す契約の
 /// ため戻り値は常に `true` になるが、型を揃えるため `bool` のままにする。
 #[allow(unsafe_code)]
 pub(crate) fn present(request_id: u64, max: Duration) -> bool {

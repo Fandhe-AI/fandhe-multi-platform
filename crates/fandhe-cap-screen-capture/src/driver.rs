@@ -12,10 +12,10 @@
 //!
 //! # OS 別の置き場（後続の子はここの dispatch を触らない）
 //!
-//! - macOS: `apple_screen_capture.rs` + `apple/fandhe_apple_screen_capture.m`（#1335、実装済み）
-//! - iOS: `apple_screen_capture.rs` + `apple/fandhe_apple_screen_capture.m` の ReplayKit 側（#1336、実装済み）
-//! - Android: `android_screen_capture.rs` + `ScreenCaptureHelper.java` / `ScreenCaptureService.java`（#1337、実装済み）
-//! - Windows: `windows_screen_capture.rs`（Issue #26、`Windows.Graphics.Capture` + `MediaTranscoder`、実装済み）
+//! - macOS: 本 crate の `apple.rs` + `apple/fandhe_apple_screen_capture.m`（#1335、実装済み）
+//! - iOS: 本 crate の `apple.rs` + `apple/fandhe_apple_screen_capture.m` の ReplayKit 側（#1336、実装済み）
+//! - Android: 本 crate の `android.rs` + `ScreenCaptureHelper.java` / `ScreenCaptureService.java`（#1337、実装済み）
+//! - Windows: 本 crate の `windows.rs`（Issue #26、`Windows.Graphics.Capture` + `MediaTranscoder`、実装済み）
 //!
 //! 結果コード表（ネイティブ → [`error_from_code`]）は `.m` ファイル冒頭と同じ。
 
