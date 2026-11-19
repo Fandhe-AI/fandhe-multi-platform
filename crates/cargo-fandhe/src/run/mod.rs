@@ -319,8 +319,10 @@ pub fn load_app(opts: &Options, os: Os) -> Result<App, Vec<String>> {
             // symlink の web/ は読み取り元の外を指しうるため、無いものとして扱う（`copy_dir` も入口で拒否する）。
             app.web_dir = Some(app.dir.join("web")).filter(|d| is_real_dir(d));
             // symlink の index.html は `copy_dir` が写さないため、無いものとして既定ページへ倒す。
-            app.web_has_index = std::fs::symlink_metadata(app.dir.join("web/index.html"))
-                .is_ok_and(|m| m.is_file());
+            // 採らなかった web/（symlink）の中は見ない（親の symlink を辿って true にしない）。
+            app.web_has_index = app.web_dir.as_deref().is_some_and(|d| {
+                std::fs::symlink_metadata(d.join("index.html")).is_ok_and(|m| m.is_file())
+            });
             // `fandhe-app.web` がテーブル以外ならここで gen と同じエラーで止まる（基礎 manifest の読み込みも同じ関数）。
             if !cfg["web"].is_null() {
                 app.web_manifest = generate_web(opts.manifest.as_deref())?

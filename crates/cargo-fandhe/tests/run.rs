@@ -598,9 +598,14 @@ fn symlinked_web_dir_is_ignored_and_not_copied() {
     let outside = root.join("private");
     std::fs::create_dir_all(&outside).expect("作成");
     std::fs::write(outside.join("secret.txt"), "s").expect("書き込み");
+    std::fs::write(outside.join("index.html"), "x").expect("書き込み");
     std::os::unix::fs::symlink(&outside, root.join("web")).expect("link");
     let app = load(&m, Os::Web).unwrap_or_else(|e| panic!("{e:?}"));
     assert!(app.web_dir.is_none(), "symlink の web/ は採らない");
+    assert!(
+        !app.web_has_index,
+        "採らない web/ の index.html は数えず、既定ページを出す"
+    );
     // 実行器も入口で拒否する。
     let t = scratch("copy-root-link");
     let e = execute(&[Op::CopyDir {
