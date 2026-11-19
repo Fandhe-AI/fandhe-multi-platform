@@ -5,7 +5,8 @@
 
 use fandhe_core::{
     Axis, CanvasWidget, Checkbox, DialogWidget, Event, ImageWidget, Measurement, Node,
-    PaintCommand, RadioButton, Screen, Slider, StateStore, ToggleSwitch, Widget, WidgetValue,
+    PaintCommand, ProgressBar, RadioButton, Screen, Separator, SeparatorOrientation, Slider,
+    Spinner, StateStore, ToggleSwitch, Widget, WidgetValue,
 };
 
 use crate::recyclers::VirtualListRecyclers;
@@ -523,7 +524,8 @@ fn render_node<S: 'static>(
         Node::Widget(widget) => {
             // `Widget<S>` トレイトオブジェクトの実描画配線は、`DialogWidget`（S47、
             // Issue #739）と `Checkbox` / `ToggleSwitch` / `Slider` / `RadioButton`
-            // （Issue #806・親 #804）を egui 標準部品へ配線済み（下記ブロック参照）。
+            // （Issue #806・親 #804）・`ProgressBar` / `Spinner` / `Separator`（Issue #1428）を
+            // egui 標準部品へ配線済み（下記ブロック参照）。
             // それ以外の具象型（レイアウトプロトコル S4 等が未確定）は引き続き
             // AX ノード公開のみに留める（TASK-8.3-S2、Issue #97、
             // out-of-scope-tracking.md 対象）。
@@ -559,7 +561,7 @@ fn render_node<S: 'static>(
             //
             // Issue #806: `Checkbox` / `ToggleSwitch` / `Slider` / `RadioButton` は
             // egui 標準部品（下記ブロック）が自前で正しい accesskit ノード（role・label）
-            // を生成する。この 4 型に対して以下の合成 AX ノードも重ねて登録すると、
+            // を生成する。この 4 型（と #1428 の `ProgressBar` / `Spinner`）に対して以下の合成 AX ノードも重ねて登録すると、
             // 同一ラベル・同一 role のノードが 2 つ存在することになり
             // `egui_kittest::get_by_label` 等が一意に解決できなくなる（実測で確認済み）。
             // `as_any` は型判定のみに使い、クローン前の `widget` から直接呼べる
@@ -570,6 +572,8 @@ fn render_node<S: 'static>(
                     || any.is::<ToggleSwitch<S>>()
                     || any.is::<Slider<S>>()
                     || any.is::<RadioButton<S>>()
+                    || any.is::<ProgressBar<S>>()
+                    || any.is::<Spinner<S>>()
             });
             #[cfg(any(target_os = "macos", target_os = "android", target_os = "windows"))]
             if !is_natively_rendered {
@@ -584,7 +588,8 @@ fn render_node<S: 'static>(
             }
 
             // `DialogWidget`（S47）・`Checkbox` / `ToggleSwitch` / `Slider` /
-            // `RadioButton`（Issue #806）を実描画する。`Checkbox` とは別系統の自己完結型
+            // `RadioButton`（Issue #806）・`ProgressBar` / `Spinner` / `Separator`（Issue #1428）を
+            // 実描画する。`Checkbox` とは別系統の自己完結型
             // `CheckboxWidget`（`checkbox.rs`）は未配線のまま（#806 のスコープ外）。reconcile 契約
             // （`Widget::sync_from_state` は `&mut self` を要求し `&Node<S>` の
             // 共有参照走査からは呼べない、`widget.rs` doc 参照）を満たすため
@@ -795,6 +800,60 @@ fn render_node<S: 'static>(
                             value: WidgetValue::Index(rb.value()),
                         });
                     }
+                });
+            } else if let Some(pb) = synced
+                .as_any()
+                .and_then(|any| any.downcast_ref::<ProgressBar<S>>())
+            {
+                // Issue #1428: 表示専用。`fraction()` は sync 済みで 0.0..=1.0 の有限値
+                // （NaN・±∞・範囲外は `ProgressBar` 側で正規化済み）。% は `paint()` と同じ
+                // 四捨五入。ラベルがあれば「ラベル 42%」の 1 文字列にして棒の上に重ねる。
+                // AX は egui の `ProgressBar` / `Spinner` が自前のノードを出すため、合成ノードは
+                // `is_natively_rendered` で除外する。
+                let percent = (pb.fraction() * 100.0).round() as u32;
+                let bar = egui::ProgressBar::new(pb.fraction());
+                let response = ui.add(if pb.label_text().is_empty() {
+                    bar.text(format!("{percent}%"))
+                } else {
+                    bar.text(format!("{} {percent}%", pb.label_text()))
+                });
+                // egui は表示文字列（「ラベル N%」）を AX の名前にするため、名前はラベルだけへ、
+                // 値は数値（四捨五入した %）へ上書きする（`toggle_switch` の role 補正と同じ書き方）。
+                #[cfg(any(target_os = "macos", target_os = "android", target_os = "windows"))]
+                {
+                    let label = widget.accessibility_label();
+                    ui.ctx().accesskit_node_builder(response.id, |node| {
+                        match label.as_deref() {
+                            Some(l) => node.set_label(l),
+                            None => node.clear_label(),
+                        }
+                        node.set_numeric_value(f64::from(percent));
+                    });
+                }
+                #[cfg(not(any(
+                    target_os = "macos",
+                    target_os = "android",
+                    target_os = "windows"
+                )))]
+                let _ = response;
+            } else if synced.as_any().is_some_and(|any| any.is::<Spinner<S>>()) {
+                // Issue #1428: egui の `Spinner` は自分で再描画を要求する。
+                ui.add(egui::Spinner::new());
+            } else if let Some(sep) = synced
+                .as_any()
+                .and_then(|any| any.downcast_ref::<Separator<S>>())
+            {
+                // Issue #1428: 太さ（`thickness`）は egui の `Separator` に相当する指定が無いため
+                // 反映しない。縦線は親の主方向が横のとき（`Node::Row` 内）だけ。縦の主方向で
+                // 縦線を置くと後続の部品が 1 画面分押し出されるため横線にする。
+                // AX は `ImageWidget` の分岐と同じく、egui の `Separator` が AX ノードを出さないため
+                // 合成ノード（`is_natively_rendered` には足さない）を使う。
+                let vertical = sep.orientation() == SeparatorOrientation::Vertical
+                    && ui.layout().main_dir().is_horizontal();
+                ui.add(if vertical {
+                    egui::Separator::default().vertical()
+                } else {
+                    egui::Separator::default().horizontal()
                 });
             } else if let Some(img) = synced
                 .as_any()

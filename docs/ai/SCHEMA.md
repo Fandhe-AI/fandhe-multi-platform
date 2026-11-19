@@ -418,10 +418,10 @@ assert_eq!(assert_iter(screen.iter()), 2);
 （macOS・Android・Windows では AX ノードだけは公開される）。`crates/fandhe-render-egui/tests/widget_coverage.rs` が 1 種ずつ
 `egui::Context::run` で描画し、出力の shape が空画面と同数のままかを確かめている（根拠は
 `render.rs` の `Node::Widget` 分岐が `DialogWidget` / `Checkbox` / `ToggleSwitch` / `Slider` /
-`RadioButton` / `ImageWidget` / `CanvasWidget` の 7 種だけを `downcast_ref` していること）。
-この 7 種以外の `Widget<S>` 実装（`LabelWidget`・`CheckboxWidget`・`TabBarWidget`・`ProgressWidget` 等）は
+`RadioButton` / `ProgressBar` / `Spinner` / `Separator` / `ImageWidget` / `CanvasWidget` の 10 種だけを `downcast_ref` していること）。
+この 10 種以外の `Widget<S>` 実装（`LabelWidget`・`CheckboxWidget`・`TabBarWidget`・`ProgressWidget` 等）は
 `.with_node()` で置いても描画されない。web-dom の対応は本表の対象外。
-描画の配線と API の整理は #1427（重複する書き方の整理）・#1428・#1429・#1430 で扱う。
+描画の配線と API の整理は #1427（重複する書き方の整理）・#1428・#1429・#1430・#1437（icon）で扱う。
 
 描画される（`Node` の直接バリアント。ビルダー名で示す）:
 `.text()` / `.dynamic_text()` / `.error_text()` / `.text_field()` / `.button()` / `.list()` /
@@ -429,7 +429,9 @@ assert_eq!(assert_iter(screen.iter()), 2);
 （後ろ 2 つは `.with_node()` か `.list()` の `expand` の中で置く。`.list()` の軸も描画に効く）
 
 描画される（`Node::Widget`）:
-`.checkbox()` / `.toggle_switch()` / `.radio_button()` / `.slider()` /
+`.checkbox()` / `.toggle_switch()` / `.radio_button()` / `.slider()` / `.progress_bar()`（割合は 0..=1 に収め、
+非有限値（NaN・±∞）は 0 とする。% は四捨五入で、ラベルがあれば「ラベル 42%」と出す）/ `.spinner()` /
+`.separator()`（太さは無視。縦線は親が横並び（`Node::Row`）のときだけで、画面のルートなど縦並びでは横線になる）/
 `ImageWidget::bound(..)` / `::fixed(..)`（`.with_node()` で置く。識別子が `fandhe_runtime::image_store::put` と一致するときだけ）/
 `DialogWidget`（`.with_node()` で置く）/ `CanvasWidget`（`.with_node()` で置く）
 
@@ -440,15 +442,12 @@ assert_eq!(assert_iter(screen.iter()), 2);
 | `.label()` | `.text()`（固定文字列）・`.dynamic_text()`（状態から読む） |
 | `.text_input()` | `.text_field()` |
 | `.list_view()` | `.list()`（`expand` が `Node::Text` 等を返す） |
-| `.progress_bar()` | `.dynamic_text()` で「42%」のように文字で出す。棒が要るときは `CanvasWidget` |
-| `.spinner()` | `.text("読み込み中")` |
 | `.image()` / `.image_bound()` | `ImageWidget` を `.with_node()` で置く。画素を直接渡すなら `.rgba_image()` |
 | `.icon()` / `.icon_bound()` | `.text()` に記号・文言を置く |
 | `.scroll_view()` | 不要。`render_screen` のルートが縦スクロールする。大量なら `.virtual_list()` |
 | `.stack()` | `Screen` に `.with_node()` で順に並べる（縦並び）。横並びは `Node::Row`、または `.list_with_axis(.., Axis::Horizontal)` |
 | `.grid()` | `.list_with_axis(.., Axis::Grid { columns })`（大量なら `.virtual_list_with_axis`） |
 | `.card()` | 子のノードを直接並べる。枠は出せない |
-| `.separator()` | なし。空の `.text("")` や区切り文字で代用するか、省く |
 | `.dialog()` | `DialogWidget::new_dynamic(..).with_content(..)`（上の `.dialog()` の注意書き） |
 | `.menu()` | 開くボタンは `.button()`。項目は `.list()` の `expand` が開いているときだけ `Node::IndexedButton` を返す（`.button()` は `.list()` の中に置けない） |
 | `.tabs()` | 見出しごとに `.button()`（押すと選択を書き換える）+ 選択中の中身を返す `.list()` |

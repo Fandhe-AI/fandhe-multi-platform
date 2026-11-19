@@ -262,9 +262,9 @@ fn rendered_or_not() {
         (
             "ProgressBar",
             Screen::new("t").progress_bar(id(1), "X", rd_f32),
-            false,
+            true,
         ),
-        ("Spinner", Screen::new("t").spinner(id(1)), false),
+        ("Spinner", Screen::new("t").spinner(id(1)), true),
         ("Icon", Screen::new("t").icon(id(1), "star", "X"), false),
         (
             "ScrollView",
@@ -297,7 +297,7 @@ fn rendered_or_not() {
         (
             "Separator",
             Screen::new("t").separator(Separator::new(id(1))),
-            false,
+            true,
         ),
         (
             "Dialog",
@@ -332,4 +332,144 @@ fn rendered_or_not() {
     }
     println!("{report}");
     assert!(bad.is_empty(), "期待と実測が食い違う: {bad:?}\n{report}");
+}
+
+/// 画面を描き、出た文字列（`|` 区切り）を返す。状態は `St { f: v }`。
+fn texts_for(screen: &Screen<St>, v: f32) -> Vec<String> {
+    let ctx = egui::Context::default();
+    let mut store = StateStore::new(St {
+        f: v,
+        ..Default::default()
+    });
+    let mut text = String::new();
+    for _ in 0..2 {
+        let full = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(400.0, 800.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    fandhe_render_egui::render_screen(ui, screen, &mut store);
+                });
+            },
+        );
+        text.clear();
+        for c in &full.shapes {
+            walk(&c.shape, &mut 0, &mut text);
+        }
+    }
+    text.split('|').map(str::to_owned).collect()
+}
+
+/// `ProgressBar` が状態の値を割合として描き、範囲外・非有限値は 0..=1 に収まる（Issue #1428）。
+#[test]
+fn progress_bar_follows_state() {
+    let screen = Screen::<St>::new("t").progress_bar(id(1), "", rd_f32);
+    for (v, want) in [
+        (0.5, "50%"),
+        (0.995, "100%"),
+        (2.0, "100%"),
+        (-1.0, "0%"),
+        (f32::NAN, "0%"),
+        (f32::INFINITY, "0%"),
+    ] {
+        assert!(texts_for(&screen, v).iter().any(|t| t == want), "{v}");
+    }
+}
+
+/// ラベルがあるときは「ラベル N%」の 1 文字列で、ラベルと % の両方が出る（`paint()` と同じ契約）。
+#[test]
+fn progress_bar_label_keeps_percent() {
+    let screen = Screen::<St>::new("t").progress_bar(id(1), "DL", rd_f32);
+    assert!(texts_for(&screen, 0.5).iter().any(|t| t == "DL 50%"));
+}
+
+/// 線分の (横に動くか, 縦に動くか) を集める。
+fn line_dirs(shape: &egui::Shape, out: &mut Vec<(bool, bool)>) {
+    match shape {
+        egui::Shape::Vec(v) => v.iter().for_each(|s| line_dirs(s, out)),
+        egui::Shape::LineSegment { points, .. } => out.push((
+            (points[0].x - points[1].x).abs() > 0.5,
+            (points[0].y - points[1].y).abs() > 0.5,
+        )),
+        _ => {}
+    }
+}
+
+fn separator_lines(screen: &Screen<St>) -> (Vec<(bool, bool)>, f32) {
+    let ctx = egui::Context::default();
+    let mut store = StateStore::new(St::default());
+    let mut dirs = Vec::new();
+    let mut after_y = f32::MAX;
+    for _ in 0..2 {
+        let full = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(400.0, 800.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    fandhe_render_egui::render_screen(ui, screen, &mut store);
+                });
+            },
+        );
+        dirs.clear();
+        for c in &full.shapes {
+            line_dirs(&c.shape, &mut dirs);
+            if let egui::Shape::Text(t) = &c.shape {
+                if t.galley.text() == "AFTER" {
+                    after_y = t.pos.y;
+                }
+            }
+        }
+    }
+    (dirs, after_y)
+}
+
+fn vertical_sep() -> fandhe_core::Separator<St> {
+    Separator::new(id(1)).with_orientation(fandhe_core::SeparatorOrientation::Vertical)
+}
+
+/// 縦線は横並び（`Node::Row`）の中だけ縦線になり、画面のルートでは横線へ倒れて後続を押し出さない。
+#[test]
+fn separator_orientation() {
+    let horizontal = Screen::<St>::new("t")
+        .separator(Separator::new(id(1)))
+        .text("AFTER");
+    let (dirs, _) = separator_lines(&horizontal);
+    // 横線はタイトル下と separator の 2 本。
+    assert_eq!(
+        dirs.iter().filter(|d| **d == (true, false)).count(),
+        2,
+        "{dirs:?}"
+    );
+
+    let root_vertical = Screen::<St>::new("t")
+        .separator(vertical_sep())
+        .text("AFTER");
+    let (dirs, after_y) = separator_lines(&root_vertical);
+    assert!(
+        dirs.iter().filter(|d| **d == (true, false)).count() == 2 && !dirs.iter().any(|d| d.1),
+        "{dirs:?}"
+    );
+    assert!(after_y < 100.0, "後続が押し出された: {after_y}");
+
+    let in_row = Screen::<St>::new("t").with_node(fandhe_core::Node::Row {
+        children: vec![fandhe_core::Node::Widget(Box::new(vertical_sep()))],
+        tap: None,
+    });
+    let (dirs, _) = separator_lines(&in_row);
+    assert!(dirs.contains(&(false, true)), "{dirs:?}");
+    assert_eq!(
+        dirs.iter().filter(|d| **d == (true, false)).count(),
+        1,
+        "{dirs:?}"
+    );
 }
