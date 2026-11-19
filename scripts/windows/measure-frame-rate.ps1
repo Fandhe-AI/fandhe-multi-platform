@@ -57,13 +57,13 @@ param(
     [switch]$AllowNonStandardRefreshRate,
 
     # 計測ウィンドウを特定するためのタイトル。既定値は `frame-metrics` 有効ビルドが
-    # `eframe::run_native` へ渡す名前（`crates/fandhe-gallery/src/demo/frame_metrics.rs`）と
+    # ウィンドウ名に使う `WINDOW_TITLE`（`crates/fandhe-gallery/src/demo/frame_metrics.rs`）と
     # 一致させている。通常ビルドの `fandhe-gallery`（`src/main.rs`）とは別名である点に注意。
     # Process.MainWindowHandle は winit の内部ウィンドウ（クラス
     # "Winit Thread Event Target"、タイトル空、可視扱い）を返すため使えない
     # （下記 FindWindows のコメント参照）。
     [ValidateNotNullOrEmpty()]
-    [string]$WindowTitle = 'fandhe-egui-proxy-frame-metrics'
+    [string]$WindowTitle = 'fandhe-gallery-frame-metrics'
 )
 
 # 60Hz 近傍と見なす範囲。59.94Hz のディスプレイは dmDisplayFrequency が 59 を返すため
@@ -314,7 +314,7 @@ try {
 finally {
     # 本スクリプトはプロセスの終了コードを計測の有効性判定に使わない。
     # `frame-metrics` 有効ビルドのデスクトップ版は計測完了後も自動終了せず結果を
-    # オーバーレイ表示し続ける契約であり（`src/frame_metrics.rs`。結果ファイルへの
+    # オーバーレイ表示し続ける契約であり（`crates/fandhe-gallery/src/demo/frame_metrics.rs`。結果ファイルへの
     # 書き出しは Android のみ）、本スクリプト側が CloseMainWindow / Kill で終了させる。
     # したがって終了コードは「こちらが終了させた事実」を反映するだけで、計測が
     # 成立したかどうかは示さない。有効性の判定は `FANDHE_FRAME_METRICS=` 行を

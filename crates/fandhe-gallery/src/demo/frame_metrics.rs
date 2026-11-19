@@ -60,6 +60,11 @@ const SAMPLE_FRAMES: usize = 600;
 /// 16.6ms 以内」の判定基準値そのもの。
 const FRAME_BUDGET_MS: f64 = 1000.0 / 60.0;
 
+/// 計測アプリのウィンドウ名（eframe の `app_name`。デスクトップではタイトルになる）。
+/// `scripts/windows/measure-frame-rate.ps1` の `-WindowTitle` 既定値と一致させる。
+#[cfg(not(target_arch = "wasm32"))]
+const WINDOW_TITLE: &str = "fandhe-gallery-frame-metrics";
+
 /// 計測ワークロード画面が保持する最小限の状態。
 ///
 /// `Node::VirtualList::item` は `fn(&S, usize) -> Node<S>`（`ReadIndexedFn`、
@@ -257,7 +262,7 @@ impl FrameMetricsApp {
         if let Some(path) = &self.result_path {
             if let Err(err) = std::fs::write(path, summary.to_json()) {
                 eprintln!(
-                    "[fandhe-egui-proxy][frame-metrics] 結果ファイルの書き込みに失敗した ({path:?}): {err}"
+                    "[fandhe-gallery][frame-metrics] 結果ファイルの書き込みに失敗した ({path:?}): {err}"
                 );
             }
         }
@@ -305,11 +310,9 @@ impl fandhe_render_egui::EguiApp for FrameMetricsApp {
 /// （モジュール doc の「feature ゲート契約」参照）。
 #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
 pub fn run_desktop() -> Result<(), fandhe_render_egui::LaunchError> {
-    fandhe_render_egui::launch::run_desktop(
-        "fandhe-egui-proxy-frame-metrics",
-        Some([480.0, 640.0]),
-        |lc| Box::new(FrameMetricsApp::new(lc.egui_ctx(), None)),
-    )
+    fandhe_render_egui::launch::run_desktop(WINDOW_TITLE, Some([480.0, 640.0]), |lc| {
+        Box::new(FrameMetricsApp::new(lc.egui_ctx(), None))
+    })
 }
 
 /// iOS（wgpu/Metal）向けの計測アプリ起動エントリ。
@@ -317,7 +320,7 @@ pub fn run_desktop() -> Result<(), fandhe_render_egui::LaunchError> {
 /// 呼び出し元は `main.rs` の iOS 版 `main` の feature 分岐のみ。
 #[cfg(target_os = "ios")]
 pub fn run_ios() -> Result<(), fandhe_render_egui::LaunchError> {
-    fandhe_render_egui::launch::run_ios("fandhe-egui-proxy-frame-metrics", |lc| {
+    fandhe_render_egui::launch::run_ios(WINDOW_TITLE, |lc| {
         Box::new(FrameMetricsApp::new(lc.egui_ctx(), None))
     })
 }
@@ -339,12 +342,10 @@ pub fn run_android(app: fandhe::__private::AndroidApp) {
         .unwrap_or_default()
         .join("frame-metrics.json");
 
-    if let Err(err) =
-        fandhe_render_egui::launch::run_android(app, "fandhe-egui-proxy-frame-metrics", move |lc| {
-            Box::new(FrameMetricsApp::new(lc.egui_ctx(), Some(result_path)))
-        })
-    {
-        eprintln!("[fandhe-egui-proxy][frame-metrics] Android 起動に失敗: {err:?}");
+    if let Err(err) = fandhe_render_egui::launch::run_android(app, WINDOW_TITLE, move |lc| {
+        Box::new(FrameMetricsApp::new(lc.egui_ctx(), Some(result_path)))
+    }) {
+        eprintln!("[fandhe-gallery][frame-metrics] Android 起動に失敗: {err:?}");
     }
 }
 
