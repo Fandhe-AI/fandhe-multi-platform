@@ -172,6 +172,12 @@ mod tests {
         assert!(registered_names().contains(&"display-widgets"));
     }
 
+    /// 通常区画（Issue #1430）で登録した containers 画面が現れることを検証する。
+    #[test]
+    fn containers_is_registered() {
+        assert!(registered_names().contains(&"containers"));
+    }
+
     /// 通常区画（Issue #1429）で登録した menu-tabs 画面が現れることを検証する。
     #[test]
     fn menu_tabs_is_registered() {

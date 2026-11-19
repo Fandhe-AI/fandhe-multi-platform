@@ -57,6 +57,7 @@
 //! 留まる）。
 
 use super::layout::FlexDirection;
+use super::node::Node;
 use super::widget::{
     AccessibilityRole, InteractionState, Measurement, PaintCommand, Widget, WidgetId,
 };
@@ -177,6 +178,25 @@ impl<S: 'static> Stack<S> {
     /// 保持している子の数（テスト・観測用）。
     pub fn children_len(&self) -> usize {
         self.children.len()
+    }
+
+    /// 主軸方向。描画層（`fandhe-render-egui`）が並べ方を決めるために読む。
+    pub fn direction(&self) -> FlexDirection {
+        self.direction
+    }
+
+    /// 子同士の間隔（丸め済み）。描画層が読む。
+    pub fn spacing(&self) -> f32 {
+        self.spacing
+    }
+
+    /// 子を宣言順に `Node::Widget` へ包んだ列。[`Widget::children`] と描画層の共通の入口で、
+    /// 添字が `resolve_node_at` の path の最後の要素と一致する。
+    pub fn child_nodes(&self) -> Vec<Node<S>> {
+        self.children
+            .iter()
+            .map(|c| Node::Widget(c.clone_box()))
+            .collect()
     }
 
     /// `direction` が横方向（[`FlexDirection::Row`]）か。
@@ -321,6 +341,15 @@ impl<S: 'static> Widget<S> for Stack<S> {
     fn clone_box(&self) -> Box<dyn Widget<S>> {
         Box::new(self.clone())
     }
+
+    /// 子ノード列。`resolve_node_at` が子の操作（`WidgetValueChanged` 等）の path を降下するのに使う。
+    fn children(&self, _state: &S) -> Vec<Node<S>> {
+        self.child_nodes()
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
 }
 
 /// 固定列数グリッドレイアウトウィジェット（TASK-8.3-S43、`Widget<S>` 実装型）。
@@ -405,6 +434,24 @@ impl<S: 'static> Grid<S> {
     /// 保持している子の数（テスト・観測用）。
     pub fn children_len(&self) -> usize {
         self.children.len()
+    }
+
+    /// 列数（1 以上）。描画層が読む。
+    pub fn columns(&self) -> usize {
+        self.columns
+    }
+
+    /// 行・列共通の間隔（丸め済み）。描画層が読む。
+    pub fn spacing(&self) -> f32 {
+        self.spacing
+    }
+
+    /// 子を宣言順に `Node::Widget` へ包んだ列（[`Stack::child_nodes`] と同契約。1 子 = 1 セル）。
+    pub fn child_nodes(&self) -> Vec<Node<S>> {
+        self.children
+            .iter()
+            .map(|c| Node::Widget(c.clone_box()))
+            .collect()
     }
 
     /// 行数（`children_len` を `columns` で切り上げ除算）。空 children は `0`。
@@ -537,6 +584,15 @@ impl<S: 'static> Widget<S> for Grid<S> {
 
     fn clone_box(&self) -> Box<dyn Widget<S>> {
         Box::new(self.clone())
+    }
+
+    /// 子ノード列。`resolve_node_at` が子の操作（`WidgetValueChanged` 等）の path を降下するのに使う。
+    fn children(&self, _state: &S) -> Vec<Node<S>> {
+        self.child_nodes()
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
     }
 }
 
