@@ -17,7 +17,7 @@
         "https://developer.apple.com/documentation/uikit/uicolorpickerviewcontrollerdelegate",
         "https://developer.apple.com/documentation/uikit/uiadaptivepresentationcontrollerdelegate/presentationcontrollerdiddismiss(_:)"
       ],
-      "note": "実装済み（#942）。確定・取り消しのボタンは無い。閉じた時点で、OS の選択通知が来ていれば選んだ色、来ていなければ「選ばずに閉じた」。最前面の画面が遷移中のとき、または自分のピッカーが出ている・遷移中のときの要求は、busy（失敗）で断る。安定して出ている別の画面の上には重ねる。"
+      "note": "実装済み（#942）。確定・取り消しのボタンは無い。閉じた時点で、OS の選択通知が来ていれば選んだ色、来ていなければ「選ばずに閉じた」。最前面の画面が遷移中のとき、または自分のピッカーが出ている・遷移中のときの要求は、busy（失敗）で断る。安定して出ている別の画面の上には重ねる。提示先のシーンが切断されたときは `UISceneDidDisconnectNotification` の観測で失敗として 1 度だけ確定し、次の開始ができる（残る天井: シーンが接続されたまま閉じた通知が来ない場合と、提示先のシーンが特定できず切断で確定しない場合は `Picking` のまま残る。シーン切断の実機確認は人間担当）。"
     },
     "android": {
       "status": "no",

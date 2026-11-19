@@ -11,7 +11,7 @@
 //! | --- | --- | --- | --- |
 //! | `Ok(PickedColor)` | 閉じるまでに色の変化通知が 1 回以上 | `ChooseColorW` が非 0 | 閉じるまでに選択通知が 1 回以上 |
 //! | `Cancelled("color_picker")` | 変化通知 0 回のまま閉じた | 戻り値 0 かつ拡張エラー 0 | 選択通知 0 回のまま閉じた |
-//! | `Internal(..)` | `NSApp` 無し・sRGB 変換失敗・NaN | owner 窓無し・拡張エラー非 0・`rgbResult` の最上位バイトが非 0 | 提示先無し・変換失敗・遷移中や自分のピッカーが出ている間（busy） |
+//! | `Internal(..)` | `NSApp` 無し・sRGB 変換失敗・NaN | owner 窓無し・拡張エラー非 0・`rgbResult` の最上位バイトが非 0 | 提示先無し・変換失敗・遷移中や自分のピッカーが出ている間（busy）・提示先のシーンの切断 |
 //!
 //! `Unsupported("color_picker")` は Android・Linux など実装の無い OS が返す。権限は要らないので
 //! `PermissionDenied` は返さない（該当なし）。「選んだ」は OS の通知・戻り値だけで決め、
@@ -19,7 +19,8 @@
 //!
 //! # OS を正にする
 //!
-//! 期限・タイマーを持たない。確定は OS の閉じた通知と戻り値だけで決める。初期色はプログラムで
+//! 期限・タイマーを持たない。確定は OS の閉じた通知と戻り値だけで決める（iOS は提示先のシーンの切断の通知でも
+//! 失敗として確定する）。初期色はプログラムで
 //! 入れてから購読する（初期設定による通知を「選んだ」と取り違えない）。
 //!
 //! # 守る範囲・守らない範囲
@@ -50,7 +51,8 @@ fn rgb_err(e: fandhe_device::eye_dropper::PickColorError) -> ColorPickerError {
 }
 
 /// Apple（macOS・iOS 共用）の `.m` 側の結果コード → 結果の写像（SSOT）。0 = 選択（`rgb` を検査）、
-/// 1 = 選ばずに閉じた、2 = sRGB 変換の失敗・NaN、3 = 提示できなかった、4 = busy（iOS のみ）。未知は `Internal`。
+/// 1 = 選ばずに閉じた、2 = sRGB 変換の失敗・NaN、3 = 提示できなかった、4 = busy（iOS のみ）、
+/// 5 = 提示先のシーンが切断された（iOS のみ。完了通知を失った要求を失敗で確定する）。未知は `Internal`。
 pub fn result_from_apple_code(code: i32, rgb: i32) -> Result<PickedColor, ColorPickerError> {
     match code {
         0 => color_from_rgb(i64::from(rgb)).map_err(rgb_err),
@@ -58,6 +60,9 @@ pub fn result_from_apple_code(code: i32, rgb: i32) -> Result<PickedColor, ColorP
         2 => Err(ColorPickerError::Internal("color_picker convert")),
         3 => Err(ColorPickerError::Internal("color_picker present")),
         4 => Err(ColorPickerError::Internal("color_picker busy")),
+        5 => Err(ColorPickerError::Internal(
+            "color_picker scene disconnected",
+        )),
         _ => Err(ColorPickerError::Internal("color_picker outcome")),
     }
 }
@@ -140,7 +145,13 @@ mod tests {
             result_from_apple_code(4, 0),
             Err(ColorPickerError::Internal("color_picker busy"))
         );
-        for code in [-1, 5, 99] {
+        assert_eq!(
+            result_from_apple_code(5, 0),
+            Err(ColorPickerError::Internal(
+                "color_picker scene disconnected"
+            ))
+        );
+        for code in [-1, 6, 99] {
             assert!(matches!(
                 result_from_apple_code(code, 0x12_3456),
                 Err(ColorPickerError::Internal("color_picker outcome"))
