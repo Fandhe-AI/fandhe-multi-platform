@@ -444,8 +444,13 @@ pub fn verify_scope(
     if os != "android" {
         let (_, app_cfg, _) = app_root(&meta)?;
         let cfg = AppConfig::parse(&app_cfg)?;
-        for k in cfg.appended_keys(os) {
-            forbidden.remove(&k);
+        for (k, kinds) in cfg.appended_keys(os) {
+            if forbidden
+                .get(&k)
+                .is_some_and(|(_, kind)| kinds.contains(kind))
+            {
+                forbidden.remove(&k);
+            }
         }
     }
     let mut hits = scan(&forbidden, observed);

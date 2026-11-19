@@ -270,14 +270,18 @@ fn plist_input_problems(field: &str, m: &Map<String, Value>) -> Vec<String> {
 
 impl AppConfig {
     /// 追記した `info-plist`・`entitlements` のキー（`verify-scope` が選んだ機能の外でも許す値）。
-    pub(crate) fn appended_keys(&self, os: &str) -> Vec<String> {
+    /// アプリが追記したキーと、それが許す禁止の種別（`scope.rs` の `tokens` の種別名）。
+    /// 種別を見ずに外すと、同名の framework・拡張ターゲット等の禁止まで解けるため、種別つきで返す。
+    pub(crate) fn appended_keys(&self, os: &str) -> Vec<(String, &'static [&'static str])> {
+        const PLIST: &[&str] = &["Info.plist キー", "説明文キー"];
+        const ENTITLEMENT: &[&str] = &["entitlement"];
         let c = if os == "ios" { &self.ios } else { &self.macos };
         // 修飾子つき（`UIBackgroundModes~ipad`）は、機能が宣言する素のキーとしても照合に現れるので素のキーも許す。
         c.info_plist
             .keys()
             .flat_map(|k| [k.as_str(), strip_qualifier(k)])
-            .chain(c.entitlements.keys().map(String::as_str))
-            .map(String::from)
+            .map(|k| (k.to_string(), PLIST))
+            .chain(c.entitlements.keys().map(|k| (k.to_string(), ENTITLEMENT)))
             .collect()
     }
 

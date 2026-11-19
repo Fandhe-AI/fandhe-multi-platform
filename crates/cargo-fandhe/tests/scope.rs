@@ -555,3 +555,20 @@ fn app_appended_qualified_keys_allow_the_base_key() {
     let m = make_ws("app-append-qualified", &app, &[]);
     check("ios", &m, &observed).unwrap();
 }
+
+/// 追記で外すのは plist・entitlement の種別の禁止だけ。同名の framework・拡張ターゲットの禁止は解かない。
+#[test]
+fn app_appended_keys_do_not_clear_frameworks_or_extensions() {
+    let app = format!(
+        "{SELECT_CAM}[package.metadata.fandhe-app.ios.info-plist]\nCoreNFC = true\n\"NfcExt.appex\" = true\n\
+         [package.metadata.fandhe-app.ios.entitlements]\nCoreNFC = true\n"
+    );
+    let m = make_ws("app-append-kind", &app, &[]);
+    let e = check(
+        "ios",
+        &m,
+        &format!("{IOS_CLEAN}Frameworks/CoreNFC.framework/CoreNFC\nPlugIns/NfcExt.appex\n"),
+    )
+    .unwrap_err();
+    assert!(e.contains("CoreNFC") && e.contains("NfcExt.appex"), "{e}");
+}
