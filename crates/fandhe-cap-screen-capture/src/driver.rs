@@ -464,7 +464,6 @@ mod tests {
     use crate::contract::build_capture_result;
 
     /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
-    #[allow(dead_code)]
     struct NoopWaker;
     impl fandhe_runtime::RepaintWaker for NoopWaker {
         fn wake(&self) {}

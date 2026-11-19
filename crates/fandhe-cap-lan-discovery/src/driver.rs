@@ -475,7 +475,6 @@ pub fn stop_shared_discovery() {
 #[cfg(test)]
 mod tests {
     /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
-    #[allow(dead_code)] // 非対応 OS の同期経路のテストだけが使う
     struct NoopWaker;
     impl fandhe_runtime::RepaintWaker for NoopWaker {
         fn wake(&self) {}

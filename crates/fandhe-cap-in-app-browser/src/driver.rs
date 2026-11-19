@@ -77,7 +77,7 @@ struct Registered(Arc<dyn InAppBrowser>);
 impl InAppBrowser for Registered {
     fn open(&self, request_id: u64, url: &BrowserUrl) -> Result<(), InAppBrowserFailure> {
         let b = bridge();
-        b.begin_with_id(b.public, request_id)?;
+        b.begin_with_id(request_id)?;
         if let Err(f) = self.0.open(request_id, url) {
             b.complete_from_os(request_id, Err(f));
         }
@@ -173,12 +173,12 @@ impl Bridge {
         Some(request_id)
     }
 
-    /// 呼び出し側が決めた `request_id` を `owner` の分として登録する（公開 platform 入口用）。
+    /// 呼び出し側が決めた `request_id` を公開入口の分として登録する（公開 platform 入口用）。
     /// `request_id` は `1..=i64::MAX` かつ、これまでに登録したどの id よりも大きいこと（使用済み id の再利用を
     /// 許すと、期限切れ要求の遅延した OS 呼び出しが新しい要求として受理されるため）。違反は `Internal`、
     /// 登録の判定は [`Bridge::begin`] の公開入口と同じ（`SlotOwner::begin_parking_with`）。進行中の要求・公開側の未取得の結果が
     /// あれば `Busy`、画面側の届いた未取得の結果は画面の受け取り待ちへ移して始める。失敗時は採番状態を変えない。
-    fn begin_with_id(&self, owner: &SlotOwner, request_id: u64) -> Result<(), InAppBrowserFailure> {
+    fn begin_with_id(&self, request_id: u64) -> Result<(), InAppBrowserFailure> {
         let mut active = self.lock();
         if request_id == 0
             || request_id > i64::MAX as u64
@@ -186,7 +186,11 @@ impl Bridge {
         {
             return Err(InAppBrowserFailure::Internal);
         }
-        if self.lost().is_some() || !owner.begin_parking_with(self.slot, self.screen, request_id) {
+        if self.lost().is_some()
+            || !self
+                .public
+                .begin_parking_with(self.slot, self.screen, request_id)
+        {
             return Err(InAppBrowserFailure::Busy);
         }
         self.high_water.store(request_id, Ordering::Relaxed);
@@ -833,7 +837,7 @@ mod tests {
     #[test]
     fn reset_before_result_delivers_interrupted_once() {
         let b = new_bridge(Duration::from_secs(30));
-        b.begin_with_id(b.public, 10).unwrap();
+        b.begin_with_id(10).unwrap();
         b.reset();
         assert_eq!(
             poll_open(b, 10),
@@ -846,7 +850,7 @@ mod tests {
     #[test]
     fn reset_after_interrupted_result_delivers_it_once() {
         let b = new_bridge(Duration::from_secs(30));
-        b.begin_with_id(b.public, 10).unwrap();
+        b.begin_with_id(10).unwrap();
         b.complete_from_os(10, Err(InAppBrowserFailure::Interrupted));
         b.reset();
         assert_eq!(
@@ -860,14 +864,14 @@ mod tests {
     #[test]
     fn reset_right_after_poll_leaves_nothing_lost() {
         let b = new_bridge(Duration::from_secs(30));
-        b.begin_with_id(b.public, 10).unwrap();
+        b.begin_with_id(10).unwrap();
         assert!(b.try_begin_present(10));
         b.complete_from_os(10, Ok(InAppBrowserOutcome::Closed));
         assert_eq!(poll_open(b, 10), Some(Ok(InAppBrowserOutcome::Closed)));
         b.reset();
         assert!(b.lost().is_none());
         assert_eq!(poll_open(b, 10), None);
-        assert!(b.begin_with_id(b.public, 11).is_ok());
+        assert!(b.begin_with_id(11).is_ok());
         b.reset();
         assert_eq!(
             poll_open(b, 11),
@@ -879,7 +883,7 @@ mod tests {
     #[test]
     fn double_reset_keeps_first_lost_result_and_delivers_once() {
         let b = new_bridge(Duration::from_secs(30));
-        b.begin_with_id(b.public, 10).unwrap();
+        b.begin_with_id(10).unwrap();
         assert!(b.try_begin_present(10));
         b.complete_from_os(10, Ok(InAppBrowserOutcome::Closed));
         b.reset();
@@ -892,7 +896,7 @@ mod tests {
     #[test]
     fn reset_after_closed_result_keeps_the_real_outcome() {
         let b = new_bridge(Duration::from_secs(30));
-        b.begin_with_id(b.public, 10).unwrap();
+        b.begin_with_id(10).unwrap();
         assert!(b.try_begin_present(10));
         b.complete_from_os(10, Ok(InAppBrowserOutcome::Closed));
         b.reset();
@@ -903,7 +907,7 @@ mod tests {
     #[test]
     fn late_completion_of_old_id_after_reset_does_not_leak_into_next_request() {
         let b = new_bridge(Duration::from_secs(30));
-        b.begin_with_id(b.public, 10).unwrap();
+        b.begin_with_id(10).unwrap();
         b.reset();
         // 古い id の遅延完了は残した結果を上書きしない。
         b.complete_from_os(10, Ok(InAppBrowserOutcome::Closed));
@@ -942,14 +946,14 @@ mod tests {
     #[test]
     fn begin_with_id_rejects_reused_and_out_of_range_ids() {
         let b = new_bridge(Duration::from_secs(60));
-        assert!(b.begin_with_id(b.public, u64::MAX).is_err());
-        assert!(b.begin_with_id(b.public, 0).is_err());
-        assert!(b.begin_with_id(b.public, 1).is_ok());
+        assert!(b.begin_with_id(u64::MAX).is_err());
+        assert!(b.begin_with_id(0).is_err());
+        assert!(b.begin_with_id(1).is_ok());
         b.complete_from_os(1, Err(InAppBrowserFailure::NoBrowser));
         b.slot.take_ready(1);
         b.public.release(1);
         // 使用済み id の再利用は拒否し、採番は壊れない。
-        assert!(b.begin_with_id(b.public, 1).is_err());
+        assert!(b.begin_with_id(1).is_err());
         assert!(b.begin(b.public).is_some_and(|id| id > 1));
     }
 
@@ -1016,15 +1020,12 @@ mod tests {
         assert!(b.try_begin_present(screen));
         b.complete_from_os(screen, Ok(InAppBrowserOutcome::Closed));
         let public = screen + 100;
-        assert_eq!(b.begin_with_id(b.public, public), Ok(()));
+        assert_eq!(b.begin_with_id(public), Ok(()));
         assert_eq!(
             b.slot.snapshot_of(screen),
             Some(Some(Ok(InAppBrowserOutcome::Closed)))
         );
         // 公開側の進行中は次の公開要求を断る。
-        assert_eq!(
-            b.begin_with_id(b.public, public + 1),
-            Err(InAppBrowserFailure::Busy)
-        );
+        assert_eq!(b.begin_with_id(public + 1), Err(InAppBrowserFailure::Busy));
     }
 }
