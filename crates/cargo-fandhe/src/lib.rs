@@ -6,6 +6,7 @@
 //! - [`check_workspace`] - `cargo metadata` で解決した全 crate の宣言を検証する（統合・到達判定はしない）
 //! - `reach` モジュール - アプリが依存として解決した機能 crate の到達判定（feature の活性化を自前で辿る）
 //! - `native` モジュール - 到達した機能の宣言だけからネイティブ設定（Manifest・Gradle・Info.plist・entitlements、Web は `--os web` で Web App Manifest）を生成する（`cargo fandhe gen`。`gen` は 2024 edition の予約語のため別名）
+//! - `run` モジュール - アプリの実行・ビルド（`cargo fandhe run|build`、デスクトップ・Web、#1422）。手順は純粋関数で組み、実行器が順に走らせる
 //! - `scope` モジュール - 選ばなかった機能の宣言が成果物に無いことの照合（`cargo fandhe verify-scope`、#1178）
 //!
 //! 形式の仕様は `docs/architecture/capability-declaration.md`。
@@ -18,6 +19,7 @@ pub mod declaration;
 pub mod merge;
 pub mod native;
 mod reach;
+pub mod run;
 mod scope;
 mod workspace;
 

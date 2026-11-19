@@ -24,7 +24,7 @@ fandhe-multi-platform/
 ├── .editorconfig                # エディタ設定（改行・インデント・末尾空白の統一）
 │
 ├── crates/
-│   ├── cargo-fandhe/            # 機能宣言（[package.metadata.fandhe]）の検証と統合規則。`cargo fandhe check`（#1160）・`cargo fandhe gen`（#1176、ネイティブ設定の生成）・`cargo fandhe verify-scope`（#1178、選ばなかった機能の混入検査）、forbid(unsafe_code)
+│   ├── cargo-fandhe/            # 機能宣言（[package.metadata.fandhe]）の検証と統合規則。`cargo fandhe check`（#1160）・`cargo fandhe gen`（#1176、ネイティブ設定の生成）・`cargo fandhe verify-scope`（#1178、選ばなかった機能の混入検査）・`cargo fandhe run`/`build`（#1201、OS 向けのビルドと起動。`docs/architecture/run-build-cli.md`）、forbid(unsafe_code)
 │   ├── fandhe/                  # 入口 crate。利用者が依存する 1 つの crate で、端末機能を feature（対応表の id）で選ぶ。契約だけを再公開し、画面の組み立ては `fandhe::app`（#1199、TASK-21.5）。各 OS の入口の中身（`src/entry/`、起動前の登録・終了処理・ソフトキーボード・iOS の入力欄）も持つ（#1200）
 │   ├── fandhe-macros/           # `#[fandhe::main]`（画面を作る関数 1 つから各 OS の入口を生成する proc-macro、#1200）
 │   ├── fandhe-cap-*/            # 端末機能 1 つにつき 1 crate（契約・OS 別実装・宣言。egui 非依存。`crates/fandhe-cap-*` を workspace の glob で拾う。移行手順は `docs/operations/capability-crate-migration.md`、TASK-21.3・21.4）

@@ -56,7 +56,7 @@ pub(crate) const IOS_TRIPLE: &str = "aarch64-apple-ios";
 pub(crate) const MACOS_TRIPLE: &str = "aarch64-apple-darwin";
 pub(crate) const WEB_TRIPLE: &str = "wasm32-unknown-unknown";
 /// Web の出力先（`gen/` からの相対）。配信側（`scripts/web/build-wasm-dom.sh`）がここから dist へ写す。
-const WEB_MANIFEST_PATH: &str = "web/manifest.webmanifest";
+pub(crate) const WEB_MANIFEST_PATH: &str = "web/manifest.webmanifest";
 pub(crate) const APP_GROUPS_KEY: &str = "com.apple.security.application-groups";
 
 /// 生成結果。`files` のキーは `gen_dir` からの相対パス（区切りは `/`）。
@@ -171,7 +171,7 @@ pub(crate) struct AppInfo {
 }
 
 impl AppInfo {
-    fn from_package(pkg: &Value, gen_dir: PathBuf) -> Self {
+    pub(crate) fn from_package(pkg: &Value, gen_dir: PathBuf) -> Self {
         let targets: Vec<&Value> = pkg["targets"].as_array().into_iter().flatten().collect();
         let has = |t: &Value, key: &str, want: &str| {
             t[key]
@@ -1040,7 +1040,7 @@ pub(crate) fn render(
 }
 
 /// metadata の root パッケージ（アプリ）の (crate のディレクトリ, `metadata.fandhe-app`, package)。
-fn app_root(meta: &Value) -> Result<(PathBuf, Value, Value), Vec<String>> {
+pub(crate) fn app_root(meta: &Value) -> Result<(PathBuf, Value, Value), Vec<String>> {
     let root = meta["resolve"]["root"].as_str().ok_or_else(|| {
         vec!["アプリのパッケージを特定できません。--manifest-path にパッケージの Cargo.toml を指定してください".to_string()]
     })?;
