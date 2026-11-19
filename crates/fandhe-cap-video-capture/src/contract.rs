@@ -247,13 +247,12 @@ impl VideoCapturer for UnsupportedVideoCapturer {
     }
 }
 
-/// 撮影パネルの状態（OS 層が書く側）。画面の `PanelPhase` とは別の、本 crate 内の型。
+/// 撮影パネルの状態（Windows。OS 層が書き、公開入口 `capture_panel` が返す）。画面の `PanelPhase` とは別の、本 crate の型。
 ///
-/// OS 実装（`windows`）が画面の状態型に依存しないよう、境界の `driver` が `PanelPhase` へ写す
+/// OS 実装（`windows`）と外のアプリが画面の状態型に依存しないよう、画面へは境界の `driver` が `PanelPhase` へ写す
 /// （`consumer-app-structure.md` §8.1）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub(crate) enum PanelState {
+pub enum PanelState {
     /// カメラの準備ができ、録画の開始待ち。
     Ready,
     /// 録画中。
@@ -262,11 +261,10 @@ pub(crate) enum PanelState {
     Busy,
 }
 
-/// 撮影パネルのボタンの命令（OS 層が受ける側）。画面の `PanelCommand` とは別の、本 crate 内の型。
-/// `driver` が `PanelCommand` から写して OS 層へ渡す。
+/// 撮影パネルのボタンの命令（Windows。公開入口 `send_panel_command` が受け、OS 層へ渡す）。画面の `PanelCommand` とは別の、本 crate の型。
+/// 画面からは `driver` が `PanelCommand` から写して渡す。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-pub(crate) enum PanelOp {
+pub enum PanelOp {
     /// 録画を始める。
     Start,
     /// 録画を止める。
