@@ -11,7 +11,7 @@
 //!   `Internal("contact_picker empty name")`（[`validate_contact_name`]）
 //! - 利用者のキャンセルは `Cancelled("contact_picker")`。失敗として見せない
 //! - 権限拒否・制限は `PermissionDenied("contact_picker")`
-//! - ピッカーを出せなかった・未知の結果コードは `Internal`、非対応 OS は `Unsupported`
+//! - ピッカーを出せなかった・iOS で提示先のシーンが切断された・未知の結果コードは `Internal`、非対応 OS は `Unsupported`
 //!
 //! # 要求の扱い
 //!
