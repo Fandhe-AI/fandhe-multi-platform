@@ -1,6 +1,7 @@
 //! `cargo fandhe check` / `cargo fandhe gen`。
 //! - `check`: workspace 内の機能宣言を検証する
 //! - `gen`: アプリが選んだ機能の宣言からネイティブ設定を `<アプリの crate>/gen/` へ生成する（`--os web` は Web App Manifest だけ、#1238）
+//! - `gen --eject <パス>`: 生成した設定ファイルを `<アプリの crate>/eject/` へ書き出す（以後は生成の代わりに使われる、#1202）
 //! - `run` / `build`: アプリを OS 向けにビルド・起動する（macos・windows・linux・web・android、#1422・#1423）
 //! - `verify-scope`: 選ばなかった機能の宣言が成果物の観測テキストに無いことを検査する（#1178）
 //!
@@ -9,7 +10,7 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-const USAGE: &str = "使い方: cargo fandhe check|gen [--os web] [--manifest-path <Cargo.toml>]\n       （--os web は gen のみ。Web App Manifest だけを生成する）\n       cargo fandhe run|build [--os macos|windows|linux|web|android] [--release] [--manifest-path <アプリの Cargo.toml>]\n       cargo fandhe verify-scope [--catalog <Cargo.toml>] [--manifest-path <アプリの Cargo.toml>] --os android|ios|macos <観測ファイル>...";
+const USAGE: &str = "使い方: cargo fandhe check|gen [--os web] [--manifest-path <Cargo.toml>]\n       （--os web は gen のみ。Web App Manifest だけを生成する）\n       cargo fandhe gen --eject <パス> [--eject <パス>]... [--manifest-path <Cargo.toml>]\n       （<パス> は gen/ からの相対パス）\n       （生成した設定ファイルを <アプリの crate>/eject/ へ書き出す。以後は生成の代わりに使われ、消すと生成へ戻る。\n       　対象: android/AndroidManifest.xml・{ios,macos}/Info.plist・{ios,macos}/App.entitlements・{ios,macos}/extensions/<name>/ の plist・entitlements）\n       cargo fandhe run|build [--os macos|windows|linux|web|android] [--release] [--manifest-path <アプリの Cargo.toml>]\n       cargo fandhe verify-scope [--catalog <Cargo.toml>] [--manifest-path <アプリの Cargo.toml>] --os android|ios|macos <観測ファイル>...";
 
 /// `verify-scope` の引数処理と実行。観測ファイルは UTF-8 のテキストとして連結して読む。
 fn verify_scope(args: &[&str]) -> ExitCode {
@@ -90,23 +91,49 @@ fn main() -> ExitCode {
             Err(p) => report(p),
         };
     }
-    let (cmd, web, manifest): (&str, bool, Option<PathBuf>) = match strs.as_slice() {
-        [c @ ("check" | "gen")] => (c, false, None),
-        [c @ ("check" | "gen"), "--manifest-path", p] => {
-            (c, false, Some(Path::new(p).to_path_buf()))
-        }
-        ["gen", "--os", "web"] => ("gen", true, None),
-        ["gen", "--os", "web", "--manifest-path", p] => {
-            ("gen", true, Some(Path::new(p).to_path_buf()))
-        }
-        _ => {
-            eprintln!("{USAGE}");
-            return ExitCode::from(2);
-        }
+    let Some(&cmd @ ("check" | "gen")) = strs.first() else {
+        eprintln!("{USAGE}");
+        return ExitCode::from(2);
     };
+    let (mut web, mut manifest, mut ejects) = (false, None, Vec::new());
+    let mut it = strs[1..].iter();
+    let mut bad = false;
+    while let Some(&a) = it.next() {
+        match (a, it.clone().next()) {
+            ("--os", Some(&"web")) => {
+                web = true;
+                it.next();
+            }
+            ("--manifest-path", Some(&v)) => {
+                manifest = Some(Path::new(v).to_path_buf());
+                it.next();
+            }
+            ("--eject", Some(&v)) if !v.starts_with('-') => {
+                ejects.push(v.to_string());
+                it.next();
+            }
+            _ => bad = true,
+        }
+    }
+    // `--eject` は gen のネイティブ設定だけ（check では意味が無く、Web は eject の対象外）。
+    if bad || (!ejects.is_empty() && (cmd == "check" || web)) || (web && cmd == "check") {
+        eprintln!("{USAGE}");
+        return ExitCode::from(2);
+    }
     if cmd == "check" {
         return match cargo_fandhe::check_workspace(manifest.as_deref()) {
             Ok(_) => ExitCode::SUCCESS,
+            Err(p) => report(p),
+        };
+    }
+    if !ejects.is_empty() {
+        return match cargo_fandhe::eject(manifest.as_deref(), &ejects) {
+            Ok(paths) => {
+                for p in paths {
+                    println!("{} へ書き出しました。消すと生成へ戻ります", p.display());
+                }
+                ExitCode::SUCCESS
+            }
             Err(p) => report(p),
         };
     }

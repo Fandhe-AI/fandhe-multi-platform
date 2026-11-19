@@ -82,8 +82,16 @@ cargo fandhe run|build [--os macos|windows|linux|web|android] [--release] [--man
 - `load_app`・`detect_env`: `cargo metadata` と実環境から入力を作ります
 - `execute`: 手順を順に実行するだけです
 
+## eject との関係（#1202）
+
+`run`/`build --os android` の gen 出力も `eject/` を通ります（`load_app` が差し替えて「eject 済み: `<rel>`」を stderr に出す）。
+`eject/ios/`・`eject/macos/` 配下の中身は `--os android` では検査せず、それらを理由に止めません。
+`eject/` 直下の余分なファイルや、`eject/android/` の綴り違いでは止まります。
+`eject/` を辿る深さの上限（8 段）は OS で絞り込む前に効くため、`--os android` でも深すぎる `eject/ios/...` では止まります。手順は
+`capability-declaration.md` §7 を参照。
+
 ## 範囲外
 
 - Windows の signtool による署名とパッケージ ID（#1208）
-- 生成物の `--eject`（#1202 の後続）。追記は Apple の `info-plist`・`entitlements` と Android の宣言・`application-attributes` が実装済み
+- Android の殻の重ね置き。追記は Apple の `info-plist`・`entitlements` と Android の宣言・`application-attributes`、設定ファイルの `--eject` が実装済み
 - 既存の `scripts/` を CLI 呼び出しへ寄せること

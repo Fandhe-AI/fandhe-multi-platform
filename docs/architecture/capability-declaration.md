@@ -190,7 +190,7 @@ params = { text = "share_text", url = "share_url" }
 | MainActivity を指す alias（ランチャーアイコンの切り替え等） | 使う機能が無い。必要になった issue で足す |
 | `<application>` の属性（`localeConfig` 等） | アプリ全体の値で、機能の宣言に書かない。例外はバックアップ規則の 2 属性（`backup-exclusions` があるときだけ gen が出す）。アプリは `fandhe-app.android.application-attributes` で殻の Manifest に足せる（§7） |
 | `neverForLocation` 以外の権限フラグ | 使う機能が出たとき enum に足す |
-| 統合エラー（flags・meta-data・属性の食い違い）を利用者が上書きする手段 | 追記・`--eject`（#1202）の範囲 |
+| 統合エラー（flags・meta-data・属性の食い違い）を利用者が上書きする手段 | 作らない。機能同士の食い違いはどちらへ寄せても片方が黙って壊れ、統合が失敗すると生成物が無く eject でも救えない。宣言は Cargo の `[patch]` で直す。アプリの追記との食い違いは、追記を外して `--eject`（§7）で書き出し、直接編集する（#1202） |
 | Gradle の版の正本 | 宣言（`gradle`）が正本で、gen の出力からビルドに入る。版の選定根拠は `scripts/android/versions.env` に残し、`tests/gen.rs` が両者の一致を確かめる（#1194） |
 
 ## 6. カタログアプリの設定との突き合わせ
@@ -358,6 +358,33 @@ manifest = "web/manifest.webmanifest"       # アプリの crate からの相対
 
 値は出力先の文法（XML・plist・Groovy の単一引用符）でエスケープします。plist の null はエラーです。
 
+### eject（`--eject`、#1202）
+
+追記では足りない変更（生成値そのものを変える）のために、生成した設定ファイルを利用者のものとして書き出せます。
+
+```sh
+cargo fandhe gen --eject ios/Info.plist [--eject ...] [--manifest-path <Cargo.toml>]
+```
+
+- 書き出し先は `<アプリの crate>/eject/<gen/ からの相対パス>` です。`gen/` と違い、コミットします。
+  先頭の「編集しない」コメントは「eject で書き出した。消せば生成へ戻る」に差し替えます
+- 対象は設定ファイルだけです: `android/AndroidManifest.xml`・`{ios,macos}/Info.plist`・`{ios,macos}/App.entitlements`・
+  `{ios,macos}/extensions/<name>/` の plist と entitlements。
+  `android/fandhe.gradle`（絶対パスを含む）・`FandheLibrary.java`・バックアップ規則の XML（TOML で足せる）・Web は対象外です。
+  対象外や生成対象に無いパスは、書き出せるパスの一覧つきのエラーで、1 件でも不正なら何も書きません
+- 既に同じファイルがあれば上書きせずエラーにします
+- 以後、`eject/<rel>` が通常ファイルなら、`gen`・`run`・`build`・`build.rs` の全経路が、生成した内容の代わりにそのファイルを使います。
+  印や設定は持たず、ファイルの有無だけで決まります。消せば次の生成から元に戻ります。使うたびに「eject 済み: `<rel>`」を stderr に出します
+- 描画と検証は eject 済みでも走ります（機能を足して説明文が欠ければ、今までどおりエラー）。TOML を変えても eject したファイルは変わりません
+- `eject/` の `.` で始まる名前（`.DS_Store`・エディタの退避やロックファイル）は無視します。深さは 8 段までです
+- `eject/` に、今回の対象 OS の生成対象に無いファイル（綴り違い・対象外のパス）があればエラーです。symlink と UTF-8 でないファイルも拒否します。
+  `--os android` の `run`/`build` は `eject/ios/`・`eject/macos/` を見ません
+- `generate` を呼ぶ `build.rs`（fandhe-gallery の macOS 埋め込み）は、`eject/` が在るときだけ変更を監視し、
+  差し替えた分は `cargo:warning=eject 済み: <rel>` で出します。`eject/` を初めて作った回は監視に入っていないため、
+  `Cargo.toml` の変更か `cargo clean -p <crate>` で作り直してください
+- `android/` のパスだけを指定した `--eject` は Android の分だけ生成します（iOS の bundle-id が無いアプリでも使えます）
+- `--eject` は値が要り、`--os web`・`check` とは併用できません（終了コード 2）
+
 ### 書き出しの安全策
 
 - `gen/` が symlink なら拒否します
@@ -369,7 +396,7 @@ manifest = "web/manifest.webmanifest"       # アプリの crate からの相対
 `CFBundleSupportedPlatforms`（シミュレータか実機かは組み立て時に決まる、#1201）、
 applicationId・compileSdk、`<application>` の属性（バックアップ規則の 2 属性を除く。アプリの `application-attributes` は殻の Manifest にだけ効き、gen は出さない）、拡張の Info.plist の確定値化、
 framework のリンクと Xcode のターゲット（#1212）、Windows の identity（#1208）、`run`/`build` への組み込み（#1201）、
-`--eject`（#1202 の後続）、`verify-scope` の Web 対応。
+eject 後の差分検知（生成結果の控えを残さない）、Android の殻の重ね置き、`verify-scope` の Web 対応。
 
 ## 8. 選ばなかった機能の検査（`cargo fandhe verify-scope`）
 

@@ -22,8 +22,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::native::{
-    app_root, generate_android, generate_web, AppInfo, ANDROID_TRIPLE, WEB_MANIFEST_PATH,
-    WEB_TRIPLE,
+    app_root, generate_android, generate_web, AppInfo, ANDROID_TRIPLE, EJECT_NOTE,
+    WEB_MANIFEST_PATH, WEB_TRIPLE,
 };
 use crate::workspace::run_metadata;
 
@@ -369,6 +369,9 @@ pub fn load_app(opts: &Options, os: Os) -> Result<App, Vec<String>> {
             // gen の出力はアプリの `gen/` ではなく成果物の置き場へ出す（アプリの iOS・macOS の生成物を消さない）。
             let gen_dir = out_dir(&app, Os::Android).join("gen");
             let (g, shell) = generate_android(opts.manifest.as_deref(), gen_dir)?;
+            for n in g.notes.iter().filter(|n| n.starts_with(EJECT_NOTE)) {
+                eprintln!("{n}");
+            }
             app.android_gen = Some(g.files);
             app.application_id = shell.application_id;
             app.application_attributes = shell.application_attributes;
@@ -498,7 +501,7 @@ fn reset_dir(dir: &Path, within: &Path) -> Result<(), String> {
 
 /// `path` が `within` の配下であること・`within` から `path` までに symlink が無いことを確かめる
 /// （消す・書く前の検査。`path` 自身が symlink でも拒否する。存在しない部分は問題にしない）。
-fn check_within(path: &Path, within: &Path) -> Result<(), String> {
+pub(crate) fn check_within(path: &Path, within: &Path) -> Result<(), String> {
     let rel = path
         .strip_prefix(within)
         .ok()

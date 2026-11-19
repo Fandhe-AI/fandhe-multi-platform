@@ -6,6 +6,7 @@
 //! - [`check_workspace`] - `cargo metadata` で解決した全 crate の宣言を検証する（統合・到達判定はしない）
 //! - `reach` モジュール - アプリが依存として解決した機能 crate の到達判定（feature の活性化を自前で辿る）
 //! - `native` モジュール - 到達した機能の宣言だけからネイティブ設定（Manifest・Gradle・Info.plist・entitlements、Web は `--os web` で Web App Manifest）を生成する（`cargo fandhe gen`。`gen` は 2024 edition の予約語のため別名）
+//! - [`eject`] - 生成した設定ファイルを `<アプリの crate>/eject/` へ書き出す（`cargo fandhe gen --eject`、#1202）。`eject/` のファイルは gen・run・build が生成の代わりに使う
 //! - `run` モジュール - アプリの実行・ビルド（`cargo fandhe run|build`、デスクトップ・Web・Android、#1422・#1423）。手順は純粋関数で組み、実行器が順に走らせる
 //! - `scope` モジュール - 選ばなかった機能の宣言が成果物に無いことの照合（`cargo fandhe verify-scope`、#1178）
 //!
@@ -25,6 +26,8 @@ mod workspace;
 
 pub use declaration::{check_paths, parse, validate, Declaration, Problem};
 pub use merge::{merge, Merged};
-pub use native::{generate, generate_web, write, Generated, ANDROID_SKIPPED_NOTE};
+pub use native::{
+    eject, generate, generate_web, write, Generated, ANDROID_SKIPPED_NOTE, EJECT_NOTE,
+};
 pub use scope::{verify_scope, ScopeReport};
 pub use workspace::check_workspace;

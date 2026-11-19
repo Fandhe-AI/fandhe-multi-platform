@@ -1170,7 +1170,8 @@ fn app_android_declaration_merges_like_a_feature() {
     assert!(
         e.contains("[package.metadata.fandhe-app]")
             && e.contains("`cam`")
-            && e.contains("android.permission.CAMERA"),
+            && e.contains("android.permission.CAMERA")
+            && e.contains("--eject android/AndroidManifest.xml"),
         "{e}"
     );
 }
