@@ -820,5 +820,5 @@ share-sheet の Windows（#1367 で続けて扱う）で、ほかは同期の wr
 | 入口 | `begin_compose_mail_sms(&ComposeRequest)`・`poll_compose_mail_sms`・`discard_compose_mail_sms`。crate ルートから出す。iOS / Android 以外は `Unsupported`（macOS・Windows は同期の `platform_compose_mail_sms`） |
 | slot | 結果を画面の型ではなく OS の生の値（`ComposeOutcome` / `ComposeMailSmsError`）で置き、画面が取り出すときに写す。画面は `begin_excluding(&[PUBLIC])` と `poll_and_finish_owned`、公開入口は `begin_parking`（前例は file-picker・eye-dropper） |
 | busy | 進行中の要求（作成画面が開いたまま）と公開側の未取得の結果は、どちらの開始も `Internal(BUSY)` で断る。discard は作成画面を閉じず、OS の結果が届くまで slot を残す。iOS は delegate が呼ばれないまま閉じられるとプロセス終了まで busy のまま残る（天井。reset が無い） |
-| 失われた要求 | Android の再生成の reset で消えた要求は、公開側の poll が `Internal(LOST)` を 1 度だけ返す。画面は失敗で終える |
+| 失われた要求 | Android の再生成の reset で消えた要求は、公開側の poll が `Internal(LOST)` を 1 度だけ返す。画面状態は作り直される（残っていれば失敗で終える） |
 | ホストのテスト | `bridge` を `test` でもコンパイルし、slot の扱い（受け取り待ち・busy・discard・lost）を確かめる |
