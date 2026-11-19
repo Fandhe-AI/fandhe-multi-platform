@@ -187,7 +187,8 @@ final class AppBadgeHelper {
             // contentIntent は付けない（exported な入口を増やさない）。
             NotificationCompat.Builder b = new NotificationCompat.Builder(activity, CHANNEL_ID)
                     .setSmallIcon(android.R.drawable.sym_def_app_icon)
-                    .setContentTitle(activity.getString(R.string.app_name))
+                    // アプリ名は Manifest の label から引く（殻・利用者の res のどちらが持つ名前にも依存しない）。
+                    .setContentTitle(activity.getApplicationInfo().loadLabel(activity.getPackageManager()))
                     .setContentText(activity.getString(R.string.app_badge_notification_text))
                     .setNumber(value)
                     .setSilent(true)
