@@ -152,7 +152,8 @@ impl Bridge {
     ///
     /// 公開入口（`owner` が `public`）は、画面側の届いた未取得の結果を捨てずに画面の受け取り待ちへ移して始める
     /// （`SlotOwner::begin_parking`、`consumer-app-structure.md` §8.2）。画面は `poll_and_finish_owned` でそのまま受け取り、
-    /// 受け取られない分は画面の次の開始か [`Bridge::reset`] で解放する（残るのは最大 1 件）。公開側の未取得の結果は、
+    /// 受け取られない分は [`Bridge::reset`] で解放する（残るのは最大 1 件。`drive` は受け取り待ちを発送済みとみなして
+    /// 次の開始へ進まないため、画面の次の開始では解放されない）。公開側の未取得の結果は、
     /// どちらの開始も置き換えない。
     fn begin(&self, owner: &SlotOwner) -> Option<u64> {
         let mut active = self.lock();
@@ -638,6 +639,26 @@ mod tests {
         assert!(start_request(bridge, &*f, bridge.screen, "https://example.com/").is_none());
         assert_eq!(f.calls.load(Ordering::SeqCst), 1);
         assert_eq!(bridge.slot.snapshot(), Some((id, None)));
+    }
+
+    /// 発送直後（`mark_running` の適用前）に公開入口が画面の結果を受け取り待ちへ移しても、再 drive で画面の要求を
+    /// 二重に発送せず、画面は移された実結果を受け取る。
+    #[test]
+    fn redrive_after_public_parks_screen_result_does_not_resend() {
+        let bridge = new_bridge(Duration::from_secs(30));
+        let f = fake(Mode::Interrupt, bridge);
+        let imp: Arc<dyn InAppBrowser> = f.clone();
+        let (sender, rx) = channel();
+        let mut state = InAppBrowserShowState::default();
+        request_open(&mut state);
+        drive(&state, &sender, &imp, bridge);
+        let screen = bridge.screen.current();
+        assert_eq!(bridge.begin_with_id(screen + 100), Ok(()));
+        drive(&state, &sender, &imp, bridge);
+        assert_eq!(f.calls.load(Ordering::SeqCst), 1);
+        pump(&mut state, &sender, &rx, &imp, bridge);
+        assert_eq!(f.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(state.result, Some(Err(CoreFailure::Interrupted)));
     }
 
     #[test]
