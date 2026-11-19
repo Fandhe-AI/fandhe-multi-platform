@@ -114,10 +114,10 @@ cd "${repo_root}"
 # PR #483 CI 是正（Issue #228 フォローアップ、run 30658486536 / 30659149425 /
 # 30659770016 / 30660444124 で継続的に再現）: 当初はメインの `target/` を
 # そのまま使い、(a) fandhe-core を先に -p 単独ビルド、(b) cargo clean してから
-# 再ビルド、(c) fandhe-core と fandhe-egui-proxy を単一呼び出しの root unit に
+# 再ビルド、(c) fandhe-core と fandhe-gallery（当時は fandhe-egui-proxy）を単一呼び出しの root unit に
 # まとめる、の 3 段階で対策したが、CI runner の実 CI ではいずれも
 # `target/<triple>/release/libfandhe_core.rlib` が見つからない事象を解消できな
-# かった（fandhe-core は fandhe-egui-proxy の依存クレートでもあるため、直前の
+# かった（fandhe-core は fandhe-gallery の依存クレートでもあるため、直前の
 # ステップ（build-aab.sh の `-p fandhe-gallery -o <jniLibs dir>` 呼び出し）が
 # メインの `target/` に対して行った処理の影響を受けていると推測されるが、
 # CI runner 環境でしか再現せず、cargo・cargo-ndk 側の詳細な原因は
