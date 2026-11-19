@@ -146,14 +146,23 @@ impl Bridge {
         mine != 0 && self.slot.snapshot().is_some_and(|(id, _)| id == mine)
     }
 
-    /// 進行中の要求も未取得の結果（画面・公開とも）も無いときだけ、`owner` の分として登録して id を返す。
-    /// 先行を置き換えず `None`。OS へ渡す前に呼び、即時の完了も照合できるようにする。
+    /// 進行中の要求と未取得の結果が無いときだけ、`owner` の分として登録して id を返す。先行を置き換えず `None`。
+    /// OS へ渡す前に呼び、即時の完了も照合できるようにする。
+    ///
+    /// 公開入口（`owner` が `public`）は、画面側の届いた未取得の結果を捨てずに画面の受け取り待ちへ移して始める
+    /// （`SlotOwner::begin_parking`、`consumer-app-structure.md` §8.2）。画面は `poll_and_finish_owned` でそのまま受け取り、
+    /// 受け取られない分は画面の次の開始か [`Bridge::reset`] で解放する（残るのは最大 1 件）。公開側の未取得の結果は、
+    /// どちらの開始も置き換えない。
     fn begin(&self, owner: &SlotOwner) -> Option<u64> {
         let mut active = self.lock();
         if self.lost().is_some() {
             return None;
         }
-        let request_id = owner.begin_excluding(self.slot, &[self.public, self.screen])?;
+        let request_id = if std::ptr::eq(owner, self.public) {
+            owner.begin_parking(self.slot, self.screen)
+        } else {
+            owner.begin_excluding(self.slot, &[self.public, self.screen])
+        }?;
         self.high_water.fetch_max(request_id, Ordering::Relaxed);
         *active = Some(Active {
             request_id,
@@ -168,6 +177,10 @@ impl Bridge {
     /// 許すと、期限切れ要求の遅延した OS 呼び出しが新しい要求として受理されるため）。違反は `Internal`、
     /// 進行中の要求も未取得の結果（画面・公開とも）も無いときだけ登録し、それ以外は `Busy`。
     /// 失敗時は採番状態を変えない。
+    ///
+    /// 呼び出し側の id で登録するため、[`Bridge::begin`] の公開入口と違い、画面側の届いた未取得の結果を受け取り待ちへ移さない
+    /// （`RequestSlot` に呼び出し側の id で移す口が無い）。その結果が残るあいだは `Busy` で、画面が受け取るか、画面の次の開始か
+    /// [`Bridge::reset`] で空く（上限のある天井）。
     fn begin_with_id(&self, owner: &SlotOwner, request_id: u64) -> Result<(), InAppBrowserFailure> {
         let mut active = self.lock();
         if request_id == 0
@@ -331,8 +344,8 @@ fn start_request(
 }
 
 /// 画面状態に依存しない公開入口。URL を検査して要求を登録し、現在の OS 実装へ渡して要求 id を返す。
-/// 同時に追跡できる要求は 1 件。先行の要求（画面経由を含む）が進行中、または結果が未取得なら
-/// 置き換えず [`InAppBrowserFailure::Busy`] を返す。結果は [`poll_open_result`] で取得する
+/// 同時に追跡できる要求は 1 件。先行の要求（画面経由を含む）が進行中、または自分の結果が未取得なら
+/// 置き換えず [`InAppBrowserFailure::Busy`] を返す。画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める。結果は [`poll_open_result`] で取得する
 /// （OS 層の `try_begin_present` はこの要求を受理する）。
 pub fn open_url(raw_url: &str) -> Result<u64, InAppBrowserFailure> {
     static IMPL: OnceLock<Arc<dyn InAppBrowser>> = OnceLock::new();
@@ -947,5 +960,73 @@ mod tests {
         // 使用済み id の再利用は拒否し、採番は壊れない。
         assert!(b.begin_with_id(b.public, 1).is_err());
         assert!(b.begin(b.public).is_some_and(|id| id > 1));
+    }
+
+    /// 画面の届いた未取得の結果は、公開入口の開始が捨てずに受け取り待ちへ移し、画面はそのまま受け取る（#1383）。
+    /// 受け取られない分は画面の次の開始で解放される。
+    #[test]
+    fn public_open_parks_unpolled_screen_result_and_screen_receives_it() {
+        let bridge = new_bridge(Duration::from_secs(30));
+        let f = fake(Mode::Silent, bridge);
+        let imp: Arc<dyn InAppBrowser> = f.clone();
+        let (sender, rx) = channel();
+        let mut state = InAppBrowserShowState::default();
+        request_open(&mut state);
+        drive(&state, &sender, &imp, bridge);
+        while let Ok(c) = rx.try_recv() {
+            c(&mut state);
+        }
+        let screen = bridge.screen.current();
+        assert!(bridge.try_begin_present(screen));
+        bridge.complete_from_os(screen, Ok(InAppBrowserOutcome::Closed));
+        // 画面がまだ poll していない結果で公開入口が詰まらない。
+        let public = start_request(bridge, &*f, bridge.public, "https://example.com/")
+            .expect("画面の未取得の結果で busy にならない");
+        assert_ne!(public, screen);
+        assert!(matches!(bridge.slot.snapshot_of(screen), Some(Some(Ok(_)))));
+        // 画面は移された結果をそのまま受け取る（lost の Interrupted にならない）。
+        pump(&mut state, &sender, &rx, &imp, bridge);
+        assert_eq!(state.result, Some(Ok(())));
+        assert!(bridge.slot.snapshot_of(screen).is_none());
+        // 公開入口の要求はそのまま進み、公開側の poll が受け取る。
+        assert!(bridge.try_begin_present(public));
+        bridge.complete_from_os(public, Ok(InAppBrowserOutcome::Closed));
+        assert!(matches!(poll_open(bridge, public), Some(Ok(_))));
+    }
+
+    #[test]
+    fn parked_screen_result_is_released_by_next_screen_begin() {
+        let b = new_bridge(Duration::from_secs(30));
+        let screen = b.begin(b.screen).unwrap();
+        assert!(b.try_begin_present(screen));
+        b.complete_from_os(screen, Ok(InAppBrowserOutcome::Closed));
+        let public = b.begin(b.public).unwrap();
+        assert!(b.slot.snapshot_of(screen).is_some());
+        // 公開側の進行中・未取得の要求は画面の開始から守る。
+        assert!(b.begin(b.screen).is_none());
+        b.complete_from_os(public, Err(InAppBrowserFailure::NoBrowser));
+        assert!(b.begin(b.screen).is_none());
+        assert_eq!(
+            poll_open(b, public),
+            Some(Err(InAppBrowserFailure::NoBrowser))
+        );
+        assert!(b.begin(b.screen).is_some());
+        assert!(
+            b.slot.snapshot_of(screen).is_none(),
+            "画面の次の開始で解放される"
+        );
+    }
+
+    /// 呼び出し側の id の入口は受け取り待ちへ移さず、画面の未取得の結果が残るあいだは `Busy`（doc の天井）。
+    #[test]
+    fn begin_with_id_stays_busy_while_screen_result_is_unpolled() {
+        let b = new_bridge(Duration::from_secs(30));
+        let screen = b.begin(b.screen).unwrap();
+        assert!(b.try_begin_present(screen));
+        b.complete_from_os(screen, Ok(InAppBrowserOutcome::Closed));
+        assert_eq!(
+            b.begin_with_id(b.public, screen + 100),
+            Err(InAppBrowserFailure::Busy)
+        );
     }
 }

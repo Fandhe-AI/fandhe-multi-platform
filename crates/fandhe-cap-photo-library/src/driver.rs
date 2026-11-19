@@ -112,17 +112,25 @@ pub fn platform_photo_library() -> Box<dyn PhotoLibrary> {
     return Box::new(crate::contract::UnsupportedPhotoLibrary);
 }
 
+/// 公開入口の slot の登録。進行中の要求と、公開側の未取得の結果があれば `None`（busy）。画面側の届いた未取得の結果は
+/// 捨てずに画面の受け取り待ちへ移す（`SlotOwner::begin_parking`、`consumer-app-structure.md` §8.2）。画面は
+/// `poll_and_finish_owned` でそのまま受け取り、受け取られない分は画面の次の開始か slot の reset で解放する（残るのは最大 1 件）。
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+fn begin_public_slot() -> Option<u64> {
+    PUBLIC_OWNER.begin_parking(&bridge::SLOT, &SCREEN_OWNER)
+}
+
 /// 任意の検査済み PNG の保存を OS へ依頼し、結果を [`poll_photo_save`] で受け取るための要求 id を返す
 /// （macOS・iOS・Android）。
 ///
 /// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。1 プロセスに 1 要求で、
-/// 進行中、または結果が未取得の要求があるうちは `Internal`（busy）で断る。依頼自体の失敗は `Err`（結果は届かない）。
+/// 進行中の要求（画面を含む）と、自分の結果が未取得のうちは `Internal`（busy）で断る（画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める。[`begin_public_slot`]）。
+/// 依頼自体の失敗は `Err`（結果は届かない）。
 /// Windows は同期の [`platform_photo_library`] を使う。Linux は `Unsupported`。
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub fn begin_photo_save(image: &PngImage) -> Result<u64, PhotoLibraryError> {
-    let request_id = PUBLIC_OWNER
-        .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
-        .ok_or(PhotoLibraryError::Internal("photo_library busy"))?;
+    let request_id =
+        begin_public_slot().ok_or(PhotoLibraryError::Internal("photo_library busy"))?;
     if let Err(e) = begin_save(request_id, image) {
         bridge::SLOT.clear(request_id);
         PUBLIC_OWNER.release(request_id);
@@ -312,9 +320,7 @@ mod tests {
         SCREEN_OWNER.release(second);
 
         // 公開入口の進行中・未取得の結果は守る。
-        let public = PUBLIC_OWNER
-            .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
-            .unwrap();
+        let public = begin_public_slot().unwrap();
         assert!(SCREEN_OWNER.begin_keeping_foreign(&bridge::SLOT).is_none());
         assert!(bridge::deliver(
             public,
@@ -422,5 +428,96 @@ mod bridge_tests {
             Some(Err(PhotoLibraryError::PermissionDenied("photo_library")))
         );
         bridge::SLOT.clear(id);
+    }
+
+    /// 起床を捨てるだけの waker（受け取り待ちのテストは受信側で完了を直接確かめる）。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+    struct ParkNoopWaker;
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+    impl fandhe_runtime::RepaintWaker for ParkNoopWaker {
+        fn wake(&self) {}
+        fn wake_after(&self, _delay: std::time::Duration) {}
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+    fn clear_slot() {
+        bridge::SLOT.reset();
+        SCREEN_OWNER.release(SCREEN_OWNER.current());
+        PUBLIC_OWNER.release(PUBLIC_OWNER.current());
+    }
+
+    /// 画面の届いた未取得の結果は、公開入口の開始が捨てずに受け取り待ちへ移し、画面の poll がそのまま受け取る（#1383）。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+    #[test]
+    fn public_begin_parks_unpolled_screen_result_and_screen_poll_receives_it() {
+        let _g = SLOT_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        clear_slot();
+        let screen = SCREEN_OWNER.begin_keeping_foreign(&bridge::SLOT).unwrap();
+        assert!(bridge::deliver(
+            screen,
+            Err(PhotoLibraryError::Internal("screen"))
+        ));
+        // 画面が受け取らない結果で公開入口が詰まらない。
+        let public = begin_public_slot().expect("画面の未取得の結果で busy にならない");
+        assert_ne!(public, screen);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let sender = fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(ParkNoopWaker));
+        fandhe_runtime::request_slot::poll_and_finish_owned(
+            &bridge::SLOT,
+            &SCREEN_OWNER,
+            &sender,
+            |_| panic!("待機にはならない"),
+            |s: &mut u8, o| {
+                *s = if matches!(o, Err(PhotoLibraryError::Internal("screen"))) {
+                    1
+                } else {
+                    2
+                };
+                true
+            },
+            |s: &mut u8| *s = 9,
+        );
+        let mut state = 0u8;
+        rx.try_recv().expect("結果が送られる")(&mut state);
+        assert_eq!(
+            state, 1,
+            "移された画面の結果をそのまま受け取る（lost にならない）"
+        );
+        assert_eq!(SCREEN_OWNER.current(), 0);
+        assert!(bridge::SLOT.snapshot_of(screen).is_none());
+        // 公開入口の要求は進行中のまま残り、結果は公開側の poll が受け取る。
+        assert!(bridge::deliver(public, Ok(SavedTo::PhotoLibrary)));
+        assert!(poll_photo_save(public).is_some());
+        clear_slot();
+    }
+
+    /// 受け取られない受け取り待ちの結果は、画面の次の開始で解放される。公開側の未取得の結果は画面から守る。
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+    #[test]
+    fn parked_screen_result_is_released_by_next_screen_begin() {
+        let _g = SLOT_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        clear_slot();
+        let screen = SCREEN_OWNER.begin_keeping_foreign(&bridge::SLOT).unwrap();
+        assert!(bridge::deliver(
+            screen,
+            Err(PhotoLibraryError::Internal("screen"))
+        ));
+        let public = begin_public_slot().unwrap();
+        assert!(bridge::SLOT.snapshot_of(screen).is_some());
+        // 進行中の公開入口の要求は画面が置き換えない。
+        assert!(SCREEN_OWNER.begin_keeping_foreign(&bridge::SLOT).is_none());
+        assert!(bridge::deliver(public, Ok(SavedTo::PhotoLibrary)));
+        assert!(
+            SCREEN_OWNER.begin_keeping_foreign(&bridge::SLOT).is_none(),
+            "公開側の未取得の結果は画面から守る"
+        );
+        assert!(poll_photo_save(public).is_some());
+        let next = SCREEN_OWNER.begin_keeping_foreign(&bridge::SLOT).unwrap();
+        assert_ne!(next, screen);
+        assert!(
+            bridge::SLOT.snapshot_of(screen).is_none(),
+            "画面の次の開始で解放される"
+        );
+        clear_slot();
     }
 }
