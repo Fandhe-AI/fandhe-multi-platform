@@ -379,6 +379,7 @@ fn card_draws_a_stroked_frame() {
     assert_eq!(frames_for(&card), base + 1);
 }
 
+#[cfg(any(target_os = "macos", target_os = "android", target_os = "windows"))]
 fn rd_tip(_: &St) -> String {
     "状態からの補足".to_string()
 }
