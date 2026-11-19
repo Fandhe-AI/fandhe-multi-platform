@@ -2,7 +2,7 @@
 //! （TASK-13.1-S3 / REQ-13 / NFR-9、親 issue #28、S1: #29 の後続）。
 //!
 //! `state::ReadFn` / `ReadAccessor`（`state/read.rs`）と `ui` モジュール
-//! （`Screen::button` / `Screen::list` / `Node::TextField`）は、状態アクセス経路を
+//! （`Screen::button` / `Screen::list` / `Node::TextField` / `ScreenStack::push`）は、状態アクセス経路を
 //! `fn(&S) -> T` / `fn(&mut S, T)` の関数ポインタに限定している。本スイートは
 //! 「環境をキャプチャするクロージャがこれらの API へ渡された場合、実際にコンパイル段階で
 //! 拒否される」ことを [trybuild](https://docs.rs/trybuild) で実行可能な形に固定化し、

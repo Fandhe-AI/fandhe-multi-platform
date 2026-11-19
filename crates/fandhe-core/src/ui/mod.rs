@@ -16,7 +16,7 @@
 //!   （TASK-1.1-S6。`Screen`/`Node` DSL の使用例）
 //! - [`screen_stack::ScreenStack`][] / [`screen::Screen::on_back`][] /
 //!   [`event::request_back`][]: 複数 `Screen<S>` を重ねて戻る画面遷移スタック
-//!   （Issue #726）。状態 `S` は単一共有のまま、画面ごとに `fn() -> Screen<S>` を
+//!   （Issue #726）。状態 `S` は単一共有のまま、画面ごとに `fn(&S) -> Screen<S>` を
 //!   `push`/`pop` する。OS の戻る操作は `.on_back()` で登録したハンドラを
 //!   `state::Event::BackRequested` 経由で発火する
 //! - [`render_mode::RenderMode`][] / [`render_mode::ModeSwitcher`][]: 画面単位の DOM/canvas

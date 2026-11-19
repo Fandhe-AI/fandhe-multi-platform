@@ -967,16 +967,21 @@ fn task_screen_renders_and_handles_actions() {
 ### パターン 8: 画面遷移スタック（積む/戻る、Issue #726）
 
 複数 `Screen<S>` を重ねて戻る画面遷移は `ScreenStack<S>` を状態型 `S` のフィールドとして
-持たせて表現する。状態は単一共有のまま、画面ごとに `fn() -> Screen<S>` を `push`/`pop` する
+持たせて表現する。状態は単一共有のまま、画面ごとに `fn(&S) -> Screen<S>` を `push`/`pop` する
 （REQ-13: 状態書き込みは `fn(&mut S)` 限定のため、遷移そのものもこの制約内で表現する）。
+構築関数は状態を読み取り専用で受け取るので、ボタンの文言など状態で変わる要素を持つ画面を積める
+（Issue #1289）。書き込み口（`&mut S`）は渡さないため REQ-13 と両立する。
 
-- `ScreenStack::new(root: fn() -> Screen<S>) -> Self`: root を 1 枚積んだ状態で作る
-- `.push(screen: fn() -> Screen<S>)`: 画面を積む
+- `ScreenStack::new(root: fn(&S) -> Screen<S>) -> Self`: root を 1 枚積んだ状態で作る
+- `.push(screen: fn(&S) -> Screen<S>)`: 画面を積む
 - `.pop() -> bool`: 直前の画面へ戻る。root では取り除かず `false`（panic しない）
-- `.current() -> Screen<S>`: 末尾のビルダーを呼んで現在画面を構築する（呼び出し元は
-  これだけを描く契約。スタック全体を意識しない）
+- `.current(&self, state: &S) -> Screen<S>`: 末尾のビルダーに `state` を渡して現在画面を構築する
+  （呼び出し元はこれだけを描く契約。毎フレーム呼び直すのでキャッシュしない）
 - `#[derive(Default)]` では `ScreenStack::new(root)` を組み立てられないため、`nav` フィールドを
   持つ状態型は **`Default` を手動実装**すること（`ScreenStack::new(root_screen)` を渡す）
+- 状態で文言が変わるボタンは、状態を変える dispatch のたびに `current_screen(state)` を引き直し、
+  その時点の文言で `ButtonClicked` / `click_button_at` を呼ぶ。古い文言は一致せず `false` になる
+  （誤発火はしない）。文言は定数か共通関数にして、画面とテストで共有する
 - 「戻る」ボタンと OS の戻る操作（Esc・Android バックキー）には**同じハンドラ**を渡す:
   ボタンでは `.button(id, "戻る", go_back)`、OS の戻るでは `.on_back(go_back)`
   （`ui::request_back` / `state::Event::BackRequested` 経由でプラットフォームレイヤが発火する）
@@ -1013,22 +1018,24 @@ fn go_back(state: &mut ListDetailState) {
     state.nav.pop();
 }
 
-pub fn list_screen() -> Screen<ListDetailState> {
+pub fn list_screen(_state: &ListDetailState) -> Screen<ListDetailState> {
     Screen::new("一覧")
         .dynamic_text(selected_label)
         .button(WidgetId::from_raw(1), "詳細を開く", open_detail)
 }
 
-pub fn detail_screen() -> Screen<ListDetailState> {
+pub fn detail_screen(state: &ListDetailState) -> Screen<ListDetailState> {
+    // 状態を読んで文言を決められる（`fn(&S)`）。書き込みは `go_back` 等の `fn(&mut S)` のみ。
+    let back = format!("{} から戻る", selected_label(state));
     Screen::new("詳細")
         .dynamic_text(selected_label)
-        .button(WidgetId::from_raw(1), "戻る", go_back)
+        .button(WidgetId::from_raw(1), back, go_back)
         .on_back(go_back)
 }
 
 // レジストリ・プラットフォームレイヤはこの関数を毎フレーム呼び直す（`fn(&S) -> Screen<S>`）。
 pub fn current_screen(state: &ListDetailState) -> Screen<ListDetailState> {
-    state.nav.current()
+    state.nav.current(state)
 }
 ```
 

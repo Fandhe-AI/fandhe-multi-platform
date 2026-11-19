@@ -6,7 +6,8 @@
 //! （`tests/`）から公開 API のみを用いて検証する。
 
 use fandhe_core::screens::list_detail::{
-    ListDetailState, PRODUCT_COUNT, current_screen, row_label,
+    LABEL_ADD_FAVORITE, LABEL_REMOVE_FAVORITE, ListDetailState, PRODUCT_COUNT, current_screen,
+    row_label,
 };
 use fandhe_core::{Event, StateStore, click_button_at, render_headless};
 
@@ -71,10 +72,40 @@ fn favorite_toggle_in_detail_is_reflected_in_list_after_back() {
     assert!(store.dispatch(
         &detail,
         &Event::ButtonClicked {
-            label: "お気に入りを切り替える".into(),
+            label: LABEL_ADD_FAVORITE.into(),
         },
     ));
 
+    // トグル後は構築関数が状態を読み直し、ボタン文言が変わる（Issue #1289）。
+    let detail = current_screen(store.state());
+    let lines = render_headless(&detail, store.state());
+    assert!(
+        lines.contains(&format!("({LABEL_REMOVE_FAVORITE})")),
+        "{lines:?}"
+    );
+    assert!(!lines.contains(&format!("({LABEL_ADD_FAVORITE})")));
+    // 古い文言は一致せず誤発火しない。現在の文言なら発火して未登録へ戻る。
+    assert!(!store.dispatch(
+        &detail,
+        &Event::ButtonClicked {
+            label: LABEL_ADD_FAVORITE.into(),
+        },
+    ));
+    assert!(store.dispatch(
+        &detail,
+        &Event::ButtonClicked {
+            label: LABEL_REMOVE_FAVORITE.into(),
+        },
+    ));
+    assert!(!store.state().products[4].favorite);
+    // 再度登録して以降の検証（一覧の ★）へ続ける。
+    let detail = current_screen(store.state());
+    assert!(store.dispatch(
+        &detail,
+        &Event::ButtonClicked {
+            label: LABEL_ADD_FAVORITE.into(),
+        },
+    ));
     let detail = current_screen(store.state());
     assert!(store.dispatch(
         &detail,

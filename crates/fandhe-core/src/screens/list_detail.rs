@@ -72,7 +72,7 @@ fn dummy_products() -> Vec<Product> {
 }
 
 impl Default for ListDetailState {
-    /// `ScreenStack::new` が `fn() -> Screen<Self>` を要求するため、`derive(Default)`
+    /// `ScreenStack::new` が `fn(&Self) -> Screen<Self>` を要求するため、`derive(Default)`
     /// では `nav` を初期化できない（手動実装が必要、screen_stack.rs のモジュール doc
     /// 参照）。
     fn default() -> Self {
@@ -169,7 +169,21 @@ fn favorite_label(state: &ListDetailState) -> String {
     }
 }
 
-/// 詳細画面の「お気に入りを切り替える」ボタンから呼ばれる。`selected` が範囲外の
+/// 詳細画面のトグルボタンの文言（未登録のとき）。
+pub const LABEL_ADD_FAVORITE: &str = "お気に入りに追加";
+/// 詳細画面のトグルボタンの文言（登録済みのとき）。
+pub const LABEL_REMOVE_FAVORITE: &str = "お気に入りから外す";
+
+/// トグルボタンの文言を現在の状態から選ぶ（登録済みなら [`LABEL_REMOVE_FAVORITE`]、
+/// それ以外は [`LABEL_ADD_FAVORITE`]）。`detail_screen` が毎フレーム呼ぶ。
+fn toggle_label(state: &ListDetailState) -> &'static str {
+    match selected_product(state) {
+        Some(p) if p.favorite => LABEL_REMOVE_FAVORITE,
+        _ => LABEL_ADD_FAVORITE,
+    }
+}
+
+/// 詳細画面のトグルボタンから呼ばれる。`selected` が範囲外の
 /// 場合は何もしない（`get_mut` による据え置き）。一覧へ戻った際、この変更が
 /// [`product_row`] の [`row_label`] を通じて即座に反映される（状態共有、Issue #730）。
 fn toggle_favorite(state: &mut ListDetailState) {
@@ -180,7 +194,7 @@ fn toggle_favorite(state: &mut ListDetailState) {
 
 /// 一覧画面（root）。商品 20 件を `VirtualList`（`Node::List` は egui 側で
 /// スクロールしないため使わない。モジュール冒頭参照）で描画する。
-pub fn list_screen() -> Screen<ListDetailState> {
+pub fn list_screen(_state: &ListDetailState) -> Screen<ListDetailState> {
     Screen::new("一覧").text("行をタップで詳細へ").virtual_list(
         product_count,
         product_row,
@@ -190,17 +204,16 @@ pub fn list_screen() -> Screen<ListDetailState> {
 
 /// 詳細画面。商品情報・お気に入りトグル・一覧への「戻る」を持つ。OS の戻る操作
 /// （Esc・Android バックキー）も `.on_back(go_back)` で同じハンドラに配線する。
-pub fn detail_screen() -> Screen<ListDetailState> {
+///
+/// トグルボタンの文言は現在のお気に入り状態から組む（`ScreenStack` の構築関数が状態を
+/// 読める例、Issue #1289）。状態の書き込みは従来どおり `toggle_favorite`（`fn(&mut S)`）のみ。
+pub fn detail_screen(state: &ListDetailState) -> Screen<ListDetailState> {
     Screen::new("詳細")
         .dynamic_text(detail_name)
         .dynamic_text(detail_price)
         .dynamic_text(detail_description)
         .dynamic_text(favorite_label)
-        .button(
-            WidgetId::from_raw(1),
-            "お気に入りを切り替える",
-            toggle_favorite,
-        )
+        .button(WidgetId::from_raw(1), toggle_label(state), toggle_favorite)
         .button(WidgetId::from_raw(2), "戻る", go_back)
         .on_back(go_back)
 }
@@ -209,5 +222,5 @@ pub fn detail_screen() -> Screen<ListDetailState> {
 /// `fn(&S) -> Screen<S>` として毎フレーム呼び直す契約。
 /// `docs/ai/SCHEMA.md` パターン 8 参照）。
 pub fn current_screen(state: &ListDetailState) -> Screen<ListDetailState> {
-    state.nav.current()
+    state.nav.current(state)
 }
