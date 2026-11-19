@@ -154,7 +154,8 @@ impl Bridge {
     ///   いないので捨て、見送らない（`consumer-app-structure.md` §8.2「画面の次の開始で解放」）
     ///
     /// 守らない範囲: 発送から `mark_running` の適用までの 1 フレームの間に、[`reset_pending_tracking`] を呼ばずに画面状態を
-    /// 作り直すと、未適用の `mark_running` が捨てられ、前の要求の結果が届いた後も見送り続ける。画面状態を作り直す側は
+    /// 作り直すと、未適用の `mark_running` が捨てられ、前の要求の結果が届いた後も見送り続ける（その間は
+    /// `POLL_INTERVAL` ごとに起床する）。画面状態を作り直す側は
     /// [`reset_pending_tracking`] を呼ぶ（Android の再生成はそうしている）。
     fn screen_dispatched(&self) -> bool {
         let mine = self.screen.current();
@@ -421,7 +422,7 @@ fn drive(
     bridge.expire_if_due();
     if let Some((_, url)) = take_request(state) {
         // 前の要求の結果待ち・`mark_running` の適用待ちは二重に発送しない。期限の判定は `drive` の中だけで走り、
-        // OS の完了も UI を起こさないため、待つ間も次のフレームを予約する。
+        // OS が応答しない間は UI を起こすものが無いため、待つ間も次のフレームを予約する。
         if bridge.screen_dispatched() {
             sender.request_repaint_after(POLL_INTERVAL);
             return;
@@ -495,12 +496,12 @@ mod tests {
     /// 予約された起床の回数を数える waker（待つ分岐が次のフレームを予約するかを確かめる）。
     #[derive(Default)]
     struct CountingWaker {
-        afters: std::sync::atomic::AtomicUsize,
+        afters: std::sync::Mutex<Vec<Duration>>,
     }
     impl fandhe_runtime::RepaintWaker for CountingWaker {
         fn wake(&self) {}
-        fn wake_after(&self, _delay: Duration) {
-            self.afters.fetch_add(1, Ordering::SeqCst);
+        fn wake_after(&self, delay: Duration) {
+            self.afters.lock().expect("lock").push(delay);
         }
     }
 
@@ -760,7 +761,7 @@ mod tests {
         drive(&fresh, &fresh_sender, &imp, bridge);
         // 前の要求が進行中の間は発送しないが、期限を判定し直すために次のフレームを予約する。
         assert_eq!(f.calls.load(Ordering::SeqCst), 1);
-        assert_eq!(waker.afters.load(Ordering::SeqCst), 1);
+        assert_eq!(*waker.afters.lock().expect("lock"), [POLL_INTERVAL]);
         std::thread::sleep(Duration::from_millis(350));
         drive(&fresh, &sender, &imp, bridge);
         assert_eq!(f.calls.load(Ordering::SeqCst), 2);
