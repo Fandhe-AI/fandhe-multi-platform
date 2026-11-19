@@ -1422,6 +1422,67 @@ const GENERATED_COMMENT: &str = "cargo fandhe gen が生成。編集しない";
 const EJECTED_COMMENT: &str =
     "cargo fandhe gen の eject で書き出した。`eject/` のこのファイルを消せば生成へ戻る";
 
+/// 殻の重ね置きの置き場（`eject/` からの相対。末尾の `/` つき）。`cargo fandhe run|build --os android` が殻へ重ねる。
+const SHELL_OVERLAY_REL: &str = "android/shell/";
+/// 殻の重ね置きを辿る深さの上限。Java のパッケージ（`app/src/main/java/com/example/…`）が入るため `EJECT_MAX_DEPTH` より深い。
+const SHELL_OVERLAY_MAX_DEPTH: usize = 16;
+
+/// 殻の重ね置きの置き場 `<アプリの crate>/eject/android/shell`。
+pub(crate) fn shell_overlay_dir(app_dir: &Path) -> PathBuf {
+    SHELL_OVERLAY_REL
+        .trim_end_matches('/')
+        .split('/')
+        .fold(app_dir.join(EJECT_DIR), |p, s| p.join(s))
+}
+
+/// 殻の重ね置きのファイル（置き場からの相対、区切りは `/`、昇順）を集める。置き場が無ければ空。
+/// symlink（置き場の途中を含む）・特殊ファイル・UTF-8 でない名前・`gen/`（gen の出力先と衝突する）・深すぎる階層はエラー。
+/// `.` で始まる名前は飛ばす。中身は検査しない（png などのバイナリも置ける）。
+pub(crate) fn shell_overlay(app_dir: &Path) -> Result<Vec<String>, Vec<String>> {
+    let root = shell_overlay_dir(app_dir);
+    crate::run::check_within(&root, app_dir).map_err(|e| vec![e])?;
+    match fs::symlink_metadata(&root) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(vec![format!("{} を調べられません: {e}", root.display())]),
+        Ok(md) if !md.is_dir() => {
+            return Err(vec![format!(
+                "{} はディレクトリではありません",
+                root.display()
+            )])
+        }
+        Ok(_) => {}
+    }
+    let mut found = Vec::new();
+    walk_eject(&root, "", 0, SHELL_OVERLAY_MAX_DEPTH, None, &mut found).map_err(|e| vec![e])?;
+    let at = |rel: &str| format!("{EJECT_DIR}/{SHELL_OVERLAY_REL}{rel}");
+    let mut errs = Vec::new();
+    let mut rels = Vec::new();
+    for (rel, ft) in found {
+        if !ft.is_file() {
+            errs.push(format!(
+                "{}: 通常ファイルではありません（symlink は使えません）",
+                at(&rel)
+            ));
+        } else if rel
+            .split('/')
+            .next()
+            .is_some_and(|c| c.eq_ignore_ascii_case("gen"))
+        {
+            errs.push(format!(
+                "{}: gen/ は置けません（gen の出力先と衝突します）。生成した設定ファイルを直したいときは `cargo fandhe gen --eject android/...` で書き出してください",
+                at(&rel)
+            ));
+        } else {
+            rels.push(rel);
+        }
+    }
+    if !errs.is_empty() {
+        return Err(errs);
+    }
+    rels.sort();
+    Ok(rels)
+}
+
 /// eject できる生成物（設定ファイルだけ）。gradle・Java・バックアップ規則は TOML で足せる／絶対パスを含むため対象外。
 fn ejectable(rel: &str) -> bool {
     rel == "android/AndroidManifest.xml"
@@ -1430,26 +1491,32 @@ fn ejectable(rel: &str) -> bool {
 }
 
 /// `eject/` の通常ファイルを集める（`rel` は `eject/` からの相対、区切りは `/`）。symlink・特殊ファイルも種別つきで返す。
-/// `.` で始まる名前（`.DS_Store`・エディタの退避・ロックファイル）は、種別を見る前に飛ばす。
+/// `.` で始まる名前（`.DS_Store`・エディタの退避・ロックファイル）は、種別を見る前に飛ばす。UTF-8 でない名前は拒否する。
+/// `skip`（`rel` と一致するディレクトリ）の中は辿らない（殻の重ね置きは別の上限で `shell_overlay` が辿る）。
 fn walk_eject(
     dir: &Path,
     rel: &str,
     depth: usize,
+    max_depth: usize,
+    skip: Option<&str>,
     out: &mut Vec<(String, fs::FileType)>,
 ) -> Result<(), String> {
-    if depth > EJECT_MAX_DEPTH {
+    if depth > max_depth {
         return Err(format!(
-            "{} は深すぎます（{EJECT_MAX_DEPTH} 段まで）",
+            "{} は深すぎます（{max_depth} 段まで）",
             dir.display()
         ));
     }
     let rd = fs::read_dir(dir).map_err(|e| format!("{} を読めません: {e}", dir.display()))?;
     for ent in rd {
         let ent = ent.map_err(|e| format!("{} を列挙できません: {e}", dir.display()))?;
-        let name = ent.file_name().to_string_lossy().into_owned();
-        if name.starts_with('.') {
+        if ent.file_name().to_string_lossy().starts_with('.') {
             continue;
         }
+        let name = ent
+            .file_name()
+            .into_string()
+            .map_err(|n| format!("{} の名前 {n:?} が UTF-8 ではありません", dir.display()))?;
         let rel = if rel.is_empty() {
             name
         } else {
@@ -1459,7 +1526,9 @@ fn walk_eject(
             .file_type()
             .map_err(|e| format!("{} を調べられません: {e}", ent.path().display()))?;
         if ft.is_dir() {
-            walk_eject(&ent.path(), &rel, depth + 1, out)?;
+            if skip != Some(rel.as_str()) {
+                walk_eject(&ent.path(), &rel, depth + 1, max_depth, skip, out)?;
+            }
         } else {
             out.push((rel, ft));
         }
@@ -1488,7 +1557,15 @@ fn apply_eject(
         Ok(_) => {}
     }
     let mut found = Vec::new();
-    walk_eject(&root, "", 0, &mut found).map_err(|e| vec![e])?;
+    walk_eject(
+        &root,
+        "",
+        0,
+        EJECT_MAX_DEPTH,
+        Some(SHELL_OVERLAY_REL.trim_end_matches('/')),
+        &mut found,
+    )
+    .map_err(|e| vec![e])?;
     found.sort_by(|a, b| a.0.cmp(&b.0));
     let mut errs = Vec::new();
     let mut picked = Vec::new();
@@ -1560,8 +1637,13 @@ pub fn eject(manifest: Option<&Path>, rels: &[String]) -> Result<Vec<PathBuf>, V
             || !g.files.contains_key(rel.as_str())
         {
             errs.push(format!(
-                "--eject {rel}: 書き出せません。書き出せるパス: {}{}",
+                "--eject {rel}: 書き出せません。書き出せるパス: {}{}{}",
                 ejectable_list(&g.files),
+                if rel.starts_with(SHELL_OVERLAY_REL) {
+                    "。殻のファイルは `cargo fandhe run|build --os android` のあと `<target_dir>/fandhe/<package>/android/` からコピーして `eject/android/shell/` へ置いてください"
+                } else {
+                    ""
+                },
                 if rel.starts_with("android/") && g.notes.iter().any(|n| n == ANDROID_SKIPPED_NOTE)
                 {
                     format!("。{ANDROID_SKIPPED_NOTE}")

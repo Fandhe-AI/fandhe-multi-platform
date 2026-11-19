@@ -42,7 +42,8 @@ cargo fandhe run|build [--os macos|windows|linux|web|android] [--release] [--man
   Windows ホストでは `gradle.bat` を検査・起動します
 - `am start` は Activity が見つからなくても終了コード 0 を返し、`Error:` を出力に出すだけです（エミュレータで確認）。そのため `-W` で起動完了まで待ち、
   続けて `adb shell pidof <application-id>` の段（`adb-check`）でプロセスがあることを確かめます。無ければ pidof が非 0 で、段名付きで失敗します
-- `versionCode` は 1 固定です。Play へ 2 回目の提出（同じ applicationId で版を上げる）はできません。版を上げる設定は未対応で、必要になった時点で別 Issue にします
+- `versionCode` は殻では 1 固定です。Play へ 2 回目の提出（同じ applicationId で版を上げる）は、殻の `app/build.gradle.kts` を
+  重ね置きで置き換えて `versionCode` を上げます（下の「殻の重ね置き」）。専用の設定欄は未対応で、必要になった時点で別 Issue にします
 - 殻は最小です。`MainActivity`（`GameActivity` の継承と `System.loadLibrary(FandheLibrary.NAME)` だけ）・
   Manifest（`application` の属性だけ。MainActivity の宣言・LAUNCHER・権限は gen の Manifest を overlay で重ねる）・
   テーマ（`FandheAppTheme`）・アプリ名（`fandhe_app_name`。アプリの `res` と衝突しないよう接頭辞を付けています）。
@@ -55,6 +56,28 @@ cargo fandhe run|build [--os macos|windows|linux|web|android] [--release] [--man
   `dataExtractionRules`・`fullBackupContent`・`debuggable` は書けません（前 2 つは `backup-exclusions`、`debuggable` はビルド種別が決めます）。
   `localeConfig`・`networkSecurityConfig` は、この欄に `@xml/...` の参照を書き、参照先の XML をアプリの `res`（`[package.metadata.fandhe-app.android] res`）に置けば足せます。
   権限・`res`・`java`・`gradle` などの欄は機能の宣言と同じで、gen の overlay に統合されます（`capability-declaration.md` §7）
+- 殻の重ね置き（#1202）: アプリの crate の `eject/android/shell/**` を、殻のルートの同じ相対パスへ重ねます。
+  置いたファイルは同じパスの殻のファイルを置き換え、殻に無いファイル（`app/google-services.json`・アイコン・`app/proguard-rules.pro` 等）は足します。
+  殻のファイルを書いたあと、cargo-ndk の前に写します（`--os android` の `run`/`build` だけ。`gen` には効きません）。
+  - 手元の殻は一度 `run`/`build` すれば `<target_dir>/fandhe/<package 名>/android/` にできるので、直したいファイルをそこから `eject/android/shell/` の同じ相対パスへコピーして編集します
+    （`cargo fandhe gen --eject android/shell/...` では書き出せません。殻は `run`/`build` の入力から作るためです）。
+    コピーした `app/build.gradle.kts` の `applicationId`・`versionName` は、そのときの値のまま固定されます
+  - 殻の `app/build.gradle.kts` は gen の出力を相対パス（`../gen/android/fandhe.gradle`）で参照するため、コピーしても target の場所に依りません
+  - 重ねたファイルが殻の前提を外すと、次の動作になります
+    - `app/src/main/AndroidManifest.xml` を重ねると、殻の Manifest ごと置き換わるため `application-attributes` が効きません
+    - `app/build.gradle.kts` の `applicationId` が TOML の `application-id` とずれると、
+      `run` の `adb-start`・`adb-check` が失敗します（起動と確認は TOML の値を使うため）
+  - 重ね置きした Gradle ファイル（`*.gradle.kts` など）はビルド時に任意のコードとして評価されます。
+    信頼できないリポジトリの `eject/` は、中身を確かめてから `run`/`build` してください
+  - `eject/android/shell/gen/` は大文字小文字を区別せず拒否します
+    （gen の出力先 `<殻>/gen/` と衝突するため）。生成した設定ファイルを直したいときは `cargo fandhe gen --eject android/...` を使います
+  - `.` で始まる名前は無視します。symlink（置き場の途中を含む）・特殊ファイル・UTF-8 でない名前・16 段を超える階層は拒否します
+    （Java のパッケージが入るため `eject/` の 8 段より深くしています）。
+    中身は検査しません（png などのバイナリも置けます）。写し先は `target_dir` の配下で途中に symlink が無いことを確かめます
+  - `app/src` の外に足したファイルは、`eject/` から消したあとに target へ残らないよう、重ねた一覧を殻のルートの `.fandhe-overlay` に控え、
+    次回の `run`/`build` の最初（gen の書き出しより前）にその分だけを消します。
+    Gradle の `build/`・`.gradle/` と、利用者が重ねていないファイルは消しません。殻と同名のファイルは、重ね置きを外すと次回から殻の版へ戻ります
+  - 使うたびに「eject 済み: android/shell（N ファイル）」を stderr に出します
 - gen は Android の分だけ生成します（内部の絞り込み。`gen --os` の公開オプションではありません）。bin や iOS の bundle-id が無い Android 専用アプリでも止まりません。
   出力先はアプリの `gen/` ではなく `<target_dir>/fandhe/<package 名>/android/gen/` です。アプリの `gen/`（iOS・macOS の生成物や、印の無い利用者のディレクトリ）には触れません
 - run は adb につながった端末 1 台の ABI だけ、build は arm64-v8a・armeabi-v7a・x86_64 を作ります。
@@ -87,11 +110,13 @@ cargo fandhe run|build [--os macos|windows|linux|web|android] [--release] [--man
 `run`/`build --os android` の gen 出力も `eject/` を通ります（`load_app` が差し替えて「eject 済み: `<rel>`」を stderr に出す）。
 `eject/ios/`・`eject/macos/` 配下の中身は `--os android` では検査せず、それらを理由に止めません。
 `eject/` 直下の余分なファイルや、`eject/android/` の綴り違いでは止まります。
-`eject/` を辿る深さの上限（8 段）は OS で絞り込む前に効くため、`--os android` でも深すぎる `eject/ios/...` では止まります。手順は
+`eject/` を辿る深さの上限（8 段）は OS で絞り込む前に効くため、`--os android` でも深すぎる `eject/ios/...` では止まります。
+UTF-8 でない名前の拒否も、OS の絞り込みより前に効きます。手順は
 `capability-declaration.md` §7 を参照。
+`eject/android/shell/` は殻への重ね置きの入力で、生成物の差し替えではありません（`gen` は見ません。上の「殻の重ね置き」）。
 
 ## 範囲外
 
 - Windows の signtool による署名とパッケージ ID（#1208）
-- Android の殻の重ね置き。追記は Apple の `info-plist`・`entitlements` と Android の宣言・`application-attributes`、設定ファイルの `--eject` が実装済み
+- `versionCode` の設定欄（重ね置きで殻の `app/build.gradle.kts` を置き換えれば上げられる）、`--eject` による殻のファイルの書き出し
 - 既存の `scripts/` を CLI 呼び出しへ寄せること

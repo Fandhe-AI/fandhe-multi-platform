@@ -5,6 +5,8 @@
 //! 殻は `<target_dir>/fandhe/<package>/android/` に置き、gen もその下の `gen/` へ出す（アプリの `gen/` には触れない。
 //! 他 OS の生成物を消さないため）。殻の `app/src` は毎回作り直してから書く（前回の ABI の `.so` や外した設定の
 //! ファイルが APK に混ざらないように）。Gradle の `build/`・`.gradle/` は消さない。
+//! アプリの `eject/android/shell/` は殻を書いたあと cargo-ndk の前に重ねる（同じパスは置き換え、殻に無いファイルは足す）。
+//! `app/src` の外に足したファイルは、重ねた一覧を殻のルートの `.fandhe-overlay` に控え、次回の最初に消す。
 //!
 //! 殻の版（AGP・SDK・minSdk 等）は `platforms/android` と `scripts/android/versions.env` に揃える（`tests/run.rs` が突き合わせる）。
 //! MainActivity は `GameActivity` の継承と `System.loadLibrary(FandheLibrary.NAME)` だけ
@@ -15,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use super::{output_of, Action, App, Env, Op, Options, Os, Step};
-use crate::native::{esc_xml, MAIN_ACTIVITY, SHELL_APPLICATION_ATTRIBUTES};
+use crate::native::{esc_xml, shell_overlay_dir, MAIN_ACTIVITY, SHELL_APPLICATION_ATTRIBUTES};
 
 pub(crate) const AGP_VERSION: &str = "9.3.1";
 pub(crate) const COMPILE_SDK: u32 = 35;
@@ -260,6 +262,12 @@ fn plan(
     let jni = dir.join("app/src/main/jniLibs");
     // 殻のソース（`app/src`。jniLibs を含む）を作り直してから書く。Gradle の `build/`・`.gradle/` は残す。
     let mut ops = vec![
+        // `app/src` の外に重ねたファイル（`google-services.json` 等）は Reset で消えないため、前回の分を控えから消す。
+        // 先頭に置くのは、控えが gen/ 配下を指していても、後の Gen が書き直して生成物を残すため。
+        Op::Prune {
+            dir: dir.to_path_buf(),
+            within: within.clone(),
+        },
         Op::Gen {
             dir: gen_dir.clone(),
             within: within.clone(),
@@ -270,11 +278,20 @@ fn plan(
             within: within.clone(),
         },
     ];
-    for (rel, body) in shell_files(app, id, &gen_dir) {
+    for (rel, body) in shell_files(app, id) {
         ops.push(Op::Write {
             path: dir.join(rel),
             within: within.clone(),
             body,
+        });
+    }
+    // 殻のあと・cargo-ndk の前に、`eject/android/shell/` を殻へ重ねる（同じパスは置き換え、殻に無いものは足す）。
+    if !app.shell_overlay.is_empty() {
+        ops.push(Op::Overlay {
+            from: shell_overlay_dir(&app.dir),
+            to: dir.to_path_buf(),
+            within: within.clone(),
+            files: app.shell_overlay.clone(),
         });
     }
 
@@ -399,11 +416,9 @@ fn shell_manifest(app: &App) -> String {
 }
 
 /// 殻のファイル（殻のルートからの相対パス → 内容）。
-fn shell_files(app: &App, id: &str, gen_dir: &Path) -> Vec<(&'static str, String)> {
-    let gradle = gen_dir
-        .join("android/fandhe.gradle")
-        .to_string_lossy()
-        .replace('\\', "/");
+/// `app/build.gradle.kts` は gen の出力を相対パスで参照する（殻・gen はどちらも殻のルート配下。eject で持ち出しても
+/// target の場所に依らない）。
+fn shell_files(app: &App, id: &str) -> Vec<(&'static str, String)> {
     vec![
         ("settings.gradle.kts", SETTINGS.to_string()),
         (
@@ -463,11 +478,10 @@ android {{
 }}
 
 // 機能 crate の Java・res・Manifest の overlay・Gradle 依存（GameActivity 等）は `cargo fandhe gen` の出力から取り込む。
-apply(from = "{gradle}")
+apply(from = "{GEN_GRADLE}")
 "#,
                 id = kt(id),
                 ver = kt(&app.version),
-                gradle = kt(&gradle),
             ),
         ),
         ("app/src/main/AndroidManifest.xml", shell_manifest(app)),
@@ -485,6 +499,9 @@ apply(from = "{gradle}")
         ),
     ]
 }
+
+/// 殻の `app/` から見た gen の Gradle 設定（殻のルートの `gen/`、`plan` の `Op::Gen` の出力先）。
+const GEN_GRADLE: &str = "../gen/android/fandhe.gradle";
 
 /// `platforms/android/settings.gradle.kts` と同じ解決先（google・mavenCentral・gradlePluginPortal だけ）。
 const SETTINGS: &str = r#"// cargo fandhe run|build が生成。編集しない

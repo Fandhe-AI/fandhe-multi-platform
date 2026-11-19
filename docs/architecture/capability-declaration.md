@@ -384,6 +384,8 @@ cargo fandhe gen --eject ios/Info.plist [--eject ...] [--manifest-path <Cargo.to
   `Cargo.toml` の変更か `cargo clean -p <crate>` で作り直してください
 - `android/` のパスだけを指定した `--eject` は Android の分だけ生成します（iOS の bundle-id が無いアプリでも使えます）
 - `--eject` は値が要り、`--os web`・`check` とは併用できません（終了コード 2）
+- `eject/android/shell/**` は `--eject` の対象ではなく、`run`/`build --os android` が殻へ重ねる入力です（`run-build-cli.md` の Android）。
+  `gen` は見ず、綴り違いの検査にも入れません。`gen/` を含むと `run`/`build` が拒否します
 
 ### 書き出しの安全策
 
@@ -396,7 +398,7 @@ cargo fandhe gen --eject ios/Info.plist [--eject ...] [--manifest-path <Cargo.to
 `CFBundleSupportedPlatforms`（シミュレータか実機かは組み立て時に決まる、#1201）、
 applicationId・compileSdk、`<application>` の属性（バックアップ規則の 2 属性を除く。アプリの `application-attributes` は殻の Manifest にだけ効き、gen は出さない）、拡張の Info.plist の確定値化、
 framework のリンクと Xcode のターゲット（#1212）、Windows の identity（#1208）、`run`/`build` への組み込み（#1201）、
-eject 後の差分検知（生成結果の控えを残さない）、Android の殻の重ね置き、`verify-scope` の Web 対応。
+eject 後の差分検知（生成結果の控えを残さない）、`--eject` による Android の殻のファイルの書き出し、`verify-scope` の Web 対応。
 
 ## 8. 選ばなかった機能の検査（`cargo fandhe verify-scope`）
 
