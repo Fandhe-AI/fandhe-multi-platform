@@ -271,3 +271,58 @@ fn rendering_slider_with_off_step_value_does_not_rewrite_state() {
 
     assert_eq!(harness.state().state().level, 3.0);
 }
+
+/// 表示部品の画面（ProgressBar・Spinner）。
+fn build_display_harness() -> egui_kittest::Harness<'static, StateStore<WidgetState>> {
+    let screen = Screen::<WidgetState>::new("test")
+        .progress_bar(WidgetId::from_raw(1), "進捗", |_| 0.506)
+        .spinner(WidgetId::from_raw(2));
+    egui_kittest::Harness::builder()
+        .with_size(WINDOW_SIZE)
+        .renderer(egui_kittest::wgpu::WgpuTestRenderer::default())
+        .build_ui_state(
+            move |ui, store: &mut StateStore<WidgetState>| {
+                fandhe_render_egui::render_screen(ui, &screen, store);
+            },
+            StateStore::new(WidgetState::default()),
+        )
+}
+
+/// `ProgressBar` と `Spinner` の AX ノードが合成ノードと egui 自前のノードで二重にならず、
+/// それぞれ 1 個ずつ（計 2 個）になる（Issue #1428）。合成ノードは macOS・Android・Windows のみ。
+#[test]
+fn display_widgets_have_single_ax_node() {
+    let _gpu_guard = GPU_SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some(mut harness) = harness_or_skip(build_display_harness) else {
+        return;
+    };
+    // Spinner が再描画を要求し続けるため `run()` ではなく数フレームだけ進める。
+    harness.run_steps(3);
+    let n = harness
+        .query_all_by_role(egui::accesskit::Role::ProgressIndicator)
+        .count();
+    assert_eq!(n, 2);
+}
+
+/// `ProgressBar` の AX は名前がラベルだけ（% を含まない）で、値が四捨五入した数値になる（Issue #1428）。
+#[cfg(any(target_os = "macos", target_os = "android", target_os = "windows"))]
+#[test]
+fn progress_bar_ax_name_is_label_and_value_is_percent() {
+    use egui_kittest::kittest::NodeT;
+    let _gpu_guard = GPU_SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some(mut harness) = harness_or_skip(build_display_harness) else {
+        return;
+    };
+    harness.run_steps(3);
+    // 棒（数値を持つ方）とスピナーの 2 個が出る。
+    let bar = harness
+        .query_all_by_role(egui::accesskit::Role::ProgressIndicator)
+        .find(|n| n.accesskit_node().numeric_value().is_some())
+        .expect("数値を持つ棒が 1 個ある");
+    assert_eq!(bar.accesskit_node().label().as_deref(), Some("進捗"));
+    assert_eq!(bar.accesskit_node().numeric_value(), Some(51.0));
+}

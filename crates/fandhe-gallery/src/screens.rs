@@ -166,6 +166,12 @@ mod tests {
         assert!(registered_names().contains(&"checkbox-list"));
     }
 
+    /// 通常区画（Issue #1428）で登録した display-widgets 画面が現れることを検証する。
+    #[test]
+    fn display_widgets_is_registered() {
+        assert!(registered_names().contains(&"display-widgets"));
+    }
+
     #[test]
     fn confirm_dialog_is_registered() {
         assert!(registered_names().contains(&"confirm_dialog"));

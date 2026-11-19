@@ -106,6 +106,8 @@ pub mod sound_classification_show;
 
 /// Phase 11 の拡充ループ型サンプル「チェックボックス一覧」（親 #1036、Issue #1037）。
 pub mod checkbox_list;
+/// 表示専用部品の確認用画面（Issue #1428）。
+pub mod display_widgets;
 
 /// 一覧の行内に複数の操作を横に並べる例「行の操作」（Issue #1288）。
 pub mod row_actions;

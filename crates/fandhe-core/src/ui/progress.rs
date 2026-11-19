@@ -260,6 +260,11 @@ impl<S: 'static> Widget<S> for ProgressBar<S> {
         Box::new(self.clone())
     }
 
+    /// `fandhe-render-egui` が具象型へ `downcast_ref` して実描画する（Issue #1428）。
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
     /// トークン解決込みの描画列（TASK-8.4-S14）。Display カテゴリの既定マッピング
     /// （`style_tokens::display_style_refs`）を用い、`paint()` と同じ構造を保った
     /// まま色・タイポグラフィのみを解決済み具体値へ差し替える。解決失敗時は
@@ -375,6 +380,11 @@ impl<S: 'static> Widget<S> for Spinner<S> {
 
     fn clone_box(&self) -> Box<dyn Widget<S>> {
         Box::new(self.clone())
+    }
+
+    /// `fandhe-render-egui` が具象型へ `downcast_ref` して実描画する（Issue #1428）。
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
     }
 
     /// トークン解決込みの描画列（TASK-8.4-S14）。[`ProgressBar::paint_styled`] と

@@ -504,10 +504,10 @@ impl<S> Screen<S> {
     /// 型レベルで拒否する（REQ-13）。プログレスは表示専用のため `set` を持たない
     /// （`progress` モジュール doc 参照）。
     ///
-    /// **未配線**: `render_headless` 等は `Node::Widget` を状態非依存のプレースホルダとして
-    /// 扱う契約（[`super::widget::Widget::sync_from_state`] のドキュメンテーションコメント
-    /// 参照）を維持する。状態変更に伴う再描画・イベント処理は未接続。`WidgetCatalog`
-    /// （`catalog.rs` の `progress_bar` エントリ）には登録済み。
+    /// `fandhe-render-egui` は egui の `ProgressBar` で描画する（Issue #1428）。一方
+    /// `render_headless` 等は `Node::Widget` を状態非依存のプレースホルダとして扱う契約
+    /// （[`super::widget::Widget::sync_from_state`] のドキュメンテーションコメント参照）を
+    /// 維持する。`WidgetCatalog`（`catalog.rs` の `progress_bar` エントリ）には登録済み。
     pub fn progress_bar(
         self,
         id: WidgetId,
@@ -528,8 +528,8 @@ impl<S> Screen<S> {
     /// 状態バインディングを持たない（`progress` モジュール doc 参照）ため `get` /
     /// `set` 引数はない。
     ///
-    /// **未配線**: `.progress_bar()` と同様、状態変更に伴う再描画・イベント処理は未接続。
-    /// `WidgetCatalog`（`catalog.rs` の `spinner` エントリ）には登録済み。
+    /// `fandhe-render-egui` は egui の `Spinner` で描画する（Issue #1428。`render_headless`
+    /// 等の契約は `.progress_bar()` と同じ）。`WidgetCatalog`（`catalog.rs` の `spinner` エントリ）には登録済み。
     pub fn spinner(self, id: WidgetId) -> Self
     where
         S: 'static,
@@ -794,8 +794,9 @@ impl<S> Screen<S> {
     /// 構築済みの [`Separator`] を末尾に追加する（TASK-8.3-S60 / REQ-8、Issue #155。
     /// [`Self::card`] と対称のパターン）。
     ///
-    /// **未配線**（`card` モジュール doc 参照）: `render_headless` は
-    /// `Node::Widget` を状態非依存のプレースホルダとして扱う契約を維持する。
+    /// `fandhe-render-egui` は egui の `Separator` で描画する（Issue #1428。縦線は親が横並び
+    /// のときだけで、それ以外は横線）。`render_headless` は `Node::Widget` を状態非依存の
+    /// プレースホルダとして扱う契約（`card` モジュール doc 参照）を維持する。
     /// セパレータは装飾専用で `hit_test` が常に `false` を返すため、状態・イベント
     /// 処理側の対象にもならない。
     pub fn separator(self, separator: Separator<S>) -> Self

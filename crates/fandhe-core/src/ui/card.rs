@@ -625,6 +625,11 @@ impl<S: 'static> Widget<S> for Separator<S> {
     fn clone_box(&self) -> Box<dyn Widget<S>> {
         Box::new(self.clone())
     }
+
+    /// `fandhe-render-egui` が具象型へ `downcast_ref` して実描画する（Issue #1428）。
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
 }
 
 #[cfg(test)]
