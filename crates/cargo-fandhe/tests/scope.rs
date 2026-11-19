@@ -572,3 +572,21 @@ fn app_appended_keys_do_not_clear_frameworks_or_extensions() {
     .unwrap_err();
     assert!(e.contains("CoreNFC") && e.contains("NfcExt.appex"), "{e}");
 }
+
+/// 同じ値を別の未選択機能が plist キーとしても宣言していて、その機能が先に並ぶ場合も、framework の禁止は残る。
+#[test]
+fn app_appended_key_keeps_framework_ban_regardless_of_order() {
+    let (dir, toml) = cap(
+        "aaa",
+        "[package.metadata.fandhe.ios.info-plist]\nCoreNFC = true\n",
+    );
+    let app = format!("{SELECT_CAM}[package.metadata.fandhe-app.ios.info-plist]\nCoreNFC = true\n");
+    let m = make_ws("app-append-order", &app, &[(dir.as_str(), toml)]);
+    let e = check(
+        "ios",
+        &m,
+        &format!("{IOS_CLEAN}Frameworks/CoreNFC.framework/CoreNFC\n"),
+    )
+    .unwrap_err();
+    assert!(e.contains("framework") && e.contains("CoreNFC"), "{e}");
+}
