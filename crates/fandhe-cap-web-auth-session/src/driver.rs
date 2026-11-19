@@ -298,13 +298,14 @@ static EXTERNAL_OWNER: SlotOwner = SlotOwner::new();
 ///
 /// `imp` が `None` のときは OS のセッションを閉じない（Activity の破棄中に OS 層へ戻らないため。Java が自分で閉じる）。
 /// 同じ要求を何度呼んでも 1 度だけ閉じる（`conclude_with` が `ACTIVE` を取り出した側だけが後片付けをする）。
+/// 結果の置き場は受け口と受け取り待ち（公開入口の開始が移した分、[`begin_external`]）の両方から消す。
 fn abandon_screen_request(imp: Option<&dyn WebAuthSession>, request_id: u64) {
     bridge::conclude_with(
         Some(request_id),
         |_| Some(Ok(WebAuthOutcome::Cancelled)),
         imp,
     );
-    let _ = bridge::SLOT.take_ready(request_id);
+    bridge::SLOT.clear(request_id);
     SCREEN_OWNER.release(request_id);
 }
 
@@ -418,7 +419,10 @@ fn drive(
 ///
 /// `req` は呼び出し側が作る（`state`・PKCE・`start_url`。乱数と SHA-256 は [`platform_web_auth_session`] の
 /// `fill_random`・`sha256` を使う）。開始後は [`poll_web_auth`] を呼び続けて結果を 1 度だけ受け取る。
-/// 1 プロセスに 1 要求で、進行中または結果が未取得の要求があるうち（画面の要求を含む）は `Internal` で断る。
+/// 1 プロセスに 1 要求で、進行中の要求（画面の要求を含む）と、自分の結果が未取得のうちは `Internal` で断る。
+/// 画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める（`SlotOwner::begin_parking`、
+/// `consumer-app-structure.md` §8.2）。画面はそのまま受け取り、受け取られない分は画面の次の開始・画面状態の作り直しでの回収・
+/// Activity の破棄（`reclaim_screen_request`）で解放する（残るのは最大 1 件）。
 /// OS が UI を開けなかったときは `Err` で、結果は届かない。
 /// Windows はループバックの受け口を呼び出し側が持ち、受けた URL を [`complete_web_auth_loopback`] へ渡す。非対応 OS は `Unsupported`。
 ///
@@ -440,7 +444,7 @@ fn begin_external(imp: &dyn WebAuthSession, req: AuthRequest) -> Result<u64, Web
         return Err(WebAuthFailure::Unsupported);
     }
     let request_id = EXTERNAL_OWNER
-        .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &EXTERNAL_OWNER])
+        .begin_parking(&bridge::SLOT, &SCREEN_OWNER)
         .ok_or(WebAuthFailure::Internal)?;
     // OS の完了が即座に届いても照合できるよう、開く前に登録する。
     *bridge::lock() = Some(bridge::Active {
@@ -1042,5 +1046,52 @@ mod tests {
         let fake = Fake::new();
         h.frame(&fake);
         assert!(!fake.started.load(Ordering::SeqCst));
+    }
+
+    /// 画面の届いた未取得の結果は、公開入口の開始が捨てずに受け取り待ちへ移し、画面はそのまま受け取る（#1383）。
+    #[test]
+    fn external_begin_parks_unpolled_screen_result_and_screen_receives_it() {
+        let _g = serial();
+        let (mut h, fake) = (Harness::new(), Fake::new());
+        screen::start(&mut h.state);
+        h.frame(&fake);
+        let screen_id = id();
+        bridge::complete_from_os(screen_id, Ok(bridge::RawResult::Url(valid_url())));
+        // 画面がまだ poll していない結果で公開入口が詰まらない。
+        let ext =
+            begin_external(&fake, ext_request()).expect("画面の未取得の結果で busy にならない");
+        assert_ne!(ext, screen_id);
+        assert!(
+            bridge::SLOT
+                .snapshot_of(screen_id)
+                .is_some_and(|r| r.is_some())
+        );
+        // 画面は移された結果をそのまま受け取る（失われた要求の失敗にならない）。
+        h.frame(&fake);
+        assert_eq!(h.state.status, screen::RETURNED_CODE_STATUS);
+        assert!(bridge::SLOT.snapshot_of(screen_id).is_none());
+        assert_eq!(SCREEN_OWNER.current(), 0);
+        // 公開入口の要求は進行中のまま。
+        assert_eq!(poll_external(&fake, ext), None);
+        assert_eq!(EXTERNAL_OWNER.current(), ext);
+    }
+
+    /// 受け取られない受け取り待ちの結果は、画面状態が作り直されて `Idle` に戻ったときの回収で解放される。公開入口の要求は巻き込まない。
+    #[test]
+    fn parked_screen_result_is_released_when_screen_state_is_recreated() {
+        let _g = serial();
+        let (mut old, fake) = (Harness::new(), Fake::new());
+        screen::start(&mut old.state);
+        old.frame(&fake);
+        let screen_id = id();
+        bridge::complete_from_os(screen_id, Ok(bridge::RawResult::Url(valid_url())));
+        let ext = begin_external(&fake, ext_request()).unwrap();
+        let mut fresh = Harness::new();
+        fresh.frame(&fake);
+        assert!(bridge::SLOT.snapshot_of(screen_id).is_none());
+        assert_eq!(SCREEN_OWNER.current(), 0);
+        assert_eq!(EXTERNAL_OWNER.current(), ext);
+        assert!(bridge::SLOT.snapshot_of(ext).is_some());
+        assert!(bridge::lock().as_ref().is_some_and(|a| a.request_id == ext));
     }
 }

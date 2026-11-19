@@ -30,10 +30,10 @@ fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"
 id = "map-view"
 
 [package.metadata.fandhe.ios]
-frameworks = ["MapKit"]
+frameworks = ["CoreLocation", "MapKit"]
 
 [package.metadata.fandhe.macos]
-frameworks = ["MapKit"]
+frameworks = ["CoreLocation", "MapKit"]
 
 [lints]
 workspace = true

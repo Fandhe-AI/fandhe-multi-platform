@@ -204,10 +204,24 @@ pub fn platform_screen_capture() -> &'static dyn ScreenCapturer {
 ))]
 static LAST_TICK: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
 
+/// 公開入口の slot の登録。進行中の要求と、公開側の未取得の結果があれば `None`（busy）。画面側の届いた未取得の結果は
+/// 捨てずに画面の受け取り待ちへ移す（`SlotOwner::begin_parking`、`consumer-app-structure.md` §8.2）。画面は
+/// `poll_and_finish_owned` でそのまま受け取り、受け取られない分は画面の次の開始か slot の reset で解放する（残るのは最大 1 件）。
+#[cfg(any(
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "android"
+))]
+fn begin_public_slot() -> Option<u64> {
+    PUBLIC_OWNER.begin_parking(&bridge::SLOT, &SCREEN_OWNER)
+}
+
 /// 画面に依存しない公開入口（4 OS）。録画を依頼して要求 id を返す。
 /// 結果は [`poll_capture`] で受け取り、止めるときは `platform_screen_capture().stop(id)`。
-/// 依頼自体が失敗したら `Err`（コールバックは来ない）。保留は 1 件だけで、進行中、または結果が届いて未取得の間に
-/// 新しい依頼を出すと `Internal("busy")` で拒否する（置き換えない。画面経由の依頼と slot を共有する）。
+/// 依頼自体が失敗したら `Err`（コールバックは来ない）。保留は 1 件だけで、進行中の依頼（画面経由を含む）と、
+/// 自分の結果が届いて未取得の間に新しい依頼を出すと `Internal("busy")` で拒否する（置き換えない。画面経由の依頼と slot を共有する）。
+/// 画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める（`SlotOwner::begin_parking`）。
 /// 結果は [`poll_capture`] で取り出すか、不要なら [`abandon_capture`] で捨てる（どちらもしないと、再生成まで busy のまま）。
 #[cfg(any(
     target_os = "macos",
@@ -216,10 +230,8 @@ static LAST_TICK: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None
     target_os = "android"
 ))]
 pub fn begin_capture(max_duration: std::time::Duration) -> Result<u64, ScreenCaptureError> {
-    // 進行中の依頼、または未取得の結果（画面側・公開側）があれば置き換えず拒否する（失敗時の clear で既存依頼を壊さない）。
-    let Some(request_id) =
-        PUBLIC_OWNER.begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
-    else {
+    // 進行中の依頼と公開側の未取得の結果は置き換えず拒否する（失敗時の clear で既存依頼を壊さない）。画面側の未取得の結果は受け取り待ちへ移す。
+    let Some(request_id) = begin_public_slot() else {
         return Err(ScreenCaptureError::Internal("busy"));
     };
     match platform_screen_capture().start(request_id, max_duration) {
@@ -273,7 +285,7 @@ pub fn abandon_capture(request_id: u64) -> bool {
 }
 
 /// 公開入口 [`begin_capture`] が追う自分の分の要求。結果が届いて [`poll_capture`] が取り出すまで、
-/// 画面側がその結果を置き換えない（`SCREEN_OWNER` と対称）。
+/// 画面側がその結果を置き換えない（画面側の未取得の結果は、公開入口の開始で画面の受け取り待ちへ移す）。
 #[cfg(any(
     target_os = "macos",
     target_os = "ios",
@@ -452,7 +464,6 @@ mod tests {
     use crate::contract::build_capture_result;
 
     /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
-    #[allow(dead_code)]
     struct NoopWaker;
     impl fandhe_runtime::RepaintWaker for NoopWaker {
         fn wake(&self) {}
@@ -521,9 +532,7 @@ mod tests {
     fn unconsumed_public_result_is_not_replaced_by_screen_or_next_public() {
         let _g = SLOT_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         bridge::reset();
-        let id = PUBLIC_OWNER
-            .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
-            .expect("空き");
+        let id = begin_public_slot().expect("空き");
         // OS の結果が届いて、公開側がまだ取り出していない。
         assert!(bridge::deliver(id, Err(ScreenCaptureError::Cancelled)));
         assert!(
@@ -531,18 +540,10 @@ mod tests {
                 .begin_excluding(&bridge::SLOT, &[&PUBLIC_OWNER])
                 .is_none()
         );
-        assert!(
-            PUBLIC_OWNER
-                .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
-                .is_none()
-        );
+        assert!(begin_public_slot().is_none());
         // 取り出して clear した後は登録できる。
         bridge::SLOT.clear(id);
-        assert!(
-            PUBLIC_OWNER
-                .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
-                .is_some()
-        );
+        assert!(begin_public_slot().is_some());
         bridge::reset();
     }
 
@@ -556,9 +557,7 @@ mod tests {
     fn abandoned_public_result_is_recovered_and_poll_releases_owner() {
         let _g = SLOT_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         bridge::reset();
-        let id = PUBLIC_OWNER
-            .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
-            .expect("空き");
+        let id = begin_public_slot().expect("空き");
         // 録画中は捨てられない。
         assert!(!abandon_capture(id));
         assert!(bridge::deliver(id, Err(ScreenCaptureError::Cancelled)));
@@ -570,9 +569,7 @@ mod tests {
             .expect("回収後は空き");
         // 取り出した場合も印が外れる。
         bridge::reset();
-        let id3 = PUBLIC_OWNER
-            .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &PUBLIC_OWNER])
-            .expect("空き");
+        let id3 = begin_public_slot().expect("空き");
         assert!(bridge::deliver(id3, Err(ScreenCaptureError::Cancelled)));
         assert!(poll_capture(id3).is_some());
         assert_eq!(PUBLIC_OWNER.current(), 0);
@@ -698,5 +695,114 @@ mod tests {
             state.status,
             fandhe_core::screens::screen_capture::UNSUPPORTED_TEXT
         );
+    }
+
+    #[cfg(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "android"
+    ))]
+    fn clear_slot() {
+        bridge::SLOT.reset();
+        SCREEN_OWNER.release(SCREEN_OWNER.current());
+        PUBLIC_OWNER.release(PUBLIC_OWNER.current());
+    }
+
+    /// 画面の届いた未取得の結果は、公開入口の開始が捨てずに受け取り待ちへ移し、画面の poll がそのまま受け取る（#1383）。
+    #[cfg(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "android"
+    ))]
+    #[test]
+    fn public_begin_parks_unpolled_screen_result_and_screen_poll_receives_it() {
+        let _g = SLOT_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        clear_slot();
+        let screen = SCREEN_OWNER
+            .begin_excluding(&bridge::SLOT, &[&PUBLIC_OWNER])
+            .unwrap();
+        assert!(bridge::deliver(
+            screen,
+            Err(ScreenCaptureError::Internal("screen"))
+        ));
+        // 画面が受け取らない結果で公開入口が詰まらない。
+        let public = begin_public_slot().expect("画面の未取得の結果で busy にならない");
+        assert_ne!(public, screen);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let sender = fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
+        fandhe_runtime::request_slot::poll_and_finish_owned(
+            &bridge::SLOT,
+            &SCREEN_OWNER,
+            &sender,
+            |_| panic!("待機にはならない"),
+            |s: &mut u8, o| {
+                *s = if matches!(o, Err(ScreenCaptureError::Internal("screen"))) {
+                    1
+                } else {
+                    2
+                };
+                true
+            },
+            |s: &mut u8| *s = 9,
+        );
+        let mut state = 0u8;
+        rx.try_recv().expect("結果が送られる")(&mut state);
+        assert_eq!(
+            state, 1,
+            "移された画面の結果をそのまま受け取る（lost にならない）"
+        );
+        assert_eq!(SCREEN_OWNER.current(), 0);
+        assert!(bridge::SLOT.snapshot_of(screen).is_none());
+        // 公開入口の要求は進行中のまま残り、結果は公開側の poll が受け取る。
+        assert!(bridge::deliver(public, Err(ScreenCaptureError::Cancelled)));
+        assert!(poll_capture(public).is_some());
+        clear_slot();
+    }
+
+    /// 受け取られない受け取り待ちの結果は、画面の次の開始で解放される。公開側の未取得の結果は画面から守る。
+    #[cfg(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "android"
+    ))]
+    #[test]
+    fn parked_screen_result_is_released_by_next_screen_begin() {
+        let _g = SLOT_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        clear_slot();
+        let screen = SCREEN_OWNER
+            .begin_excluding(&bridge::SLOT, &[&PUBLIC_OWNER])
+            .unwrap();
+        assert!(bridge::deliver(
+            screen,
+            Err(ScreenCaptureError::Internal("screen"))
+        ));
+        let public = begin_public_slot().unwrap();
+        assert!(bridge::SLOT.snapshot_of(screen).is_some());
+        // 進行中の公開入口の要求は画面が置き換えない。
+        assert!(
+            SCREEN_OWNER
+                .begin_excluding(&bridge::SLOT, &[&PUBLIC_OWNER])
+                .is_none()
+        );
+        assert!(bridge::deliver(public, Err(ScreenCaptureError::Cancelled)));
+        assert!(
+            SCREEN_OWNER
+                .begin_excluding(&bridge::SLOT, &[&PUBLIC_OWNER])
+                .is_none(),
+            "公開側の未取得の結果は画面から守る"
+        );
+        assert!(poll_capture(public).is_some());
+        let next = SCREEN_OWNER
+            .begin_excluding(&bridge::SLOT, &[&PUBLIC_OWNER])
+            .unwrap();
+        assert_ne!(next, screen);
+        assert!(
+            bridge::SLOT.snapshot_of(screen).is_none(),
+            "画面の次の開始で解放される"
+        );
+        clear_slot();
     }
 }

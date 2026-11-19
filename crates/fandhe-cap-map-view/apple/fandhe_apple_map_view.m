@@ -26,7 +26,7 @@
 // 失敗が確定し、復帰後に届いた completion は id 照合で捨てる。scale は 1x（traitCollection）に
 // 固定する（ポイントとピクセルを揃えて余分な画素を取らない。RGBA は常に w x h の context へ描く）。
 //
-// 権限・CoreLocation は使わない。座標・NSError の内容・画素はログへ出さない（NSLog 不使用、
+// 権限・位置情報の取得は使わない（CoreLocation は座標の型・関数だけ使う）。座標・NSError の内容・画素はログへ出さない（NSLog 不使用、
 // security.md A09）。実機での表示確認（タイルが取れるか・上下の向き）は #272（人手）。
 
 #import <Foundation/Foundation.h>
