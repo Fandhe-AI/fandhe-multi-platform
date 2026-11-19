@@ -7,7 +7,13 @@ fn main() {
     if target_is_ios() || target_is_macos() {
         compile_objc(
             "apple/fandhe_apple_map_view.m",
-            &[ui_framework(), "CoreGraphics", "Foundation", "MapKit"],
+            &[
+                ui_framework(),
+                "CoreGraphics",
+                "CoreLocation",
+                "Foundation",
+                "MapKit",
+            ],
         );
     }
 }
