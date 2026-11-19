@@ -905,8 +905,7 @@ pub mod wallpaper_set {
     #[allow(dead_code, hidden_glob_reexports)]
     mod driver {}
 }
-// web は対応表で n-a。機能 crate が wasm32 でコンパイルできないため、wasm32 では出さない（Cargo.toml 参照）。
-#[cfg(all(feature = "web-auth-session", not(target_arch = "wasm32")))]
+#[cfg(feature = "web-auth-session")]
 pub mod web_auth_session {
     pub use fandhe_cap_web_auth_session::*;
     #[allow(dead_code, hidden_glob_reexports)]

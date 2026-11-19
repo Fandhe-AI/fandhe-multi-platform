@@ -79,7 +79,8 @@ pub fn take_capture_result(
 
 /// Windows の撮影パネルの状態（表示中の要求 `request_id` のときだけ `Some`）。
 /// `platform_video_capture()` を直接使うアプリが、自前のパネルへ状態を写すための口。
-pub fn capture_panel(request_id: u64) -> Option<PanelPhase> {
+/// 戻り値は本 crate の [`PanelState`] で、画面の状態型（`fandhe_core::screens`）に依存しない。
+pub fn capture_panel(request_id: u64) -> Option<PanelState> {
     bridge()
         .panel()
         .filter(|(id, _)| *id == request_id)
@@ -87,7 +88,8 @@ pub fn capture_panel(request_id: u64) -> Option<PanelPhase> {
 }
 
 /// 撮影パネルの命令（録画の開始・停止・取り消し）を `request_id` の要求へ渡す。Windows 以外は何もしない。
-pub fn send_panel_command(request_id: u64, command: PanelCommand) {
+/// 命令は本 crate の [`PanelOp`] で、画面の状態型に依存しない。
+pub fn send_panel_command(request_id: u64, command: PanelOp) {
     forward_panel_command(request_id, command);
 }
 
@@ -148,8 +150,8 @@ struct Active {
     request_id: u64,
     /// OS が撮影 UI を出し始めたことを `try_begin_present` で記録済みか。
     presenting: bool,
-    /// OS 層が書いた撮影パネルの状態（Windows）。OS を正にして画面へ写す。
-    panel: Option<PanelPhase>,
+    /// OS 層が書いた撮影パネルの状態（Windows）。OS を正にして、画面へは `drive` が [`PanelPhase`] へ写して渡す。
+    panel: Option<PanelState>,
 }
 
 /// 要求の追跡と表示開始の記録。テストが並列で干渉しないよう static から切り出して
@@ -269,7 +271,7 @@ impl Bridge {
 
     /// 撮影パネルの状態を書く。現在の要求で、表示開始を記録済みのときだけ書く（古い id・表示前は捨てる）。
     #[allow(dead_code)] // Windows 以外のビルドでは単体テストだけが呼ぶ。
-    fn set_panel(&self, request_id: u64, panel: Option<PanelPhase>) {
+    fn set_panel(&self, request_id: u64, panel: Option<PanelState>) {
         let mut active = self.lock();
         if let Some(a) = active
             .as_mut()
@@ -280,7 +282,7 @@ impl Bridge {
     }
 
     /// 表示中の要求 id と、その撮影パネルの状態。
-    fn panel(&self) -> Option<(u64, Option<PanelPhase>)> {
+    fn panel(&self) -> Option<(u64, Option<PanelState>)> {
         let active = self.lock();
         active
             .as_ref()
@@ -337,11 +339,11 @@ pub(crate) fn complete_from_os(request_id: u64, result: Outcome) {
 /// OS 層が撮影パネルの状態を書く受け口（Windows。モジュール doc 参照）。
 #[allow(dead_code)]
 pub(crate) fn set_panel(request_id: u64, panel: Option<PanelState>) {
-    bridge().set_panel(request_id, panel.map(panel_phase_from_state));
+    bridge().set_panel(request_id, panel);
 }
 
-/// OS 層の [`PanelState`] を画面の [`PanelPhase`] へ写す（網羅 `match`。バリアントの増減でコンパイルが止まる）。
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+/// 本 crate の [`PanelState`] を画面の [`PanelPhase`] へ写す（網羅 `match`。バリアントの増減でコンパイルが止まる）。
+/// 画面の型との写像は本モジュールの内側だけに置く（`consumer-app-structure.md` §8.1）。
 fn panel_phase_from_state(state: PanelState) -> PanelPhase {
     match state {
         PanelState::Ready => PanelPhase::Ready,
@@ -350,8 +352,7 @@ fn panel_phase_from_state(state: PanelState) -> PanelPhase {
     }
 }
 
-/// 画面の [`PanelCommand`] を OS 層の [`PanelOp`] へ写す（網羅 `match`）。
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+/// 画面の [`PanelCommand`] を本 crate の [`PanelOp`] へ写す（網羅 `match`）。
 fn panel_op_from_command(command: PanelCommand) -> PanelOp {
     match command {
         PanelCommand::Start => PanelOp::Start,
@@ -396,7 +397,7 @@ fn drive(
     sender: &CompletionSender<VideoCaptureShowState>,
     imp: &Arc<dyn VideoCapturer>,
     bridge: &Bridge,
-    forward: fn(u64, PanelCommand),
+    forward: fn(u64, PanelOp),
 ) {
     if let Some(generation) = take_request(state) {
         match bridge.try_begin_screen() {
@@ -430,13 +431,13 @@ fn drive(
     if let Some((g, cmd)) = take_panel_command(state) {
         // 現在の表示中の要求へ渡し、渡した命令を画面から消す。
         if let Some((id, _)) = bridge.panel() {
-            forward(id, cmd);
+            forward(id, panel_op_from_command(cmd));
         }
         let _ = sender.send(Box::new(move |s: &mut VideoCaptureShowState| {
             clear_panel_command(s, g, cmd)
         }));
     }
-    if let Some((_, panel)) = bridge.panel()
+    if let Some(panel) = bridge.panel().map(|(_, p)| p.map(panel_phase_from_state))
         && panel != state.panel
     {
         let _ = sender.send(Box::new(move |s: &mut VideoCaptureShowState| {
@@ -496,9 +497,9 @@ pub fn video_capture_show_effect(
 }
 
 /// 撮影パネルの命令を OS 層へ渡す本番の転送先。Windows 以外にパネルは無い。
-fn forward_panel_command(request_id: u64, command: PanelCommand) {
+fn forward_panel_command(request_id: u64, command: PanelOp) {
     #[cfg(target_os = "windows")]
-    crate::windows::panel_command(request_id, panel_op_from_command(command));
+    crate::windows::panel_command(request_id, command);
     #[cfg(not(target_os = "windows"))]
     let _ = (request_id, command);
 }
@@ -532,11 +533,11 @@ mod tests {
         Box::leak(Box::new(Bridge::new()))
     }
 
-    fn no_forward(_: u64, _: PanelCommand) {}
+    fn no_forward(_: u64, _: PanelOp) {}
 
-    static FORWARDED: Mutex<Vec<(u64, PanelCommand)>> = Mutex::new(Vec::new());
+    static FORWARDED: Mutex<Vec<(u64, PanelOp)>> = Mutex::new(Vec::new());
 
-    fn record_forward(id: u64, cmd: PanelCommand) {
+    fn record_forward(id: u64, cmd: PanelOp) {
         FORWARDED.lock().unwrap().push((id, cmd));
     }
 
@@ -824,17 +825,17 @@ mod tests {
         let bridge = new_bridge();
         let id = bridge.begin();
         // 表示前の書き込みは捨てる
-        bridge.set_panel(id, Some(PanelPhase::Ready));
+        bridge.set_panel(id, Some(PanelState::Ready));
         assert_eq!(bridge.panel(), None);
         assert!(bridge.try_begin_present(id));
         // 古い id は捨てる
-        bridge.set_panel(id + 1, Some(PanelPhase::Ready));
+        bridge.set_panel(id + 1, Some(PanelState::Ready));
         assert_eq!(bridge.panel(), Some((id, None)));
-        bridge.set_panel(id, Some(PanelPhase::Ready));
+        bridge.set_panel(id, Some(PanelState::Ready));
 
         let bridge = new_bridge();
         let (mut state, sender, rx, imp, id) = presenting_screen(bridge);
-        bridge.set_panel(id, Some(PanelPhase::Recording));
+        bridge.set_panel(id, Some(PanelState::Recording));
         drive(&state, &sender, &imp, bridge, no_forward);
         while let Ok(c) = rx.try_recv() {
             c(&mut state);
@@ -846,7 +847,7 @@ mod tests {
     fn panel_command_is_forwarded_with_current_id_and_cleared() {
         let bridge = new_bridge();
         let (mut state, sender, rx, imp, id) = presenting_screen(bridge);
-        bridge.set_panel(id, Some(PanelPhase::Ready));
+        bridge.set_panel(id, Some(PanelState::Ready));
         drive(&state, &sender, &imp, bridge, no_forward);
         while let Ok(c) = rx.try_recv() {
             c(&mut state);
@@ -858,7 +859,7 @@ mod tests {
         while let Ok(c) = rx.try_recv() {
             c(&mut state);
         }
-        assert_eq!(*FORWARDED.lock().unwrap(), vec![(id, PanelCommand::Start)]);
+        assert_eq!(*FORWARDED.lock().unwrap(), vec![(id, PanelOp::Start)]);
         assert_eq!(state.panel_command, None);
     }
 
@@ -866,7 +867,7 @@ mod tests {
     fn cancel_during_panel_is_cancelled_not_failure() {
         let bridge = new_bridge();
         let (mut state, sender, rx, imp, id) = presenting_screen(bridge);
-        bridge.set_panel(id, Some(PanelPhase::Ready));
+        bridge.set_panel(id, Some(PanelState::Ready));
         bridge.complete_from_os(id, Ok(VideoCaptureOutcome::Cancelled));
         pump(&mut state, &sender, &rx, &imp, bridge);
         assert_eq!(state.result, Some(Ok(CoreOutcome::Cancelled)));

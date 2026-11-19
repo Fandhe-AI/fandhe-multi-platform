@@ -320,6 +320,7 @@ fandhe-cap-video-capture = { path = "../fandhe-cap-video-capture", optional = tr
 fandhe-cap-video-transcode = { path = "../fandhe-cap-video-transcode", optional = true }
 fandhe-cap-volume-control = { path = "../fandhe-cap-volume-control", optional = true }
 fandhe-cap-wallpaper-set = { path = "../fandhe-cap-wallpaper-set", optional = true }
+fandhe-cap-web-auth-session = { path = "../fandhe-cap-web-auth-session", optional = true }
 fandhe-cap-wifi-connect = { path = "../fandhe-cap-wifi-connect", optional = true }
 fandhe-cap-wifi-info = { path = "../fandhe-cap-wifi-info", optional = true }
 fandhe-cap-window-management = { path = "../fandhe-cap-window-management", optional = true }
@@ -348,10 +349,6 @@ web-sys = { workspace = true, optional = true, features = [
     "console",
 ] }
 console_error_panic_hook = { workspace = true, optional = true }
-
-# web は対応表で n-a（専用 API の概念がない）。機能 crate が wasm32 でコンパイルできないため、wasm32 では依存させない。
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-fandhe-cap-web-auth-session = { path = "../fandhe-cap-web-auth-session", optional = true }
 
 [lints]
 workspace = true

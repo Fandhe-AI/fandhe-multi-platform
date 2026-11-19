@@ -14,7 +14,7 @@
 //! （選んでいないアプリへ url-scheme の受信箱を持ち込まない）。Android は `WebAuthSessionLifecycle`（非公開 provider）が
 //! `onNewIntent` のリスナーと Paused / Resumed を受け、`fandhe://web-auth` のコールバックを確定する。同じ filter を宣言する
 //! url-scheme 側は、コールバックを受信箱へ流さない（`UrlSchemeHelper.deliver` が同じ条件で除外。code・state を別画面に出さない）。
-//! `shutdown` は `fandhe-gallery` が終了時に呼ぶ。Activity 再生成では要求を引き継ぎ（Java が状態を static に持ち、結果は新しい Activity の `onNewIntent` へ届く）、呼び出し側の掃除は要らない。
+//! `shutdown` は入口 crate `fandhe` の終了処理（`src/entry/lifecycle.rs`）が呼ぶ。Activity 再生成では要求を引き継ぎ（Java が状態を static に持ち、結果は新しい Activity の `onNewIntent` へ届く）、呼び出し側の掃除は要らない。
 //!
 //! 守る範囲: 1 プロセス内で 1 件ずつ処理すること、嘘の成功を出さないこと、期限・取り消し・終了でサーバーと OS のセッションを残さないこと、
 //! 秘密値（URL・state・code）をログと `Debug` に出さないこと。
