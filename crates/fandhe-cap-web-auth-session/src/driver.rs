@@ -244,7 +244,8 @@ fn setup(imp: &dyn WebAuthSession, request_id: u64) -> Result<bridge::Active, We
     use fandhe_device::url_scheme::SCHEME;
 
     // wasm32（web は対応表で n-a）では断る。`Instant::now()` が wasm32-unknown-unknown では実行時に panic し、
-    // デモ認可サーバー（TCP の待ち受け）も動かないため、時計と slot に触れる前に返す。
+    // デモ認可サーバー（TCP の待ち受け）も動かないため、時計に触れる前に返す（slot は `drive` が確保済みで、
+    // 既存の失敗経路が結果を置いて解放する）。
     if cfg!(target_arch = "wasm32") {
         return Err(WebAuthFailure::Unsupported);
     }
