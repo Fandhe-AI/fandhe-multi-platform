@@ -148,7 +148,6 @@ pub(crate) mod bridge {
     /// 画面へ反映する完了結果（`super::to_outcome` 後の形）。
     pub(crate) type Outcome = Result<CoreShareOutcome, String>;
 
-    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
     /// 画面 effect が追う自分の分の要求。
     pub(crate) static SCREEN_OWNER: SlotOwner = SlotOwner::new();
@@ -162,15 +161,15 @@ pub(crate) mod bridge {
         SCREEN_OWNER.begin_replacing(&SLOT, &[&PUBLIC_OWNER])
     }
 
-    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     /// 公開入口の開始。進行中の要求と、自分の未取得の結果があれば `None`（busy）。画面側の届いた未取得の結果は
     /// 捨てずに画面の受け取り待ちへ移す（`SlotOwner::begin_parking`。受け取られない分は画面の次の開始で解放、残るのは最大 1 件）。
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     pub(crate) fn begin_public() -> Option<u64> {
         PUBLIC_OWNER.begin_parking(&SLOT, &SCREEN_OWNER)
     }
 
-    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     /// 公開入口の依頼自体が失敗したときの後片付け（結果は届かないので slot と印を空ける）。
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     pub(crate) fn abort_public(request_id: u64) {
         SLOT.clear(request_id);
         PUBLIC_OWNER.release(request_id);
@@ -188,10 +187,10 @@ pub(crate) mod bridge {
             })
     }
 
-    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     /// [`super::poll_share_sheet`] の本体。持ち主が `request_id` のときだけ見る。結果待ちの間は `on_waiting` を
     /// 呼ぶ（Windows のキャンセル検知）。届いていれば 1 度だけ `Some` で持ち主を外す。slot の要求が失われた
     /// （別の要求に替わった・消えた）ときは `Err(Internal)` を 1 度だけ返す。
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     pub(crate) fn poll_public(
         request_id: u64,
         on_waiting: impl FnOnce(u64),
@@ -217,10 +216,10 @@ pub(crate) mod bridge {
         Some(Err(ShareSheetError::Internal))
     }
 
-    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     /// [`super::discard_share_sheet`] の本体。持ち主が `request_id` のときだけ、slot の記録と持ち主を外して `true`。
     /// 共有 UI は閉じない。Windows の共有 UI は閉じた通知が無く、捨てた要求を観測し続ける口も無いため、進行中でも
     /// 記録を消す（後から届く `TargetApplicationChosen` は id の照合で捨てる）。
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     pub(crate) fn discard_public(request_id: u64) -> bool {
         let _guard = PUBLIC_POLL_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         if request_id == 0 || PUBLIC_OWNER.current() != request_id {

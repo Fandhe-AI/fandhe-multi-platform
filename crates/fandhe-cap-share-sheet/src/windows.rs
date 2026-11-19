@@ -155,7 +155,7 @@ pub(crate) fn present(request_id: u64, request: &ShareRequest) -> Result<(), Sha
         });
     });
 
-    // SAFETY: `hwnd` の生存根拠は上と同じ。`interop` も同一の有効な COM ポインタ。
+    // SAFETY: `hwnd` の根拠は上と同じ。`interop` も同一の有効な COM ポインタ。
     unsafe { interop.ShowShareUIForWindow(hwnd) }.map_err(|_| ShareSheetError::Internal)
 }
 
