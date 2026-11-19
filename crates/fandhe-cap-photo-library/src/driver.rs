@@ -124,7 +124,7 @@ fn begin_public_slot() -> Option<u64> {
 /// （macOS・iOS・Android）。
 ///
 /// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。1 プロセスに 1 要求で、
-/// 進行中の要求（画面を含む）と、自分の結果が未取得のうちは `Internal`（busy）で断る（画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める。[`begin_public_slot`]）。
+/// 進行中の要求（画面を含む）と、自分の結果が未取得のうちは `Internal`（busy）で断る（画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める。`SlotOwner::begin_parking`）。
 /// 依頼自体の失敗は `Err`（結果は届かない）。
 /// Windows は同期の [`platform_photo_library`] を使う。Linux は `Unsupported`。
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
@@ -431,15 +431,12 @@ mod bridge_tests {
     }
 
     /// 起床を捨てるだけの waker（受け取り待ちのテストは受信側で完了を直接確かめる）。
-    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     struct ParkNoopWaker;
-    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     impl fandhe_runtime::RepaintWaker for ParkNoopWaker {
         fn wake(&self) {}
         fn wake_after(&self, _delay: std::time::Duration) {}
     }
 
-    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     fn clear_slot() {
         bridge::SLOT.reset();
         SCREEN_OWNER.release(SCREEN_OWNER.current());
@@ -447,7 +444,6 @@ mod bridge_tests {
     }
 
     /// 画面の届いた未取得の結果は、公開入口の開始が捨てずに受け取り待ちへ移し、画面の poll がそのまま受け取る（#1383）。
-    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     #[test]
     fn public_begin_parks_unpolled_screen_result_and_screen_poll_receives_it() {
         let _g = SLOT_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -492,7 +488,6 @@ mod bridge_tests {
     }
 
     /// 受け取られない受け取り待ちの結果は、画面の次の開始で解放される。公開側の未取得の結果は画面から守る。
-    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     #[test]
     fn parked_screen_result_is_released_by_next_screen_begin() {
         let _g = SLOT_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());

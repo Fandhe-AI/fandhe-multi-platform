@@ -393,7 +393,7 @@ fn begin_public_slot() -> Option<u64> {
 /// （iOS・macOS・Windows・Android）。
 ///
 /// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。1 プロセスに 1 要求で、
-/// 進行中の要求（画面を含む）と、自分の結果が未取得のうちは `Internal`（busy）で断る（画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める。[`begin_public_slot`]）。
+/// 進行中の要求（画面を含む）と、自分の結果が未取得のうちは `Internal`（busy）で断る（画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める。`SlotOwner::begin_parking`）。
 /// 依頼自体の失敗は `Err`（結果は届かない）。
 /// それ以外の OS は `Unsupported`。
 #[cfg(any(
@@ -661,25 +661,6 @@ mod tests {
         assert!(poll_lan_discovery(public).is_some());
     }
 
-    /// 起床を捨てるだけの waker（受け取り待ちのテストは受信側で完了を直接確かめる）。
-    #[cfg(any(
-        target_os = "ios",
-        target_os = "macos",
-        target_os = "windows",
-        target_os = "android"
-    ))]
-    struct ParkNoopWaker;
-    #[cfg(any(
-        target_os = "ios",
-        target_os = "macos",
-        target_os = "windows",
-        target_os = "android"
-    ))]
-    impl fandhe_runtime::RepaintWaker for ParkNoopWaker {
-        fn wake(&self) {}
-        fn wake_after(&self, _delay: std::time::Duration) {}
-    }
-
     /// slot・持ち主は static のため、slot を使うテストを直列にする。
     #[cfg(any(
         target_os = "ios",
@@ -723,7 +704,7 @@ mod tests {
         let public = begin_public_slot().expect("画面の未取得の結果で busy にならない");
         assert_ne!(public, screen);
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(ParkNoopWaker));
+        let sender = fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
         fandhe_runtime::request_slot::poll_and_finish_owned(
             &bridge::SLOT,
             &SCREEN_OWNER,

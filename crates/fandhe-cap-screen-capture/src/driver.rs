@@ -221,7 +221,7 @@ fn begin_public_slot() -> Option<u64> {
 /// 結果は [`poll_capture`] で受け取り、止めるときは `platform_screen_capture().stop(id)`。
 /// 依頼自体が失敗したら `Err`（コールバックは来ない）。保留は 1 件だけで、進行中の依頼（画面経由を含む）と、
 /// 自分の結果が届いて未取得の間に新しい依頼を出すと `Internal("busy")` で拒否する（置き換えない。画面経由の依頼と slot を共有する）。
-/// 画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める（[`begin_public_slot`]）。
+/// 画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める（`SlotOwner::begin_parking`）。
 /// 結果は [`poll_capture`] で取り出すか、不要なら [`abandon_capture`] で捨てる（どちらもしないと、再生成まで busy のまま）。
 #[cfg(any(
     target_os = "macos",
@@ -285,7 +285,7 @@ pub fn abandon_capture(request_id: u64) -> bool {
 }
 
 /// 公開入口 [`begin_capture`] が追う自分の分の要求。結果が届いて [`poll_capture`] が取り出すまで、
-/// 画面側がその結果を置き換えない（`SCREEN_OWNER` と対称）。
+/// 画面側がその結果を置き換えない（画面側の未取得の結果は、公開入口の開始で画面の受け取り待ちへ移す）。
 #[cfg(any(
     target_os = "macos",
     target_os = "ios",
@@ -698,25 +698,6 @@ mod tests {
         );
     }
 
-    /// 起床を捨てるだけの waker（受け取り待ちのテストは受信側で完了を直接確かめる）。
-    #[cfg(any(
-        target_os = "ios",
-        target_os = "macos",
-        target_os = "windows",
-        target_os = "android"
-    ))]
-    struct ParkNoopWaker;
-    #[cfg(any(
-        target_os = "ios",
-        target_os = "macos",
-        target_os = "windows",
-        target_os = "android"
-    ))]
-    impl fandhe_runtime::RepaintWaker for ParkNoopWaker {
-        fn wake(&self) {}
-        fn wake_after(&self, _delay: std::time::Duration) {}
-    }
-
     #[cfg(any(
         target_os = "ios",
         target_os = "macos",
@@ -751,7 +732,7 @@ mod tests {
         let public = begin_public_slot().expect("画面の未取得の結果で busy にならない");
         assert_ne!(public, screen);
         let (tx, rx) = std::sync::mpsc::channel();
-        let sender = fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(ParkNoopWaker));
+        let sender = fandhe_runtime::CompletionSender::new(tx, std::sync::Arc::new(NoopWaker));
         fandhe_runtime::request_slot::poll_and_finish_owned(
             &bridge::SLOT,
             &SCREEN_OWNER,

@@ -203,7 +203,7 @@ fn begin_public_slot() -> Option<u64> {
 /// 地図スナップショットを依頼し、結果を [`poll_map_snapshot`] で受け取るための要求 id を返す（macOS・iOS）。
 ///
 /// 画面の状態型に依存しない非同期の入口で、フレームワークの外のアプリも使える。1 プロセスに 1 要求で、
-/// 進行中の要求（画面を含む）と、自分の結果が未取得のうちは `Internal`（busy）で断る（画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める。[`begin_public_slot`]）。
+/// 進行中の要求（画面を含む）と、自分の結果が未取得のうちは `Internal`（busy）で断る（画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める。`SlotOwner::begin_parking`）。
 /// 結果は [`poll_map_snapshot`] で
 /// 取り出す（取り出さないと busy のまま）。オフライン・期限切れ等の失敗も結果として届く。
 /// それ以外の OS は `Unsupported`。
@@ -492,19 +492,15 @@ mod bridge_tests {
     }
 
     /// 起床を捨てるだけの waker（受け取り待ちのテストは受信側で完了を直接確かめる）。
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
     struct ParkNoopWaker;
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
     impl fandhe_runtime::RepaintWaker for ParkNoopWaker {
         fn wake(&self) {}
         fn wake_after(&self, _delay: std::time::Duration) {}
     }
 
     /// slot・持ち主は static のため、slot を使うテストを直列にする。
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
     static SLOT_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
     fn clear_slot() {
         bridge::SLOT.reset();
         SCREEN_OWNER.release(SCREEN_OWNER.current());
@@ -512,7 +508,6 @@ mod bridge_tests {
     }
 
     /// 画面の届いた未取得の結果は、公開入口の開始が捨てずに受け取り待ちへ移し、画面の poll がそのまま受け取る（#1383）。
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
     #[test]
     fn public_begin_parks_unpolled_screen_result_and_screen_poll_receives_it() {
         let _g = SLOT_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
@@ -562,7 +557,6 @@ mod bridge_tests {
     }
 
     /// 受け取られない受け取り待ちの結果は、画面の次の開始で解放される。公開側の未取得の結果は画面から守る。
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
     #[test]
     fn parked_screen_result_is_released_by_next_screen_begin() {
         let _g = SLOT_SERIAL.lock().unwrap_or_else(|e| e.into_inner());

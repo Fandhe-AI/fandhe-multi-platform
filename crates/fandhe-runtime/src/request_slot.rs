@@ -98,7 +98,7 @@ impl<O> RequestSlot<O> {
     /// [`RequestSlot::try_begin`] に加え、結果が届いて未取得の要求の id が `keep` を満たすときも `None`
     /// （その結果の持ち主がまだ取り出していないため、置き換えて落とさない）。判定と登録は同じロックで行う。
     pub fn try_begin_unless(&self, keep: impl FnOnce(u64) -> bool) -> Option<u64> {
-        self.register_unless(|id, in_flight| in_flight || keep(id), |_| false, None)
+        self.register_unless(|id, in_flight| in_flight || keep(id), |_| false, None, None)
     }
 
     /// 登録済みの要求の id が `foreign` を満たす（他の持ち主の要求）ときだけ `None`、それ以外は置き換えて登録する。
@@ -106,11 +106,12 @@ impl<O> RequestSlot<O> {
     /// 他の持ち主の進行中の要求・未取得の結果を落とさず、自分の再要求は前の要求を置き換える型に使う。
     /// 判定と登録は同じロックで行う。
     pub fn begin_unless_foreign(&self, foreign: impl FnOnce(u64) -> bool) -> Option<u64> {
-        self.register_unless(|id, _| foreign(id), |_| false, None)
+        self.register_unless(|id, _| foreign(id), |_| false, None, None)
     }
 
     /// 登録済みの要求（id・進行中か）が `refuse` を満たせば `None`、満たさなければ採番して登録し、
-    /// 同じロックの内側で `owner` に持ち主の印を付ける。登録から印付けまでの間に相手方が判定して、印の無い要求として
+    /// 同じロックの内側で `owner` に持ち主の印を付ける。`fixed_id` があれば採番せずその id で登録する
+    /// （採番はその次まで進める。[`RequestSlot::begin_with`] と同じ前提）。登録から印付けまでの間に相手方が判定して、印の無い要求として
     /// 置き換えることが起きない。
     ///
     /// 置き換える要求の結果が届いていて `park` を満たせば、捨てずに受け取り待ち（`parked`）へ移す（前の受け取り待ちは捨てる）。
@@ -121,6 +122,7 @@ impl<O> RequestSlot<O> {
         refuse: impl FnOnce(u64, bool) -> bool,
         park: impl FnOnce(u64) -> bool,
         owner: Option<&SlotOwner>,
+        fixed_id: Option<u64>,
     ) -> Option<u64> {
         let mut evicted: [Option<Pending<O>>; 2] = [None, None];
         let mut inner = self.lock();
@@ -137,7 +139,14 @@ impl<O> RequestSlot<O> {
         {
             evicted[0] = inner.parked.take();
         }
-        let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
+        let request_id = match fixed_id {
+            Some(id) => {
+                self.next_request_id
+                    .fetch_max(id.saturating_add(1), Ordering::Relaxed);
+                id
+            }
+            None => self.next_request_id.fetch_add(1, Ordering::Relaxed),
+        };
         let old = inner.current.replace(Pending {
             request_id,
             ready: None,
@@ -309,7 +318,7 @@ impl SlotOwner {
     /// 進行中の要求が無いときだけ登録して `request_id` を返し、自分の分として覚える。
     /// 先行（公開入口・別の画面要求）が進行中なら `None`（置き換えない）。呼び出し側は画面へ「処理中」の失敗を返す。
     pub fn begin<O>(&self, slot: &RequestSlot<O>) -> Option<u64> {
-        slot.register_unless(|_, in_flight| in_flight, |_| false, Some(self))
+        slot.register_unless(|_, in_flight| in_flight, |_| false, Some(self), None)
     }
 
     /// 持ち主の印を付ける。登録と同じ slot のロックの内側から呼ぶ（[`RequestSlot::register_unless`]）。
@@ -324,6 +333,7 @@ impl SlotOwner {
             |id, in_flight| in_flight || others.iter().any(|o| o.current() == id),
             |_| false,
             Some(self),
+            None,
         )
     }
 
@@ -335,6 +345,7 @@ impl SlotOwner {
             |id, _| foreign.iter().any(|o| o.current() == id),
             |_| false,
             Some(self),
+            None,
         )
     }
 
@@ -345,6 +356,7 @@ impl SlotOwner {
             |id, in_flight| in_flight || id != self.current(),
             |_| false,
             Some(self),
+            None,
         )
     }
 
@@ -360,7 +372,26 @@ impl SlotOwner {
             |id, in_flight| in_flight || id == self.current(),
             |id| id == screen.current(),
             Some(self),
+            None,
         )
+    }
+
+    /// [`SlotOwner::begin_parking`] の呼び出し側の id 版。採番せず `request_id` で登録する（フレームワーク外のアプリが
+    /// 自分の id で OS 実装を直接呼ぶ公開入口用）。判定・退避は `begin_parking` と同じで、登録できなければ `false`。
+    /// `request_id` の検査（0 でない・使用済みでない・`i64::MAX` 以下）は呼び出し側が行う。
+    pub fn begin_parking_with<O>(
+        &self,
+        slot: &RequestSlot<O>,
+        screen: &SlotOwner,
+        request_id: u64,
+    ) -> bool {
+        slot.register_unless(
+            |id, in_flight| in_flight || id == self.current(),
+            |id| id == screen.current(),
+            Some(self),
+            Some(request_id),
+        )
+        .is_some()
     }
 
     /// 既に登録済みの `request_id`（`slot.begin()` の戻り値等）を自分の分として覚える。
@@ -843,6 +874,29 @@ mod tests {
         assert!(slot.deliver(orphan, 2));
         public.begin_parking(&slot, &screen).unwrap();
         assert_eq!(slot.snapshot_of(orphan), None);
+    }
+
+    /// 呼び出し側の id 版も同じ判定・退避で、指定した id で登録し採番をその次へ進める。
+    #[test]
+    fn begin_parking_with_uses_caller_id_and_parks_screen_result() {
+        let slot: RequestSlot<u8> = RequestSlot::new();
+        let (screen, public) = (SlotOwner::new(), SlotOwner::new());
+        let s = screen.begin_keeping_foreign(&slot).unwrap();
+        // 進行中は断る。
+        assert!(!public.begin_parking_with(&slot, &screen, 50));
+        assert!(slot.deliver(s, 1));
+        assert!(public.begin_parking_with(&slot, &screen, 50));
+        assert_eq!(public.current(), 50);
+        assert_eq!(
+            slot.snapshot_of(s),
+            Some(Some(1)),
+            "画面の結果は受け取り待ちへ"
+        );
+        assert!(slot.deliver(50, 2));
+        // 自分の未取得の結果があれば断る。
+        assert!(!public.begin_parking_with(&slot, &screen, 60));
+        assert_eq!(slot.take_ready(50), Some(2));
+        assert_eq!(slot.begin(), 51, "採番は指定 id の次から");
     }
 
     #[test]
