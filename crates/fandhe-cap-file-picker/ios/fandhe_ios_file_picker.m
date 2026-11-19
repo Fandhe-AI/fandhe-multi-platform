@@ -207,6 +207,7 @@ int32_t fandhe_ios_file_picker_pick(uint64_t requestId) {
         // 判定は delegate の有無ではなく OS の観測（picker の提示状態）で行う: 完了通知で delegate を解放した直後も、
         // picker は dismiss が終わるまで提示中のままで、その上へ present すると失敗してコールバックが来ない。
         // picker が解放済み（weak が nil）・dismiss 済みなら進行中ではなく、永久に busy にはならない。
+        // `isBeingPresented` が提示の直後に立つ保証は文書に無い（立てば断る、立たなくても他の 2 条件と同じ扱い）。
         UIDocumentPickerViewController *active = g_activePicker;
         if (active != nil && (active.presentingViewController != nil || active.isBeingPresented || active.isBeingDismissed)) {
             fandhe_rust_file_picker_outcome(requestId, 3, NULL, 0);
