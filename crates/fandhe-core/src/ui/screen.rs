@@ -910,6 +910,12 @@ impl<S> Screen<S> {
                     Self::visit_node_windowed(&child, state, range, f);
                 }
             }
+            // `Row`（Issue #1288）は評価済みの子を持つ。`expand_children` と同じく全部辿る。
+            Node::Row { children, .. } => {
+                for child in children {
+                    Self::visit_node_windowed(child, state, range, f);
+                }
+            }
             _ => {}
         }
     }
@@ -977,6 +983,8 @@ mod tests {
                 Node::StyledText { .. } => "styled_text",
                 Node::Button { .. } => "button",
                 Node::IndexedButton { .. } => "indexed_button",
+                Node::CellButton { .. } => "cell_button",
+                Node::Row { .. } => "row",
                 Node::List { .. } => "list",
                 Node::VirtualList { .. } => "virtual_list",
                 // 本テストは TASK-8.3-S2 時点で `Widget` を使わない
@@ -1108,6 +1116,8 @@ mod tests {
                 Node::StyledText { .. } => "styled_text",
                 Node::Button { .. } => "button",
                 Node::IndexedButton { .. } => "indexed_button",
+                Node::CellButton { .. } => "cell_button",
+                Node::Row { .. } => "row",
                 Node::List { .. } => "list",
                 Node::VirtualList { .. } => "virtual_list",
                 // 本テストは TASK-8.3-S2 時点で `Widget` を使わない
@@ -1527,5 +1537,31 @@ mod tests {
             Some(Node::Widget(_)) => {}
             _ => panic!("Widget バリアントであるべき"),
         }
+    }
+
+    /// `visit_windowed` が `Row` の子を辿る（Issue #1288）。
+    #[test]
+    fn visit_windowed_descends_into_row() {
+        let screen: Screen<CounterState> = Screen::new("r").with_node(Node::Row {
+            children: vec![
+                Node::Text("a".to_string()),
+                Node::Button {
+                    label: "b".to_string(),
+                    on_click,
+                    id: super::super::widget::WidgetId::from_raw(1),
+                },
+            ],
+            tap: None,
+        });
+        let mut kinds = Vec::new();
+        screen.visit_windowed(&CounterState { count: 0 }, &(0..0), |n| {
+            kinds.push(match n {
+                Node::Row { .. } => "row",
+                Node::Text(_) => "text",
+                Node::Button { .. } => "button",
+                _ => "other",
+            })
+        });
+        assert_eq!(kinds, vec!["row", "text", "button"]);
     }
 }

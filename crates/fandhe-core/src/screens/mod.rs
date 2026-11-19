@@ -107,6 +107,9 @@ pub mod sound_classification_show;
 /// Phase 11 の拡充ループ型サンプル「チェックボックス一覧」（親 #1036、Issue #1037）。
 pub mod checkbox_list;
 
+/// 一覧の行内に複数の操作を横に並べる例「行の操作」（Issue #1288）。
+pub mod row_actions;
+
 /// Phase 11 の拡充ループ型サンプル「バックグラウンド処理」（親 #1042、Issue #1043）。
 pub mod background_task;
 

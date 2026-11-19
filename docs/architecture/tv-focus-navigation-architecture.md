@@ -76,10 +76,10 @@ L215〜223）の受け入れ基準 1「独自レンダラ方式でのフォー�
 以下の条件をすべて満たす `Node<S>` を「フォーカス可能」と定義する（v1 スコープ。除外対象と理由は
 下記参照）。
 
-- **`Node::Button` または `Node::IndexedButton` であること**。決定ボタン押下時に 5 節の
+- **`Node::Button`・`Node::IndexedButton`・`Node::CellButton`（Issue #1288）のいずれかであること**。決定ボタン押下時に 5 節の
   `activate_focus_at`（`click_button_at` の id 版、5 節参照）がそのまま解決できる葉ノードに限定する。
-- `Node::Text` / `Node::List` / `Node::VirtualList` 自身（コンテナ・静的テキスト）はフォーカス不可とする。
-  ただし `List` / `VirtualList` の**展開結果の子ノード**は、上記条件（`Button`/`IndexedButton`）を
+- `Node::Text` / `Node::List` / `Node::VirtualList` / `Node::Row` 自身（コンテナ・静的テキスト。`Row` は横向きの入れ物）はフォーカス不可とする。
+  ただし `List` / `VirtualList` の**展開結果の子ノード**は、上記条件（`Button`/`IndexedButton`/`CellButton`）を
   満たせばフォーカス可能である。
 
 **型変更**: `Node::Button` / `Node::IndexedButton` へ

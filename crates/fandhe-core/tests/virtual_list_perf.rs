@@ -83,6 +83,8 @@ fn visit_node_for_work(node: &Node<PerfState>, state: &PerfState, out: &mut Vec<
         Node::TextField { label, get, .. } => out.push(format!("[{}: {}]", label, get(state))),
         Node::Button { label, .. } => out.push(format!("({label})")),
         Node::IndexedButton { label, .. } => out.push(format!("({label})")),
+        // 本テストは `Row` / `CellButton`（Issue #1288）を使わない。
+        Node::CellButton { .. } | Node::Row { .. } => {}
         Node::List { .. } => {}
         // 本テストは `ListRecycler` 経由でウィンドウ経路を測定するため
         // `Node::VirtualList` を直接使わない（本ファイルのスコープ外）。

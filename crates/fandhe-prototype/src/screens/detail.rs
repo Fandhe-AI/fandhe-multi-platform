@@ -77,6 +77,9 @@ mod tests {
                 // （動的生成子の対話ノードは未追加）。到達しないはずの分岐だが、
                 // 網羅性のために明示する。
                 Node::IndexedButton { label, .. } => label.as_str(),
+                // `Row` / `CellButton`（Issue #1288）も使わない。網羅性のために明示する。
+                Node::CellButton { label, .. } => label.as_str(),
+                Node::Row { .. } => "row",
                 Node::Text(_) => "text",
                 // 本プロトタイプ画面は Issue #581 時点で `DynamicText` を使わない
                 // （動的テキストは未導入）。到達しないはずの分岐だが、網羅性のために明示する。

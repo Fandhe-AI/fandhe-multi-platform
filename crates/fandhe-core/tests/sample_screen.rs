@@ -34,6 +34,8 @@ fn sample_screen_includes_text_button_and_list() {
         // `sample_screen()` は `IndexedButton`（動的生成子の対話ノード）を使わない
         // （Issue #491 のスコープ）。到達しないはずの分岐だが、網羅性のために明示する。
         Node::IndexedButton { .. } => {}
+        // `Row` / `CellButton`（Issue #1288）も使わない。
+        Node::CellButton { .. } | Node::Row { .. } => {}
         Node::List { .. } => list_count += 1,
         // `sample_screen()` は `VirtualList` を使わない（TASK-1.1-S6 由来の代表画面の
         // スコープ外）。到達しないはずの分岐として明示するが、`unreachable!()` には

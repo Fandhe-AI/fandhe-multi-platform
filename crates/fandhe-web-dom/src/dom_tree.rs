@@ -17,7 +17,9 @@
 //! | `Node::StyledText`（Issue #812） | `Error` → `p role="alert" class="fandhe-text-error"`、`Body` → `p`（#814） |
 //! | `Node::TextField` | `label` + `input`（`value` 属性は `get(state)`） |
 //! | `Node::Button` | `button` |
-//! | `Node::List` | `ul`（子要素は `li` でラップし、ネストした `List` も再帰的に `ul` へ） |
+//! | `Node::IndexedButton` / `Node::CellButton`（Issue #491・#1288） | `button`（イベントは未配線） |
+//! | `Node::List` | `ul`（子要素は `li` でラップし、ネストした `List` も再帰的に `ul` へ。軸が縦以外のときだけ flex / grid の style） |
+//! | `Node::Row`（Issue #1288） | `div.fandhe-row`（`display:flex`。子は順に並ぶ） |
 //! | `Node::Widget(Checkbox)` | `label` + `input type="checkbox"`（Issue #993） |
 //! | `Node::Widget(ToggleSwitch)` | `label` + `input type="checkbox" role="switch"`（Issue #993） |
 //! | `Node::Widget(Slider)` | `label` + `input type="range"`（Issue #993） |
@@ -198,6 +200,23 @@ pub fn render<S: 'static>(screen: &Screen<S>, state: &S, mount_id: u64) -> Rende
     }
 }
 
+/// `ul` に `axis` の並びを style で付ける（Issue #1288）。縦（既定）は属性なしのまま。
+/// `li` の中身は 1 子なので、`ul` を flex / grid にすれば子が横・格子に並ぶ。
+fn axis_styled(mut ul: DomNode, axis: fandhe_core::Axis) -> DomNode {
+    let style = match axis {
+        fandhe_core::Axis::Vertical => return ul,
+        fandhe_core::Axis::Horizontal => {
+            "display:flex;flex-direction:row;list-style:none;padding:0".to_string()
+        }
+        fandhe_core::Axis::Grid { columns } => format!(
+            "display:grid;grid-template-columns:repeat({},auto);list-style:none;padding:0",
+            columns.max(1)
+        ),
+    };
+    ul.attrs.push(("style".to_string(), style));
+    ul
+}
+
 /// 1 つの `Node<S>` を `DomNode` へ変換する（深さ優先の再帰本体）。
 ///
 /// `List` は [`fandhe_core::Node::expand_children`] で 1 段展開し、各子ノードを
@@ -266,8 +285,8 @@ fn convert_node<S: 'static>(
                 event_hook: Some(EventHook::Click { handler_index }),
             }
         }
-        Node::IndexedButton { label, .. } => {
-            // 動的生成子内のボタン（Issue #491）。
+        Node::IndexedButton { label, .. } | Node::CellButton { label, .. } => {
+            // 動的生成子内のボタン（Issue #491。`CellButton`〔#1288〕も同じ扱い）。
             // `HandlerCollector::click_handlers` は `fn(&mut S)`（引数なし）固定のため、
             // `fn(&mut S, usize)` の `on_click` をそのまま登録できない。
             // `(handler, index)` を持つ新 binding 種別の設計は本モジュールの対象外とし、
@@ -281,15 +300,33 @@ fn convert_node<S: 'static>(
                 event_hook: None,
             }
         }
-        Node::List { .. } => {
+        Node::List { axis, .. } => {
             let items = node
                 .expand_children(state)
                 .iter()
                 .map(|child| DomNode::container("li", vec![convert_node(child, state, collector)]))
                 .collect();
-            DomNode::container("ul", items)
+            axis_styled(DomNode::container("ul", items), *axis)
         }
-        Node::VirtualList { .. } => {
+        // 行（Issue #1288）。子を横に並べる。行タップのイベントは未配線
+        // （`IndexedButton` と同じく既存の未対応。入口のボタンは見える）。
+        Node::Row { children, .. } => {
+            let mut row = DomNode::container(
+                "div",
+                children
+                    .iter()
+                    .map(|child| convert_node(child, state, collector))
+                    .collect(),
+            );
+            row.attrs
+                .push(("class".to_string(), "fandhe-row".to_string()));
+            row.attrs.push((
+                "style".to_string(),
+                "display:flex;align-items:center;gap:8px".to_string(),
+            ));
+            row
+        }
+        Node::VirtualList { axis, .. } => {
             // `Node::expand_children` は `VirtualList` を `0..len(state)` の全項目へ
             // 展開する（TASK-5.5-S2、fandhe-core::ui::node の設計判断）。DOM 側でも
             // 既存の `List` と同じ `ul`/`li` マッピングを用い、可視範囲限定の性能経路
@@ -300,7 +337,7 @@ fn convert_node<S: 'static>(
                 .iter()
                 .map(|child| DomNode::container("li", vec![convert_node(child, state, collector)]))
                 .collect();
-            DomNode::container("ul", items)
+            axis_styled(DomNode::container("ul", items), *axis)
         }
         Node::RgbaImage { pixels, alt } => {
             // `src` は自前で作る `data:image/png;base64,` のみ（外部由来の文字列を
@@ -992,6 +1029,80 @@ mod tests {
                 .as_deref(),
             Some("b")
         );
+    }
+
+    /// `Row` は `div.fandhe-row`（flex）で子の順を保ち、`ul` は軸が縦以外のときだけ style が付く（#1288）。
+    #[test]
+    fn row_maps_to_flex_div_and_list_axis_adds_style() {
+        fn noop_cell(_: &mut CounterState, _: (usize, usize)) {}
+        fn row_items(_: &CounterState) -> Vec<Node<CounterState>> {
+            vec![Node::Row {
+                children: vec![
+                    Node::Text("題名".to_string()),
+                    Node::CellButton {
+                        label: "★3".to_string(),
+                        row: 0,
+                        col: 3,
+                        on_click: noop_cell,
+                        id: fandhe_core::WidgetId::from_raw(1),
+                    },
+                ],
+                tap: None,
+            }]
+        }
+        let screen: Screen<CounterState> =
+            Screen::new("t").list_with_axis(row_items, fandhe_core::Axis::Grid { columns: 2 });
+        let dom = build_dom_tree(&screen, &empty_state(), 0);
+        let ul = &dom.children[1];
+        assert_eq!(ul.tag, "ul");
+        assert!(ul
+            .attrs
+            .iter()
+            .any(|(k, v)| k == "style" && v.contains("repeat(2,auto)")));
+        let row = &ul.children[0].children[0];
+        assert_eq!(row.tag, "div");
+        assert!(row
+            .attrs
+            .iter()
+            .any(|(k, v)| k == "class" && v == "fandhe-row"));
+        assert_eq!(row.children[0].text.as_deref(), Some("題名"));
+        assert_eq!(row.children[1].tag, "button");
+        assert_eq!(row.children[1].text.as_deref(), Some("★3"));
+
+        // 縦（既定）は style を付けない。
+        let screen: Screen<CounterState> = Screen::new("t").list(row_items);
+        let dom = build_dom_tree(&screen, &empty_state(), 0);
+        assert!(dom.children[1].attrs.is_empty());
+    }
+
+    /// `Horizontal` は flex の style、`VirtualList` の `ul` にも軸の style が付く（#1288）。
+    #[test]
+    fn horizontal_and_virtual_list_axis_add_ul_style() {
+        let style = |n: &DomNode| {
+            n.attrs
+                .iter()
+                .find(|(k, _)| k == "style")
+                .map(|(_, v)| v.clone())
+        };
+        let screen: Screen<CounterState> =
+            Screen::new("t").list_with_axis(expand_items, fandhe_core::Axis::Horizontal);
+        let dom = build_dom_tree(&screen, &empty_state(), 0);
+        assert!(style(&dom.children[1]).unwrap().contains("display:flex"));
+
+        fn len(_: &CounterState) -> usize {
+            1
+        }
+        fn item(_: &CounterState, _: usize) -> Node<CounterState> {
+            Node::Text("v".to_string())
+        }
+        let screen: Screen<CounterState> = Screen::new("t").virtual_list_with_axis(
+            len,
+            item,
+            20.0,
+            fandhe_core::Axis::Grid { columns: 3 },
+        );
+        let dom = build_dom_tree(&screen, &empty_state(), 0);
+        assert!(style(&dom.children[1]).unwrap().contains("repeat(3,auto)"));
     }
 
     #[test]

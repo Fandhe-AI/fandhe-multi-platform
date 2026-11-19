@@ -274,8 +274,22 @@ fn render_node<S>(
         Node::Button { label, id, .. } => {
             render_focusable_button(ui, label, *id, path, ctx);
         }
-        Node::IndexedButton { label, id, .. } => {
+        Node::IndexedButton { label, id, .. } | Node::CellButton { label, id, .. } => {
             render_focusable_button(ui, label, *id, path, ctx);
+        }
+        Node::Row { children, .. } => {
+            // 横並び（Issue #1288）。行タップはこの検証用描画では扱わない
+            // （入口のボタンが押せる）。
+            let mut child_path = path.to_vec();
+            child_path.push(0);
+            ui.horizontal(|ui| {
+                for (i, child) in children.iter().enumerate() {
+                    if let Some(last) = child_path.last_mut() {
+                        *last = i;
+                    }
+                    render_node(ui, child, state, &child_path, ctx);
+                }
+            });
         }
         Node::List { expand, axis } => {
             let children = expand(state);

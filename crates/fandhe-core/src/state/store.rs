@@ -94,7 +94,7 @@ pub enum Event {
         /// `set` へ渡す新しい入力値。
         value: String,
     },
-    /// ツリー上の位置（`path`）で特定した `Node::Button` / `Node::IndexedButton` の押下
+    /// ツリー上の位置（`path`）で特定した `Node::Button` / `Node::IndexedButton` / `Node::CellButton` の押下
     /// （Issue #491）。動的生成子（`List::expand` / `VirtualList::item`）内のボタンは
     /// ラベルだけでは一意に解決できないため、`path` で位置を特定する。
     ButtonClickedAt {
