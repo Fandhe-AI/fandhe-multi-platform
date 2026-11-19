@@ -1,14 +1,15 @@
 //! `cargo fandhe check` / `cargo fandhe gen`。
 //! - `check`: workspace 内の機能宣言を検証する
 //! - `gen`: アプリが選んだ機能の宣言からネイティブ設定を `<アプリの crate>/gen/` へ生成する（`--os web` は Web App Manifest だけ、#1238）
+//! - `run` / `build`: アプリを OS 向けにビルド・起動する（macos・windows・linux・web、#1422）
 //! - `verify-scope`: 選ばなかった機能の宣言が成果物の観測テキストに無いことを検査する（#1178）
 //!
-//! 終了コード: 0 正常 / 1 宣言・入力の不正 / 2 未知の引数。
+//! 終了コード: 0 正常 / 1 宣言・入力の不正（`run`/`build` では前提の不足と子プロセスの失敗も 1） / 2 未知の引数。
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-const USAGE: &str = "使い方: cargo fandhe check|gen [--os web] [--manifest-path <Cargo.toml>]\n       （--os web は gen のみ。Web App Manifest だけを生成する）\n       cargo fandhe verify-scope [--catalog <Cargo.toml>] [--manifest-path <アプリの Cargo.toml>] --os android|ios|macos <観測ファイル>...";
+const USAGE: &str = "使い方: cargo fandhe check|gen [--os web] [--manifest-path <Cargo.toml>]\n       （--os web は gen のみ。Web App Manifest だけを生成する）\n       cargo fandhe run|build [--os macos|windows|linux|web] [--release] [--manifest-path <アプリの Cargo.toml>]\n       cargo fandhe verify-scope [--catalog <Cargo.toml>] [--manifest-path <アプリの Cargo.toml>] --os android|ios|macos <観測ファイル>...";
 
 /// `verify-scope` の引数処理と実行。観測ファイルは UTF-8 のテキストとして連結して読む。
 fn verify_scope(args: &[&str]) -> ExitCode {
@@ -78,6 +79,16 @@ fn main() -> ExitCode {
     let strs: Vec<&str> = args.iter().map(String::as_str).collect();
     if strs.first() == Some(&"verify-scope") {
         return verify_scope(&strs[1..]);
+    }
+    if matches!(strs.first(), Some(&"run" | &"build")) {
+        let Some(opts) = cargo_fandhe::run::parse_args(&strs) else {
+            eprintln!("{USAGE}");
+            return ExitCode::from(2);
+        };
+        return match cargo_fandhe::run::run_cli(&opts) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(p) => report(p),
+        };
     }
     let (cmd, web, manifest): (&str, bool, Option<PathBuf>) = match strs.as_slice() {
         [c @ ("check" | "gen")] => (c, false, None),
