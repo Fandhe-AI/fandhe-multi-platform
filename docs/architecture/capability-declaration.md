@@ -367,7 +367,8 @@ cargo fandhe verify-scope --catalog <全機能を含む Cargo.toml> \
 - 禁止集合は「カタログの宣言 − アプリが到達した宣言」から作ります。到達判定は `gen` と同じです
 - 基盤の framework（`scope.rs` の `BASE_FRAMEWORKS`。UIKit・AppKit 等、選択によらずどのアプリもリンクするもの）は禁止にしません。宣言に書いても書かなくても判定は変わりません
 - 到達した機能と同じ値を宣言する未選択機能の値は、正当に現れるため禁止にしません
-- アプリ自身が追記した `info-plist`・`entitlements` のキー（iOS・macOS）も、未選択機能が同名を宣言していても禁止にしません（キー単位。`~ipad` 等の修飾子つきで追記したときは素のキーも含む。外すのは Info.plist キー・説明文キー・entitlement の禁止だけで、同名の framework・拡張ターゲットの禁止は残す。#1202）
+- アプリ自身が追記した `info-plist`・`entitlements` のキー（iOS・macOS）も、未選択機能が同名を宣言していても禁止にしません（キー単位。`~ipad` 等の修飾子つきで追記したときは素のキーも含む。
+  外すのは Info.plist キー・説明文キー・entitlement の禁止だけで、同名の framework・拡張ターゲットの禁止は残す。#1202）
 - 観測ファイルは成果物から外部ツールで取り出したテキストです。いずれかの禁止値が現れたら、機能 id・種別・値を出して終了コード 1 で終わります
 - 照合はトークン境界つきです。`android.hardware.camera` は `android.hardware.camera.autofocus` に、`group:artifact` は `group:artifact-ktx` に一致しません
 - 観測テキストが空なら失敗します（ツールの失敗の見逃し防止）。未選択の機能が 0 件でも、禁止トークンの照合対象が空になるだけで、空の観測の検出と Android の構造照合は行います
