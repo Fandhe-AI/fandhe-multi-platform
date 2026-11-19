@@ -6,8 +6,8 @@
 //! 持てる本クレート（プラットフォーム最適化レイヤ）側から直接 `windows` クレートを叩く
 //! （`lib.rs` の Windows `deny(unsafe_code)` 緩和・coding-rust.md の FFI 例外規定準拠）。
 //!
-//! `unsafe` は [`present`] 内の `GetForWindow` / `ShowShareUIForWindow` 呼び出し 2 箇所に
-//! 閉じる（`// SAFETY:` を各呼び出し直前に付与）。それ以外の WinRT 呼び出し
+//! `unsafe` は [`present`] 内の `GetForWindow` / `ShowShareUIForWindow` と [`window_is_foreground`] の
+//! `GetForegroundWindow` の 3 箇所に閉じる（`// SAFETY:` を各呼び出し直前に付与）。それ以外の WinRT 呼び出し
 //! （`DataRequested` / `TargetApplicationChosen` の登録、`DataPackage` への書き込み）は
 //! `windows` クレート側で safe fn としてラップ済みのため `unsafe` を要しない。
 //!
@@ -50,16 +50,16 @@ struct Held {
 }
 
 // `DataTransferManager`（COM オブジェクト）は `Send`/`Sync` を実装しないため
-// `static Mutex` に置けない。`present` は `driver.rs` の effect ドライバから
-// egui の update ループ（UI/メインスレッド）上でのみ呼ばれる契約（`GetForWindow` /
+// `static Mutex` に置けない。`present` は `driver.rs` の effect ドライバ（egui の update ループ）と
+// 公開入口 `begin_share_sheet` から、ウィンドウを作った UI スレッド上でのみ呼ばれる契約（`GetForWindow` /
 // `ShowShareUIForWindow` も同じスレッドで呼ぶ必要がある WinRT の STA 前提）のため、
 // スレッドローカルで足りる（`Mutex` のような他スレッドとの排他は不要）。
 thread_local! {
     static HELD: RefCell<Option<Held>> = const { RefCell::new(None) };
 }
 
-/// `driver.rs` の Windows 経路から呼ばれる。`request_id` は
-/// `driver::bridge::begin` が払い出したプロセス内一意な ID（`bridge::deliver` の
+/// `driver.rs` の Windows 経路（画面 effect と公開入口 `begin_share_sheet`）から呼ばれる。`request_id` は
+/// `driver::bridge` が払い出したプロセス内一意な ID（`bridge::deliver` の
 /// 照合キー）。同期的に失敗した場合は `Err` を返し、呼び出し元が `bridge::deliver` する
 /// （`TargetApplicationChosen` は二度と来ないため）。
 #[allow(unsafe_code)]
@@ -85,9 +85,8 @@ pub(crate) fn present(request_id: u64, request: &ShareRequest) -> Result<(), Sha
             .RemoveTargetApplicationChosen(held.target_chosen);
     }
 
-    // SAFETY: `hwnd` は `remember_window` が `eframe::CreationContext`（`ProxyApp`
-    // 構築時、winit が生成したウィンドウ）から得た HWND で、`ProxyApp` の生存中は
-    // ウィンドウも生存する（`update` から呼ばれる effect の実行中に閉じられない）。
+    // SAFETY: `hwnd` は `remember_window` で控えた値渡しのハンドルで、ポインタとして読み書きしない
+    // （ウィンドウが既に閉じていれば OS が失敗を返し、`Internal` へ畳む）。UI スレッドから呼ぶのは呼び出し側の契約。
     // `interop` は上で取得した有効な COM ポインタ。
     let manager: DataTransferManager =
         unsafe { interop.GetForWindow(hwnd) }.map_err(|_| ShareSheetError::Internal)?;
@@ -156,6 +155,18 @@ pub(crate) fn present(request_id: u64, request: &ShareRequest) -> Result<(), Sha
         });
     });
 
-    // SAFETY: `hwnd` の生存根拠は上と同じ。`interop` も同一の有効な COM ポインタ。
+    // SAFETY: `hwnd` の根拠は上と同じ。`interop` も同一の有効な COM ポインタ。
     unsafe { interop.ShowShareUIForWindow(hwnd) }.map_err(|_| ShareSheetError::Internal)
+}
+
+/// 公開入口のキャンセル検知用: メインウィンドウ（`fandhe_platform_windows::window`）が前面か。
+/// 控えた HWND が無ければ `true`（前面を失った観測にしない。結果が届くまで待つ）。
+#[allow(unsafe_code)]
+pub(crate) fn window_is_foreground() -> bool {
+    let Some(hwnd) = fandhe_platform_windows::window() else {
+        return true;
+    };
+    // SAFETY: `GetForegroundWindow` は引数を取らず、前面のウィンドウのハンドル（無ければ null）を返すだけ。
+    let foreground = unsafe { windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
+    foreground == hwnd
 }
