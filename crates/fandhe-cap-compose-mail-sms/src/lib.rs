@@ -9,8 +9,9 @@
 //! （`contract` の doc を参照）。macOS・Windows・iOS・Android が実装し、他の OS は `Unsupported`。
 //!
 //! 契約（`contract`）・失敗の種類（`error`）・effect ドライバ（`driver`）・OS 実装を 1 つに集める。
-//! 画面の状態型を参照してよいのは `driver` だけ。入口 `pub fn platform_compose_mail_sms()` は状態型に依存しないため、
-//! フレームワークの外のアプリも使える。
+//! 画面の状態型を参照してよいのは `driver` だけ。入口 `pub fn platform_compose_mail_sms()`（iOS / Android 以外）と
+//! `begin_compose_mail_sms` / `poll_compose_mail_sms` / `discard_compose_mail_sms`（iOS / Android の非同期の入口、
+//! `consumer-app-structure.md` §8.2）は状態型に依存しないため、フレームワークの外のアプリも使える。
 
 // unsafe は OS 実装の FFI・JNI エクスポートに限る（`// SAFETY:` を付ける）。該当 OS だけ deny へ緩める。
 #![cfg_attr(
@@ -58,6 +59,7 @@ pub use contract::*;
 pub use driver::platform_compose_mail_sms;
 #[cfg(target_os = "android")]
 pub use driver::reset_pending_tracking;
+pub use driver::{begin_compose_mail_sms, discard_compose_mail_sms, poll_compose_mail_sms};
 // OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
 #[allow(unused_imports)]
 pub(crate) use driver::*;
