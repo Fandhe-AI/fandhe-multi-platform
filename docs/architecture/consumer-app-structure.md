@@ -112,7 +112,9 @@ fn app(ctx: &fandhe::egui::Context) -> Box<dyn fandhe::app::ProxyAppDyn> {
 - 対応表（`docs/device/capabilities/`）は計画情報だけを持ちます。権限は書かず、`build-capabilities.mjs` が crate の宣言と id で結合して一覧の権限欄を出します（別名の crate は `crate` キー、crate を持たない基盤の機能は `"crate": null`。食い違えば検証が拒否します。#1195）
 - 生成先は `gen/` で、gitignore します。利用者が手を入れる逃げ道は、TOML の追記と `--eject` の 2 つだけにします（#1202）。
   追記は機能の宣言と同じ欄名を `[package.metadata.fandhe-app.*]` に書く形で、生成値と食い違えば上書きせずエラーにします。
-  Apple の `info-plist`・`entitlements` と、Android の宣言（機能の宣言と同じ欄。アプリを宣言者として統合）・`application-attributes`（殻の `<application>`）は実装済みで、`--eject` は後続です
+  Apple の `info-plist`・`entitlements` と、Android の宣言（機能の宣言と同じ欄。アプリを宣言者として統合）・`application-attributes`（殻の `<application>`）は実装済みです。
+  `--eject` は生成した設定ファイル（Manifest・Info.plist・entitlements）を `<アプリの crate>/eject/` へ書き出し、以後は生成の代わりに使います
+  （消せば生成へ戻る。`capability-declaration.md` §7）
 - 権限の説明文は既定値を持たず、利用者が書きます。有効な機能の説明文が無ければエラーにします。
   既定の文言のまま審査に出る事故を避けるためです
 - Java はソース配布にします（#1216 で同梱を確かめます）。アプリの applicationId と独立した固定パッケージ `com.fandhe.platform`（仮名、公開前に確定）へ移しました（#1167）。
@@ -137,7 +139,7 @@ fn app(ctx: &fandhe::egui::Context) -> Box<dyn fandhe::app::ProxyAppDyn> {
     背景 URLSession の完了（identifier での登録）を機能の `.m` へ配ります
   - window insets の変化は、共通層の `HostInsets.addListener` へ登録して受けます（#1327）。decorView のリスナーは View につき 1 つのため共通層が 1 つだけ付け、Rust の static への送信と登録済みの機能への配信をそこで行います。PiP の切り替わりは `ComponentActivity.addOnPictureInPictureModeChangedListener` で足ります。手順は `docs/operations/capability-crate-migration.md` §18
   - 利用者の `MainActivity` に要るのは `GameActivity` の継承と、`static` 初期化子での `System.loadLibrary` だけです
-  - 採らなかった案: `gen` が委譲コードを生成する（出力と宣言の欄が増える。`gen` は現状 `MainActivity` を出さず、`--eject` も未実装）、利用者の手順書で委譲を案内する（「機能を選ぶだけ」が崩れる）、共通の基底 Activity に集める（機能の一覧を知る手段が別に要る）、
+  - 採らなかった案: `gen` が委譲コードを生成する（出力と宣言の欄が増える。`gen` は現状 `MainActivity` を出さず、`--eject` の対象も設定ファイルだけ）、利用者の手順書で委譲を案内する（「機能を選ぶだけ」が崩れる）、共通の基底 Activity に集める（機能の一覧を知る手段が別に要る）、
     単一 provider に meta-data を集める（同名コンポーネントの異なる定義を拒否する現行の統合規則に欄の追加が要る）
   - 機能が数十に増えて起動時間が問題になれば、`androidx.startup` 型の単一 provider へ寄せます（Phase 5 で計測してから）
 - 細かい形式と検証・統合の規則は `capability-declaration.md` に定めました（#1160）。

@@ -32,6 +32,14 @@ fn embed_macos_info_plist() {
     let dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("cargo が設定する"));
     let generated = cargo_fandhe::generate(Some(&dir.join("Cargo.toml")))
         .unwrap_or_else(|e| panic!("cargo fandhe gen に失敗しました:\n{}", e.join("\n")));
+    // eject 済みのファイルで差し替えたときは、生成の出力に出ない build.rs でも気付けるよう警告として出す。
+    for n in generated
+        .notes
+        .iter()
+        .filter(|n| n.starts_with(cargo_fandhe::EJECT_NOTE))
+    {
+        println!("cargo:warning={n}");
+    }
     let plist = generated
         .files
         .get("macos/Info.plist")
@@ -43,6 +51,12 @@ fn embed_macos_info_plist() {
         out.display()
     );
     // 生成の入力（workspace の各 crate の宣言・アプリ設定・依存の解決）が変わったときだけ作り直す。
+    // eject/ は在るときだけ監視する（無いパスを出すと毎回ビルドし直す）。初めて作ったときは拾えないので、
+    // その 1 回は Cargo.toml の変更か `cargo clean -p fandhe-gallery` で作り直す。
+    let eject = dir.join("eject");
+    if eject.is_dir() {
+        println!("cargo:rerun-if-changed={}", eject.display());
+    }
     let root = dir.join("../..");
     for f in ["Cargo.toml", "Cargo.lock"] {
         rerun_if_changed(&root.join(f));

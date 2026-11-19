@@ -68,7 +68,7 @@ pub(crate) const APP_GROUPS_KEY: &str = "com.apple.security.application-groups";
 pub struct Generated {
     pub gen_dir: PathBuf,
     pub files: BTreeMap<String, String>,
-    /// 成功時に添える通知（生成を飛ばした OS と理由）。失敗ではないため終了コードは変えない（Issue #1399）。
+    /// 成功時に添える通知（生成を飛ばした OS と理由、`eject/` のファイルで差し替えた分の「eject 済み: <rel>」）。失敗ではないため終了コードは変えない（Issue #1399）。
     pub notes: Vec<String>,
 }
 
@@ -1012,6 +1012,11 @@ fn resolve_build_vars(v: &mut Value, exe: &str, left: &mut BTreeSet<String>) {
     }
 }
 
+/// 追記と生成値が食い違ったときの案内。生成値そのものを変えたいなら eject で書き出して直接編集する。
+fn eject_hint(rel: &str) -> String {
+    format!("生成値を変えたいときは、この追記を外して `cargo fandhe gen --eject {rel}` で書き出し、直接編集してください")
+}
+
 /// アプリの追記（`fandhe-app.<os>.<field>`）を生成値へ統合する。食い違った葉は両側の値つきでエラーにし、
 /// 生成値を残す。アプリの追記だけは殻のテーブル（`UILaunchScreen` 等）へも再帰できる。
 /// `info-plist` の修飾子つきキー（`CFBundleName~ipad`）は、素のキーが生成値にあると OS が修飾子つきを優先して
@@ -1043,7 +1048,17 @@ fn append_app(
         Ok(_) => generated,
         Err(leaves) => {
             errs.extend(leaves.into_iter().map(|(leaf, d)| {
-                format!("{os}: {at}.{leaf} が生成値と食い違います（生成値と追記の値: {d}）")
+                format!(
+                    "{os}: {at}.{leaf} が生成値と食い違います（生成値と追記の値: {d}）。{}",
+                    eject_hint(&format!(
+                        "{os}/{}",
+                        if field == "info-plist" {
+                            "Info.plist"
+                        } else {
+                            "App.entitlements"
+                        }
+                    ))
+                )
             }));
             generated
         }
@@ -1172,7 +1187,20 @@ pub(crate) fn render_for(
             .collect();
         let refs: Vec<_> = decls.iter().map(|d| (d.id.as_str(), d)).collect();
         merge(&refs)
-            .map_err(|e| errs.extend(e.into_iter().map(|e| e.to_string())))
+            .map_err(|e| {
+                errs.extend(e.into_iter().map(|e| {
+                    let m = e.to_string();
+                    // アプリが当事者で Manifest に出る欄の食い違いだけ eject の案内を添える（gradle・java・res は eject できない）。
+                    if os == "android"
+                        && e.field.starts_with("android.")
+                        && (e.a == APP_DECL_ID || e.b == APP_DECL_ID)
+                    {
+                        format!("{m}。{}", eject_hint("android/AndroidManifest.xml"))
+                    } else {
+                        m
+                    }
+                }))
+            })
             .ok()
     };
 
@@ -1316,6 +1344,17 @@ fn generate_for(
     only: Option<&str>,
     gen_dir: Option<PathBuf>,
 ) -> Result<(Generated, AndroidShellInput), Vec<String>> {
+    let (mut g, shell, dir) = generate_parts(manifest, only, gen_dir)?;
+    apply_eject(&dir, only, &mut g.files, &mut g.notes)?;
+    Ok((g, shell))
+}
+
+/// eject の差し替え前の生成結果と、アプリの crate のディレクトリ。`--eject` の書き出し元（生成値そのもの）でもある。
+fn generate_parts(
+    manifest: Option<&Path>,
+    only: Option<&str>,
+    gen_dir: Option<PathBuf>,
+) -> Result<(Generated, AndroidShellInput, PathBuf), Vec<String>> {
     let mut sets: Vec<Vec<Found>> = Vec::new();
     let mut app: Option<(PathBuf, Value, Value)> = None;
     for (os, triple) in [
@@ -1368,7 +1407,202 @@ fn generate_for(
             application_id: cfg.android.application_id,
             application_attributes: cfg.android.application_attributes,
         },
+        dir,
     ))
+}
+
+/// eject したファイルを置く場所（アプリの crate 直下。コミットする。`gen/` は無視する側）。
+const EJECT_DIR: &str = "eject";
+/// `eject/` を辿る深さの上限（設定ファイルの置き場は最大 `<os>/extensions/<name>/<file>` の 4 段）。
+const EJECT_MAX_DEPTH: usize = 8;
+/// 差し替えたときの通知の接頭辞。run・build の `load_app` も同じ文言で出す。
+pub const EJECT_NOTE: &str = "eject 済み: ";
+/// 生成した先頭の「編集しない」コメントと、eject で差し替える文言。XML のコメントは `--` を含められない。
+const GENERATED_COMMENT: &str = "cargo fandhe gen が生成。編集しない";
+const EJECTED_COMMENT: &str =
+    "cargo fandhe gen の eject で書き出した。`eject/` のこのファイルを消せば生成へ戻る";
+
+/// eject できる生成物（設定ファイルだけ）。gradle・Java・バックアップ規則は TOML で足せる／絶対パスを含むため対象外。
+fn ejectable(rel: &str) -> bool {
+    rel == "android/AndroidManifest.xml"
+        || (rel.starts_with("ios/") || rel.starts_with("macos/"))
+            && (rel.ends_with(".plist") || rel.ends_with(".entitlements"))
+}
+
+/// `eject/` の通常ファイルを集める（`rel` は `eject/` からの相対、区切りは `/`）。symlink・特殊ファイルも種別つきで返す。
+/// `.` で始まる名前（`.DS_Store`・エディタの退避・ロックファイル）は、種別を見る前に飛ばす。
+fn walk_eject(
+    dir: &Path,
+    rel: &str,
+    depth: usize,
+    out: &mut Vec<(String, fs::FileType)>,
+) -> Result<(), String> {
+    if depth > EJECT_MAX_DEPTH {
+        return Err(format!(
+            "{} は深すぎます（{EJECT_MAX_DEPTH} 段まで）",
+            dir.display()
+        ));
+    }
+    let rd = fs::read_dir(dir).map_err(|e| format!("{} を読めません: {e}", dir.display()))?;
+    for ent in rd {
+        let ent = ent.map_err(|e| format!("{} を列挙できません: {e}", dir.display()))?;
+        let name = ent.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') {
+            continue;
+        }
+        let rel = if rel.is_empty() {
+            name
+        } else {
+            format!("{rel}/{name}")
+        };
+        let ft = ent
+            .file_type()
+            .map_err(|e| format!("{} を調べられません: {e}", ent.path().display()))?;
+        if ft.is_dir() {
+            walk_eject(&ent.path(), &rel, depth + 1, out)?;
+        } else {
+            out.push((rel, ft));
+        }
+    }
+    Ok(())
+}
+
+/// `eject/<rel>` が通常ファイルなら、生成した内容の代わりにその内容を採る（gen・run・build・build.rs の全経路が通る）。
+/// 今回の対象に無いファイル（綴り違い・対象外のパス）・symlink・非 UTF-8 はエラー。`only` 以外の OS の分は見ない。
+fn apply_eject(
+    dir: &Path,
+    only: Option<&str>,
+    files: &mut BTreeMap<String, String>,
+    notes: &mut Vec<String>,
+) -> Result<(), Vec<String>> {
+    let root = dir.join(EJECT_DIR);
+    match fs::symlink_metadata(&root) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(vec![format!("{} を調べられません: {e}", root.display())]),
+        Ok(md) if !md.is_dir() => {
+            return Err(vec![format!(
+                "{} はディレクトリではありません（symlink は使えません）",
+                root.display()
+            )])
+        }
+        Ok(_) => {}
+    }
+    let mut found = Vec::new();
+    walk_eject(&root, "", 0, &mut found).map_err(|e| vec![e])?;
+    found.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut errs = Vec::new();
+    let mut picked = Vec::new();
+    for (rel, ft) in found {
+        let os = rel.split('/').next().unwrap_or_default();
+        if matches!(os, "android" | "ios" | "macos") && only.is_some_and(|o| o != os) {
+            continue;
+        }
+        let at = format!("{EJECT_DIR}/{rel}");
+        if !ft.is_file() {
+            errs.push(format!(
+                "{at}: 通常ファイルではありません（symlink は使えません）"
+            ));
+        } else if !(ejectable(&rel) && files.contains_key(&rel)) {
+            let skipped =
+                rel.starts_with("android/") && !files.keys().any(|k| k.starts_with("android/"));
+            errs.push(format!(
+                "{at}: 今回の生成対象にありません（綴りを確かめるか、消してください）。書き出せるパス: {}{}",
+                ejectable_list(files),
+                if skipped { format!("。{ANDROID_SKIPPED_NOTE}") } else { String::new() }
+            ));
+        } else {
+            match fs::read(root.join(&rel)).map(String::from_utf8) {
+                Ok(Ok(body)) => picked.push((rel, body)),
+                Ok(Err(_)) => errs.push(format!("{at}: UTF-8 のテキストではありません")),
+                Err(e) => errs.push(format!("{at} を読めません: {e}")),
+            }
+        }
+    }
+    if !errs.is_empty() {
+        return Err(errs);
+    }
+    for (rel, body) in picked {
+        notes.push(format!("{EJECT_NOTE}{rel}"));
+        files.insert(rel, body);
+    }
+    Ok(())
+}
+
+fn ejectable_list(files: &BTreeMap<String, String>) -> String {
+    let v: Vec<&str> = files
+        .keys()
+        .map(String::as_str)
+        .filter(|r| ejectable(r))
+        .collect();
+    if v.is_empty() {
+        "なし".into()
+    } else {
+        v.join("、")
+    }
+}
+
+/// `cargo fandhe gen --eject <rel>`: 生成した設定ファイルを `<アプリの crate>/eject/<rel>` へ書き出す。
+/// 以後は gen・run・build がそのファイルを生成の代わりに使う（消せば生成へ戻る）。既にあれば上書きしない。
+/// 対象外のパスは書き出せるパスの一覧つきでエラー。1 件でも不正なら何も書かない。戻りは書き出したパス。
+pub fn eject(manifest: Option<&Path>, rels: &[String]) -> Result<Vec<PathBuf>, Vec<String>> {
+    // android/ だけを書き出すなら Android の分だけ生成する（iOS の bundle-id が無いアプリでも使える）。
+    let only =
+        (!rels.is_empty() && rels.iter().all(|r| r.starts_with("android/"))).then_some("android");
+    let (g, _, dir) = generate_parts(manifest, only, None)?;
+    let mut errs = Vec::new();
+    let mut plan = Vec::new();
+    for rel in rels.iter().collect::<BTreeSet<_>>() {
+        let dest = rel.split('/').fold(dir.join(EJECT_DIR), |p, s| p.join(s));
+        if rel
+            .split('/')
+            .any(|s| s.is_empty() || s == "." || s == "..")
+            || !ejectable(rel)
+            || !g.files.contains_key(rel.as_str())
+        {
+            errs.push(format!(
+                "--eject {rel}: 書き出せません。書き出せるパス: {}{}",
+                ejectable_list(&g.files),
+                if rel.starts_with("android/") && g.notes.iter().any(|n| n == ANDROID_SKIPPED_NOTE)
+                {
+                    format!("。{ANDROID_SKIPPED_NOTE}")
+                } else {
+                    String::new()
+                }
+            ));
+        } else if let Err(e) = crate::run::check_within(&dest, &dir) {
+            errs.push(format!("--eject {rel}: {e}"));
+        } else if fs::symlink_metadata(&dest).is_ok() {
+            errs.push(format!(
+                "--eject {rel}: {} が既にあります。上書きしません",
+                dest.display()
+            ));
+        } else {
+            plan.push((
+                dest,
+                g.files[rel.as_str()].replacen(GENERATED_COMMENT, EJECTED_COMMENT, 1),
+            ));
+        }
+    }
+    if !errs.is_empty() {
+        return Err(errs);
+    }
+    let mut written = Vec::new();
+    for (dest, body) in plan {
+        let parent = dest.parent().unwrap_or(&dir);
+        // 検査のあとに現れたファイルも上書きしない（create_new）。
+        fs::create_dir_all(parent)
+            .and_then(|()| {
+                use std::io::Write;
+                fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&dest)?
+                    .write_all(body.as_bytes())
+            })
+            .map_err(|e| vec![format!("{} を書けません: {e}", dest.display())])?;
+        written.push(dest);
+    }
+    Ok(written)
 }
 
 /// Web だけを生成する（`cargo fandhe gen --os web`、#1238）。bin や iOS 設定を持たない Web 専用の
