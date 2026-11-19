@@ -774,10 +774,14 @@ mod tests {
         use super::*;
 
         fn temp_file(contents: &[u8]) -> File {
+            // 並列のテスト同士が同じ時刻で同名を奪い合わないよう、プロセス内の連番も名前に含める（`write_temp_file` と同じ）。
+            static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let mut path = std::env::temp_dir();
             path.push(format!(
-                "fandhe-cap-drag-drop-android-test-{}-{}",
+                "fandhe-cap-drag-drop-android-test-{}-{}-{}",
                 std::process::id(),
+                seq,
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
