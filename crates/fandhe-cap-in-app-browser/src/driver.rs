@@ -727,7 +727,7 @@ mod tests {
     /// `mark_running` の適用後に画面が作り直され、前の要求が OS で応答しないままでも、期限で解けて新しい要求を発送する。
     #[test]
     fn rebuilt_screen_waits_for_deadline_then_dispatches() {
-        let bridge = new_bridge(Duration::from_millis(20));
+        let bridge = new_bridge(Duration::from_millis(300));
         let f = fake(Mode::Silent, bridge);
         let imp: Arc<dyn InAppBrowser> = f.clone();
         let (sender, rx) = channel();
@@ -743,7 +743,7 @@ mod tests {
         drive(&fresh, &sender, &imp, bridge);
         // 前の要求が進行中の間は発送しない。
         assert_eq!(f.calls.load(Ordering::SeqCst), 1);
-        std::thread::sleep(Duration::from_millis(30));
+        std::thread::sleep(Duration::from_millis(350));
         drive(&fresh, &sender, &imp, bridge);
         assert_eq!(f.calls.load(Ordering::SeqCst), 2);
     }
