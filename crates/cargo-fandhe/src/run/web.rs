@@ -102,6 +102,7 @@ fn plan(app: &App, opts: &Options, env: &Env, dir: &Path, name: &str) -> Vec<Op>
                 dir.display().to_string(),
                 wasm.display().to_string(),
             ],
+            env: Vec::new(),
         }),
     ];
     if opts.release {
@@ -110,6 +111,7 @@ fn plan(app: &App, opts: &Options, env: &Env, dir: &Path, name: &str) -> Vec<Op>
             stage: "wasm-opt",
             program: "wasm-opt".into(),
             args: vec!["-Os".into(), bg.clone(), "-o".into(), bg],
+            env: Vec::new(),
         }));
     }
     // アプリの web/ を写してから、生成した manifest を置く（manifest は生成物が正）。
@@ -122,12 +124,14 @@ fn plan(app: &App, opts: &Options, env: &Env, dir: &Path, name: &str) -> Vec<Op>
     if let Some(body) = &app.web_manifest {
         ops.push(Op::Write {
             path: dir.join("manifest.webmanifest"),
+            within: app.target_dir.clone(),
             body: body.clone(),
         });
     }
     if !app.web_has_index {
         ops.push(Op::Write {
             path: dir.join("index.html"),
+            within: app.target_dir.clone(),
             body: default_index(name, app.web_manifest.is_some()),
         });
     }

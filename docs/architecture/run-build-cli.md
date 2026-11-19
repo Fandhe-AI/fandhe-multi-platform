@@ -6,7 +6,7 @@ OS ごとに PR を分けて足します（デスクトップ・Web #1422、Andr
 ## 形
 
 ```sh
-cargo fandhe run|build [--os macos|windows|linux|web] [--release] [--manifest-path <アプリの Cargo.toml>]
+cargo fandhe run|build [--os macos|windows|linux|web|android] [--release] [--manifest-path <アプリの Cargo.toml>]
 ```
 
 - `--os` を省くとホストのデスクトップ OS です。同じオプションの重複と、`-` で始まる `--manifest-path` の値は引数エラー（2）です
@@ -17,6 +17,7 @@ cargo fandhe run|build [--os macos|windows|linux|web] [--release] [--manifest-pa
 | OS | build | run |
 | --- | --- | --- |
 | macos・windows・linux | `cargo build`。`--os` がホストと違えば止める | `cargo run` |
+| android | gen（Android の分だけ）→ 殻を生成 → `cargo ndk -t <abi>... build --lib` → `gradle :app:assembleDebug`（`--release` は `:app:bundleRelease`、署名必須） | build のあと `adb install -r` → `adb shell am start -W -n <application-id>/com.fandhe.platform.MainActivity` → `adb shell pidof <application-id>`（`--release` は `:app:assembleRelease`） |
 | web | `cargo build --lib --target wasm32-unknown-unknown` → 出力先を作り直す → `wasm-bindgen --target web` →（`--release` は `wasm-opt -Os`）→ `web/`・manifest・フォントを足す | build のあと、cargo-fandhe 自身が 127.0.0.1 の空きポートで配り、URL を出す（Ctrl-C で終了） |
 
 - Web の出力先は `<target_dir>/fandhe/<package 名>/web/` です。`cargo build` が成功したあと、`wasm-bindgen` の前にこのディレクトリを消して作り直します（コンパイルに失敗しても前回の成果物は残ります）
@@ -32,13 +33,41 @@ cargo fandhe run|build [--os macos|windows|linux|web] [--release] [--manifest-pa
   外部プロセス（python 等）を使わないため、cargo-fandhe が終わればポートも閉じます。127.0.0.1 の外へは開きません
 - 手順は cargo-fandhe が持ちます。`scripts/` は本リポジトリの gallery 専用で、利用者には配られないため呼びません
 
+### Android
+
+- 殻（Gradle プロジェクト）は `<target_dir>/fandhe/<package 名>/android/` に作ります。
+  `gen/` に置かないのは、gen が毎回 `gen/` を作り直して Gradle の `build/`・`.gradle/` を消すためです。
+  殻のソース（`app/src`。`jniLibs` を含む）は毎回作り直し、ルートの Gradle ファイルは上書きします（前回の ABI の `.so` を APK に混ぜない）。Gradle のキャッシュは消しません
+- 殻の書き込みと `gen` の出力先は、`target_dir` の配下で途中に symlink が無いことを確かめてから書きます（`Reset` と同じ検査）。
+  Windows ホストでは `gradle.bat` を検査・起動します
+- `am start` は Activity が見つからなくても終了コード 0 を返し、`Error:` を出力に出すだけです（エミュレータで確認）。そのため `-W` で起動完了まで待ち、
+  続けて `adb shell pidof <application-id>` の段（`adb-check`）でプロセスがあることを確かめます。無ければ pidof が非 0 で、段名付きで失敗します
+- `versionCode` は 1 固定です。Play へ 2 回目の提出（同じ applicationId で版を上げる）はできません。版を上げる設定は未対応で、必要になった時点で別 Issue にします
+- 殻は最小です。`MainActivity`（`GameActivity` の継承と `System.loadLibrary(FandheLibrary.NAME)` だけ）・
+  Manifest（`application` の属性だけ。MainActivity の宣言・LAUNCHER・権限は gen の Manifest を overlay で重ねる）・
+  テーマ・`app_name`。
+  AGP・compileSdk・minSdk・targetSdk・build-tools は `platforms/android` と `scripts/android/versions.env` に揃えます
+  （`tests/run.rs` が突き合わせます）。
+  GameActivity の版は gen の `fandhe.gradle`
+  （`fandhe-platform-android` の宣言）から入ります
+- `applicationId` は `[package.metadata.fandhe-app.android] application-id` に書きます（必須。書式は `com.example.app`）。gen の出力には入りません
+- gen は Android の分だけ生成します（内部の絞り込み。`gen --os` の公開オプションではありません）。bin や iOS の bundle-id が無い Android 専用アプリでも止まりません。
+  出力先はアプリの `gen/` ではなく `<target_dir>/fandhe/<package 名>/android/gen/` です。アプリの `gen/`（iOS・macOS の生成物や、印の無い利用者のディレクトリ）には触れません
+- run は adb につながった端末 1 台の ABI だけ、build は arm64-v8a・armeabi-v7a・x86_64 を作ります。
+  端末が 0 台・複数台なら止まります（複数のときは環境変数 `ANDROID_SERIAL`）。エミュレータは起動しません
+- `--release` は `FANDHE_ANDROID_KEYSTORE`・`FANDHE_ANDROID_KEYSTORE_PASSWORD`・`FANDHE_ANDROID_KEY_ALIAS` が全部そろっていなければ止まります（無署名で成功させません）。
+  値は環境変数のまま Gradle へ継承します。keystore のパスだけ、Gradle の作業ディレクトリに依らないよう絶対パスにして上書きします。
+  `build --release` は `.aab`、`run --release` は `.apk` です
+- Gradle wrapper は同梱せず、PATH の `gradle` を使います（`platforms/android` と同じ。wrapper jar のバイナリをコミット・生成物に入れない）
+
 ## 前提の検査
 
 - 実行前に不足を全件集め、1 件 1 行で「何が無いか。直し方」を出します。環境を黙って変えません（`rustup target add` などは案内だけ）
-- 見るもの: Rust の target（rustup があるとき）、bin（デスクトップ）・cdylib（Web）の有無、`wasm-bindgen` CLI の有無と
-  Cargo.lock の `wasm-bindgen` との版の一致、`--release` の `wasm-opt`
+- 見るもの: Rust の target（rustup があるとき）、bin（デスクトップ）・cdylib（Web・Android）の有無、`wasm-bindgen` CLI の有無と
+  Cargo.lock の `wasm-bindgen` との版の一致、`--release` の `wasm-opt`。Android は application-id、`ANDROID_HOME`（または `ANDROID_SDK_ROOT`）、NDK、
+  `cargo-ndk`・`gradle`・`java`、run は `adb` と端末 1 台、`--release` は署名の環境変数と keystore ファイルの実在
 - エラーに環境変数の値を出しません（`security.md`）
-- 子プロセスの失敗は出力をそのまま流し、最後にどの段（cargo・wasm-bindgen・wasm-opt）で止まったかを 1 行出します
+- 子プロセスの失敗は出力をそのまま流し、最後にどの段（cargo・wasm-bindgen・wasm-opt・cargo-ndk・gradle・adb-install・adb-start・adb-check）で止まったかを 1 行出します
 
 ## 作り
 

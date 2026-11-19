@@ -6,20 +6,25 @@
 //! - 入力の取得 [`load_app`]・[`detect_env`]: `cargo metadata` と実環境（PATH・rustup・wasm-bindgen の版）から入力を作る
 //! - 実行器 [`execute`]: 手順を順に実行するだけ。判断は持たない
 //!
-//! デスクトップ（macOS・Windows・Linux）は cargo への委譲、Web は `web` モジュール。Android・iOS は後続 PR で
-//! `Os` と `match os` の腕を足す（漏れはコンパイルで分かる）。`scripts/` は gallery 専用で利用者に配られないため呼ばない。
+//! デスクトップ（macOS・Windows・Linux）は cargo への委譲、Web は `web` モジュール、Android は `android` モジュール
+//! （#1423）。iOS は後続 PR で `Os` と `match os` の腕を足す（漏れはコンパイルで分かる）。`scripts/` は gallery 専用で利用者に配られないため呼ばない。
 //! 終了コードは `main.rs` が決める（失敗は 1）。エラー文に環境変数の値は出さない（security.md）。
 //! 設計は `docs/architecture/run-build-cli.md`。
 
+mod android;
 mod serve;
 mod web;
 
-use std::collections::BTreeSet;
+pub use android::{parse_adb_devices, AndroidEnv};
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::native::{app_root, generate_web, AppInfo, WEB_MANIFEST_PATH, WEB_TRIPLE};
+use crate::native::{
+    app_root, generate_android, generate_web, AppInfo, ANDROID_TRIPLE, WEB_MANIFEST_PATH,
+    WEB_TRIPLE,
+};
 use crate::workspace::run_metadata;
 
 /// 対象 OS。
@@ -29,6 +34,7 @@ pub enum Os {
     Windows,
     Linux,
     Web,
+    Android,
 }
 
 impl Os {
@@ -39,11 +45,12 @@ impl Os {
             Os::Windows => "windows",
             Os::Linux => "linux",
             Os::Web => "web",
+            Os::Android => "android",
         }
     }
 
     fn parse(s: &str) -> Option<Os> {
-        [Os::Macos, Os::Windows, Os::Linux, Os::Web]
+        [Os::Macos, Os::Windows, Os::Linux, Os::Web, Os::Android]
             .into_iter()
             .find(|o| o.name() == s)
     }
@@ -62,6 +69,7 @@ impl Os {
     fn triple(self) -> Option<&'static str> {
         match self {
             Os::Web => Some(WEB_TRIPLE),
+            Os::Android => Some(ANDROID_TRIPLE),
             Os::Macos | Os::Windows | Os::Linux => None,
         }
     }
@@ -132,7 +140,9 @@ pub struct App {
     pub target_dir: PathBuf,
     /// 実行体（bin target）の名前。
     pub bins: Vec<String>,
-    /// `cdylib` を含む lib の名前（`_` 区切り）。Web の wasm の元。
+    /// package の版。Android の殻の `versionName`。
+    pub version: String,
+    /// `cdylib` を含む lib の名前（`_` 区切り）。Web の wasm・Android の `.so` の元。
     pub cdylib: Option<String>,
     /// アプリの依存解決（Cargo.lock）にある `wasm-bindgen` の版（Web のときだけ調べる）。
     pub wasm_bindgen: Option<String>,
@@ -144,6 +154,10 @@ pub struct App {
     pub font: Option<PathBuf>,
     /// `cargo fandhe gen --os web` 相当の manifest の中身。`fandhe-app.web` があるアプリだけ `Some`。
     pub web_manifest: Option<String>,
+    /// `fandhe-app.android.application-id`（Android のときだけ読む）。
+    pub application_id: Option<String>,
+    /// `cargo fandhe gen`（Android の分だけ）の出力。Android のときだけ作る。
+    pub android_gen: Option<BTreeMap<String, String>>,
 }
 
 /// 実行環境のスナップショット。判定を純粋にするため、実環境の観測は [`detect_env`] だけが行う。
@@ -151,12 +165,14 @@ pub struct App {
 pub struct Env {
     /// ホストのデスクトップ OS。対応外は `None`。
     pub host: Option<Os>,
-    /// PATH 上にあるコマンド名（`rustup`・`wasm-bindgen`・`wasm-opt`）。
+    /// PATH 上にあるコマンド名（`rustup`・`wasm-bindgen`・`wasm-opt`・`cargo-ndk`・`gradle`・`gradle.bat`・`java`・`adb`）。
     pub commands: BTreeSet<String>,
     /// `rustup target list --installed`。rustup が無い・取得できないときは `None`（検査を飛ばす）。
     pub installed_targets: Option<BTreeSet<String>>,
     /// `wasm-bindgen --version` の版。取得できなければ `None`。
     pub wasm_bindgen_version: Option<String>,
+    /// Android の環境（Android のときだけ調べる）。
+    pub android: android::AndroidEnv,
     /// 子プロセスとして起動する cargo（環境変数 `CARGO` か `cargo`）。値はエラー文に出さない。
     pub cargo: OsString,
 }
@@ -167,6 +183,8 @@ pub struct Step {
     pub stage: &'static str,
     pub program: OsString,
     pub args: Vec<String>,
+    /// 子プロセスの環境変数の上書き（継承した環境に足す）。秘密値は入れない（継承のまま渡す）。
+    pub env: Vec<(String, OsString)>,
 }
 
 /// 手順の 1 要素。実行器は上から順に処理する。
@@ -178,9 +196,18 @@ pub enum Op {
         dir: PathBuf,
         within: PathBuf,
     },
-    /// ファイルを書く（親ディレクトリは作る）。
+    /// `cargo fandhe gen` の出力を `dir` へ書く（`native::write`。印のある `gen/` だけを置き換える）。
+    /// `dir` は `within` の配下で、途中に symlink が無いことを確かめてから書く。
+    Gen {
+        dir: PathBuf,
+        within: PathBuf,
+        files: BTreeMap<String, String>,
+    },
+    /// ファイルを書く（親ディレクトリは作る）。`path` が `within` の配下で、`within` から `path` までに
+    /// symlink が無いことを確かめてから書く（`Reset` と同じ検査）。
     Write {
         path: PathBuf,
+        within: PathBuf,
         body: String,
     },
     /// ファイルを写す（親ディレクトリは作る）。
@@ -221,6 +248,7 @@ pub fn prepare(app: &App, opts: &Options, env: &Env) -> Result<Vec<Op>, Vec<Stri
     let os = resolve_os(opts, env.host)?;
     match os {
         Os::Web => web::prepare(app, opts, env, &out_dir(app, os)),
+        Os::Android => android::prepare(app, opts, env, &out_dir(app, os)),
         Os::Macos | Os::Windows | Os::Linux => desktop_prepare(os, app, opts, env),
     }
 }
@@ -264,6 +292,7 @@ fn cargo_step(app: &App, opts: &Options, env: &Env, extra: &[&str]) -> Step {
         stage: "cargo",
         program: env.cargo.clone(),
         args,
+        env: Vec::new(),
     }
 }
 
@@ -289,6 +318,7 @@ pub fn load_app(opts: &Options, os: Os) -> Result<App, Vec<String>> {
     };
     let mut app = App {
         name: info.name,
+        version: info.version,
         manifest,
         dir,
         target_dir,
@@ -299,6 +329,8 @@ pub fn load_app(opts: &Options, os: Os) -> Result<App, Vec<String>> {
         web_has_index: false,
         font: None,
         web_manifest: None,
+        application_id: None,
+        android_gen: None,
     };
     match os {
         Os::Web => {
@@ -330,6 +362,13 @@ pub fn load_app(opts: &Options, os: Os) -> Result<App, Vec<String>> {
                     .remove(WEB_MANIFEST_PATH);
             }
         }
+        Os::Android => {
+            // gen の出力はアプリの `gen/` ではなく成果物の置き場へ出す（アプリの iOS・macOS の生成物を消さない）。
+            let gen_dir = out_dir(&app, Os::Android).join("gen");
+            let (g, id) = generate_android(opts.manifest.as_deref(), gen_dir)?;
+            app.android_gen = Some(g.files);
+            app.application_id = id;
+        }
         Os::Macos | Os::Windows | Os::Linux => {}
     }
     Ok(app)
@@ -341,18 +380,32 @@ pub fn parse_wasm_bindgen_version(out: &str) -> Option<String> {
     (w.next()? == "wasm-bindgen").then(|| w.next().map(String::from))?
 }
 
-/// 実環境を観測して [`Env`] にする。Web 以外では rustup・wasm-bindgen の中身を調べない。
-pub fn detect_env(os: Os) -> Env {
-    let commands: BTreeSet<String> = ["rustup", "wasm-bindgen", "wasm-opt"]
-        .into_iter()
-        .filter(|c| on_path(c))
-        .map(String::from)
-        .collect();
-    let web = match os {
-        Os::Web => true,
+/// 実環境を観測して [`Env`] にする。rustup の target は Web・Android だけ、wasm-bindgen の版は Web だけ調べる。
+pub fn detect_env(os: Os, action: Action) -> Env {
+    let commands: BTreeSet<String> = [
+        "rustup",
+        "wasm-bindgen",
+        "wasm-opt",
+        "cargo-ndk",
+        "gradle",
+        "gradle.bat",
+        "java",
+        "adb",
+    ]
+    .into_iter()
+    .filter(|c| on_path(c))
+    .map(String::from)
+    .collect();
+    let rust_targets = match os {
+        Os::Web | Os::Android => true,
         Os::Macos | Os::Windows | Os::Linux => false,
     };
-    let installed_targets = (web && commands.contains("rustup"))
+    let web = os == Os::Web;
+    let android = match os {
+        Os::Android => android::detect(&commands, action),
+        _ => android::AndroidEnv::default(),
+    };
+    let installed_targets = (rust_targets && commands.contains("rustup"))
         .then(|| output_of("rustup", &["target", "list", "--installed"]))
         .flatten()
         .map(|t| t.lines().map(|l| l.trim().to_string()).collect());
@@ -365,6 +418,7 @@ pub fn detect_env(os: Os) -> Env {
         commands,
         installed_targets,
         wasm_bindgen_version,
+        android,
         cargo: std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()),
     }
 }
@@ -390,8 +444,13 @@ pub fn execute(ops: &[Op]) -> Result<(), String> {
     for op in ops {
         match op {
             Op::Say(m) => println!("{m}"),
+            Op::Gen { dir, within, files } => {
+                check_within(dir, within)?;
+                crate::native::write(dir, files)?;
+            }
             Op::Reset { dir, within } => reset_dir(dir, within)?,
-            Op::Write { path, body } => {
+            Op::Write { path, within, body } => {
+                check_within(path, within)?;
                 make_parent(path)?;
                 std::fs::write(path, body)
                     .map_err(|e| format!("{} を書けません: {e}", path.display()))?;
@@ -407,6 +466,7 @@ pub fn execute(ops: &[Op]) -> Result<(), String> {
             Op::Spawn(s) => {
                 let status = Command::new(&s.program)
                     .args(&s.args)
+                    .envs(s.env.iter().map(|(k, v)| (k, v)))
                     .status()
                     .map_err(|e| format!("{} の段を起動できません: {e}", s.stage))?;
                 if !status.success() {
@@ -423,7 +483,19 @@ pub fn execute(ops: &[Op]) -> Result<(), String> {
 
 /// `dir` を消して作り直す。消す前に、`within` の配下であること・`within` から `dir` までに symlink が無いことを確かめる。
 fn reset_dir(dir: &Path, within: &Path) -> Result<(), String> {
-    let rel = dir
+    check_within(dir, within)?;
+    match std::fs::remove_dir_all(dir) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(format!("{} を消せません: {e}", dir.display())),
+    }
+    std::fs::create_dir_all(dir).map_err(|e| format!("{} を作れません: {e}", dir.display()))
+}
+
+/// `path` が `within` の配下であること・`within` から `path` までに symlink が無いことを確かめる
+/// （消す・書く前の検査。`path` 自身が symlink でも拒否する。存在しない部分は問題にしない）。
+fn check_within(path: &Path, within: &Path) -> Result<(), String> {
+    let rel = path
         .strip_prefix(within)
         .ok()
         // 空（`within` 自身）と、`..` などの字句上だけ配下に見える形（`within/../x`）は拒否する。
@@ -434,8 +506,8 @@ fn reset_dir(dir: &Path, within: &Path) -> Result<(), String> {
         })
         .ok_or_else(|| {
             format!(
-                "{} は {} の配下ではないため消しません",
-                dir.display(),
+                "{} は {} の配下ではないため操作しません",
+                path.display(),
                 within.display()
             )
         })?;
@@ -444,19 +516,14 @@ fn reset_dir(dir: &Path, within: &Path) -> Result<(), String> {
         cur.push(c);
         match std::fs::symlink_metadata(&cur) {
             Ok(md) if md.file_type().is_symlink() => {
-                return Err(format!("{} は symlink のため消しません", cur.display()))
+                return Err(format!("{} は symlink のため操作しません", cur.display()))
             }
             Ok(_) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => break,
             Err(e) => return Err(format!("{} を調べられません: {e}", cur.display())),
         }
     }
-    match std::fs::remove_dir_all(dir) {
-        Ok(()) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(format!("{} を消せません: {e}", dir.display())),
-    }
-    std::fs::create_dir_all(dir).map_err(|e| format!("{} を作れません: {e}", dir.display()))
+    Ok(())
 }
 
 /// symlink でない実体のディレクトリか（`is_dir` はリンク先を辿るため使わない）。
@@ -510,7 +577,7 @@ fn make_parent(path: &Path) -> Result<(), String> {
 /// `cargo fandhe run|build` の本体。問題は 1 件ずつの文字列で返す。
 pub fn run_cli(opts: &Options) -> Result<(), Vec<String>> {
     let os = resolve_os(opts, Os::host())?;
-    let env = detect_env(os);
+    let env = detect_env(os, opts.action);
     let app = load_app(opts, os)?;
     let ops = prepare(&app, opts, &env)?;
     execute(&ops).map_err(|e| vec![e])
