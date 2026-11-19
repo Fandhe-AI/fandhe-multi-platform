@@ -5,6 +5,22 @@
 
 ## [Unreleased]
 
+`ScreenStack` の構築関数が状態を読み取り専用で受け取れるようにする（Issue #1289）。
+
+### 破壊的変更（BREAKING CHANGE）
+
+- `ScreenStack::new` / `push` が受け取る型を `fn() -> Screen<S>` から `fn(&S) -> Screen<S>` に変更
+- `ScreenStack::current` を `current(&self, state: &S)` に変更
+- `screens::list_detail::{list_screen, detail_screen}` が `&ListDetailState` を受け取る。詳細画面の
+  トグルボタンの文言を `LABEL_ADD_FAVORITE` / `LABEL_REMOVE_FAVORITE` に変更（状態で切り替わる）
+
+### 移行手順
+
+1. 画面を作る関数の引数に `_state: &S` を足す（状態を読まない画面は未使用のままでよい）
+2. `stack.current()` を `stack.current(state)` に置き換える（`state.nav.current(state)`）
+3. 状態で文言が変わるボタンへ `ButtonClicked` を送る側は、dispatch のたびに画面を組み直し、
+   その時点の文言を使う
+
 実画素の画像ノード `Node::RgbaImage` を追加し、カメラ撮影のサムネイルを実画素にする（Issue #5）。
 
 ### 追加
