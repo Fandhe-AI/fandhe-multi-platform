@@ -11,7 +11,7 @@
 //! `fandhe_runtime::request_slot::RequestSlot` で受ける。画面（macOS・Web の [`eye_dropper_pick_effect`]。Web の `open()`・中断の実体は `web.rs`）と
 //! 公開入口（[`begin_eye_dropper`] / [`poll_eye_dropper`] / [`discard_eye_dropper`]）が同じ slot を共有し、
 //! 持ち主の印（`SlotOwner`）で互いの進行中の要求を置き換えない。
-//! 片方が進行中のあいだ、または公開入口の結果が未取得のあいだ（画面側の開始のみ）、後から来た方は
+//! 片方が進行中のあいだ、または公開入口の結果が未取得のあいだ、後から来た方は
 //! `Internal("eye_dropper busy")` で断る（macOS はサンプラーが 2 つ同時に開かないようにするためでもある）。
 //!
 //! # 画面が受け取らない結果
@@ -161,7 +161,7 @@ fn drive_callback(state: &EyeDropperState, sender: &CompletionSender<EyeDropperS
                 false
             }
         },
-        // 自分の要求が置き換わった・失われた。待ち続けず失敗で終える（Idle なら何もしない）。
+        // 自分の要求が失われた（slot の reset 等）。待ち続けず失敗で終える（Idle なら何もしない）。
         move |s: &mut EyeDropperState| {
             if s.phase != PickPhase::Idle {
                 finish_pick(
@@ -469,7 +469,7 @@ mod tests {
             fn wake_after(&self, _delay: std::time::Duration) {}
         }
 
-        /// 画面の届いた未取得の結果を、公開入口の開始が捨てずに受け取り待ちへ移す。画面は poll でそのまま受け取る。
+        /// 画面 effect と同じ受け取り方（自分の id で受け口・受け取り待ちを見る）で画面側の結果を 1 回 poll する。
         fn poll_screen(sender: &CompletionSender<u8>) {
             fandhe_runtime::request_slot::poll_and_finish_owned(
                 &bridge::SLOT,
@@ -484,6 +484,7 @@ mod tests {
             );
         }
 
+        /// 画面の届いた未取得の結果を、公開入口の開始が捨てずに受け取り待ちへ移す。画面は poll でそのまま受け取る。
         #[test]
         fn public_begin_parks_unpolled_screen_result_and_screen_poll_receives_it() {
             let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
@@ -542,6 +543,10 @@ mod tests {
             let screen = begin_screen().unwrap();
             assert!(bridge::deliver(screen, Ok(color("#aabbcc"))));
             begin_public().unwrap();
+            assert_eq!(
+                bridge::SLOT.snapshot_of(screen),
+                Some(Some(Ok(color("#aabbcc"))))
+            );
             reset();
             assert_eq!(bridge::SLOT.snapshot_of(screen), None);
         }
