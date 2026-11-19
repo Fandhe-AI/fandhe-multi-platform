@@ -150,6 +150,41 @@ impl BackupDomain {
     }
 }
 
+/// アプリの `info-plist`（`fandhe-app.<os>.info-plist`）の検証。アプリは `*UsageDescription` も書ける
+/// （機能が要求したキーと文言が食い違えば、統合でエラーになる）。検査は制御文字と、説明文キー
+/// （修飾子を落として `UsageDescription` で終わるもの）の値が空白だけでない文字列であること。
+pub(crate) fn info_plist_problems(field: &str, m: &Map<String, Value>) -> Vec<Problem> {
+    let mut c = Ctx(Vec::new());
+    for (k, v) in m {
+        c.check(
+            no_ctrl(k) && json_no_ctrl(v),
+            &format!("{field}.{k}"),
+            "制御文字は使えません",
+        );
+        // 説明文は `usage-descriptions` と同じ基準（文字列で、空白だけでない）にする。
+        if strip_qualifier(k).ends_with("UsageDescription") {
+            c.check(
+                v.as_str().is_some_and(|t| !t.trim().is_empty()),
+                &format!("{field}.{k}"),
+                "説明文は空白だけでない文字列にしてください",
+            );
+        }
+    }
+    c.0
+}
+
+/// アプリの `entitlements`（`fandhe-app.<os>.entitlements`）の検証。機能の宣言と同じ `Ctx::entitlements` を通し、
+/// App Group の誘導先だけアプリの欄（機能の `app-groups` と `app-group-prefix`）にする。
+pub(crate) fn entitlements_problems(field: &str, m: &Map<String, Value>) -> Vec<Problem> {
+    let mut c = Ctx(Vec::new());
+    c.entitlements(
+        field,
+        m,
+        "App Group は機能の宣言の `app-groups` と `fandhe-app.app-group-prefix` から生成されるため、ここには書けません",
+    );
+    c.0
+}
+
 /// `backup-exclusions` の検証。機能の宣言（`android.backup-exclusions`）とアプリの入力
 /// （`fandhe-app.android.backup-exclusions`）が同じ規則を通す。
 pub(crate) fn backup_exclusion_problems(field: &str, list: &[BackupExclusion]) -> Vec<Problem> {
@@ -375,18 +410,23 @@ fn is_rel_path(s: &str) -> bool {
     !s.is_empty()
         && !s.starts_with('/')
         && !s.contains(['\\', ':'])
-        && !s.chars().any(char::is_control)
+        && !s
+            .chars()
+            .any(|c| c.is_control() || matches!(c, '\u{FFFE}' | '\u{FFFF}'))
         && s.split('/').all(|seg| seg != "..")
 }
 
 /// Info.plist のキーから端末修飾子（`key-<platform>~<device>` の `-…`・`~…`）を落とす。
-/// `info-plist` の説明文拒否判定が使う。修飾子つきでも説明文を機能側に埋め込ませないため。
-fn strip_qualifier(k: &str) -> &str {
+/// 機能の `info-plist` の説明文拒否判定と、アプリの追記（`native::append_app`）が使う。
+/// 追記では、修飾子つきのキーが生成値の素のキーを上書きしないかの照合と、説明文の検査の対象判定に使う。
+pub(crate) fn strip_qualifier(k: &str) -> &str {
     &k[..k.find(['-', '~']).unwrap_or(k.len())]
 }
 
-fn no_ctrl(s: &str) -> bool {
-    !s.chars().any(char::is_control)
+pub(crate) fn no_ctrl(s: &str) -> bool {
+    // XML 1.0 で不正な U+FFFE・U+FFFF も拒否する（plist・Manifest へそのまま出すため）。
+    !s.chars()
+        .any(|c| c.is_control() || matches!(c, '\u{FFFE}' | '\u{FFFF}'))
 }
 
 fn json_no_ctrl(v: &Value) -> bool {
@@ -519,12 +559,13 @@ impl Ctx {
             );
         }
     }
-    fn entitlements(&mut self, field: &str, m: &Map<String, Value>) {
+    /// `group_hint` は App Group を直接書いたときの誘導文（機能の宣言とアプリの追記で書き先が違う）。
+    fn entitlements(&mut self, field: &str, m: &Map<String, Value>, group_hint: &str) {
         for (k, v) in m {
             self.check(
                 k != "com.apple.security.application-groups",
                 &format!("{field}.{k}"),
-                "App Group は `app-groups` に記号名で書いてください",
+                group_hint,
             );
             self.check(
                 no_ctrl(k) && json_no_ctrl(v),
@@ -605,7 +646,11 @@ fn validate_apple(c: &mut Ctx, os: &str, a: &Apple) {
     c.idents(&format!("{os}.frameworks"), &a.frameworks);
     c.app_groups(&format!("{os}.app-groups"), &a.app_groups);
     c.plist(&format!("{os}.info-plist"), &a.info_plist);
-    c.entitlements(&format!("{os}.entitlements"), &a.entitlements);
+    c.entitlements(
+        &format!("{os}.entitlements"),
+        &a.entitlements,
+        "App Group は `app-groups` に記号名で書いてください",
+    );
     c.dup(
         &format!("{os}.extensions"),
         a.extensions.iter().map(|e| e.name.as_str()),
@@ -637,7 +682,11 @@ fn validate_apple(c: &mut Ctx, os: &str, a: &Apple) {
         c.idents(&format!("{p}.frameworks"), &e.frameworks);
         c.app_groups(&format!("{p}.app-groups"), &e.app_groups);
         c.plist(&format!("{p}.info-plist"), &e.info_plist);
-        c.entitlements(&format!("{p}.entitlements"), &e.entitlements);
+        c.entitlements(
+            &format!("{p}.entitlements"),
+            &e.entitlements,
+            "App Group は `app-groups` に記号名で書いてください",
+        );
         c.check(
             e.info_plist.contains_key("NSExtension"),
             &format!("{p}.info-plist"),

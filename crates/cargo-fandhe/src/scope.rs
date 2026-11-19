@@ -4,6 +4,7 @@
 //! （aapt2・codesign・otool・Gradle 等）で取り出したテキストに、禁止集合の値が 1 つでも
 //! 現れたら違反とする。ツールの実行は `scripts/audit/verify-capability-scope.sh` の担当で、
 //! 本モジュールはテキストの照合だけを行う（ネットワーク・外部コマンドは `cargo metadata` のみ）。
+//! アプリ自身が追記した Info.plist・entitlements のキー（修飾子を落とした素のキーを含む）も、禁止集合から除く。
 //! 到達した宣言と値が重なるもの（複数機能が同じ権限を宣言する等）は、正当に現れるため禁止にしない。
 //! 宣言から禁止集合を作るので、機能が増えても検査側の修正は要らない。
 //! Android は加えて aapt2 の xmltree を要素単位で読み、カタログの権限の `usesPermissionFlags`（ビット値）と
@@ -17,7 +18,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use crate::declaration::{Apple, Declaration, MAIN_ACTIVITY_ATTRIBUTES};
-use crate::native::{ANDROID_TRIPLE, APP_GROUPS_KEY, IOS_TRIPLE, MACOS_TRIPLE, MAIN_ACTIVITY};
+use crate::native::{
+    app_root, AppConfig, ANDROID_TRIPLE, APP_GROUPS_KEY, IOS_TRIPLE, MACOS_TRIPLE, MAIN_ACTIVITY,
+};
 use crate::reach::reachable;
 use crate::workspace::{collect, run_metadata};
 
@@ -108,10 +111,13 @@ fn tokens(d: &Declaration, os: &str) -> Vec<(&'static str, String)> {
 }
 
 /// 禁止集合: カタログのうち到達しなかった機能の値から、到達した機能が宣言する値を引く。
+/// `app` はアプリが追記した `(値, 種別)` で、禁止に入れない。値ごとではなく種別つきで飛ばすので、
+/// 同じ値の別種別（framework・拡張ターゲット）の禁止は残る（#1202）。
 pub(crate) fn forbidden_tokens(
     reached: &[&Declaration],
     catalog: &[&Declaration],
     os: &str,
+    app: &BTreeSet<(String, &'static str)>,
 ) -> BTreeMap<String, Owner> {
     let allowed: BTreeSet<String> = reached
         .iter()
@@ -126,6 +132,7 @@ pub(crate) fn forbidden_tokens(
     {
         for (kind, v) in tokens(d, os) {
             if !allowed.contains(&v)
+                && !app.contains(&(v.clone(), kind))
                 && !GENERIC_KEYS.contains(&v.as_str())
                 && !(kind == "framework" && BASE_FRAMEWORKS.contains(&v.as_str()))
             {
@@ -436,7 +443,18 @@ pub fn verify_scope(
             "観測テキストが空です（ツールの失敗を見逃さないため失敗にします）".into(),
         ]);
     }
-    let forbidden = forbidden_tokens(&reached, &catalog_decls, os);
+    // アプリ自身が追記した Info.plist・entitlements のキーは、未選択の機能と同名でも違反にしない。
+    let mut app = BTreeSet::new();
+    if os != "android" {
+        let (_, app_cfg, _) = app_root(&meta)?;
+        let (plist, entitlements) = AppConfig::parse(&app_cfg)?.appended_keys(os);
+        for k in plist {
+            app.insert((k.clone(), "Info.plist キー"));
+            app.insert((k, "説明文キー"));
+        }
+        app.extend(entitlements.into_iter().map(|k| (k, "entitlement")));
+    }
+    let forbidden = forbidden_tokens(&reached, &catalog_decls, os, &app);
     let mut hits = scan(&forbidden, observed);
     if os == "android" {
         hits.extend(android_structure(&reached, &catalog_decls, observed));
@@ -479,10 +497,10 @@ mod tests {
             .copied()
             .filter(|d| d.id == "camera-capture")
             .collect();
-        let android = forbidden_tokens(&reached, &cat, "android");
+        let android = forbidden_tokens(&reached, &cat, "android", &BTreeSet::new());
         assert!(android.contains_key("android.permission.NFC"));
         assert!(!android.contains_key("android.permission.CAMERA"));
-        assert!(forbidden_tokens(&reached, &cat, "ios").contains_key("VisionKit"));
+        assert!(forbidden_tokens(&reached, &cat, "ios", &BTreeSet::new()).contains_key("VisionKit"));
     }
 
     /// print だけを選び、カタログに UIKit / AppKit を宣言する color-picker を含めても、
@@ -497,8 +515,8 @@ mod tests {
             .collect();
         assert_eq!(cat.len(), 2);
         let reached: Vec<&Declaration> = cat.iter().copied().filter(|d| d.id == "print").collect();
-        let ios = forbidden_tokens(&reached, &cat, "ios");
-        let macos = forbidden_tokens(&reached, &cat, "macos");
+        let ios = forbidden_tokens(&reached, &cat, "ios", &BTreeSet::new());
+        let macos = forbidden_tokens(&reached, &cat, "macos", &BTreeSet::new());
         assert!(!ios.contains_key("UIKit"));
         assert!(!macos.contains_key("AppKit"));
     }
