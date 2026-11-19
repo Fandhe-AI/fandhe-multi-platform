@@ -5,6 +5,26 @@
 
 ## [Unreleased]
 
+`menu`・`tabs` を egui で描画し、選択を状態へ返せるようにする（Issue #1429）。
+
+### 破壊的変更（BREAKING CHANGE）
+
+- `Screen::menu` / `Menu::bound` に書き戻し先 `set_open: WriteFn<S, bool>` と
+  `set_selected: WriteFn<S, usize>` を追加（引数の並びは `open, set_open, selected, set_selected`）
+- `Screen::tabs` / `Tabs::bound` に書き戻し先 `set_selected: WriteFn<S, usize>` を追加
+
+### 追加
+
+- `Menu` / `Tabs` が `Widget::apply_value` を実装。`WidgetValue::Bool` は開閉、`WidgetValue::Index` は
+  選択を書く（範囲外の番号は無視。`Menu` は選択に続けて `set_open(false)` も呼ぶ）
+- `Menu` / `Tabs` に `Widget::as_any` を実装（egui 描画の downcast 用）
+- 確認用画面 `screens::menu_tabs`（gallery の `menu-tabs`）
+
+### 移行手順
+
+1. `.menu(id, label, items, open, selected)` を `.menu(id, label, items, open, set_open, selected, set_selected)` へ
+2. `.tabs(id, labels, selected)` を `.tabs(id, labels, selected, set_selected)` へ
+
 `ScreenStack` の構築関数が状態を読み取り専用で受け取れるようにする（Issue #1289）。
 
 ### 破壊的変更（BREAKING CHANGE）

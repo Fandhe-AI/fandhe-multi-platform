@@ -63,11 +63,11 @@ use crate::ui::{
 /// 型不一致（例: `Checkbox` に `Number` を渡す）を判定してガードする。
 #[derive(Debug, Clone, PartialEq)]
 pub enum WidgetValue {
-    /// `Checkbox` / `ToggleSwitch` が運ぶ真偽値。
+    /// `Checkbox` / `ToggleSwitch` が運ぶ真偽値、`Menu` が運ぶ開閉。
     Bool(bool),
     /// `Slider` が運ぶ数値（`NaN`・範囲外は `apply_value` 側でガードする）。
     Number(f32),
-    /// `RadioButton` が運ぶ選択肢インデックス。
+    /// `RadioButton` / `Tabs` / `Menu` が運ぶ選択肢・タブ・項目のインデックス。
     Index(usize),
 }
 
@@ -126,7 +126,7 @@ pub enum Event {
     /// 状態を変更せず `false` を返す。
     BackRequested,
     /// `path` で特定した `Node::Widget`（`Checkbox` / `ToggleSwitch` / `Slider` /
-    /// `RadioButton`）の値変更（Issue #805 / 親 #804）。`ButtonActivatedAt`（#536）と
+    /// `RadioButton` / `Menu` / `Tabs`）の値変更（Issue #805 / 親 #804）。`ButtonActivatedAt`（#536）と
     /// 対称の id ガード付き path 方式で、プラットフォームレイヤが描画した標準部品
     /// （egui のネイティブチェックボックス・トグル・スライダー・ラジオ等）が発生させた
     /// 値変更を `ui::event::set_widget_value_at` へ委譲して状態へ反映する。

@@ -109,6 +109,9 @@ pub mod checkbox_list;
 /// 表示専用部品の確認用画面（Issue #1428）。
 pub mod display_widgets;
 
+/// `menu`・`tabs` の確認用画面（Issue #1429）。
+pub mod menu_tabs;
+
 /// 一覧の行内に複数の操作を横に並べる例「行の操作」（Issue #1288）。
 pub mod row_actions;
 

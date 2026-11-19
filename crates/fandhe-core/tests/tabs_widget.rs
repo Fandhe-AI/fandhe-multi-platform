@@ -37,12 +37,21 @@ fn get_selected_tab(state: &FormState) -> usize {
     state.selected_tab
 }
 
+fn set_selected_tab(state: &mut FormState, index: usize) {
+    state.selected_tab = index;
+}
+
 fn tab_labels() -> Vec<String> {
     vec!["概要".to_string(), "詳細".to_string()]
 }
 
 fn tabs_screen() -> Screen<FormState> {
-    Screen::new("フォーム画面").tabs(WidgetId::from_raw(1), tab_labels(), get_selected_tab)
+    Screen::new("フォーム画面").tabs(
+        WidgetId::from_raw(1),
+        tab_labels(),
+        get_selected_tab,
+        set_selected_tab,
+    )
 }
 
 fn sized(width: f32, height: f32) -> Measurement {
@@ -110,6 +119,7 @@ fn tabs_does_not_affect_rendering_of_other_node_variants() {
         WidgetId::from_raw(1),
         tab_labels(),
         get_selected_tab,
+        set_selected_tab,
     );
     let state = FormState { selected_tab: 0 };
 
@@ -142,7 +152,12 @@ fn tabs_screen_builds_one_widget_node() {
 /// から固定化する。
 #[test]
 fn labels_returns_constructed_headings() {
-    let tabs: Tabs<FormState> = Tabs::bound(WidgetId::from_raw(1), tab_labels(), get_selected_tab);
+    let tabs: Tabs<FormState> = Tabs::bound(
+        WidgetId::from_raw(1),
+        tab_labels(),
+        get_selected_tab,
+        set_selected_tab,
+    );
     assert_eq!(tabs.labels(), vec!["概要", "詳細"]);
 }
 
@@ -151,8 +166,12 @@ fn labels_returns_constructed_headings() {
 /// と同じ観点）。
 #[test]
 fn sync_from_state_transitions_selected_tab_via_public_api() {
-    let mut tabs: Tabs<FormState> =
-        Tabs::bound(WidgetId::from_raw(1), tab_labels(), get_selected_tab);
+    let mut tabs: Tabs<FormState> = Tabs::bound(
+        WidgetId::from_raw(1),
+        tab_labels(),
+        get_selected_tab,
+        set_selected_tab,
+    );
 
     let mut state = FormState { selected_tab: 0 };
     tabs.sync_from_state(&state);
@@ -168,8 +187,12 @@ fn sync_from_state_transitions_selected_tab_via_public_api() {
 /// と同じ観点をクレート外部から再確認する）。
 #[test]
 fn selected_tab_is_reflected_in_painted_labels_via_public_api() {
-    let mut tabs: Tabs<FormState> =
-        Tabs::bound(WidgetId::from_raw(1), tab_labels(), get_selected_tab);
+    let mut tabs: Tabs<FormState> = Tabs::bound(
+        WidgetId::from_raw(1),
+        tab_labels(),
+        get_selected_tab,
+        set_selected_tab,
+    );
     tabs.sync_from_state(&FormState { selected_tab: 1 });
 
     let commands = tabs.paint((0.0, 0.0), tabs.measure(sized(800.0, 600.0)));
@@ -189,8 +212,12 @@ fn selected_tab_is_reflected_in_painted_labels_via_public_api() {
 /// `tabs.rs` モジュール doc 参照）。
 #[test]
 fn hit_test_covers_measured_size() {
-    let mut tabs: Tabs<FormState> =
-        Tabs::bound(WidgetId::from_raw(1), tab_labels(), get_selected_tab);
+    let mut tabs: Tabs<FormState> = Tabs::bound(
+        WidgetId::from_raw(1),
+        tab_labels(),
+        get_selected_tab,
+        set_selected_tab,
+    );
     tabs.sync_from_state(&FormState { selected_tab: 0 });
 
     let available = sized(800.0, 600.0);
@@ -210,7 +237,12 @@ fn hit_test_covers_measured_size() {
 /// `tabs_preview_widget_is_backed_by_real_tabs` 参照）。
 #[test]
 fn accessibility_role_is_tab_list() {
-    let tabs: Tabs<FormState> = Tabs::bound(WidgetId::from_raw(1), tab_labels(), get_selected_tab);
+    let tabs: Tabs<FormState> = Tabs::bound(
+        WidgetId::from_raw(1),
+        tab_labels(),
+        get_selected_tab,
+        set_selected_tab,
+    );
     assert_eq!(tabs.accessibility_role(), AccessibilityRole::TabList);
 }
 

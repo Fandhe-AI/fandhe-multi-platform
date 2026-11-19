@@ -55,7 +55,9 @@
 //!   非発火、`DialogWidget` / `RadioGroupWidget` と同じ意味論）。
 //!   - `Trigger` + `Trigger` → 開閉トグル（`Event::ButtonClicked { label: self.label }`）。
 //!     宣言層はレガシー `.button(label, toggle_handler)` で受け、`StateStore::dispatch` →
-//!     `sync_from_state` で開閉が還流する制御型の設計。
+//!     `sync_from_state` で開閉が還流する制御型の設計。egui の描画（`fandhe-render-egui`、
+//!     #1429）は本経路ではなく、`bound` で受けた `WriteFn` を [`Widget::apply_value`]
+//!     （`WidgetValue::Bool` = 開閉、`WidgetValue::Index` = 選択して閉じる）経由で呼ぶ。
 //!   - 開状態で `Item(i)` + `Item(i)`（同一 index）→ 選択確定
 //!     （`Event::ButtonClicked { label: self.items[i] }`）。`focused_item` も `i` へ
 //!     同期する（`RadioGroupWidget::release` の「Pointer select skips focus update」
@@ -100,7 +102,8 @@
 //! (g) `items` が空の場合でもポップアップ用の余白（[`MENU_PADDING`]）を予約し、
 //! 開状態で空のポップアップ `Rect` を描画する（プレースホルダ実装の既知の制約。
 //! 項目 0 件時の特別扱いは対象外）、
-//! (h) `Event` 専用バリアント化（`Event::ButtonClicked` へのブリッジのまま）・
+//! (h) `Event` 専用バリアント化（`apply_pointer` / `handle_input` は `Event::ButtonClicked` への
+//! ブリッジのまま。egui 経路は #1429 で `Event::WidgetValueChanged` → `apply_value` へ統合済み）・
 //! `WidgetId` ベースディスパッチ統合、
 //! (i) ディスパッチャ層での「ウィジェット外座標のイベント配送」実配線（`hit_test` が
 //! `false` を返す外側クリックを widget まで届ける経路は S5 系の汎用ディスパッチ基盤の
@@ -110,7 +113,7 @@ use super::widget::{
     AccessibilityRole, InteractionInput, InteractionState, Measurement, PaintCommand, VisualState,
     Widget, WidgetId,
 };
-use crate::state::{Event, ReadFn};
+use crate::state::{Event, ReadFn, WidgetValue, WriteFn};
 
 /// 単一行の高さ近似（論理ピクセル相当）。[`super::dialog::Dialog`] /
 /// [`super::slider::Slider`] / [`super::checkbox::Checkbox`] の `APPROX_LINE_HEIGHT` と
@@ -202,11 +205,17 @@ pub struct Menu<S> {
     /// キャッシュのみを保持する（`Checkbox` / `Slider` / `Dialog` と同じ制御型の
     /// 設計判断）。
     open: ReadFn<S, bool>,
+    /// 開閉の書き戻し経路（Issue #1429）。`WidgetValue::Bool` を受けた
+    /// [`Widget::apply_value`] が呼ぶ。環境キャプチャ不可の関数ポインタ（REQ-13）。
+    set_open: WriteFn<S, bool>,
     /// [`Widget::sync_from_state`] が更新する表示キャッシュ（`is_open()` が返す値）。
     cached_open: bool,
     /// 選択中項目 index の読み取り経路（`RadioGroupWidget` S23 と同じ `Option<usize>`
     /// の SSOT パターン）。
     selected: ReadFn<S, Option<usize>>,
+    /// 選んだ項目 index の書き戻し経路（Issue #1429）。`WidgetValue::Index` を受けた
+    /// [`Widget::apply_value`] が呼ぶ（利用者が選択を外す操作は無いため `usize`）。
+    set_selected: WriteFn<S, usize>,
     /// [`Widget::sync_from_state`] が更新する表示キャッシュ。範囲外 index は
     /// [`clamp_selected`] により安全側で `None` へフォールバックする。
     cached_selected: Option<usize>,
@@ -245,8 +254,10 @@ impl<S> Clone for Menu<S> {
             label: self.label.clone(),
             items: self.items.clone(),
             open: self.open,
+            set_open: self.set_open,
             cached_open: self.cached_open,
             selected: self.selected,
+            set_selected: self.set_selected,
             cached_selected: self.cached_selected,
             focused_item: self.focused_item,
             press_region: self.press_region,
@@ -258,8 +269,8 @@ impl<S> Clone for Menu<S> {
 impl<S: 'static> Menu<S> {
     /// 状態 `S` に束縛したメニューを作る（ビルダー形式の起点）。
     ///
-    /// `open` / `selected` は [`crate::state`] の SSOT 型エイリアス（[`ReadFn`]）と
-    /// 代入互換の関数ポインタに限定する（REQ-13、環境キャプチャクロージャを型レベルで
+    /// `open` / `selected` は [`crate::state`] の SSOT 型エイリアス（[`ReadFn`]）、
+    /// `set_open` / `set_selected` は同 [`WriteFn`] と代入互換の関数ポインタに限定する（REQ-13、環境キャプチャクロージャを型レベルで
     /// 拒否する）。既定は閉状態・未選択（`sync_from_state` 呼び出し前のプレースホルダ、
     /// [`Self::bound`] を呼んだ直後の初期値）。
     pub fn bound(
@@ -267,15 +278,19 @@ impl<S: 'static> Menu<S> {
         label: impl Into<String>,
         items: Vec<String>,
         open: ReadFn<S, bool>,
+        set_open: WriteFn<S, bool>,
         selected: ReadFn<S, Option<usize>>,
+        set_selected: WriteFn<S, usize>,
     ) -> Self {
         Self {
             id,
             label: label.into(),
             items,
             open,
+            set_open,
             cached_open: false,
             selected,
+            set_selected,
             cached_selected: None,
             focused_item: None,
             press_region: None,
@@ -703,6 +718,33 @@ impl<S: 'static> Widget<S> for Menu<S> {
     fn clone_box(&self) -> Box<dyn Widget<S>> {
         Box::new(self.clone())
     }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    /// 描画層が検出した操作を状態 `S` へ書き戻す（Issue #1429）。`id` の一致は呼び出し元
+    /// `ui::set_widget_value_at` が確認済み。
+    ///
+    /// - `WidgetValue::Bool(open)`: 開閉（トリガーの押下・外側クリック・Esc）を `set_open` へ書く
+    /// - `WidgetValue::Index(i)`: 項目の選択を `set_selected` へ書き、続けて `set_open(false)` で
+    ///   閉じる（選んだらメニューが閉じる、WAI-ARIA の menu の慣例。`i >= items.len()` は無視）
+    ///
+    /// 型不一致・範囲外は状態を変えず `false` を返す。
+    fn apply_value(&self, state: &mut S, value: &WidgetValue) -> bool {
+        match value {
+            WidgetValue::Bool(open) => {
+                (self.set_open)(state, *open);
+                true
+            }
+            WidgetValue::Index(i) if *i < self.items.len() => {
+                (self.set_selected)(state, *i);
+                (self.set_open)(state, false);
+                true
+            }
+            _ => false,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -722,6 +764,14 @@ mod tests {
         state.selected
     }
 
+    fn set_menu_open(state: &mut MenuState, open: bool) {
+        state.menu_open = open;
+    }
+
+    fn set_selected(state: &mut MenuState, index: usize) {
+        state.selected = Some(index);
+    }
+
     fn make_items() -> Vec<String> {
         vec![
             "項目 A".to_string(),
@@ -736,7 +786,9 @@ mod tests {
             "選択してください",
             make_items(),
             get_menu_open,
+            set_menu_open,
             get_selected,
+            set_selected,
         )
     }
 
@@ -1446,7 +1498,9 @@ mod tests {
             "空メニュー",
             Vec::new(),
             get_menu_open,
+            set_menu_open,
             get_selected,
+            set_selected,
         );
         menu.sync_from_state(&MenuState {
             menu_open: true,
@@ -1537,5 +1591,45 @@ mod tests {
         });
         let event = menu.apply_pointer(InteractionInput::PointerReleased, MenuHitRegion::Item(0));
         assert_eq!(event, None);
+    }
+
+    // Issue #1429: 描画層が積む `WidgetValue` の書き戻し
+
+    #[test]
+    fn apply_value_bool_writes_open() {
+        let menu = make_menu();
+        let mut state = MenuState {
+            menu_open: false,
+            selected: None,
+        };
+        assert!(menu.apply_value(&mut state, &WidgetValue::Bool(true)));
+        assert!(state.menu_open);
+        assert!(menu.apply_value(&mut state, &WidgetValue::Bool(false)));
+        assert!(!state.menu_open);
+    }
+
+    #[test]
+    fn apply_value_index_selects_and_closes() {
+        let menu = make_menu();
+        let mut state = MenuState {
+            menu_open: true,
+            selected: None,
+        };
+        assert!(menu.apply_value(&mut state, &WidgetValue::Index(1)));
+        assert_eq!(state.selected, Some(1));
+        assert!(!state.menu_open);
+    }
+
+    #[test]
+    fn apply_value_rejects_out_of_range_index_and_wrong_type() {
+        let menu = make_menu();
+        let mut state = MenuState {
+            menu_open: true,
+            selected: None,
+        };
+        assert!(!menu.apply_value(&mut state, &WidgetValue::Index(99)));
+        assert!(!menu.apply_value(&mut state, &WidgetValue::Number(1.0)));
+        assert_eq!(state.selected, None);
+        assert!(state.menu_open);
     }
 }

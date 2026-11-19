@@ -702,24 +702,40 @@ impl<S> Screen<S> {
     /// `Node::Widget(Box::new(Menu::bound(..)))` を組み立てて [`Self::with_node`] に
     /// 委譲する。`id` はツリー上で一意な識別子（[`super::widget::WidgetId`]）、
     /// `open` は開閉状態、`selected` は選択中項目 index（`Option<usize>`）を読み取る
-    /// [`crate::state::ReadFn`]（環境キャプチャクロージャを型レベルで拒否する、REQ-13）。
+    /// [`crate::state::ReadFn`]。`set_open` は開閉の、`set_selected` は選んだ項目 index の
+    /// 書き戻し先 [`crate::state::WriteFn`]（いずれも環境キャプチャクロージャを型レベルで
+    /// 拒否する、REQ-13）。利用者がトリガーを押す・外側を押す・項目を選ぶと、
+    /// `fandhe-render-egui` が `Event::WidgetValueChanged`（開閉は `WidgetValue::Bool`、
+    /// 選択は `WidgetValue::Index`）を積み、`Widget::apply_value` が書き戻す。項目を選ぶと
+    /// `set_selected(i)` に続けて `set_open(false)` も呼ばれる（Issue #1429）。
     ///
-    /// **未配線**: `render_headless` 等は `Node::Widget` を状態非依存のプレースホルダとして
-    /// 扱う契約（`menu` モジュール doc 参照）を維持する。開閉・選択イベント配線は未接続。
+    /// `render_headless` 等は `Node::Widget` を状態非依存のプレースホルダとして
+    /// 扱う契約（`menu` モジュール doc 参照）を維持する。描画は `fandhe-render-egui` のみ。
     /// `WidgetCatalog`（`catalog.rs` の `menu` エントリ）には登録済み。
+    // 糖衣構文が `Menu::bound` の 7 引数に `self` を足すため 8 になる。引数を束ねる型は
+    // 呼び出し側の書き味を悪くするだけなので足さない。
+    #[allow(clippy::too_many_arguments)]
     pub fn menu(
         self,
         id: WidgetId,
         label: impl Into<String>,
         items: Vec<String>,
         open: crate::state::ReadFn<S, bool>,
+        set_open: crate::state::WriteFn<S, bool>,
         selected: crate::state::ReadFn<S, Option<usize>>,
+        set_selected: crate::state::WriteFn<S, usize>,
     ) -> Self
     where
         S: 'static,
     {
         self.with_node(Node::Widget(Box::new(Menu::bound(
-            id, label, items, open, selected,
+            id,
+            label,
+            items,
+            open,
+            set_open,
+            selected,
+            set_selected,
         ))))
     }
 
@@ -729,23 +745,32 @@ impl<S> Screen<S> {
     /// `Node::Widget(Box::new(Tabs::bound(..)))` を組み立てて [`Self::with_node`] に
     /// 委譲する。`id` はツリー上で一意な識別子（[`super::widget::WidgetId`]）、
     /// `labels` は各タブの見出し文言、`selected` は選択中タブ index（`usize`）を
-    /// 読み取る [`crate::state::ReadFn`]（環境キャプチャクロージャを型レベルで
-    /// 拒否する、REQ-13）。各タブへのコンテンツ追加は、組み立て済みの `Tabs<S>` を
-    /// `Tabs::with_content` で構成してから [`Self::with_node`] へ直接渡すこと。
+    /// 読み取る [`crate::state::ReadFn`]、`set_selected` は利用者が選んだタブ index の
+    /// 書き戻し先 [`crate::state::WriteFn`]（いずれも環境キャプチャクロージャを型レベルで
+    /// 拒否する、REQ-13）。タブを押すと `fandhe-render-egui` が `Event::WidgetValueChanged`
+    /// （`WidgetValue::Index`）を積み、`Widget::apply_value` が `set_selected` へ書き戻す
+    /// （Issue #1429）。選択中タブの中身は、状態を読む `.list()` 等を後ろに置いて出し分ける
+    /// （`Tabs::with_content` の中身は egui では描かれない）。
     ///
-    /// **未配線**: `render_headless` 等は `Node::Widget` を状態非依存のプレースホルダとして
-    /// 扱う契約（`tabs` モジュール doc 参照）を維持する。タブ切替イベント配線は未接続。
+    /// `render_headless` 等は `Node::Widget` を状態非依存のプレースホルダとして
+    /// 扱う契約（`tabs` モジュール doc 参照）を維持する。描画は `fandhe-render-egui` のみ。
     /// `WidgetCatalog`（`catalog.rs` の `tabs` エントリ）には登録済み。
     pub fn tabs(
         self,
         id: WidgetId,
         labels: Vec<String>,
         selected: crate::state::ReadFn<S, usize>,
+        set_selected: crate::state::WriteFn<S, usize>,
     ) -> Self
     where
         S: 'static,
     {
-        self.with_node(Node::Widget(Box::new(Tabs::bound(id, labels, selected))))
+        self.with_node(Node::Widget(Box::new(Tabs::bound(
+            id,
+            labels,
+            selected,
+            set_selected,
+        ))))
     }
 
     /// 固定テキスト・アンカー必須のツールチップを構築して追加する糖衣構文
@@ -1524,13 +1549,17 @@ mod tests {
         fn get_selected(_state: &CounterState) -> Option<usize> {
             None
         }
+        fn set_menu_open(_state: &mut CounterState, _open: bool) {}
+        fn set_selected(_state: &mut CounterState, _index: usize) {}
 
         let screen: Screen<CounterState> = Screen::new("メニュー画面").menu(
             super::WidgetId::from_raw(1),
             "選択してください",
             vec!["項目A".to_string(), "項目B".to_string()],
             get_menu_open,
+            set_menu_open,
             get_selected,
+            set_selected,
         );
 
         assert_eq!(screen.len(), 1);

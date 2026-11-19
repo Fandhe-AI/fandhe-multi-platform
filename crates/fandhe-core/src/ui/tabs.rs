@@ -39,8 +39,8 @@
 //! 変更しない。検証は `Widget` メソッドの直接呼び出しで行う。
 //!
 //! **スコープ外事項**（`.claude/rules/out-of-scope-tracking.md` 準拠。PR 本文に記録する）:
-//! (a) タブ切替イベント配線（クリック・キーボード操作の `WriteFn` 書き込み、
-//! S53 / #148）、
+//! (a) ~~タブ切替イベント配線~~（#1429 で解消。`WriteFn` を `bound` で受け、egui の描画が積む
+//! `WidgetValue::Index` を [`Widget::apply_value`] が書き戻す。キーボード操作は egui 側の標準動作）、
 //! (b) `WidgetCatalog` 登録・テスト網羅拡充（S54 / #149）、
 //! (c) 個々のタブへの `AccessibilityRole::Tab` 付与（子ウィジェット階層が前提）、
 //! (d) スクロール可能タブバー・アイコン付きタブ・閉じるボタン・縦置きタブ、
@@ -51,7 +51,7 @@
 use super::widget::{
     AccessibilityRole, InteractionState, Measurement, PaintCommand, VisualState, Widget, WidgetId,
 };
-use crate::state::ReadFn;
+use crate::state::{ReadFn, WidgetValue, WriteFn};
 
 /// 単一行の高さ近似（論理ピクセル相当）。[`super::menu::Menu`] / [`super::dialog::Dialog`] /
 /// [`super::slider::Slider`] / [`super::checkbox::Checkbox`] の `APPROX_LINE_HEIGHT` と
@@ -146,6 +146,9 @@ pub struct Tabs<S> {
     /// 限定）。選択中タブの SSOT は常に `S` 側に置き、本ウィジェットはキャッシュのみを
     /// 保持する（`Checkbox` / `Slider` / `Dialog` / `Menu` と同じ制御型の設計判断）。
     selected: ReadFn<S, usize>,
+    /// 選んだタブ index の書き戻し経路（Issue #1429）。`WidgetValue::Index` を受けた
+    /// [`Widget::apply_value`] が呼ぶ。環境キャプチャ不可の関数ポインタ（REQ-13）。
+    set_selected: WriteFn<S, usize>,
     /// [`Widget::sync_from_state`] が更新する表示キャッシュ。範囲外 index は
     /// [`clamp_selected`] により安全側で `None` へフォールバック済み。
     cached_selected: Option<usize>,
@@ -170,6 +173,7 @@ impl<S> Clone for Tabs<S> {
             id: self.id,
             items: self.items.clone(),
             selected: self.selected,
+            set_selected: self.set_selected,
             cached_selected: self.cached_selected,
             interaction: self.interaction,
         }
@@ -179,14 +183,20 @@ impl<S> Clone for Tabs<S> {
 impl<S: 'static> Tabs<S> {
     /// 状態 `S` に束縛したタブを作る（ビルダー形式の起点）。
     ///
-    /// `selected` は [`crate::state`] の SSOT 型エイリアス（[`ReadFn`]）と代入互換の
-    /// 関数ポインタに限定する（REQ-13、環境キャプチャクロージャを型レベルで拒否する）。
+    /// `selected` / `set_selected` は [`crate::state`] の SSOT 型エイリアス（[`ReadFn`] /
+    /// [`WriteFn`]）と代入互換の関数ポインタに限定する（REQ-13、環境キャプチャクロージャを型レベルで拒否する）。
     /// 既定は各タブともコンテンツなし（[`Self::with_content`] で個別に追加可能）。
-    pub fn bound(id: WidgetId, labels: Vec<String>, selected: ReadFn<S, usize>) -> Self {
+    pub fn bound(
+        id: WidgetId,
+        labels: Vec<String>,
+        selected: ReadFn<S, usize>,
+        set_selected: WriteFn<S, usize>,
+    ) -> Self {
         Self {
             id,
             items: labels.into_iter().map(TabItem::new).collect(),
             selected,
+            set_selected,
             cached_selected: None,
             interaction: InteractionState::default(),
         }
@@ -197,6 +207,8 @@ impl<S: 'static> Tabs<S> {
     /// `index` が範囲外の場合は安全側で無視する（panic させない、構築時の呼び出し
     /// ミスをここで検知できない代わりに `.claude/rules/coding-rust.md` の
     /// エラーハンドリング方針を優先する）。
+    ///
+    /// egui（`fandhe-render-egui`）では中身を描かない。画面側が選択中のタブを読んで出し分ける。
     pub fn with_content(mut self, index: usize, content: impl Widget<S> + 'static) -> Self {
         if let Some(item) = self.items.get_mut(index) {
             item.content = Some(Box::new(content));
@@ -383,6 +395,23 @@ impl<S: 'static> Widget<S> for Tabs<S> {
     fn clone_box(&self) -> Box<dyn Widget<S>> {
         Box::new(self.clone())
     }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    /// 描画層が検出したタブの選択を `set_selected` へ書き戻す（Issue #1429）。`id` の一致は
+    /// 呼び出し元 `ui::set_widget_value_at` が確認済み。`WidgetValue::Index(i)` で `i` が
+    /// タブ数未満のときだけ書く。型不一致・範囲外は状態を変えず `false`。
+    fn apply_value(&self, state: &mut S, value: &WidgetValue) -> bool {
+        match value {
+            WidgetValue::Index(i) if *i < self.items.len() => {
+                (self.set_selected)(state, *i);
+                true
+            }
+            _ => false,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -398,12 +427,21 @@ mod tests {
         state.selected_tab
     }
 
+    fn set_selected_tab(state: &mut TabsState, index: usize) {
+        state.selected_tab = index;
+    }
+
     fn make_labels() -> Vec<String> {
         vec!["概要".to_string(), "詳細".to_string(), "履歴".to_string()]
     }
 
     fn make_tabs() -> Tabs<TabsState> {
-        Tabs::bound(WidgetId::from_raw(1), make_labels(), get_selected_tab)
+        Tabs::bound(
+            WidgetId::from_raw(1),
+            make_labels(),
+            get_selected_tab,
+            set_selected_tab,
+        )
     }
 
     fn sized(width: f32, height: f32) -> Measurement {
@@ -669,8 +707,12 @@ mod tests {
         use crate::ui::node::Node;
         use crate::ui::screen::Screen;
 
-        let screen: Screen<TabsState> =
-            Screen::new("タブ画面").tabs(WidgetId::from_raw(5), make_labels(), get_selected_tab);
+        let screen: Screen<TabsState> = Screen::new("タブ画面").tabs(
+            WidgetId::from_raw(5),
+            make_labels(),
+            get_selected_tab,
+            set_selected_tab,
+        );
 
         let mut found_widget = false;
         screen.visit(|node| {
@@ -679,5 +721,24 @@ mod tests {
             }
         });
         assert!(found_widget);
+    }
+
+    // Issue #1429: 描画層が積む `WidgetValue::Index` の書き戻し
+
+    #[test]
+    fn apply_value_index_writes_selected_tab() {
+        let tabs = make_tabs();
+        let mut state = TabsState { selected_tab: 0 };
+        assert!(tabs.apply_value(&mut state, &WidgetValue::Index(2)));
+        assert_eq!(state.selected_tab, 2);
+    }
+
+    #[test]
+    fn apply_value_rejects_out_of_range_index_and_wrong_type() {
+        let tabs = make_tabs();
+        let mut state = TabsState { selected_tab: 1 };
+        assert!(!tabs.apply_value(&mut state, &WidgetValue::Index(3)));
+        assert!(!tabs.apply_value(&mut state, &WidgetValue::Bool(true)));
+        assert_eq!(state.selected_tab, 1);
     }
 }

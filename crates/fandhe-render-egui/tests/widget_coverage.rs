@@ -306,13 +306,21 @@ fn rendered_or_not() {
         ),
         (
             "Menu",
-            Screen::new("t").menu(id(1), "X", vec!["Y".into()], rd_open, rd_sel),
-            false,
+            Screen::new("t").menu(
+                id(1),
+                "X",
+                vec!["Y".into()],
+                rd_open,
+                wr_bool,
+                rd_sel,
+                wr_usize,
+            ),
+            true,
         ),
         (
             "Tabs",
-            Screen::new("t").tabs(id(1), vec!["X".into()], rd_usize),
-            false,
+            Screen::new("t").tabs(id(1), vec!["X".into()], rd_usize, wr_usize),
+            true,
         ),
         (
             "Tooltip",
