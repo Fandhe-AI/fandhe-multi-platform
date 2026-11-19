@@ -812,8 +812,10 @@ PiP の切り替わりの口は #1327（§18）で決着していた。はじめ
 ## 32. コールバック型の機能に非同期の入口を足す（#1367）
 
 §8.2 の「同期の `platform_<stem>()` では実機能に届かない機能は begin / poll / discard 型の入口も公開する」に合わせて、
-第 1〜15 束の機能 crate を洗い出した（一覧は #1367）。入口が欠けていたのは compose-mail-sms の iOS・Android（本節）と
-share-sheet の Windows（#1367 で続けて扱う）で、ほかは同期の wrapper か既存の非同期の入口で OS まで届く。
+第 1〜15 束の機能 crate を洗い出した（一覧は #1367）。入口が欠けていたのは compose-mail-sms の iOS・Android と
+share-sheet の Windows で、ほかは同期の wrapper か既存の非同期の入口で OS まで届く。
+
+### compose-mail-sms（iOS・Android）
 
 | 項目 | 扱い |
 | --- | --- |
@@ -822,3 +824,18 @@ share-sheet の Windows（#1367 で続けて扱う）で、ほかは同期の wr
 | busy | 進行中の要求（作成画面が開いたまま）と公開側の未取得の結果は、どちらの開始も `Internal(BUSY)` で断る。discard は作成画面を閉じず、OS の結果が届くまで slot を残す。iOS は delegate が呼ばれないまま閉じられるとプロセス終了まで busy のまま残る（天井。reset が無い） |
 | 失われた要求 | Android の再生成の reset で消えた要求は、公開側の poll が `Internal(LOST)` を 1 度だけ返す。画面状態は作り直される（残っていれば失敗で終える） |
 | ホストのテスト | `bridge` を `test` でもコンパイルし、slot の扱い（受け取り待ち・busy・discard・lost）を確かめる |
+
+### share-sheet（Windows）
+
+macOS・iOS・Android は同期の `platform_share_sheet` で OS まで届く。Windows の `DataTransferManager` は結果を
+`TargetApplicationChosen` で後から返すため、非同期の入口を足した。
+
+| 項目 | 扱い |
+| --- | --- |
+| 入口 | `begin_share_sheet(&ShareRequest)`・`poll_share_sheet`・`discard_share_sheet`。crate ルートから出す。Windows 以外は `Unsupported`（begin）・`None`（poll）・`false`（discard） |
+| slot | 画面は `begin_replacing(&[PUBLIC])`（自分の前の要求は従来どおり置き換える）と `poll_and_finish_owned`、公開入口は `begin_parking` |
+| busy | 進行中の要求と公開側の未取得の結果は、どちらの開始も断る（公開は `Internal`、画面は処理中の失敗）。メインウィンドウが前面でない間（共有 UI が開いている等）も公開の開始を断る。discard 直後で共有 UI がまだ前面を取る前の開始は防げない（天井） |
+| キャンセル | 共有 UI を閉じた通知が無いため、poll のたびに `GetForegroundWindow` で前面を観測し、画面と同じ判定で `Cancelled` を推定する。結果が出るまで 100ms 程度の間隔で poll する。前面を失った状態を一度も観測できなければ確定しないので、そのときは discard で捨てる |
+| discard | 共有 UI は閉じず、進行中でも slot の記録を消す（後から届く結果は id の照合で捨てる） |
+| 失われた要求 | 画面側は `Internal(LOST)` で失敗に終える。公開側の poll は slot から消えた要求に `Err(Internal)` を 1 度だけ返す |
+| ホストのテスト | `bridge` を `test` でもコンパイルし、結果の変換・受け取り待ち・discard・lost・同じ poll でのキャンセルを確かめる |
