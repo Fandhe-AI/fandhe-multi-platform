@@ -12,12 +12,13 @@
 //! （`.claude/rules/coding-rust.md` の feature 設計方針）。呼び出し元は feature 有効時の
 //! `main.rs`（デスクトップ相当・iOS の feature 分岐）・`lib.rs`
 //! （Android の `android_main` の feature 分岐）の 3 箇所のみで、いずれも計測専用ビルドへ
-//! エントリそのものを差し替える（既存の `ProxyApp` 経路とは共存しない別ビルド）。
+//! エントリそのものを差し替える（通常起動の `fandhe_render_egui::ProxyApp` 経路（`select.rs`）とは
+//! 共存しない別ビルド）。
 //! wasm32 は対象外（Web の計測は既存の `web/index.html` `?measure=1` 計装、TASK-4.5 を使う）。
 //!
 //! **計測プロトコル**（PoC-4 準拠）: [`fandhe_core::Screen::virtual_list`] で 300 項目の
-//! `Node::VirtualList` 画面を構築し、`render_screen`（`lib.rs`）の実描画パス
-//! （`render_virtual_list` の可視範囲限定描画）を通す。`ctx.request_repaint()` で
+//! `Node::VirtualList` 画面を構築し、`fandhe_render_egui::render_screen`（`render.rs`）の
+//! 実描画パス（`render_virtual_list` の可視範囲限定描画）を通す。`ctx.request_repaint()` で
 //! 毎フレーム再描画を要求し、vsync ペーシング下で 60Hz 律速の連続再描画を駆動する。
 //! 可視項目のテキストは [`FrameMetricsState::tick`]（`Cell` による内部可変性。
 //! 状態アクセスは `fn(&S) -> T` 関数ポインタ限定という DSL の制約（REQ-13）の範囲内で
