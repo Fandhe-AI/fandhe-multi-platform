@@ -141,10 +141,10 @@ impl Bridge {
         self.lost_public.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// 画面側の要求が発送済み（OS 呼び出し中、または結果が画面へ未反映）か。
+    /// 画面側の要求が発送済み（OS 呼び出し中、または結果が画面へ未反映）か。公開入口が受け取り待ちへ移した分も含める。
     fn screen_pending(&self) -> bool {
         let mine = self.screen.current();
-        mine != 0 && self.slot.snapshot().is_some_and(|(id, _)| id == mine)
+        mine != 0 && self.slot.snapshot_of(mine).is_some()
     }
 
     /// 進行中の要求と未取得の結果が無いときだけ、`owner` の分として登録して id を返す。先行を置き換えず `None`。
@@ -1025,6 +1025,8 @@ mod tests {
             b.slot.snapshot_of(screen),
             Some(Some(Ok(InAppBrowserOutcome::Closed)))
         );
+        // 受け取り待ちへ移った分も発送済みとみなし、`mark_running` の適用前の再 drive で二重に発送しない。
+        assert!(b.screen_pending());
         // 公開側の進行中は次の公開要求を断る。
         assert_eq!(b.begin_with_id(public + 1), Err(InAppBrowserFailure::Busy));
     }
