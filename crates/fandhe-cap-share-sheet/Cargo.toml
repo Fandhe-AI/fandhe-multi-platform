@@ -20,9 +20,10 @@ fandhe-platform-android = { path = "../fandhe-platform-android" }
 jni = { workspace = true }
 
 # `DataTransferManager`（`ApplicationModel_DataTransfer`）を `IDataTransferManagerInterop`（`Win32_UI_Shell`）で
-# ウィンドウ束縛して呼ぶ。`Foundation` は `TypedEventHandler` / `Uri`、`Win32_Foundation` は `HWND`。
+# ウィンドウ束縛して呼ぶ。`Foundation` は `TypedEventHandler` / `Uri`、`Win32_Foundation` は `HWND`、
+# `Win32_UI_WindowsAndMessaging` は公開入口のキャンセル検知で前面のウィンドウを見る `GetForegroundWindow`。
 [target.'cfg(target_os = "windows")'.dependencies]
-windows = { workspace = true, features = ["ApplicationModel_DataTransfer", "Foundation", "Win32_Foundation", "Win32_UI_Shell"] }
+windows = { workspace = true, features = ["ApplicationModel_DataTransfer", "Foundation", "Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 fandhe-platform-windows = { path = "../fandhe-platform-windows" }
 
 [build-dependencies]

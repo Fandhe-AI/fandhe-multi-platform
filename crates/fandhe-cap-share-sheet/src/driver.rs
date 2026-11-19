@@ -47,6 +47,28 @@ use fandhe_runtime::CompletionSender;
 /// `Share`/`bridge::deliver` 未対応環境（Unsupported）で画面へ出す固定案内
 /// （`ShareSheetError` の内部構造は含めない、security.md A09）。
 const UNAVAILABLE: &str = "この環境では共有シートを使えません";
+/// 公開入口の共有が進行中・結果が未取得のときに画面へ出す固定文言。
+#[cfg_attr(
+    not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "android",
+        target_os = "windows"
+    )),
+    allow(dead_code)
+)]
+const BUSY: &str = "前の共有がまだ終わっていません";
+/// 画面の要求が失われたときの固定文言。
+#[cfg_attr(
+    not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "android",
+        target_os = "windows"
+    )),
+    allow(dead_code)
+)]
+const LOST: &str = "共有の要求が失われました。もう一度お試しください";
 
 /// `ShareSheetError` を画面へ渡す文言へ変換する。`Unsupported` は固定文言へ畳み、
 /// それ以外は `Display` の文言をそのまま転送する
@@ -106,26 +128,103 @@ pub(crate) fn outcome_from_code(code: i32) -> Result<DeviceShareOutcome, ShareSh
 
 /// macOS/iOS/Android/Windows 共通: OS 側コールバックとの橋渡し（pull 型、
 /// `fandhe-runtime/src/request_slot.rs::RequestSlot` の facade。モジュール doc 参照）。
+/// 画面 effect（`SCREEN_OWNER`）と Windows の公開入口（[`super::begin_share_sheet`]、`PUBLIC_OWNER`）が
+/// 持ち主の印で分けて共有する（`consumer-app-structure.md` §8.2）。macOS・iOS・Android の [`super::platform_share_sheet`]
+/// は印を付けない（画面と同時に使わない契約）。ホストのテストでも slot の扱いを確かめるため、`test` でもコンパイルする。
 #[cfg(any(
     target_os = "macos",
     target_os = "ios",
     target_os = "android",
-    target_os = "windows"
+    target_os = "windows",
+    test
 ))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub(crate) mod bridge {
+    use crate::contract::ShareOutcome as DeviceShareOutcome;
     use crate::error::ShareSheetError;
     use fandhe_core::screens::share_text::ShareOutcome as CoreShareOutcome;
 
-    use fandhe_runtime::request_slot::RequestSlot;
+    use fandhe_runtime::request_slot::{RequestSlot, SlotOwner};
 
     /// 画面へ反映する完了結果（`super::to_outcome` 後の形）。
     pub(crate) type Outcome = Result<CoreShareOutcome, String>;
 
     pub(crate) static SLOT: RequestSlot<Outcome> = RequestSlot::new();
+    /// 画面 effect が追う自分の分の要求。
+    pub(crate) static SCREEN_OWNER: SlotOwner = SlotOwner::new();
+    /// Windows の公開入口が追う自分の分の要求。
+    pub(crate) static PUBLIC_OWNER: SlotOwner = SlotOwner::new();
+    /// 公開側の poll・discard 本体を直列にする。並行 poll で結果が二重に返らないため。
+    static PUBLIC_POLL_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-    /// 提示直前に呼ぶ。戻り値の `request_id` を OS へ渡す。
-    pub(crate) fn begin() -> u64 {
-        SLOT.begin()
+    /// 画面側の開始。自分の前の要求は置き換え（従来どおり）、公開入口の進行中の要求・未取得の結果は置き換えず `None`。
+    pub(crate) fn begin_screen() -> Option<u64> {
+        SCREEN_OWNER.begin_replacing(&SLOT, &[&PUBLIC_OWNER])
+    }
+
+    /// 公開入口の開始。進行中の要求と、自分の未取得の結果があれば `None`（busy）。画面側の届いた未取得の結果は
+    /// 捨てずに画面の受け取り待ちへ移す（`SlotOwner::begin_parking`。受け取られない分は画面の次の開始で解放、残るのは最大 1 件）。
+    pub(crate) fn begin_public() -> Option<u64> {
+        PUBLIC_OWNER.begin_parking(&SLOT, &SCREEN_OWNER)
+    }
+
+    /// 公開入口の依頼自体が失敗したときの後片付け（結果は届かないので slot と印を空ける）。
+    pub(crate) fn abort_public(request_id: u64) {
+        SLOT.clear(request_id);
+        PUBLIC_OWNER.release(request_id);
+    }
+
+    /// 画面用の結果を公開入口の結果へ戻す。失敗の種類は `Internal` へ畳む（`CallbackShare` と同じ）。
+    pub(crate) fn to_device(outcome: Outcome) -> Result<DeviceShareOutcome, ShareSheetError> {
+        outcome
+            .map_err(|_| ShareSheetError::Internal)
+            .map(|o| match o {
+                CoreShareOutcome::Shared => DeviceShareOutcome::Shared,
+                CoreShareOutcome::Cancelled => DeviceShareOutcome::Cancelled,
+                CoreShareOutcome::NoTarget => DeviceShareOutcome::NoTarget,
+                CoreShareOutcome::Unknown => DeviceShareOutcome::Unknown,
+            })
+    }
+
+    /// [`super::poll_share_sheet`] の本体。持ち主が `request_id` のときだけ見る。結果待ちの間は `on_waiting` を
+    /// 呼ぶ（Windows のキャンセル検知）。届いていれば 1 度だけ `Some` で持ち主を外す。slot の要求が失われた
+    /// （別の要求に替わった・消えた）ときは `Err(Internal)` を 1 度だけ返す。
+    pub(crate) fn poll_public(
+        request_id: u64,
+        on_waiting: impl FnOnce(u64),
+    ) -> Option<Result<DeviceShareOutcome, ShareSheetError>> {
+        let _guard = PUBLIC_POLL_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        if request_id == 0 || PUBLIC_OWNER.current() != request_id {
+            return None;
+        }
+        if SLOT
+            .snapshot()
+            .is_some_and(|(id, ready)| id == request_id && ready.is_none())
+        {
+            on_waiting(request_id);
+        }
+        if let Some(result) = SLOT.take_ready(request_id) {
+            PUBLIC_OWNER.release(request_id);
+            return Some(to_device(result));
+        }
+        if SLOT.snapshot().is_some_and(|(id, _)| id == request_id) {
+            return None;
+        }
+        PUBLIC_OWNER.release(request_id);
+        Some(Err(ShareSheetError::Internal))
+    }
+
+    /// [`super::discard_share_sheet`] の本体。持ち主が `request_id` のときだけ、slot の記録と持ち主を外して `true`。
+    /// 共有 UI は閉じない。Windows の共有 UI は閉じた通知が無く、捨てた要求を観測し続ける口も無いため、進行中でも
+    /// 記録を消す（後から届く `TargetApplicationChosen` は id の照合で捨てる）。
+    pub(crate) fn discard_public(request_id: u64) -> bool {
+        let _guard = PUBLIC_POLL_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        if request_id == 0 || PUBLIC_OWNER.current() != request_id {
+            return false;
+        }
+        SLOT.clear(request_id);
+        PUBLIC_OWNER.release(request_id);
+        true
     }
 
     /// OS からの結果（`crate::contract::ShareOutcome` を経由した生の
@@ -229,7 +328,14 @@ fn drive_callback(state: &ShareTextState, sender: &CompletionSender<ShareTextSta
     if let Some(request) = take_request(state) {
         let _ = sender.send(Box::new(mark_sharing));
 
-        let request_id = bridge::begin();
+        // 公開入口の進行中の要求・未取得の結果は置き換えず、画面には処理中の失敗を返す。
+        let Some(request_id) = bridge::begin_screen() else {
+            let generation = request.generation;
+            let _ = sender.send(Box::new(move |s: &mut ShareTextState| {
+                finish_share(s, generation, Err(BUSY.to_string()));
+            }));
+            return;
+        };
         match ShareRequest::new(&request.text, request.url.as_deref()) {
             Ok(share_request) => {
                 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
@@ -256,8 +362,9 @@ fn drive_callback(state: &ShareTextState, sender: &CompletionSender<ShareTextSta
         return;
     }
     let generation = state.generation;
-    fandhe_runtime::request_slot::poll_and_finish(
+    fandhe_runtime::request_slot::poll_and_finish_owned(
         &bridge::SLOT,
+        &bridge::SCREEN_OWNER,
         sender,
         |_request_id| {
             // Windows 限定: `DataTransferManager` に「共有 UI を閉じた」イベントが
@@ -280,6 +387,10 @@ fn drive_callback(state: &ShareTextState, sender: &CompletionSender<ShareTextSta
                 false
             }
         },
+        // 自分の要求が失われた。待ち続けず失敗で終える。
+        move |s: &mut ShareTextState| {
+            finish_share(s, generation, Err(LOST.to_string()));
+        },
     );
 }
 
@@ -288,8 +399,8 @@ fn drive_callback(state: &ShareTextState, sender: &CompletionSender<ShareTextSta
 /// macOS・iOS・Android は OS の共有 UI の結果をコールバックで受け、結果が届くまで呼び出しスレッドを塞ぐ
 /// [`Share`] を返す。進行中の要求があるときの 2 件目は提示せず `Internal` で断る。メインスレッドから呼ばず（コールバックがメインで届くためデッドロックする）、
 /// 画面ドライバ（[`share_text_effect`]）と同時に使わない（要求の追跡を共有する）。失敗の種類は
-/// `Internal` へ畳む。Windows はフォーカスの観測（`HostView`）なしにキャンセルを検知できないため、
-/// Linux と同じく常に `Unsupported`。
+/// `Internal` へ畳む。Windows は呼び出しスレッドを塞ぐとキャンセルの観測（フォーカス）が進まないため、
+/// Linux と同じく `Unsupported` を返し、非同期の [`begin_share_sheet`] / [`poll_share_sheet`] / [`discard_share_sheet`] を使う。
 pub fn platform_share_sheet() -> Box<dyn Share> {
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     {
@@ -319,14 +430,7 @@ impl Share for CallbackShare {
             match bridge::SLOT.snapshot() {
                 Some((rid, Some(outcome))) if rid == id => {
                     bridge::SLOT.clear(id);
-                    return outcome
-                        .map_err(|_| ShareSheetError::Internal)
-                        .map(|o| match o {
-                            CoreShareOutcome::Shared => DeviceShareOutcome::Shared,
-                            CoreShareOutcome::Cancelled => DeviceShareOutcome::Cancelled,
-                            CoreShareOutcome::NoTarget => DeviceShareOutcome::NoTarget,
-                            CoreShareOutcome::Unknown => DeviceShareOutcome::Unknown,
-                        });
+                    return bridge::to_device(outcome);
                 }
                 // 別の要求に置き換えられた・消された場合は結果が来ないため失敗で返す。
                 Some((rid, None)) if rid == id => {
@@ -335,6 +439,71 @@ impl Share for CallbackShare {
                 _ => return Err(ShareSheetError::Internal),
             }
         }
+    }
+}
+
+/// 公開入口（Windows）: 共有 UI を開き、結果を受け取るための要求 id を返す。画面の状態型に依存せず、フレームワークの
+/// 外のアプリも使える（`consumer-app-structure.md` §8.2）。結果は [`poll_share_sheet`] で 1 度だけ取り出し、使わない要求は
+/// [`discard_share_sheet`] で捨てる。
+///
+/// - ウィンドウを作った UI スレッドから呼ぶ（`DataTransferManager` の STA 前提）。HWND は
+///   `fandhe_platform_windows::remember_window` で控えたものを使う（無ければ `Internal`）
+/// - 進行中の要求（画面経由を含む）と、自分の結果が未取得のうちは `Internal` で断る（busy）
+/// - 画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める（画面はそのまま受け取る）
+/// - 依頼自体の失敗は `Err`（結果は届かない）。`DataTransferManager` が使えない環境は `Unsupported`
+///
+/// macOS・iOS・Android は同期の [`platform_share_sheet`] を使い、この入口は Windows 以外では `Unsupported`。
+pub fn begin_share_sheet(request: &ShareRequest) -> Result<u64, ShareSheetError> {
+    #[cfg(target_os = "windows")]
+    {
+        let request_id = bridge::begin_public().ok_or(ShareSheetError::Internal)?;
+        if let Err(e) = crate::windows::present(request_id, request) {
+            bridge::abort_public(request_id);
+            return Err(e);
+        }
+        Ok(request_id)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = request;
+        Err(ShareSheetError::Unsupported)
+    }
+}
+
+/// [`begin_share_sheet`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・公開入口でない id・取り出し済み・
+/// 0・Windows 以外は `None`。要求が失われたときは `Err(Internal)` を 1 度だけ返す。
+///
+/// `DataTransferManager` には共有 UI を閉じた通知が無いため、結果待ちの間は呼ぶたびにメインウィンドウが前面か
+/// （`GetForegroundWindow`）を観測し、前面を失ってから戻り、猶予を過ぎても届かなければ `Ok(Cancelled)` にする
+/// （画面のキャンセル検知と同じ判定）。結果が出るまで、描画のたびなど繰り返し呼ぶ。
+pub fn poll_share_sheet(request_id: u64) -> Option<Result<DeviceShareOutcome, ShareSheetError>> {
+    #[cfg(target_os = "windows")]
+    {
+        bridge::poll_public(request_id, |rid| {
+            if windows_cancel_check(rid, crate::windows::window_is_foreground()) {
+                bridge::deliver(rid, Ok(DeviceShareOutcome::Cancelled));
+            }
+        })
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = request_id;
+        None
+    }
+}
+
+/// [`begin_share_sheet`] の自分の要求を捨てる。`request_id` が公開入口の現在の要求のときだけ `true`
+/// （他人の id・取り出し済み・0・Windows 以外は `false`）。以後 [`poll_share_sheet`] は `None`。
+/// 共有 UI は閉じない。閉じた通知が無いため進行中でも記録を消し、後から届く結果は捨てる。
+pub fn discard_share_sheet(request_id: u64) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        bridge::discard_public(request_id)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = request_id;
+        false
     }
 }
 
@@ -599,30 +768,121 @@ mod tests {
 }
 
 /// [`bridge`] の単体テスト。要求の追跡そのもの（採番・first-wins・照合）は
-/// `fandhe-runtime/src/request_slot.rs::RequestSlot` 側で検証済みのため、ここでは facade が
-/// 担う「`deliver` 境界での `to_outcome` 変換」だけを固定する（Issue #943 で
-/// 3 機能の `bridge_tests` を統合、`fandhe-cap-biometric-auth` の `driver.rs` も同型）。OS 側実装
-/// （`.m`/`.java`/Windows COM interop）のビルドを要さず host 上の `cargo test` で
-/// 回せる。iOS/Android の実装は本 host（macOS/Windows 前提の開発機）では
-/// コンパイル対象外だが、`bridge` モジュール自体は `cfg(any(...))` で 4 OS 共通の
-/// ため、macOS/Windows 上のテストでロジックを検証できる。
+/// `fandhe-runtime/src/request_slot.rs::RequestSlot` 側で検証済みのため、ここでは facade が担う
+/// 「`deliver` 境界での `to_outcome` 変換」と、画面と公開入口の slot の共有を確かめる。OS 側実装を要さず、
+/// `bridge` を `test` でもコンパイルするためホストの `cargo test` で回せる。slot は static なので直列に走らせる。
 #[cfg(test)]
-#[cfg(any(target_os = "macos", target_os = "windows"))]
 mod bridge_tests {
     use super::bridge;
+    use crate::contract::ShareOutcome as DeviceShareOutcome;
+    use crate::error::ShareSheetError;
+    use fandhe_core::screens::share_text::ShareOutcome as CoreShareOutcome;
+    use std::sync::Mutex;
+
+    static SERIAL: Mutex<()> = Mutex::new(());
+
+    fn clear() {
+        bridge::SLOT.reset();
+        bridge::SCREEN_OWNER.release(bridge::SCREEN_OWNER.current());
+        bridge::PUBLIC_OWNER.release(bridge::PUBLIC_OWNER.current());
+    }
 
     #[test]
     fn deliver_converts_raw_result_via_to_outcome() {
-        let request_id = bridge::begin();
-        assert!(bridge::deliver(
-            request_id,
-            Ok(crate::contract::ShareOutcome::Shared)
-        ));
+        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        clear();
+        let request_id = bridge::SLOT.begin();
+        assert!(bridge::deliver(request_id, Ok(DeviceShareOutcome::Shared)));
         let (_, ready) = bridge::SLOT.snapshot().expect("begin 済みなので Some");
-        assert_eq!(
-            ready,
-            Some(Ok(fandhe_core::screens::share_text::ShareOutcome::Shared))
+        assert_eq!(ready, Some(Ok(CoreShareOutcome::Shared)));
+        clear();
+    }
+
+    #[test]
+    fn public_result_is_returned_once_and_kept_from_screen() {
+        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        clear();
+        let public = bridge::begin_public().unwrap();
+        let mut waited = 0;
+        assert_eq!(bridge::poll_public(public, |_| waited += 1), None);
+        assert_eq!(waited, 1, "結果待ちの間だけキャンセル検知を呼ぶ");
+        assert!(
+            bridge::begin_screen().is_none(),
+            "公開側の進行中は画面が置き換えない"
         );
-        bridge::SLOT.clear(request_id);
+        assert!(bridge::begin_public().is_none());
+        assert!(bridge::deliver(public, Ok(DeviceShareOutcome::Cancelled)));
+        assert!(
+            bridge::begin_screen().is_none(),
+            "公開側の未取得の結果も守る"
+        );
+        assert_eq!(
+            bridge::poll_public(public, |_| panic!("届いた後は観測しない")),
+            Some(Ok(DeviceShareOutcome::Cancelled))
+        );
+        assert_eq!(bridge::poll_public(public, |_| {}), None, "結果は 1 度だけ");
+        assert!(bridge::begin_screen().is_some());
+        clear();
+    }
+
+    #[test]
+    fn public_begin_parks_screen_result_and_screen_keeps_replacing_its_own() {
+        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        clear();
+        let first = bridge::begin_screen().unwrap();
+        let second = bridge::begin_screen().expect("画面は自分の前の要求を置き換える");
+        assert!(bridge::begin_public().is_none(), "画面の進行中は busy");
+        assert!(!bridge::deliver(first, Ok(DeviceShareOutcome::Shared)));
+        assert!(bridge::deliver(second, Ok(DeviceShareOutcome::Shared)));
+        let public = bridge::begin_public().expect("画面の未取得の結果で busy にならない");
+        assert_eq!(
+            bridge::SLOT.snapshot_of(second),
+            Some(Some(Ok(CoreShareOutcome::Shared))),
+            "画面の結果は受け取り待ちへ"
+        );
+        assert!(bridge::discard_public(public));
+        assert!(!bridge::discard_public(public), "2 回目は何もしない");
+        assert_eq!(bridge::poll_public(public, |_| {}), None);
+        assert!(
+            !bridge::deliver(public, Ok(DeviceShareOutcome::Shared)),
+            "捨てた後の結果は捨てる"
+        );
+        clear();
+    }
+
+    #[test]
+    fn abort_and_lost_public_request() {
+        let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        clear();
+        let public = bridge::begin_public().unwrap();
+        bridge::abort_public(public);
+        assert!(bridge::SLOT.snapshot().is_none());
+        assert_eq!(bridge::poll_public(public, |_| {}), None);
+        let public = bridge::begin_public().unwrap();
+        bridge::SLOT.reset();
+        assert_eq!(
+            bridge::poll_public(public, |_| {}),
+            Some(Err(ShareSheetError::Internal)),
+            "失われた要求は 1 度だけ失敗"
+        );
+        assert_eq!(bridge::poll_public(public, |_| {}), None);
+        assert_eq!(
+            bridge::to_device(Err("x".to_string())),
+            Err(ShareSheetError::Internal)
+        );
+        clear();
+    }
+
+    /// Windows 以外の公開入口は成功へ倒さない。
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn public_entry_is_unsupported_off_windows() {
+        let req = crate::contract::ShareRequest::new("x", None).unwrap();
+        assert_eq!(
+            super::begin_share_sheet(&req),
+            Err(ShareSheetError::Unsupported)
+        );
+        assert_eq!(super::poll_share_sheet(1), None);
+        assert!(!super::discard_share_sheet(1));
     }
 }

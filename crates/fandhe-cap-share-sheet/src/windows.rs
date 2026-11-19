@@ -58,8 +58,8 @@ thread_local! {
     static HELD: RefCell<Option<Held>> = const { RefCell::new(None) };
 }
 
-/// `driver.rs` の Windows 経路から呼ばれる。`request_id` は
-/// `driver::bridge::begin` が払い出したプロセス内一意な ID（`bridge::deliver` の
+/// `driver.rs` の Windows 経路（画面 effect と公開入口 `begin_share_sheet`）から呼ばれる。`request_id` は
+/// `driver::bridge` が払い出したプロセス内一意な ID（`bridge::deliver` の
 /// 照合キー）。同期的に失敗した場合は `Err` を返し、呼び出し元が `bridge::deliver` する
 /// （`TargetApplicationChosen` は二度と来ないため）。
 #[allow(unsafe_code)]
@@ -158,4 +158,16 @@ pub(crate) fn present(request_id: u64, request: &ShareRequest) -> Result<(), Sha
 
     // SAFETY: `hwnd` の生存根拠は上と同じ。`interop` も同一の有効な COM ポインタ。
     unsafe { interop.ShowShareUIForWindow(hwnd) }.map_err(|_| ShareSheetError::Internal)
+}
+
+/// 公開入口のキャンセル検知用: メインウィンドウ（`fandhe_platform_windows::window`）が前面か。
+/// 控えた HWND が無ければ `true`（前面を失った観測にしない。結果が届くまで待つ）。
+#[allow(unsafe_code)]
+pub(crate) fn window_is_foreground() -> bool {
+    let Some(hwnd) = fandhe_platform_windows::window() else {
+        return true;
+    };
+    // SAFETY: `GetForegroundWindow` は引数を取らず、前面のウィンドウのハンドル（無ければ null）を返すだけ。
+    let foreground = unsafe { windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
+    foreground == hwnd
 }

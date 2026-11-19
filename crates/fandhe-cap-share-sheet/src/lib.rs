@@ -5,14 +5,15 @@
 //! （`UIActivityViewController`）・Android（`Intent.createChooser`、`ShareSheetHelper` を `ShareSheetLifecycle` が束ねる）・
 //! Windows（`DataTransferManager`）が実装し、他は `Unsupported`。結果は OS のコールバックが `RequestSlot` へ置き、
 //! effect が毎フレーム拾う pull 型。Windows は「共有 UI を閉じた」イベントが無いため、フォーカスの復帰を
-//! `fandhe_runtime::HostView::focused` で観測してキャンセルを推定する（egui を知らない）。
+//! `fandhe_runtime::HostView::focused` で観測してキャンセルを推定する（egui を知らない。公開入口は `GetForegroundWindow` で観測する）。
 //! 守る範囲は 1 プロセス内の要求順序・失敗を成功と見せないこと・Android の受信器の解除。
 //! 守らない範囲は共有 UI 表示中の画面の再生成（後から届く結果は捨てる）・共有先アプリの実際の送信結果・
 //! Windows のフォーカス推定のずれ。
 //!
 //! 契約（`contract`）・失敗の種類（`error`）・effect ドライバ（`driver`）・OS 実装を 1 つに集める。
-//! 画面の状態型を参照してよいのは `driver` だけ。入口 `platform_share_sheet()` は状態型に依存しないため、
-//! フレームワークの外のアプリも使える。
+//! 画面の状態型を参照してよいのは `driver` だけ。入口 `platform_share_sheet()`（macOS・iOS・Android）と
+//! `begin_share_sheet` / `poll_share_sheet` / `discard_share_sheet`（Windows の非同期の入口、`consumer-app-structure.md` §8.2）は
+//! 状態型に依存しないため、フレームワークの外のアプリも使える。
 
 // unsafe は OS 実装の FFI・JNI エクスポートに限る（`// SAFETY:` を付ける）。該当 OS だけ deny へ緩める。
 #![cfg_attr(
@@ -47,7 +48,7 @@ mod error;
 mod windows;
 
 pub use contract::*;
-pub use driver::platform_share_sheet;
+pub use driver::{begin_share_sheet, discard_share_sheet, platform_share_sheet, poll_share_sheet};
 // OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
 #[allow(unused_imports)]
 pub(crate) use driver::*;
