@@ -203,12 +203,12 @@ int32_t fandhe_ios_file_picker_pick(uint64_t requestId) {
     dispatch_async(dispatch_get_main_queue(), ^{
       @autoreleasepool {
         FandheFilePickerObserveSceneDisconnect();
-        // 進行中の選択画面（提示中、または dismiss のアニメーション中の picker）があれば、重ねて提示せず busy を返す。
+        // 進行中の選択画面（提示中、提示・dismiss のアニメーション中の picker）があれば、重ねて提示せず busy を返す（photo-picker と同じ 3 条件）。
         // 判定は delegate の有無ではなく OS の観測（picker の提示状態）で行う: 完了通知で delegate を解放した直後も、
         // picker は dismiss が終わるまで提示中のままで、その上へ present すると失敗してコールバックが来ない。
         // picker が解放済み（weak が nil）・dismiss 済みなら進行中ではなく、永久に busy にはならない。
         UIDocumentPickerViewController *active = g_activePicker;
-        if (active != nil && (active.presentingViewController != nil || active.isBeingDismissed)) {
+        if (active != nil && (active.presentingViewController != nil || active.isBeingPresented || active.isBeingDismissed)) {
             fandhe_rust_file_picker_outcome(requestId, 3, NULL, 0);
             return;
         }

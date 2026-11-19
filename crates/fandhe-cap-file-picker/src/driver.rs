@@ -550,7 +550,7 @@ pub fn begin_file_pick() -> Result<u64, FilePickerError> {
 /// [`poll_file_pick`] が `None` になり、画面が閉じれば公開入口も画面 effect も再び開始できる。iOS・Android 以外では常に `false`。
 ///
 /// busy の判定は OS の観測で行う。Android は追跡中の要求（結果の通知・launch 失敗・Activity の終了で外れる）、
-/// iOS は提示中の選択画面（提示されていない残りは進行中とみなさない）。
+/// iOS は提示中、または提示・dismiss のアニメーション中の選択画面（提示されていない残りは進行中とみなさない）。
 pub fn discard_file_pick(request_id: u64) -> bool {
     #[cfg(any(target_os = "ios", target_os = "android"))]
     {
