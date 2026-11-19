@@ -827,15 +827,15 @@ share-sheet の Windows で、ほかは同期の wrapper か既存の非同期�
 
 ### share-sheet（Windows）
 
-macOS・iOS・Android は同期の `platform_share_sheet` で OS まで届く。Windows の `DataTransferManager` は結果を
-`TargetApplicationChosen` で後から返すため、非同期の入口を足した。
+macOS・iOS・Android は同期の `platform_share_sheet` で OS まで届く。Windows は UI スレッドから呼ぶ前提で、塞ぐと
+キャンセルの観測（前面）が進まないため、同期の入口は `Unsupported` のまま非同期の入口を足した。
 
 | 項目 | 扱い |
 | --- | --- |
 | 入口 | `begin_share_sheet(&ShareRequest)`・`poll_share_sheet`・`discard_share_sheet`。crate ルートから出す。Windows 以外は `Unsupported`（begin）・`None`（poll）・`false`（discard） |
 | slot | 画面は `begin_replacing(&[PUBLIC])`（自分の前の要求は従来どおり置き換える）と `poll_and_finish_owned`、公開入口は `begin_parking` |
-| busy | 進行中の要求と公開側の未取得の結果は、どちらの開始も断る（公開は `Internal`、画面は処理中の失敗）。メインウィンドウが前面でない間（共有 UI が開いている等）も公開の開始を断る。discard 直後で共有 UI がまだ前面を取る前の開始は防げない（天井） |
+| busy | 公開の開始は、進行中の要求（画面経由を含む）と自分の未取得の結果があれば `Internal` で断る。画面の開始は、公開入口の要求が進行中・未取得のときだけ処理中の失敗で断る（自分の進行中は置き換える）。メインウィンドウが前面でない間（共有 UI が開いている等）も公開の開始を断る。discard 直後で共有 UI がまだ前面を取る前の開始は防げない（天井） |
 | キャンセル | 共有 UI を閉じた通知が無いため、poll のたびに `GetForegroundWindow` で前面を観測し、画面と同じ判定で `Cancelled` を推定する。結果が出るまで 100ms 程度の間隔で poll する。前面を失った状態を一度も観測できなければ確定しないので、そのときは discard で捨てる |
 | discard | 共有 UI は閉じず、進行中でも slot の記録を消す（後から届く結果は id の照合で捨てる） |
-| 失われた要求 | 画面側は `Internal(LOST)` で失敗に終える。公開側の poll は slot から消えた要求に `Err(Internal)` を 1 度だけ返す |
+| 失われた要求 | 画面側は固定文言（`LOST`）の失敗で終える。公開側の poll は slot から消えた要求に `Err(Internal)` を 1 度だけ返す |
 | ホストのテスト | `bridge` を `test` でもコンパイルし、結果の変換・受け取り待ち・discard・lost・同じ poll でのキャンセルを確かめる |
