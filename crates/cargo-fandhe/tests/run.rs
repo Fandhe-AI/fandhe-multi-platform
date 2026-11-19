@@ -8,7 +8,8 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use cargo_fandhe::run::{
-    execute, load_app, parse_args, prepare, Action, App, Env, Op, Options, Os, Step,
+    execute, load_app, parse_adb_devices, parse_args, prepare, Action, AndroidEnv, App, Env, Op,
+    Options, Os, Step,
 };
 
 const SECRET: &str = "/secret-cargo-path-7f3a";
@@ -36,6 +37,7 @@ fn env(host: Os, cmds: &[&str], bindgen: &str) -> Env {
         commands: cmds.iter().map(|s| s.to_string()).collect(),
         installed_targets: Some(BTreeSet::from(["wasm32-unknown-unknown".to_string()])),
         wasm_bindgen_version: Some(bindgen.to_string()),
+        android: AndroidEnv::default(),
         cargo: SECRET.into(),
     }
 }
@@ -109,7 +111,8 @@ fn desktop_build_and_run_delegate_to_cargo() {
             vec![Op::Spawn(Step {
                 stage: "cargo",
                 program: SECRET.into(),
-                args
+                args,
+                env: vec![]
             })]
         );
     }
@@ -251,7 +254,7 @@ fn web_without_app_index_writes_default_page_and_manifest() {
     let index = ops
         .iter()
         .find_map(|o| match o {
-            Op::Write { path, body } if *path == web.join("index.html") => Some(body),
+            Op::Write { path, body, .. } if *path == web.join("index.html") => Some(body),
             _ => None,
         })
         .expect("既定の index.html");
@@ -261,6 +264,7 @@ fn web_without_app_index_writes_default_page_and_manifest() {
     assert!(index.contains("rel=\"manifest\""));
     assert!(ops.contains(&Op::Write {
         path: web.join("manifest.webmanifest"),
+        within: app.target_dir.clone(),
         body: "{\"name\":\"x\"}".to_string()
     }));
     assert!(!ops
@@ -350,6 +354,7 @@ fn execute_reports_only_the_failed_stage() {
             stage: "cargo",
             program: program.into(),
             args: vec!["--secret-arg-9c1".to_string()],
+            env: vec![],
         })]
     };
     let e = execute(&op("false")).expect_err("失敗");
@@ -493,6 +498,7 @@ fn execute_writes_copies_and_recreates_directories() {
         },
         Op::Write {
             path: out.join("deep/w.txt"),
+            within: t.join("target"),
             body: "w".into(),
         },
         Op::Copy {
@@ -615,4 +621,619 @@ fn symlinked_web_dir_is_ignored_and_not_copied() {
     .expect_err("拒否");
     assert!(e.contains("symlink"), "{e}");
     assert!(!t.join("dst/secret.txt").exists());
+}
+
+// ---- Android（Issue #1423）----
+
+const KEYSTORE: &str = "/ks/secret-keystore-4d1.jks";
+const ALL_TRIPLES: [&str; 4] = [
+    "aarch64-linux-android",
+    "armv7-linux-androideabi",
+    "x86_64-linux-android",
+    "i686-linux-android",
+];
+
+fn android_opts(action: Action, release: bool) -> Options {
+    opts(action, Os::Android, release)
+}
+
+/// すべてそろった Android 環境。端末は 1 台（x86_64）。署名の変数は release のテストだけ足す。
+fn aenv(signed: bool) -> Env {
+    let mut e = env(Os::Macos, &["cargo-ndk", "gradle", "java", "adb"], "0");
+    e.installed_targets = Some(ALL_TRIPLES.iter().map(|s| s.to_string()).collect());
+    e.android = AndroidEnv {
+        sdk: true,
+        ndk: true,
+        devices: vec!["emulator-5554".into()],
+        serial_env: None,
+        device_abi: Some("x86_64".into()),
+        signing: if signed {
+            [
+                "FANDHE_ANDROID_KEYSTORE",
+                "FANDHE_ANDROID_KEYSTORE_PASSWORD",
+                "FANDHE_ANDROID_KEY_ALIAS",
+            ]
+            .map(String::from)
+            .into()
+        } else {
+            BTreeSet::new()
+        },
+        keystore: signed.then(|| PathBuf::from(KEYSTORE)),
+        keystore_file: signed,
+    };
+    e
+}
+
+fn shell(app: &App) -> PathBuf {
+    app.target_dir
+        .join("fandhe")
+        .join(&app.name)
+        .join("android")
+}
+
+fn written<'a>(ops: &'a [Op], rel: &str, shell: &Path) -> &'a str {
+    ops.iter()
+        .find_map(|o| match o {
+            Op::Write { path, body, .. } if *path == shell.join(rel) => Some(body.as_str()),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("{rel} を書く手順がありません"))
+}
+
+#[test]
+fn android_build_sequence_for_gallery() {
+    let app = gallery(Os::Android);
+    assert_eq!(app.application_id.as_deref(), Some("com.fandhe.androidapp"));
+    let ops = prepare(&app, &android_opts(Action::Build, false), &aenv(false)).expect("通る");
+    let sh = shell(&app);
+    let jni = sh.join("app/src/main/jniLibs");
+    // gen（Android の分だけ。出力先は殻の下で、アプリの gen/ ではない）→ app/src の作り直し → 殻の書き出し → cargo-ndk → gradle。
+    assert!(
+        matches!(&ops[0], Op::Gen { dir, within, files } if *dir == sh.join("gen") && *within == app.target_dir && files.contains_key("android/fandhe.gradle") && !files.keys().any(|k| k.starts_with("ios/")))
+    );
+    assert_ne!(sh.join("gen"), app.dir.join("gen"));
+    assert_eq!(
+        ops[1],
+        Op::Reset {
+            dir: sh.join("app/src"),
+            within: app.target_dir.clone()
+        }
+    );
+    assert!(ops[2..ops.len() - 3]
+        .iter()
+        .all(|o| matches!(o, Op::Write { path, within, .. } if path.starts_with(&sh) && *within == app.target_dir)));
+    let steps = spawns(&ops);
+    assert_eq!(
+        steps.iter().map(|s| s.stage).collect::<Vec<_>>(),
+        ["cargo-ndk", "gradle"]
+    );
+    assert_eq!(
+        steps[0].args,
+        [
+            "ndk",
+            "-t",
+            "arm64-v8a",
+            "-t",
+            "armeabi-v7a",
+            "-t",
+            "x86_64",
+            "--platform",
+            "24",
+            "-o",
+            &jni.display().to_string(),
+            "build",
+            "--lib",
+            "--manifest-path",
+            &app.manifest.display().to_string()
+        ]
+    );
+    assert_eq!(
+        steps[1].args,
+        [
+            "-p",
+            &sh.display().to_string(),
+            ":app:assembleDebug",
+            "--console=plain"
+        ]
+    );
+    assert!(steps[1].env.is_empty());
+    // 殻の中身の要点。
+    let app_gradle = written(&ops, "app/build.gradle.kts", &sh);
+    assert!(app_gradle.contains("applicationId = \"com.fandhe.androidapp\""));
+    assert!(app_gradle.contains(&format!(
+        "apply(from = \"{}\")",
+        sh.join("gen/android/fandhe.gradle").display()
+    )));
+    let main = written(
+        &ops,
+        "app/src/main/java/com/fandhe/platform/MainActivity.java",
+        &sh,
+    );
+    assert!(
+        main.contains("extends GameActivity")
+            && main.contains("System.loadLibrary(FandheLibrary.NAME)")
+    );
+    assert!(written(&ops, "app/src/main/AndroidManifest.xml", &sh).contains("@style/AppTheme"));
+}
+
+#[test]
+fn android_run_uses_the_device_abi_and_starts_the_activity() {
+    let app = gallery(Os::Android);
+    let ops = prepare(&app, &android_opts(Action::Run, false), &aenv(false)).expect("通る");
+    let steps = spawns(&ops);
+    assert_eq!(
+        steps.iter().map(|s| s.stage).collect::<Vec<_>>(),
+        [
+            "cargo-ndk",
+            "gradle",
+            "adb-install",
+            "adb-start",
+            "adb-check"
+        ]
+    );
+    let ndk = &steps[0].args;
+    assert_eq!(ndk.iter().filter(|a| *a == "-t").count(), 1);
+    assert!(ndk.windows(2).any(|w| w == ["-t", "x86_64"]));
+    let apk = shell(&app).join("app/build/outputs/apk/debug/app-debug.apk");
+    assert_eq!(
+        steps[2].args,
+        [
+            "-s",
+            "emulator-5554",
+            "install",
+            "-r",
+            &apk.display().to_string()
+        ]
+    );
+    assert_eq!(
+        steps[3].args,
+        [
+            "-s",
+            "emulator-5554",
+            "shell",
+            "am",
+            "start",
+            "-W",
+            "-n",
+            "com.fandhe.androidapp/com.fandhe.platform.MainActivity"
+        ]
+    );
+    assert_eq!(
+        steps[4].args,
+        [
+            "-s",
+            "emulator-5554",
+            "shell",
+            "pidof",
+            "com.fandhe.androidapp"
+        ]
+    );
+    // ANDROID_SERIAL があればそれを使う（複数台でも通る）。
+    let mut e = aenv(false);
+    e.android.devices = vec!["a1".into(), "b2".into()];
+    e.android.serial_env = Some("b2".into());
+    let ops = prepare(&app, &android_opts(Action::Run, false), &e).expect("通る");
+    assert!(spawns(&ops)[2]
+        .args
+        .starts_with(&["-s".to_string(), "b2".to_string()]));
+}
+
+#[test]
+fn android_release_requires_signing_and_passes_only_the_keystore_path() {
+    let app = gallery(Os::Android);
+    // build --release は .aab、run --release は .apk。パスワードは載せず keystore だけ絶対パスで上書きする。
+    let ops = prepare(&app, &android_opts(Action::Build, true), &aenv(true)).expect("通る");
+    let steps = spawns(&ops);
+    assert!(steps[0].args.contains(&"--release".to_string()));
+    assert_eq!(steps[1].args[2], ":app:bundleRelease");
+    assert_eq!(
+        steps[1].env,
+        [("FANDHE_ANDROID_KEYSTORE".to_string(), KEYSTORE.into())]
+    );
+    let ops = prepare(&app, &android_opts(Action::Run, true), &aenv(true)).expect("通る");
+    assert_eq!(spawns(&ops)[1].args[2], ":app:assembleRelease");
+    // 署名の殻は環境変数だけを読み、値を持たない。
+    let g = written(&ops, "app/build.gradle.kts", &shell(&app));
+    assert!(
+        g.contains("System.getenv(\"FANDHE_ANDROID_KEYSTORE_PASSWORD\")") && !g.contains(KEYSTORE)
+    );
+    // 1 つでも欠ければ、欠けた名前だけを挙げて止まる（値は出さない）。
+    for missing in [
+        "FANDHE_ANDROID_KEYSTORE",
+        "FANDHE_ANDROID_KEYSTORE_PASSWORD",
+        "FANDHE_ANDROID_KEY_ALIAS",
+    ] {
+        let mut e = aenv(true);
+        e.android.signing.remove(missing);
+        let p = errs(prepare(&app, &android_opts(Action::Build, true), &e));
+        assert_eq!(p.len(), 1, "{p:?}");
+        assert!(p[0].contains(missing) && !p[0].contains(KEYSTORE), "{p:?}");
+    }
+    // debug は署名なしで通る。
+    assert!(prepare(&app, &android_opts(Action::Build, false), &aenv(false)).is_ok());
+}
+
+#[test]
+fn android_prerequisites_are_all_collected_one_line_each() {
+    let mut app = gallery(Os::Android);
+    app.cdylib = None;
+    app.application_id = None;
+    let mut e = env(Os::Macos, &[], "0");
+    e.installed_targets = Some(BTreeSet::new());
+    let p = errs(prepare(&app, &android_opts(Action::Build, true), &e));
+    // cdylib・application-id・SDK・NDK・cargo-ndk・gradle・java・target 3 つ・署名。
+    assert_eq!(p.len(), 11, "{p:?}");
+    for want in [
+        "cdylib",
+        "applicationId",
+        "ANDROID_HOME",
+        "ANDROID_NDK_HOME",
+        "cargo-ndk",
+        "gradle",
+        "java",
+        "--release",
+    ] {
+        assert!(p.iter().any(|l| l.contains(want)), "{want}: {p:?}");
+    }
+    assert_eq!(
+        p.iter().filter(|l| l.contains("rustup target add")).count(),
+        3
+    );
+    // run は adb と端末も要る。
+    let p = errs(prepare(&app, &android_opts(Action::Run, false), &e));
+    assert!(p.iter().any(|l| l.starts_with("adb がありません")), "{p:?}");
+    assert!(p.iter().any(|l| l.contains("端末がありません")), "{p:?}");
+}
+
+#[test]
+fn android_device_selection_branches() {
+    let app = gallery(Os::Android);
+    let run = android_opts(Action::Run, false);
+    let with = |f: &dyn Fn(&mut AndroidEnv)| {
+        let mut e = aenv(false);
+        f(&mut e.android);
+        errs(prepare(&app, &run, &e))
+    };
+    let p = with(&|a| a.devices.clear());
+    assert!(p.len() == 1 && p[0].contains("端末がありません"), "{p:?}");
+    let p = with(&|a| a.devices = vec!["a".into(), "b".into()]);
+    assert!(p.len() == 1 && p[0].contains("ANDROID_SERIAL"), "{p:?}");
+    let p = with(&|a| a.serial_env = Some("zzz".into()));
+    assert!(
+        p.len() == 1 && p[0].contains("見つかりません") && !p[0].contains("zzz"),
+        "{p:?}"
+    );
+    let p = with(&|a| a.device_abi = None);
+    assert!(p.len() == 1 && p[0].contains("ABI"), "{p:?}");
+    let p = with(&|a| a.device_abi = Some("mips".into()));
+    assert!(p.len() == 1 && p[0].contains("対応していません"), "{p:?}");
+    // 端末の ABI の target だけが要る。
+    let mut e = aenv(false);
+    e.installed_targets = Some(BTreeSet::from(["aarch64-linux-android".to_string()]));
+    let p = errs(prepare(&app, &run, &e));
+    assert!(
+        p.len() == 1 && p[0].contains("x86_64-linux-android"),
+        "{p:?}"
+    );
+    // rustup が無ければ target は検査しない。
+    e.installed_targets = None;
+    assert!(prepare(&app, &run, &e).is_ok());
+    // build は端末を見ない。
+    let mut e = aenv(false);
+    e.android.devices.clear();
+    e.commands.remove("adb");
+    assert!(prepare(&app, &android_opts(Action::Build, false), &e).is_ok());
+}
+
+#[test]
+fn android_errors_do_not_leak_environment_values() {
+    let app = gallery(Os::Android);
+    let mut e = aenv(true);
+    e.android.signing.remove("FANDHE_ANDROID_KEY_ALIAS");
+    e.android.devices.clear();
+    e.android.serial_env = Some("serial-secret-77".into());
+    e.commands.clear();
+    let all = errs(prepare(&app, &android_opts(Action::Run, true), &e));
+    assert!(all.len() > 3);
+    assert!(
+        all.iter().all(|l| !l.contains(SECRET)
+            && !l.contains(KEYSTORE)
+            && !l.contains("serial-secret-77")),
+        "{all:?}"
+    );
+}
+
+#[test]
+fn android_shell_versions_match_versions_env_and_platforms_android() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let read =
+        |p: &str| std::fs::read_to_string(root.join(p)).unwrap_or_else(|e| panic!("{p}: {e}"));
+    let versions = read("scripts/android/versions.env");
+    let var = |k: &str| {
+        versions
+            .lines()
+            .find_map(|l| l.strip_prefix(&format!("{k}=")))
+            .map(|v| v.trim_matches('"').to_string())
+            .unwrap_or_else(|| panic!("{k} がありません"))
+    };
+    let app = gallery(Os::Android);
+    let ops = prepare(&app, &android_opts(Action::Build, false), &aenv(false)).expect("通る");
+    let sh = shell(&app);
+    let app_gradle = written(&ops, "app/build.gradle.kts", &sh);
+    let root_gradle = written(&ops, "build.gradle.kts", &sh);
+    let sdk = var("PLATFORM_PACKAGE")
+        .trim_start_matches("platforms;android-")
+        .to_string();
+    let tools = var("BUILD_TOOLS_PACKAGE")
+        .trim_start_matches("build-tools;")
+        .to_string();
+    let min = var("ANDROID_MIN_API");
+    let agp = var("AGP_VERSION");
+    assert!(app_gradle.contains(&format!("compileSdk = {sdk}\n")));
+    assert!(app_gradle.contains(&format!("targetSdk = {sdk}\n")));
+    assert!(app_gradle.contains(&format!("buildToolsVersion = \"{tools}\"")));
+    assert!(app_gradle.contains(&format!("minSdk = {min}\n")));
+    assert!(root_gradle.contains(&format!("version \"{agp}\"")));
+    assert!(spawns(&ops)[0]
+        .args
+        .windows(2)
+        .any(|w| w == ["--platform", min.as_str()]));
+    // platforms/android の殻と同じ値。
+    let pa = read("platforms/android/app/build.gradle.kts");
+    for want in [
+        format!("compileSdk = {sdk}\n"),
+        format!("targetSdk = {sdk}\n"),
+        format!("buildToolsVersion = \"{tools}\""),
+        format!("minSdk = {min}\n"),
+        "applicationId = \"com.fandhe.androidapp\"".to_string(),
+        "JavaVersion.VERSION_17".to_string(),
+    ] {
+        assert!(pa.contains(&want), "platforms/android: {want}");
+        assert!(app_gradle.contains(&want), "殻: {want}");
+    }
+    assert!(read("platforms/android/build.gradle.kts").contains(&format!("version \"{agp}\"")));
+    // abiFilters と同じ 3 ABI。
+    assert!(pa.contains("arm64-v8a,armeabi-v7a,x86_64"));
+}
+
+#[test]
+fn parses_adb_devices_output() {
+    let out =
+        "List of devices attached\nemulator-5554\tdevice\nR58\tunauthorized\nabc\toffline\n\n";
+    assert_eq!(parse_adb_devices(out), ["emulator-5554"]);
+    assert!(parse_adb_devices("List of devices attached\n\n").is_empty());
+    // デーモン起動の案内行が前に付いても拾う。
+    let out = "* daemon started successfully\nList of devices attached\n1234\tdevice usb:1\n";
+    assert_eq!(parse_adb_devices(out), ["1234"]);
+}
+
+/// bin も iOS の設定も持たない Android 専用アプリ。
+fn android_only(tag: &str, android_toml: &str) -> PathBuf {
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("run-{tag}"));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).expect("作成");
+    std::fs::write(
+        root.join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"droid-app\"\nversion = \"0.3.0\"\nedition = \"2021\"\n\n\
+             [lib]\ncrate-type = [\"cdylib\"]\n\n[workspace]\n\n{android_toml}"
+        ),
+    )
+    .expect("書き込み");
+    std::fs::write(root.join("src/lib.rs"), "").expect("書き込み");
+    root.join("Cargo.toml")
+}
+
+#[test]
+fn android_generation_is_limited_to_android() {
+    let m = android_only(
+        "droid",
+        "[package.metadata.fandhe-app.android]\napplication-id = \"com.example.droid\"\n",
+    );
+    // 通常の gen は iOS の必須条件（bin・bundle-id）で止まるが、run / build は Android の分だけ生成する。
+    assert!(cargo_fandhe::generate(Some(&m)).is_err());
+    let app = load(&m, Os::Android).unwrap_or_else(|e| panic!("{e:?}"));
+    assert_eq!(app.application_id.as_deref(), Some("com.example.droid"));
+    let files = app.android_gen.as_ref().expect("生成する");
+    assert!(files.contains_key("android/fandhe.gradle"));
+    assert!(files["android/java/com/fandhe/platform/FandheLibrary.java"].contains("\"droid_app\""));
+    assert!(files
+        .keys()
+        .all(|k| !k.starts_with("ios/") && !k.starts_with("macos/")));
+    let mut e = aenv(false);
+    e.installed_targets = None;
+    let ops = prepare(&app, &android_opts(Action::Build, false), &e).expect("通る");
+    assert!(written(&ops, "app/build.gradle.kts", &shell(&app)).contains("versionName = \"0.3.0\""));
+}
+
+#[test]
+fn android_application_id_is_optional_in_gen_but_validated_and_required_to_build() {
+    let m = android_only("droid-noid", "");
+    let app = load(&m, Os::Android).unwrap_or_else(|e| panic!("{e:?}"));
+    assert_eq!(app.application_id, None);
+    let p = errs(prepare(
+        &app,
+        &android_opts(Action::Build, false),
+        &aenv(false),
+    ));
+    assert!(p.len() == 1 && p[0].contains("application-id"), "{p:?}");
+    for bad in [
+        "com",
+        "com.1x",
+        "com.ex-ample.app",
+        "com..app",
+        "com.a\\\"b",
+        "com.a$b",
+    ] {
+        let m = android_only(
+            "droid-bad",
+            &format!("[package.metadata.fandhe-app.android]\napplication-id = \"{bad}\"\n"),
+        );
+        let e = load(&m, Os::Android).expect_err(bad);
+        assert!(e[0].contains("application-id"), "{bad}: {e:?}");
+    }
+}
+
+#[test]
+fn android_keystore_file_must_exist() {
+    let app = gallery(Os::Android);
+    let mut e = aenv(true);
+    e.android.keystore_file = false;
+    let p = errs(prepare(&app, &android_opts(Action::Build, true), &e));
+    assert_eq!(p.len(), 1, "{p:?}");
+    assert!(
+        p[0].contains("FANDHE_ANDROID_KEYSTORE") && !p[0].contains(KEYSTORE),
+        "{p:?}"
+    );
+    // debug では見ない。
+    assert!(prepare(&app, &android_opts(Action::Build, false), &e).is_ok());
+}
+
+#[test]
+fn android_uses_gradle_bat_on_windows_hosts() {
+    let app = gallery(Os::Android);
+    let opts = android_opts(Action::Build, false);
+    let mut e = aenv(false);
+    e.host = Some(Os::Windows);
+    let p = errs(prepare(&app, &opts, &e));
+    assert!(
+        p.len() == 1 && p[0].starts_with("gradle.bat がありません"),
+        "{p:?}"
+    );
+    e.commands.insert("gradle.bat".into());
+    e.commands.remove("gradle");
+    let ops = prepare(&app, &opts, &e).expect("通る");
+    assert_eq!(spawns(&ops)[1].program, "gradle.bat");
+    // Windows 以外は gradle。
+    let ops = prepare(&app, &opts, &aenv(false)).expect("通る");
+    assert_eq!(spawns(&ops)[1].program, "gradle");
+}
+
+#[test]
+fn android_requires_the_gen_output() {
+    let mut app = gallery(Os::Android);
+    app.android_gen = None;
+    let p = errs(prepare(
+        &app,
+        &android_opts(Action::Build, false),
+        &aenv(false),
+    ));
+    assert!(p.len() == 1 && p[0].contains("gen 出力"), "{p:?}");
+}
+
+#[test]
+fn android_app_name_is_xml_escaped() {
+    let mut app = gallery(Os::Android);
+    app.name = "a&b<c>\"d'".into();
+    let ops = prepare(&app, &android_opts(Action::Build, false), &aenv(false)).expect("通る");
+    let x = written(&ops, "app/src/main/res/values/strings.xml", &shell(&app));
+    assert!(x.contains("a&amp;b&lt;c&gt;&quot;d&apos;"), "{x}");
+}
+
+#[test]
+fn step_env_reaches_the_child_process() {
+    #[cfg(unix)]
+    {
+        let sh = |want: &str| {
+            vec![Op::Spawn(Step {
+                stage: "sh",
+                program: "sh".into(),
+                args: vec!["-c".into(), "test \"$FANDHE_TEST_X\" = v".into()],
+                env: vec![("FANDHE_TEST_X".into(), want.into())],
+            })]
+        };
+        assert!(execute(&sh("v")).is_ok());
+        assert!(execute(&sh("w")).is_err());
+    }
+}
+
+#[test]
+fn detect_env_reads_rust_targets_for_web_and_android_only() {
+    use cargo_fandhe::run::detect_env;
+    if std::process::Command::new("rustup")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return; // rustup が無い環境では観測されない（検査は飛ばす仕様）
+    }
+    for os in [Os::Web, Os::Android] {
+        let e = detect_env(os, Action::Build);
+        assert!(e.installed_targets.is_some(), "{os:?}");
+    }
+    assert!(detect_env(Os::Macos, Action::Build)
+        .installed_targets
+        .is_none());
+}
+
+#[test]
+fn android_run_leaves_the_apps_own_gen_alone() {
+    // 印の無い利用者の gen/ があっても、run / build は触れず、出力は殻の下の gen/ へ出る。
+    let m = android_only(
+        "droid-ownedgen",
+        "[package.metadata.fandhe-app.android]\napplication-id = \"com.example.droid\"\n",
+    );
+    let own = m.parent().expect("dir").join("gen");
+    std::fs::create_dir_all(&own).expect("作成");
+    std::fs::write(own.join("keep.txt"), "mine").expect("書き込み");
+    let app = load(&m, Os::Android).unwrap_or_else(|e| panic!("{e:?}"));
+    let mut e = aenv(false);
+    e.installed_targets = None;
+    let ops = prepare(&app, &android_opts(Action::Build, false), &e).expect("通る");
+    let sh = shell(&app);
+    // gen・殻の書き出しまでを実行する（cargo-ndk 以降は外す）。
+    let upto = ops
+        .iter()
+        .position(|o| matches!(o, Op::Spawn(_)))
+        .expect("spawn");
+    execute(&ops[..upto]).expect("通る");
+    assert_eq!(
+        std::fs::read_to_string(own.join("keep.txt")).expect("読む"),
+        "mine"
+    );
+    assert_eq!(std::fs::read_dir(&own).expect("読む").count(), 1);
+    let gradle = std::fs::read_to_string(sh.join("gen/android/fandhe.gradle")).expect("gen の出力");
+    assert!(
+        gradle.contains(&sh.join("gen").display().to_string()),
+        "{gradle}"
+    );
+    assert!(sh
+        .join("app/src/main/java/com/fandhe/platform/MainActivity.java")
+        .is_file());
+    // 実行し直しても通る（印のある殻の gen/ は置き換わる）。
+    execute(&ops[..upto]).expect("2 回目も通る");
+}
+
+#[test]
+fn write_refuses_paths_outside_or_through_symlinks() {
+    let t = scratch("write");
+    let within = t.join("target");
+    std::fs::create_dir_all(&within).expect("作成");
+    let w = |path: PathBuf| {
+        execute(&[Op::Write {
+            path,
+            within: within.clone(),
+            body: "x".into(),
+        }])
+    };
+    let e = w(t.join("other/a.txt")).expect_err("配下の外は拒否");
+    assert!(e.contains("配下ではない"), "{e}");
+    assert!(!t.join("other").exists());
+    #[cfg(unix)]
+    {
+        let victim = t.join("victim");
+        std::fs::create_dir_all(&victim).expect("作成");
+        std::os::unix::fs::symlink(&victim, within.join("fandhe")).expect("link");
+        let e = w(within.join("fandhe/a.txt")).expect_err("経路の symlink は拒否");
+        assert!(e.contains("symlink"), "{e}");
+        assert!(!victim.join("a.txt").exists());
+        // 書き込み先のファイル自身が symlink でも拒否する。
+        let target = t.join("victim/orig.txt");
+        std::fs::write(&target, "orig").expect("書き込み");
+        std::fs::create_dir_all(within.join("ok")).expect("作成");
+        std::os::unix::fs::symlink(&target, within.join("ok/f.txt")).expect("link");
+        assert!(w(within.join("ok/f.txt")).is_err());
+        assert_eq!(std::fs::read_to_string(&target).expect("読む"), "orig");
+    }
+    assert!(w(within.join("ok2/b.txt")).is_ok());
 }

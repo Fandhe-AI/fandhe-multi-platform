@@ -99,6 +99,8 @@ pub(crate) struct AppConfig {
 struct AndroidConfig {
     #[serde(default)]
     backup_exclusions: Vec<BackupExclusion>,
+    /// `applicationId`。`cargo fandhe run|build --os android` で必須（殻の Gradle へ渡す。gen の出力には入らない）。
+    application_id: Option<String>,
 }
 
 /// アプリの基礎 manifest。名前・アイコン・`start_url` などアプリが持つ値だけを書く。
@@ -219,6 +221,20 @@ fn is_ident(s: &str) -> bool {
         && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
+/// Android の `applicationId` の形（Gradle へ文字列として埋めるため、文字種はここで絞る）。
+fn is_application_id(s: &str) -> bool {
+    let mut n = 0;
+    for seg in s.split('.') {
+        n += 1;
+        if !seg.starts_with(|c: char| c.is_ascii_alphabetic())
+            || !seg.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            return false;
+        }
+    }
+    n >= 2
+}
+
 impl AppConfig {
     fn parse(v: &Value) -> Result<Self, Vec<String>> {
         let cfg: AppConfig = if v.is_null() {
@@ -247,6 +263,11 @@ impl AppConfig {
                 || m.split('/').any(|s| s == "..")
             {
                 errs.push(format!("fandhe-app.web.manifest: `{m}` はアプリの crate からの相対パスにしてください（空・絶対・`..`・`\\`・`:` は不可）"));
+            }
+        }
+        if let Some(id) = &cfg.android.application_id {
+            if !is_application_id(id) {
+                errs.push(format!("fandhe-app.android.application-id: `{id}` は 2 セグメント以上のドット区切りで、各セグメントは英字で始まる英数字と `_` にしてください"));
             }
         }
         errs.extend(
@@ -300,7 +321,7 @@ impl AppConfig {
 
 // ---- エスケープ・直列化 ----
 
-fn esc_xml(s: &str) -> String {
+pub(crate) fn esc_xml(s: &str) -> String {
     let mut o = String::with_capacity(s.len());
     for c in s.chars() {
         match c {
@@ -916,6 +937,7 @@ fn apple_files(
 // ---- 生成本体 ----
 
 /// 到達した機能 (OS ごと) とアプリ設定から、`gen/` 配下の相対パス → 内容を作る。純粋関数。
+#[cfg(test)]
 pub(crate) fn render(
     android: &[&Found],
     ios: &[&Found],
@@ -923,6 +945,19 @@ pub(crate) fn render(
     cfg: &AppConfig,
     app: &AppInfo,
 ) -> Result<BTreeMap<String, String>, Vec<String>> {
+    render_for(None, android, ios, macos, cfg, app)
+}
+
+/// [`render`] を対象 OS（`"android"` など）に絞れる形。絞ると他 OS の殻の必須条件（iOS の bundle-id 等）を検査しない。
+pub(crate) fn render_for(
+    only: Option<&str>,
+    android: &[&Found],
+    ios: &[&Found],
+    macos: &[&Found],
+    cfg: &AppConfig,
+    app: &AppInfo,
+) -> Result<BTreeMap<String, String>, Vec<String>> {
+    let want = |os: &str| only.is_none_or(|o| o == os);
     let mut errs: Vec<String> = Vec::new();
     let mut files = BTreeMap::new();
     // 対象 OS 以外の欄を落としてから統合する（未到達 OS の欄の競合で全体を失敗させない）。
@@ -950,17 +985,21 @@ pub(crate) fn render(
             .ok()
     };
 
-    if let Some(m) = merged("android", android, &mut errs).map(|m| {
-        // アプリの自前の除外を機能の分へ足す統合点。
-        let mut a = m.android;
-        a.backup_exclusions.extend(
-            cfg.android
-                .backup_exclusions
-                .iter()
-                .map(|e| (e.domain, e.path.clone())),
-        );
-        a
-    }) {
+    if let Some(m) = want("android")
+        .then(|| merged("android", android, &mut errs))
+        .flatten()
+        .map(|m| {
+            // アプリの自前の除外を機能の分へ足す統合点。
+            let mut a = m.android;
+            a.backup_exclusions.extend(
+                cfg.android
+                    .backup_exclusions
+                    .iter()
+                    .map(|e| (e.domain, e.path.clone())),
+            );
+            a
+        })
+    {
         match &app.cdylib {
             // Android の入口（`android_main`）は cdylib にしか置けない。cdylib の無いアプリは Android を対象にしない
             // （iOS・デスクトップだけのアプリ。Issue #1200）ので、Android の生成物を出さない。
@@ -996,6 +1035,9 @@ pub(crate) fn render(
         }
     }
     for (os, set) in [("ios", ios), ("macos", macos)] {
+        if !want(os) {
+            continue;
+        }
         let Some(m) = merged(os, set, &mut errs).map(|m| if os == "ios" { m.ios } else { m.macos })
         else {
             continue;
@@ -1064,9 +1106,34 @@ pub(crate) fn app_root(meta: &Value) -> Result<(PathBuf, Value, Value), Vec<Stri
 /// `manifest`（省略時はカレントのパッケージ）のアプリが選んだ機能から、ネイティブ設定を生成する。
 /// 宣言・入力に問題が 1 件でもあれば何も返さない（check と同じ厳しさ）。書き出しは [`write`]。
 pub fn generate(manifest: Option<&Path>) -> Result<Generated, Vec<String>> {
+    generate_for(manifest, None, None).map(|(g, _)| g)
+}
+
+/// Android の分だけ生成する（`cargo fandhe run|build --os android` 用の内部入口）。iOS・macOS の殻の必須条件を検査しない。
+/// 出力先は `gen_dir`（アプリの `gen/` には触れない）。戻りは生成結果と `fandhe-app.android.application-id`。
+pub(crate) fn generate_android(
+    manifest: Option<&Path>,
+    gen_dir: PathBuf,
+) -> Result<(Generated, Option<String>), Vec<String>> {
+    generate_for(manifest, Some("android"), Some(gen_dir))
+}
+
+fn generate_for(
+    manifest: Option<&Path>,
+    only: Option<&str>,
+    gen_dir: Option<PathBuf>,
+) -> Result<(Generated, Option<String>), Vec<String>> {
     let mut sets: Vec<Vec<Found>> = Vec::new();
     let mut app: Option<(PathBuf, Value, Value)> = None;
-    for triple in [ANDROID_TRIPLE, IOS_TRIPLE, MACOS_TRIPLE] {
+    for (os, triple) in [
+        ("android", ANDROID_TRIPLE),
+        ("ios", IOS_TRIPLE),
+        ("macos", MACOS_TRIPLE),
+    ] {
+        if only.is_some_and(|o| o != os) {
+            sets.push(Vec::new());
+            continue;
+        }
         let meta = run_metadata(manifest, Some(triple))?;
         if app.is_none() {
             app = Some(app_root(&meta)?);
@@ -1081,19 +1148,23 @@ pub fn generate(manifest: Option<&Path>) -> Result<Generated, Vec<String>> {
     }
     let (dir, cfg, pkg) = app.expect("ループで必ず設定される");
     let cfg = AppConfig::parse(&cfg)?;
-    let info = AppInfo::from_package(&pkg, dir.join("gen"));
+    let gen_dir = gen_dir.unwrap_or_else(|| dir.join("gen"));
+    let info = AppInfo::from_package(&pkg, gen_dir.clone());
     let r = |i: usize| sets[i].iter().collect::<Vec<_>>();
-    let files = render(&r(0), &r(1), &r(2), &cfg, &info)?;
+    let files = render_for(only, &r(0), &r(1), &r(2), &cfg, &info)?;
     let notes = if info.cdylib.is_none() {
         vec![ANDROID_SKIPPED_NOTE.to_string()]
     } else {
         Vec::new()
     };
-    Ok(Generated {
-        gen_dir: dir.join("gen"),
-        files,
-        notes,
-    })
+    Ok((
+        Generated {
+            gen_dir,
+            files,
+            notes,
+        },
+        cfg.android.application_id,
+    ))
 }
 
 /// Web だけを生成する（`cargo fandhe gen --os web`、#1238）。bin や iOS 設定を持たない Web 専用の

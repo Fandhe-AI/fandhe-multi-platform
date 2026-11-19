@@ -252,6 +252,7 @@ NSCameraUsageDescription = "撮影に使います"  # 有効な機能が要求�
 
 ```toml
 [package.metadata.fandhe-app.android]
+application-id = "com.example.app"          # `cargo fandhe run|build --os android` で必須（gen の出力には入らない）
 backup-exclusions = [{ domain = "file", path = "cache-index" }]
 ```
 
