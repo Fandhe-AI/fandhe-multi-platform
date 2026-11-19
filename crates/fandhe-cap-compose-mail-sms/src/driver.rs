@@ -59,7 +59,7 @@ fn to_outcome(
                 l if l == contract::CLEANUP => {
                     "前回の添付の一時ファイルを消せなかったため、作成画面を開きませんでした"
                 }
-                l if l == contract::BUSY => "前の作成画面がまだ開いています",
+                l if l == contract::BUSY => "前の作成画面が開いているか、前の結果がまだ受け取られていません",
                 l if l == contract::LOST => "作成画面の要求が失われました。もう一度お試しください",
                 l if l == contract::MAPI => {
                     "既定のメールアプリで添付付きの作成を開けませんでした（新しい Outlook は非対応）"
@@ -207,11 +207,16 @@ pub(crate) mod bridge {
 
     /// Android: Activity 再生成直後に `android_main` から呼ぶ。保留中の要求は復元せず破棄し、
     /// 以後届く旧 `request_id` の [`deliver`] を無視させる（`app_badge::bridge::reset` と同じ）。受け取り待ちの結果も捨てる。
-    /// 公開側の持ち主の印は残し、次の [`poll_public`] が失われた要求を 1 度だけ通知する。
+    /// 持ち主の印は残し、画面は次の poll で失敗に、公開側は次の [`poll_public`] で失われた要求を 1 度だけ通知する。
     #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
     pub(crate) fn reset() {
         SLOT.reset();
-        SCREEN_OWNER.release(SCREEN_OWNER.current());
+    }
+
+    /// 公開入口の依頼自体が失敗したときの後片付け（結果は届かないので slot と印を空ける）。
+    pub(crate) fn abort_public(request_id: u64) {
+        SLOT.clear(request_id);
+        PUBLIC_OWNER.release(request_id);
     }
 }
 
@@ -222,7 +227,7 @@ pub fn reset_pending_tracking() {
 }
 
 /// OS へ作成画面の表示を依頼する。`Ok` は受理済みで結果は後から [`bridge::deliver`] で届く。
-/// `Err` は依頼自体の失敗（呼び出し元がその場で `deliver` する）。
+/// `Err` は依頼自体の失敗（結果は届かない。画面経路はその場で `deliver` し、公開入口は `bridge::abort_public` で空けて `Err` を返す）。
 #[cfg(target_os = "ios")]
 fn begin_compose(request_id: u64, req: &ComposeRequest) -> Result<(), ComposeMailSmsError> {
     crate::ios::begin_compose(request_id, req)
@@ -292,14 +297,17 @@ fn drive_callback(state: &ComposeMailSmsState, sender: &CompletionSender<Compose
 ///
 /// - 進行中の要求（画面経由を含む。作成画面が開いたまま）と、自分の結果が未取得のうちは `Internal(BUSY)` で断る
 /// - 画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める（画面はそのまま受け取る）
-/// - 依頼自体の失敗は `Err`（結果は届かない）。macOS・Windows は同期の [`platform_compose_mail_sms`] を使い、
+/// - 依頼自体の失敗は `Err`（結果は届かない）。macOS・Windows は同期の `platform_compose_mail_sms` を使い、
 ///   この入口は iOS / Android 以外では `Unsupported`
+///
+/// iOS の天井: busy は Rust の slot が決め、空くのは `.m` の delegate の完了通知だけ。delegate が呼ばれないまま
+/// 作成画面が閉じられる（ホストアプリが提示の積み重ねごと閉じる等）と、プロセス終了まで画面・公開とも busy のまま残る
+/// （iOS には reset が無く、discard も進行中の slot は残す）。`.m` は `modalInPresentation` でスワイプの閉じを塞いでいる。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn begin_compose_mail_sms(req: &ComposeRequest) -> Result<u64, ComposeMailSmsError> {
     let request_id = bridge::begin_public().ok_or(ComposeMailSmsError::Internal(contract::BUSY))?;
     if let Err(e) = begin_compose(request_id, req) {
-        bridge::SLOT.clear(request_id);
-        bridge::PUBLIC_OWNER.release(request_id);
+        bridge::abort_public(request_id);
         return Err(e);
     }
     Ok(request_id)
@@ -427,7 +435,6 @@ pub fn compose_mail_sms_effect(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
     use std::time::Duration;
 
     /// 起床を捨てるだけの waker（テストは受信側で完了を直接確かめる）。
@@ -475,12 +482,26 @@ mod tests {
         ));
     }
 
+    /// iOS / Android 以外の公開入口は成功へ倒さない。
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    #[test]
+    fn public_entry_is_unsupported_off_ios_android() {
+        let req = ComposeRequest::sms("", "x").unwrap();
+        assert_eq!(
+            begin_compose_mail_sms(&req),
+            Err(ComposeMailSmsError::Unsupported("compose"))
+        );
+        assert_eq!(poll_compose_mail_sms(1), None);
+        assert!(!discard_compose_mail_sms(1));
+    }
+
     #[test]
     fn to_outcome_maps_attachment_labels_to_fixed_text() {
         for l in [
             contract::ATTACHMENT_FILE,
             contract::CLEANUP,
             contract::BUSY,
+            contract::LOST,
             contract::MAPI,
         ] {
             let Err(ComposeFailure::Failed(m)) = to_outcome(Err(ComposeMailSmsError::Internal(l)))
@@ -564,6 +585,7 @@ mod tests {
     mod sync_path {
         use super::*;
         use crate::contract::UnsupportedComposeMailSms;
+        use std::sync::Arc;
         use std::sync::atomic::{AtomicU32, Ordering};
 
         /// 呼び出し回数を数え、決めた結果を返す偽実装。
@@ -822,23 +844,50 @@ mod tests {
             assert_eq!(bridge::poll_public(public), None);
             clear();
         }
-    }
-}
 
-#[cfg(all(test, any(target_os = "ios", target_os = "android")))]
-mod bridge_tests {
-    use super::bridge;
-    use super::*;
+        #[test]
+        fn stale_request_id_is_dropped_and_second_deliver_ignored() {
+            let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            clear();
+            let id = bridge::begin_screen().unwrap();
+            assert!(!bridge::deliver(id + 1000, Ok(ComposeOutcome::Queued)));
+            assert!(bridge::deliver(id, Ok(ComposeOutcome::Cancelled)));
+            assert!(!bridge::deliver(id, Ok(ComposeOutcome::Queued)));
+            assert_eq!(
+                bridge::SLOT.snapshot_of(id),
+                Some(Some(Ok(ComposeOutcome::Cancelled)))
+            );
+            clear();
+        }
 
-    #[test]
-    fn stale_request_id_is_dropped_and_second_deliver_ignored() {
-        let id = bridge::begin();
-        assert!(!bridge::deliver(id + 1000, Ok(ComposeOutcome::Queued)));
-        assert!(bridge::SLOT.snapshot().is_some_and(|(_, r)| r.is_none()));
-        assert!(bridge::deliver(id, Ok(ComposeOutcome::Cancelled)));
-        assert!(!bridge::deliver(id, Ok(ComposeOutcome::Queued)));
-        let (_, ready) = bridge::SLOT.snapshot().expect("begin 済み");
-        assert_eq!(ready, Some(Ok(CoreOutcome::Cancelled)));
-        bridge::SLOT.clear(id);
+        #[test]
+        fn reset_fails_screen_request_once() {
+            let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            clear();
+            bridge::begin_screen().unwrap();
+            bridge::reset();
+            assert_eq!(poll_screen(), 9, "失われた画面の要求は失敗で終える");
+            assert_eq!(poll_screen(), 0, "通知は 1 度だけ");
+            clear();
+        }
+
+        #[test]
+        fn abort_public_frees_slot_and_discard_of_ready_result_clears_it() {
+            let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            clear();
+            let public = bridge::begin_public().unwrap();
+            bridge::abort_public(public);
+            assert_eq!(bridge::poll_public(public), None);
+            assert!(bridge::SLOT.snapshot().is_none());
+            let public = bridge::begin_public().unwrap();
+            assert!(bridge::deliver(public, Ok(ComposeOutcome::Saved)));
+            assert!(bridge::discard_public(public));
+            assert!(
+                bridge::SLOT.snapshot().is_none(),
+                "届いた結果は discard で捨てる"
+            );
+            assert!(bridge::begin_screen().is_some());
+            clear();
+        }
     }
 }

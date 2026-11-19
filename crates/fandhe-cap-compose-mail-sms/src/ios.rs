@@ -46,8 +46,8 @@ unsafe extern "C" {
     ) -> i32;
 }
 
-/// 作成画面の表示を依頼する。`Err` は依頼自体が受理されなかった（呼び出し元がその場で
-/// `deliver` する）。`Ok` なら結果は後で [`fandhe_rust_compose_mail_sms_outcome`] が届ける。
+/// 作成画面の表示を依頼する。`Err` は依頼自体が受理されなかった（結果は届かない。後始末は
+/// `driver` の呼び出し元が行う）。`Ok` なら結果は後で [`fandhe_rust_compose_mail_sms_outcome`] が届ける。
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
 pub(crate) fn begin_compose(
