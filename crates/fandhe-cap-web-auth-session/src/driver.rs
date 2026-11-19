@@ -243,6 +243,11 @@ fn setup(imp: &dyn WebAuthSession, request_id: u64) -> Result<bridge::Active, We
     use fandhe_device::passkey::base64url_encode;
     use fandhe_device::url_scheme::SCHEME;
 
+    // wasm32（web は対応表で n-a）では断る。`Instant::now()` が wasm32-unknown-unknown では実行時に panic し、
+    // デモ認可サーバー（TCP の待ち受け）も動かないため、時計と slot に触れる前に返す。
+    if cfg!(target_arch = "wasm32") {
+        return Err(WebAuthFailure::Unsupported);
+    }
     let started = std::time::Instant::now();
     let (mut state, mut verifier, mut code) = ([0u8; 16], [0u8; 32], [0u8; 16]);
     imp.fill_random(&mut state)?;
@@ -428,6 +433,11 @@ pub fn begin_web_auth(req: AuthRequest) -> Result<u64, WebAuthFailure> {
 }
 
 fn begin_external(imp: &dyn WebAuthSession, req: AuthRequest) -> Result<u64, WebAuthFailure> {
+    // wasm32（web は対応表で n-a）では断る。`Instant::now()` が wasm32-unknown-unknown では実行時に panic し、
+    // デモ認可サーバー（TCP の待ち受け）も動かないため、時計と slot に触れる前に返す。
+    if cfg!(target_arch = "wasm32") {
+        return Err(WebAuthFailure::Unsupported);
+    }
     let request_id = EXTERNAL_OWNER
         .begin_excluding(&bridge::SLOT, &[&SCREEN_OWNER, &EXTERNAL_OWNER])
         .ok_or(WebAuthFailure::Internal)?;

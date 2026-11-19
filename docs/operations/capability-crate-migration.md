@@ -791,7 +791,6 @@ PiP の切り替わりの口は #1327（§18）で決着していた。はじめ
 | `crates/fandhe/Cargo.toml` | `[features]` に `<id> = ["dep:fandhe-cap-<id>"]`、`[dependencies]` に `fandhe-cap-<id> = { path = "../fandhe-cap-<id>", optional = true }` を id の順で足す |
 | `crates/fandhe/src/lib.rs` | `#[cfg(feature = "<id>")] pub mod <stem> { pub use fandhe_cap_<stem>::*; mod driver {} }` を足す。glob で crate ルートを出し、同名の非公開モジュールで機能 crate の `driver` を覆い隠す（入口からドライバへ届かない。consumer-app-structure.md §8.1）。`mod driver {}` には `#[allow(dead_code, hidden_glob_reexports)]` を付ける |
 | 足し忘れ | `crates/fandhe/tests/features.rs` が、`crates/fandhe-cap-*` のすべてに feature・依存・再公開があるかを `cargo test` で検査する |
-| wasm32 でコンパイルできない機能 | 依存を `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]` に置き、再公開の `cfg` に `not(target_arch = "wasm32")` を足す（現状は web-auth-session だけ） |
 
 ## 31. 各 OS の入口を `#[fandhe::main]` で生成する（#1200）
 
