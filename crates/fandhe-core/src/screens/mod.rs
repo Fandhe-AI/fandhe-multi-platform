@@ -109,6 +109,9 @@ pub mod checkbox_list;
 /// 表示専用部品の確認用画面（Issue #1428）。
 pub mod display_widgets;
 
+/// `Stack`・`Grid`・`Card`・`Tooltip` の確認用画面（Issue #1430）。
+pub mod containers;
+
 /// `menu`・`tabs` の確認用画面（Issue #1429）。
 pub mod menu_tabs;
 

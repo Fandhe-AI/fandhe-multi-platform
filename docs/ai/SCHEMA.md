@@ -425,10 +425,10 @@ assert_eq!(assert_iter(screen.iter()), 2);
 （macOS・Android・Windows では AX ノードだけは公開される）。`crates/fandhe-render-egui/tests/widget_coverage.rs` が 1 種ずつ
 `egui::Context::run` で描画し、出力の shape が空画面と同数のままかを確かめている（根拠は
 `render.rs` の `Node::Widget` 分岐が `DialogWidget` / `Checkbox` / `ToggleSwitch` / `Slider` /
-`RadioButton` / `ProgressBar` / `Spinner` / `Separator` / `Menu` / `Tabs` / `ImageWidget` / `CanvasWidget` の 12 種だけを `downcast_ref` していること）。
-この 12 種以外の `Widget<S>` 実装（`LabelWidget`・`CheckboxWidget`・`TabBarWidget`・`ProgressWidget` 等）は
+`RadioButton` / `ProgressBar` / `Spinner` / `Separator` / `Menu` / `Tabs` / `Stack` / `Grid` / `Card` / `Tooltip` / `ImageWidget` / `CanvasWidget` の 16 種だけを `downcast_ref` していること）。
+この 16 種以外の `Widget<S>` 実装（`LabelWidget`・`CheckboxWidget`・`TabBarWidget`・`ProgressWidget` 等）は
 `.with_node()` で置いても描画されない。web-dom の対応は本表の対象外。
-描画の配線と API の整理は #1427（重複する書き方の整理）・#1428・#1429・#1430・#1437（icon）で扱う。
+描画の配線と API の整理は #1427（重複する書き方の整理）・#1428・#1429・#1430・#1437（icon）で扱う（#1428〜#1430 は配線済み）。
 
 描画される（`Node` の直接バリアント。ビルダー名で示す）:
 `.text()` / `.dynamic_text()` / `.error_text()` / `.text_field()` / `.button()` / `.list()` /
@@ -441,7 +441,28 @@ assert_eq!(assert_iter(screen.iter()), 2);
 `.menu()` / `.tabs()`（書き方はパターン 7-3。`tabs` は見出しだけを描き、中身は描かない）/
 `.separator()`（太さは無視。縦線は親が横並び（`Node::Row`）のときだけで、画面のルートなど縦並びでは横線になる）/
 `ImageWidget::bound(..)` / `::fixed(..)`（`.with_node()` で置く。識別子が `fandhe_runtime::image_store::put` と一致するときだけ）/
-`DialogWidget`（`.with_node()` で置く）/ `CanvasWidget`（`.with_node()` で置く）
+`DialogWidget`（`.with_node()` で置く）/ `CanvasWidget`（`.with_node()` で置く）/
+`.stack()`・`.grid()`・`.card()`・`.tooltip()`（子を再帰して描く。下の「コンテナの子」）
+
+**コンテナの子（`Stack` / `Grid` / `Card` / `Tooltip`、Issue #1430）**:
+
+- 子は `Widget::children`（宣言順）と同じ並びで描かれ、子の操作は `Event::WidgetValueChanged` の path
+  （`Widget::children` の添字の列）で状態へ届く。入れ子（`Stack` の中の `Card` の中の `Checkbox`）も同じ
+- 子として描かれるのは、上の「描画される（`Node::Widget`）」の部品（`Checkbox`・`ProgressBar` 等）。
+  **子が `Label` / `LabelWidget` のときは描かれない**（コンテナの枠だけが出る）。#1427 で解決予定。
+  文字を置くなら `Checkbox` 等のラベルを使うか、`Stack` の外に `.text()` を置く。
+  描かれない子（`Label`・閉じた `DialogWidget` 等）も、`with_spacing` の間隔 1 つ分の場所は取る
+- `Stack` は `with_direction` で縦・横、`with_spacing` で間隔（既定は 0）。`Grid` は `with_columns` で列数（1 子 = 1 セル）、
+  `with_spacing` で行・列の間隔。`Card` は `with_padding` の余白つきの枠で子を縦に並べる。
+  `Card` の `with_tap_label`（タップ）は egui では未配線。`Grid` のセルに `Tabs`・横向きの `Stack` など
+  折り返して並べる部品を置くと、列幅が広がらず縦に折り返す（`Grid` の外に置く）
+- 無効化（`Card::set_disabled`）中の子は見た目のまま操作できない。`Tooltip::set_disabled` はバブルだけを止める
+- `Tooltip` はアンカー（`with_anchor`）にポインタを重ねると本文のバブルを出す（`show()` 済みなら常に出す）。
+  **タッチ端末ではバブルを出さない**。egui 0.33 は押している間を hover 扱いにせず、離すとポインタも消えるため、
+  タップ・長押しのどちらでも出ない（タップはアンカー自身の操作に使うので、タップで出す設計にもしない）。
+  本文だけを唯一の情報経路にしないこと。本文は `Tooltip` の AX ラベルとして公開されるが、AX ツリーに出るのは
+  macOS・Android・Windows のみ（読み上げは実機で未確認）。iOS・Web・Linux のタッチには本文へ届く経路が無く（既知の天井）、
+  スクリーンリーダーを使わないタッチ利用者にも届かない
 
 描画されない（何も出ない）と、代わりの書き方:
 
@@ -453,11 +474,7 @@ assert_eq!(assert_iter(screen.iter()), 2);
 | `.image()` / `.image_bound()` | `ImageWidget` を `.with_node()` で置く。画素を直接渡すなら `.rgba_image()` |
 | `.icon()` / `.icon_bound()` | `.text()` に記号・文言を置く |
 | `.scroll_view()` | 不要。`render_screen` のルートが縦スクロールする。大量なら `.virtual_list()` |
-| `.stack()` | `Screen` に `.with_node()` で順に並べる（縦並び）。横並びは `Node::Row`、または `.list_with_axis(.., Axis::Horizontal)` |
-| `.grid()` | `.list_with_axis(.., Axis::Grid { columns })`（大量なら `.virtual_list_with_axis`） |
-| `.card()` | 子のノードを直接並べる。枠は出せない |
 | `.dialog()` | `DialogWidget::new_dynamic(..).with_content(..)`（上の `.dialog()` の注意書き） |
-| `.tooltip()` | 補足を `.text()` で隣に置く（ホバー表示は無い） |
 
 `DialogWidget` の `dismiss_label` ボタンは、`with_content` の子ノード列にある同名の `Node::Button` が描く
 （本体だけでは出ない）。

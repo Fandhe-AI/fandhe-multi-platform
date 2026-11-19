@@ -52,6 +52,8 @@ use super::widget::{
 };
 use crate::state::ReadFn;
 
+use super::node::Node;
+
 // バブルの座標・寸法（パディング・行高等）は `PaintCommand` が座標・レイヤを表現
 // できないため算出しない（`measure` はアンカー寸法をそのまま返す契約、
 // モジュール doc 参照）。`Dialog::APPROX_LINE_HEIGHT` 等の先行定数は自前の寸法計算が
@@ -178,6 +180,15 @@ impl<S: 'static> Tooltip<S> {
         self
     }
 
+    /// アンカーを `Node::Widget` に包んだ列（無ければ空、最大 1 件）。[`Widget::children`] と
+    /// 描画層の共通の入口。無効化はバブルだけを抑止する（`paint` と同じ）ため、アンカーは常に返す。
+    pub fn child_nodes(&self) -> Vec<Node<S>> {
+        self.anchor
+            .iter()
+            .map(|a| Node::Widget(a.clone_box()))
+            .collect()
+    }
+
     /// 現在の表示キャッシュ値（本文テキスト）を返す。
     pub fn text(&self) -> &str {
         &self.cached_text
@@ -299,12 +310,27 @@ impl<S: 'static> Widget<S> for Tooltip<S> {
         AccessibilityRole::Tooltip
     }
 
+    /// 本文（キャッシュ値）。空なら `None`。`fandhe-render-egui` が AX ツリーへ出すのは macOS・Android・
+    /// Windows のみ（読み上げは実機で未確認）。iOS・Web・Linux のタッチには本文へ届く経路が無い（既知の天井）。
+    fn accessibility_label(&self) -> Option<String> {
+        (!self.cached_text.is_empty()).then(|| self.cached_text.clone())
+    }
+
     fn interaction_state(&self) -> InteractionState {
         self.interaction
     }
 
     fn clone_box(&self) -> Box<dyn Widget<S>> {
         Box::new(self.clone())
+    }
+
+    /// アンカー 1 件。子の操作の path 降下（`resolve_node_at`）に使う。
+    fn children(&self, _state: &S) -> Vec<Node<S>> {
+        self.child_nodes()
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
     }
 }
 
@@ -508,6 +534,14 @@ mod tests {
     }
 
     // (g) accessibility_role・clone_box
+
+    #[test]
+    fn accessibility_label_is_the_text() {
+        let tooltip: Tooltip<FormState> = Tooltip::fixed(WidgetId::from_raw(17), "保存します");
+        assert_eq!(tooltip.accessibility_label().as_deref(), Some("保存します"));
+        let empty: Tooltip<FormState> = Tooltip::fixed(WidgetId::from_raw(18), "");
+        assert_eq!(empty.accessibility_label(), None);
+    }
 
     #[test]
     fn accessibility_role_is_tooltip() {

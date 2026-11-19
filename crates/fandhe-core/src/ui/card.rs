@@ -119,6 +119,8 @@ use std::marker::PhantomData;
 
 use crate::state::Event;
 
+use super::node::Node;
+
 use super::widget::{
     AccessibilityRole, InteractionInput, InteractionState, Measurement, PaintCommand, VisualState,
     Widget, WidgetId,
@@ -264,6 +266,15 @@ impl<S: 'static> Card<S> {
     /// 保持している子の数（テスト・観測用）。
     pub fn children_len(&self) -> usize {
         self.children.len()
+    }
+
+    /// 子を宣言順に `Node::Widget` へ包んだ列。無効化の有無は見ない（見た目は維持して描くため）。
+    /// 操作の解決に使う [`Widget::children`] は無効化中は空を返す（`DialogWidget` と同じ契約）。
+    pub fn child_nodes(&self) -> Vec<Node<S>> {
+        self.children
+            .iter()
+            .map(|c| Node::Widget(c.clone_box()))
+            .collect()
     }
 
     /// 現在の padding 値（テスト・観測用）。
@@ -464,6 +475,18 @@ impl<S: 'static> Widget<S> for Card<S> {
 
     fn clone_box(&self) -> Box<dyn Widget<S>> {
         Box::new(self.clone())
+    }
+
+    /// 無効化中は空（子の操作を `set_widget_value_at` 等へ届けない。表示は [`Card::child_nodes`]）。
+    fn children(&self, _state: &S) -> Vec<Node<S>> {
+        if self.interaction.disabled {
+            return Vec::new();
+        }
+        self.child_nodes()
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
     }
 }
 

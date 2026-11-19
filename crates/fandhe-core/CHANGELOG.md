@@ -5,6 +5,25 @@
 
 ## [Unreleased]
 
+`Stack`・`Grid`・`Card`・`Tooltip` の子を egui で描画する（Issue #1430）。
+
+### 追加
+
+- `Stack` / `Grid` / `Card` / `Tooltip` が `Widget::children`（子を `Node::Widget` に包んで宣言順に返す。
+  `Card` は無効化中は空）と `Widget::as_any` を実装。子の操作が `WidgetValueChanged` の path で状態へ届く
+- `Stack::direction` / `spacing`、`Grid::columns` / `spacing`、各型の `child_nodes`（描画層が読む）
+- `Tooltip` の `accessibility_label` が本文を返す。AX ツリーに出るのは macOS・Android・Windows のみ（読み上げは
+  実機で未確認）。iOS・Web・Linux のタッチには本文へ届く経路が無い（既知の天井）
+- 確認用画面 `screens::containers`（gallery の `containers`）
+
+### 挙動の変更
+
+- これらのコンテナの子が `Node::expand_children` / `resolve_node_at` / `Screen::visit_*` から辿れる
+  （それ以前は子なしとして扱われた）
+- web-dom: 4 型の子が実 DOM に出る（操作できる）。`Tooltip` は `role="group" aria-label=本文` になる。
+  無効化した `Card` は子が消える（`DialogWidget` と同じ割り切り）。`Stack` の方向・`Grid` の列は反映しない
+- swiftui-bridge: スナップショットが空 list の入れ子になる（スキーマ版は変わらない）
+
 `menu`・`tabs` を egui で描画し、選択を状態へ返せるようにする（Issue #1429）。
 
 ### 破壊的変更（BREAKING CHANGE）

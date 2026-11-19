@@ -7,8 +7,8 @@
 
 use fandhe_core::ui::{FlexDirection, Measurement};
 use fandhe_core::{
-    CanvasWidget, Card, DialogWidget, Grid, Label, PaintCommand, RgbaPixels, Screen, Separator,
-    Stack, StateStore, WidgetId,
+    CanvasWidget, Card, Checkbox, DialogWidget, Grid, Label, PaintCommand, RgbaPixels, Screen,
+    Separator, Stack, StateStore, WidgetId,
 };
 
 #[derive(Default)]
@@ -271,28 +271,50 @@ fn rendered_or_not() {
             Screen::new("t").scroll_view(id(1), Label::<St>::fixed(id(2), "X")),
             false,
         ),
+        // 子は `Widget` 側で描かれる `Checkbox`。子 `Label`（`.label()` 系）は #1427 の結論待ちで描かれない。
         (
             "Stack",
             Screen::new("t").stack(
                 Stack::new(id(1))
                     .with_direction(FlexDirection::Column)
-                    .with_child(Label::fixed(id(2), "X")),
+                    .with_child(Checkbox::bound(id(2), "X", rd_bool, wr_bool)),
             ),
+            true,
+        ),
+        (
+            "Stack（子が Label）",
+            Screen::new("t").stack(Stack::new(id(1)).with_child(Label::fixed(id(2), "X"))),
             false,
         ),
         (
             "Grid",
-            Screen::new("t").grid(
-                Grid::new(id(1))
-                    .with_columns(2)
-                    .with_child(Label::fixed(id(2), "X")),
-            ),
-            false,
+            Screen::new("t").grid(Grid::new(id(1)).with_columns(2).with_child(Checkbox::bound(
+                id(2),
+                "X",
+                rd_bool,
+                wr_bool,
+            ))),
+            true,
         ),
         (
             "Card",
-            Screen::new("t").card(Card::new(id(1)).with_child(Label::fixed(id(2), "X"))),
-            false,
+            Screen::new("t").card(Card::new(id(1)).with_child(Checkbox::bound(
+                id(2),
+                "X",
+                rd_bool,
+                wr_bool,
+            ))),
+            true,
+        ),
+        // 子 `Label` は描かれないが、枠は描かれる（枠そのものは container_render の card_draws_a_stroked_frame で確かめる）。
+        (
+            "Card（子が Label、padding あり）",
+            Screen::new("t").card(
+                Card::new(id(1))
+                    .with_padding(8.0)
+                    .with_child(Label::fixed(id(2), "X")),
+            ),
+            true,
         ),
         (
             "Separator",
@@ -324,6 +346,11 @@ fn rendered_or_not() {
         ),
         (
             "Tooltip",
+            Screen::new("t").tooltip(id(1), "Y", Checkbox::bound(id(2), "X", rd_bool, wr_bool)),
+            true,
+        ),
+        (
+            "Tooltip（子が Label）",
             Screen::new("t").tooltip(id(1), "Y", Label::<St>::fixed(id(2), "X")),
             false,
         ),

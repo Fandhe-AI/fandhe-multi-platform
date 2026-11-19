@@ -4,9 +4,9 @@
 //! [`crate::launch`]、アプリ本体（`StateStore` の保持と毎フレームの駆動）は [`crate::app`]。
 
 use fandhe_core::{
-    Axis, CanvasWidget, Checkbox, DialogWidget, Event, ImageWidget, Measurement, Menu, Node,
-    PaintCommand, ProgressBar, RadioButton, Screen, Separator, SeparatorOrientation, Slider,
-    Spinner, StateStore, Tabs, ToggleSwitch, Widget, WidgetValue,
+    Axis, CanvasWidget, Card, Checkbox, DialogWidget, Event, Grid, ImageWidget, Measurement, Menu,
+    Node, PaintCommand, ProgressBar, RadioButton, Screen, Separator, SeparatorOrientation, Slider,
+    Spinner, Stack, StateStore, Tabs, ToggleSwitch, Tooltip, Widget, WidgetValue,
 };
 
 use crate::recyclers::VirtualListRecyclers;
@@ -527,7 +527,8 @@ fn render_node<S: 'static>(
             // `Widget<S>` トレイトオブジェクトの実描画配線は、`DialogWidget`（S47、
             // Issue #739）と `Checkbox` / `ToggleSwitch` / `Slider` / `RadioButton`
             // （Issue #806・親 #804）・`ProgressBar` / `Spinner` / `Separator`（Issue #1428）・
-            // `Menu` / `Tabs`（Issue #1429）を egui 標準部品へ配線済み（下記ブロック参照）。
+            // `Menu` / `Tabs`（Issue #1429）・`Stack` / `Grid` / `Card` / `Tooltip`（Issue #1430）を
+            // egui 標準部品へ配線済み（下記ブロック参照）。
             // それ以外の具象型（レイアウトプロトコル S4 等が未確定）は引き続き
             // AX ノード公開のみに留める（TASK-8.3-S2、Issue #97、
             // out-of-scope-tracking.md 対象）。
@@ -579,6 +580,9 @@ fn render_node<S: 'static>(
                     || any.is::<Menu<S>>()
                     || any.is::<Tabs<S>>()
             });
+            // `Stack` / `Grid` / `Card` / `Tooltip`（Issue #1430）は egui のレイアウト部品で描くが、
+            // AX は上の合成ノード（Stack・Grid・Card は Group、Tooltip は Tooltip の役割）を残す。
+            // 子が自分の AX ノードを出すので二重にはならない。
             #[cfg(any(target_os = "macos", target_os = "android", target_os = "windows"))]
             if !is_natively_rendered {
                 let ax_id = egui::Id::new(("fandhe-widget-ax", widget.id().raw()));
@@ -603,6 +607,61 @@ fn render_node<S: 'static>(
             // 正しく子を返すが（`dialog_widget.rs` doc 参照）、他フィールド
             // （title/body/dismiss_label のキャッシュ値）は sync 済みクローンで
             // 読むという契約に統一する。
+            // Issue #1430: `Stack` / `Grid` / `Card` は自身が読む値（向き・間隔・列数・余白）が
+            // 状態に依存せず、子は下の `render_node` が 1 つずつ `sync_from_state` するため、sync 前の
+            // `widget` から downcast する。ここで全体を複製・sync すると入れ子の深さに比例して重複する。
+            // 子は `Widget::children`（`child_nodes`）と同じ並びで `render_node` へ再帰する。path は
+            // `path + 子の添字` で `resolve_node_at` の降下規則と一致し、子の操作は
+            // `WidgetValueChanged { path }` として `set_widget_value_at` へ届く。
+            if let Some(any) = widget.as_any() {
+                if let Some(stack) = any.downcast_ref::<Stack<S>>() {
+                    let axis = match stack.direction() {
+                        fandhe_core::ui::FlexDirection::Row => Axis::Horizontal,
+                        fandhe_core::ui::FlexDirection::Column => Axis::Vertical,
+                    };
+                    let nodes = stack.child_nodes();
+                    render_children_spaced(
+                        ui,
+                        axis,
+                        Some(stack.spacing()),
+                        &nodes,
+                        state,
+                        path,
+                        ctx,
+                    );
+                    return;
+                }
+                if let Some(grid) = any.downcast_ref::<Grid<S>>() {
+                    let axis = Axis::Grid {
+                        columns: grid.columns(),
+                    };
+                    let nodes = grid.child_nodes();
+                    render_children_spaced(
+                        ui,
+                        axis,
+                        Some(grid.spacing()),
+                        &nodes,
+                        state,
+                        path,
+                        ctx,
+                    );
+                    return;
+                }
+                if let Some(card) = any.downcast_ref::<Card<S>>() {
+                    // 枠付きの縦並び。無効化中は見た目を保ったまま操作だけ止める（`DialogWidget` と同じ）。
+                    // タップ（`with_tap_label`）は未配線（#1430 のスコープ外）。
+                    let disabled = widget.interaction_state().disabled;
+                    let nodes = card.child_nodes();
+                    ui.add_enabled_ui(!disabled, |ui| {
+                        egui::Frame::group(ui.style())
+                            .inner_margin(card.padding())
+                            .show(ui, |ui| {
+                                render_children(ui, Axis::Vertical, &nodes, state, path, ctx);
+                            });
+                    });
+                    return;
+                }
+            }
             let mut synced = widget.clone_box();
             synced.sync_from_state(state);
             if let Some(dialog) = synced
@@ -963,6 +1022,42 @@ fn render_node<S: 'static>(
                         }
                     });
                 });
+            } else if let Some(tip) = synced
+                .as_any()
+                .and_then(|any| any.downcast_ref::<Tooltip<S>>())
+            {
+                // アンカーを描き、その範囲へポインタを重ねている間だけ本文のバブルを出す。
+                // タッチ端末: バブルは出さない（方針）。egui 0.33 は押している間を hover 扱いにせず
+                // （押したまま止めても同じ）、離すとポインタも消えるため、タップ・長押しのどちらでも
+                // 出ない。タップはアンカー自身の操作に使われるので、タップで出す設計にもしない。
+                // そのため本文だけが唯一の情報経路になる使い方は避ける。本文は `Tooltip` の
+                // `accessibility_label` として合成 AX ノードへ載るが、その AX ノードを出すのは
+                // macOS・Android・Windows だけ（読み上げは実機で未確認）。iOS・Web・Linux のタッチには
+                // 本文へ届く経路が無い（既知の天井）。スクリーンリーダーを使わないタッチ利用者にも届かない。
+                // `show()` 済み（`is_visible`）なら重ねなくても出し続ける。無効化中は出さない。
+                // 当たり判定はアンカーを描いた後に足す。hover だけの当たり判定は、後から登録した
+                // （手前の）ものだけが hovered になる（egui の hit_test）。先に足すと子の部品の下に
+                // なり、子の上では反応しない。hover だけなので子のクリックは妨げない。
+                let nodes = tip.child_nodes();
+                // アンカーが無く常時表示でもなければ何も確保しない（余白を取らない）。
+                if nodes.is_empty() && !tip.is_visible() {
+                    return;
+                }
+                let area = ui
+                    .scope(|ui| {
+                        render_children(ui, Axis::Vertical, &nodes, state, path, ctx);
+                    })
+                    .response
+                    .rect;
+                let hover_id = egui::Id::new(("fandhe-tooltip", widget.id().raw()));
+                let anchor = ui.interact(area, hover_id, egui::Sense::hover());
+                if !widget.interaction_state().disabled && !tip.text().is_empty() {
+                    if tip.is_visible() {
+                        anchor.show_tooltip_text(tip.text());
+                    } else {
+                        anchor.on_hover_text(tip.text());
+                    }
+                }
             } else if let Some(img) = synced
                 .as_any()
                 .and_then(|any| any.downcast_ref::<ImageWidget<S>>())
@@ -1157,20 +1252,50 @@ fn render_children<S: 'static>(
     path: &[usize],
     ctx: &mut RenderContext<S>,
 ) {
+    render_children_spaced(ui, axis, None, children, state, path, ctx);
+}
+
+/// [`render_children`] に子同士の間隔 `spacing`（`Stack` / `Grid` が指定、Issue #1430）を足した版。
+///
+/// 間隔は並べる側（この関数が作る縦・横の Ui と `egui::Grid`）にだけ掛け、各子は外側の
+/// `item_spacing` へ戻した scope の中で描く。さもないと子孫（`Tabs` の見出し・入れ子の `Card`
+/// 等）の内部の間隔まで上書きされる。`spacing` が `Some` のときは `Grid` の子を折り返さない
+/// （`egui::Grid` の列幅は前フレームの内容で決まり、折り返しを許すと 1 字ずつ縦に折れる実測のため）。
+fn render_children_spaced<S: 'static>(
+    ui: &mut egui::Ui,
+    axis: Axis,
+    spacing: Option<f32>,
+    children: &[Node<S>],
+    state: &S,
+    path: &[usize],
+    ctx: &mut RenderContext<S>,
+) {
     if children.is_empty() {
         return;
     }
+    let outer_spacing = ui.spacing().item_spacing;
     let mut child_path = path.to_vec();
     child_path.push(0);
     let mut each = |ui: &mut egui::Ui, i: usize, child: &Node<S>| {
         if let Some(last) = child_path.last_mut() {
             *last = i;
         }
-        render_node(ui, child, state, &child_path, ctx);
+        if spacing.is_some() {
+            ui.scope(|ui| {
+                ui.spacing_mut().item_spacing = outer_spacing;
+                render_node(ui, child, state, &child_path, ctx);
+            });
+        } else {
+            render_node(ui, child, state, &child_path, ctx);
+        }
     };
+    let gap = spacing.map(egui::Vec2::splat);
     match axis {
         Axis::Vertical => {
             ui.vertical(|ui| {
+                if let Some(gap) = gap {
+                    ui.spacing_mut().item_spacing = gap;
+                }
                 for (i, child) in children.iter().enumerate() {
                     each(ui, i, child);
                 }
@@ -1179,6 +1304,9 @@ fn render_children<S: 'static>(
         Axis::Horizontal => {
             // 長い題名で子が画面外へ出ないよう折り返す。
             ui.horizontal_wrapped(|ui| {
+                if let Some(gap) = gap {
+                    ui.spacing_mut().item_spacing = gap;
+                }
                 for (i, child) in children.iter().enumerate() {
                     each(ui, i, child);
                 }
@@ -1186,9 +1314,18 @@ fn render_children<S: 'static>(
         }
         Axis::Grid { columns } => {
             let columns = columns.max(1);
-            egui::Grid::new(("fandhe-list-grid", path.to_vec())).show(ui, |ui| {
+            let mut grid = egui::Grid::new(("fandhe-list-grid", path.to_vec()));
+            if let Some(gap) = gap {
+                grid = grid.spacing(gap);
+            }
+            grid.show(ui, |ui| {
                 for (i, child) in children.iter().enumerate() {
-                    ui.vertical(|ui| each(ui, i, child));
+                    ui.vertical(|ui| {
+                        if spacing.is_some() {
+                            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                        }
+                        each(ui, i, child)
+                    });
                     if (i + 1) % columns == 0 {
                         ui.end_row();
                     }
