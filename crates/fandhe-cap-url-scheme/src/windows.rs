@@ -373,7 +373,7 @@ pub mod win {
                 let result = forward(byte, p.as_deref());
                 if result == Forward::Failed {
                     // URL・パスを含めない固定文言のみ。
-                    eprintln!("[fandhe-egui-proxy] 起動済みインスタンスへの転送に失敗した。");
+                    eprintln!("[fandhe-cap-url-scheme] 起動済みインスタンスへの転送に失敗した。");
                 }
                 exit_code(result)
             });
