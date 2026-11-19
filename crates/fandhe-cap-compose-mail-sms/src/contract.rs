@@ -32,7 +32,8 @@
 //! | CC / BCC 付きの添付要求を macOS で受けた（`NSSharingService` に渡す API が無い） | `Unsupported("compose cc")` |
 //! | 添付の一時ファイルを用意できない | `Internal(ATTACHMENT_FILE)`（`"compose attachment file"`） |
 //! | 前回の一時ファイルを消せず、OS を呼ばなかった | `Internal(CLEANUP)`（`"compose cleanup"`） |
-//! | 前の作成画面が開いたまま（Windows） | `Internal(BUSY)`（`"compose busy"`） |
+//! | 前の作成画面が開いたまま（Windows）、別の要求が進行中・公開入口の結果が未取得（iOS / Android） | `Internal(BUSY)`（`"compose busy"`） |
+//! | 要求が失われた（Android。Activity 再生成の reset） | `Internal(LOST)`（`"compose lost"`） |
 //! | MAPI が失敗を返した（Windows。`NoHandler` に読み替えない） | `Internal(MAPI)`（`"compose mapi"`） |
 //! | 作成画面を出せない（ウィンドウ・NSURL 生成失敗など） | `Internal("compose ...")` |
 //!
@@ -137,8 +138,10 @@ const ATTACH_DATA_MAX_BYTES: usize = 1024 * 1024;
 pub const ATTACHMENT_FILE: &str = "compose attachment file";
 /// 前回の一時ファイルを消せず OS を呼ばなかった。
 pub const CLEANUP: &str = "compose cleanup";
-/// 前の作成画面がまだ開いている（Windows の添付付き）。
+/// 前の作成画面がまだ開いている（Windows の添付付き）、または別の要求が進行中・公開入口の結果が未取得（iOS / Android）。
 pub const BUSY: &str = "compose busy";
+/// 要求が失われた（Android。Activity 再生成の reset で slot から消えた）。
+pub const LOST: &str = "compose lost";
 /// MAPI が失敗を返した（Windows の添付付き。`NoHandler` に読み替えない）。
 pub const MAPI: &str = "compose mapi";
 
