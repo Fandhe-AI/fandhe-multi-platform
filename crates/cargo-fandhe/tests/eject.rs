@@ -488,6 +488,68 @@ fn shell_overlay_files_removed_from_eject_disappear_and_gradle_caches_stay() {
 }
 
 #[test]
+fn shell_overlay_handles_a_directory_turning_into_a_file_and_back() {
+    let m = app("shell-dir-to-file", "");
+    let ov = dir(&m).join("eject/android/shell");
+    put(&ov, "extra/a.txt", b"a");
+    let (_, sh) = run_until_ndk(&m);
+    assert!(sh.join("extra/a.txt").is_file());
+    // ディレクトリだった `extra` を通常ファイルに変える。前回写した空の `extra/` が残っていると写せない。
+    fs::remove_dir_all(ov.join("extra")).unwrap();
+    put(&ov, "extra", b"file");
+    let (_, sh) = run_until_ndk(&m);
+    assert_eq!(fs::read(sh.join("extra")).unwrap(), b"file");
+    // 戻しても通る。
+    fs::remove_file(ov.join("extra")).unwrap();
+    put(&ov, "extra/a.txt", b"b");
+    let (_, sh) = run_until_ndk(&m);
+    assert_eq!(fs::read(sh.join("extra/a.txt")).unwrap(), b"b");
+}
+
+#[test]
+fn shell_overlay_record_naming_a_directory_does_not_get_stuck() {
+    // 写し先が既存のディレクトリで写せなかった等で、控えにディレクトリの名前が残った状態。
+    let m = app("shell-record-dir", "");
+    let ov = dir(&m).join("eject/android/shell");
+    put(&ov, "app/x.txt", b"x");
+    let (_, sh) = run_until_ndk(&m);
+    fs::write(sh.join(".fandhe-overlay"), r#"["app"]"#).unwrap();
+    put(&sh, "app/build/o.txt", b"x");
+    let (_, sh) = run_until_ndk(&m);
+    // ディレクトリは消さずに飛ばし、Gradle の出力も残る。
+    assert!(sh.join("app/build/o.txt").is_file() && sh.join("app/x.txt").is_file());
+}
+
+#[test]
+fn shell_overlay_dir_input_over_a_shell_file_recovers_after_removal() {
+    // 殻の通常ファイルと同名のディレクトリを入力に置く置き間違い。写せずに止まるが、入力を外せば次は通る。
+    let m = app("shell-dir-over-file", "");
+    let ov = dir(&m).join("eject/android/shell");
+    put(&ov, "settings.gradle.kts/x.txt", b"x");
+    let app_ = load_android(&m).unwrap_or_else(|e| panic!("{e:?}"));
+    let ops = prepare(&app_, &build_opts(&m), &android_env()).unwrap_or_else(|e| panic!("{e:?}"));
+    let upto = ops.iter().position(|o| matches!(o, Op::Spawn(_))).unwrap();
+    assert!(execute(&ops[..upto]).is_err());
+    fs::remove_dir_all(dir(&m).join("eject")).unwrap();
+    let (_, sh) = run_until_ndk(&m);
+    assert!(sh.join("settings.gradle.kts").is_file() && !sh.join(".fandhe-overlay").exists());
+}
+
+#[test]
+fn shell_overlay_missing_entry_still_cleans_its_empty_parent() {
+    // 写す途中で失敗し、控えにはあるがファイルが無く、空の親だけ残った状態。
+    let m = app("shell-missing-entry", "");
+    let ov = dir(&m).join("eject/android/shell");
+    put(&ov, "keep.txt", b"k");
+    let (_, sh) = run_until_ndk(&m);
+    fs::create_dir_all(sh.join("extra")).unwrap();
+    fs::write(sh.join(".fandhe-overlay"), r#"["keep.txt","extra/a.txt"]"#).unwrap();
+    put(&ov, "extra", b"file");
+    let (_, sh) = run_until_ndk(&m);
+    assert_eq!(fs::read(sh.join("extra")).unwrap(), b"file");
+}
+
+#[test]
 fn shell_overlay_rejects_gen_and_special_files_with_guidance() {
     let m = app("shell-gen", "");
     let ov = dir(&m).join("eject/android/shell");

@@ -215,7 +215,8 @@ pub enum Op {
         body: String,
     },
     /// 前回の殻の重ね置きが書いたファイルを消す（`dir` の `.fandhe-overlay` に控えがある分だけ。Gradle の
-    /// `build/`・`.gradle/` など他のものは消さない）。`within` の配下で symlink を通らないことを確かめてから消す。
+    /// `build/`・`.gradle/` など他のものは消さない。控えの項目が通常ファイルでなければ飛ばし、空になった親ディレクトリは消す）。
+    /// `within` の配下で symlink を通らないことを確かめてから消す。
     Prune {
         dir: PathBuf,
         within: PathBuf,
@@ -523,6 +524,7 @@ pub fn execute(ops: &[Op]) -> Result<(), String> {
 const OVERLAY_RECORD: &str = ".fandhe-overlay";
 
 /// 控えにあるファイルを消し、控えも消す。控えが無ければ何もしない。壊れた控え・`..` を含む項目では何も消さずに止まる。
+/// 控えの項目が通常ファイルでなければ（ディレクトリ等）飛ばす。項目の親ディレクトリは、空なら `dir` の手前まで消す。
 fn prune_overlay(dir: &Path, within: &Path) -> Result<(), String> {
     let record = dir.join(OVERLAY_RECORD);
     check_within(&record, within)?;
@@ -553,10 +555,24 @@ fn prune_overlay(dir: &Path, within: &Path) -> Result<(), String> {
         check_within(t, within)?;
     }
     for t in targets {
-        match std::fs::remove_file(&t) {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(format!("{} を消せません: {e}", t.display())),
+        // 重ね置きが書くのは通常ファイルだけ。ディレクトリ等に変わっていれば（写し先が既存のディレクトリで写せなかった等）
+        // 自分の書いたものではないので消さない（消そうとして毎回失敗し、控えが永久に残るのを防ぐ）。
+        match std::fs::symlink_metadata(&t) {
+            Ok(m) if m.is_file() => std::fs::remove_file(&t)
+                .map_err(|e| format!("{} を消せません: {e}", t.display()))?,
+            Ok(_) => continue,
+            // 元から無い（写す途中で失敗した・途中の要素が通常ファイル）。親の空ディレクトリは残りうるので下へ落とす。
+            Err(e) if is_absent(&e) => {}
+            Err(e) => return Err(format!("{} を調べられません: {e}", t.display())),
+        }
+        // 空になった親ディレクトリを `dir` の手前まで消す（入力が `extra/a.txt` から通常ファイル `extra` に変わっても
+        // 写せるように）。空でなければ（殻のファイル・Gradle の出力がある）そこで止める。
+        let mut parent = t.parent();
+        while let Some(p) = parent.filter(|p| *p != dir) {
+            if std::fs::remove_dir(p).is_err() {
+                break;
+            }
+            parent = p.parent();
         }
     }
     // 控えに自身の名前があると、上の削除で既に消えている。
@@ -630,11 +646,20 @@ pub(crate) fn check_within(path: &Path, within: &Path) -> Result<(), String> {
                 return Err(format!("{} は symlink のため操作しません", cur.display()))
             }
             Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => break,
+            Err(e) if is_absent(&e) => break,
             Err(e) => return Err(format!("{} を調べられません: {e}", cur.display())),
         }
     }
     Ok(())
+}
+
+/// パスが存在しないことを表すエラーか。途中の要素が通常ファイルのとき unix は `NotFound` ではなく `NotADirectory` を返す
+/// （直前の要素は symlink でないと確かめ済みなので、ここから先は存在しない扱いでよい）。
+fn is_absent(e: &std::io::Error) -> bool {
+    matches!(
+        e.kind(),
+        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+    )
 }
 
 /// symlink でない実体のディレクトリか（`is_dir` はリンク先を辿るため使わない）。
