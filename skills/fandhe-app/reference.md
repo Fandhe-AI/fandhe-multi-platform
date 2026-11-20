@@ -211,7 +211,8 @@ crate doc、契約の trait の doc を読んでから書きます。形は次�
 - 結果は成功・キャンセル・失敗を分けて画面に出します。キャンセル（例: `Ok(None)`）と `Unsupported` を成功として見せません
 - 失敗の値は `Display` で文字にできます。秘密になりうる値（クリップボードの中身・選んだファイルの中身）はログに出しません
 
-begin / poll の例です（feature `file-picker`）。要求 id を状態へ移してから poll し、画面を捨てるときに受け取っていない要求を discard します。
+begin / poll の例です（feature `file-picker`）。begin が返した要求 id は、捨てられたときに discard する持ち主（`Ticket`）に
+すぐ包みます。完了の閉包が適用される前に画面が捨てられても、閉包と一緒に `Ticket` が捨てられて要求が解放されます。
 
 ```rust
 #![cfg_attr(not(target_os = "android"), forbid(unsafe_code))]
@@ -223,14 +224,24 @@ use fandhe::app::{CompletionSender, ProxyApp, ProxyAppDyn};
 use fandhe::file_picker::{begin_file_pick, discard_file_pick, poll_file_pick};
 use fandhe::{Screen, WidgetId, egui};
 
-#[derive(Default, Clone, Copy, PartialEq)]
+/// begin が返した要求 id の持ち主。捨てられたら discard する。捨てないと slot に残り、次の begin が busy になる。
+/// 結果を受け取り終えた id の discard は何もしないので、受け取った後に捨ててもよい。
+struct Ticket(u64);
+
+impl Drop for Ticket {
+    fn drop(&mut self) {
+        discard_file_pick(self.0);
+    }
+}
+
+#[derive(Default)]
 enum Phase {
     #[default]
     Idle,
     /// ボタンが押され、effect の begin を待つ。
     Requested,
-    /// begin 済み。poll で結果を待つ要求 id。
-    Waiting(u64),
+    /// begin 済み。poll で結果を待つ。画面（`Menu` で戻る）と一緒に捨てられると discard される。
+    Waiting(Ticket),
 }
 
 #[derive(Default)]
@@ -239,18 +250,8 @@ pub struct Pick {
     message: String,
 }
 
-/// 画面を捨てる（`Menu` で戻る）ときに、受け取っていない要求を捨てる。捨てないと slot に残り、次の begin が busy になる。
-/// begin と同じフレームで画面が捨てられると、id が状態へ移る前に失われ、ここでは捨てられない（例では扱わない）。
-impl Drop for Pick {
-    fn drop(&mut self) {
-        if let Phase::Waiting(id) = self.phase {
-            discard_file_pick(id);
-        }
-    }
-}
-
 fn request(s: &mut Pick) {
-    if s.phase == Phase::Idle {
+    if matches!(s.phase, Phase::Idle) {
         s.phase = Phase::Requested;
     }
 }
@@ -262,12 +263,12 @@ fn screen(_: &Pick) -> Screen<Pick> {
 }
 
 fn effect(s: &Pick, tx: &CompletionSender<Pick>) {
-    match s.phase {
+    match &s.phase {
         Phase::Idle => {}
         Phase::Requested => {
-            // begin はこのフレームで 1 回だけ。id は send で状態へ移り、次のフレームから Waiting になる。
+            // begin はこのフレームで 1 回だけ。id はすぐ Ticket に包み、send で状態へ移す（次のフレームから Waiting）。
             let (phase, message) = match begin_file_pick() {
-                Ok(id) => (Phase::Waiting(id), "選んでいます".to_string()),
+                Ok(id) => (Phase::Waiting(Ticket(id)), "選んでいます".to_string()),
                 Err(e) => (Phase::Idle, format!("開けません: {e}")),
             };
             let _ = tx.send(Box::new(move |s: &mut Pick| {
@@ -275,7 +276,7 @@ fn effect(s: &Pick, tx: &CompletionSender<Pick>) {
                 s.message = message;
             }));
         }
-        Phase::Waiting(id) => match poll_file_pick(id) {
+        Phase::Waiting(ticket) => match poll_file_pick(ticket.0) {
             Some(result) => {
                 let message = match result {
                     Ok(Some(file)) => format!("{}（{} バイト）", file.name, file.bytes.len()),
@@ -327,7 +328,7 @@ fn app(ctx: &egui::Context) -> Box<dyn ProxyAppDyn> {
 | 値の変わらないフレームで再描画を予約しない | 入力が無いと読み直しが止まり、古い値のまま | `tx.request_repaint_after(間隔)` |
 | feature を足さずに `fandhe::<stem>` を使う | `use` なら ``unresolved import `fandhe::<stem>` ``（E0432）、パスで呼ぶなら ``cannot find `<stem>` in `fandhe` ``（E0433） | `Cargo.toml` の `features` に id を足す |
 | trait のメソッドを、trait を import せずに呼ぶ | ``no method named `last_fix` found``（E0599） | 契約の trait も import する（例: `use fandhe::location::{Location, platform_location};`） |
-| 画面を捨てるときに begin / poll の要求を discard しない | `Menu` で戻ってから同じ機能を使うと busy で失敗する | 状態型の `Drop` で、受け取っていない要求を `discard_*(id)` する（5 節の例） |
+| 画面を捨てるときに begin / poll の要求を discard しない | `Menu` で戻ってから同じ機能を使うと busy で失敗する | begin が返した id をすぐ、捨てられたら `discard_*(id)` する持ち主で包む。完了の閉包が適用される前に捨てられても解放される（5 節の例の `Ticket`） |
 | 説明文に仮の文言を書いて `gen` を通す | 審査で差し戻される | 目的を利用者に確かめて書く |
 | `fandhe::screens::*` の状態型を使う | カタログの画面に縛られ、自分の画面と合わない | 状態型と画面は自分の crate に書く |
 
