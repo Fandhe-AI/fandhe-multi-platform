@@ -52,10 +52,13 @@ fandhe-multi-platform/
 │   ├── architecture/            # 設計文書（責務分界・IME・トークン・Web・SwiftUI ブリッジ等）
 │   ├── environment/             # 開発環境のセットアップ手順
 │   ├── device/                  # 端末機能の対応表（SSOT は capabilities/*.json、生成物は git 管理外）
-│   ├── ai/                      # AI 向けメタ情報（SCHEMA.md）
+│   ├── ai/                      # AI 向けメタ情報（SCHEMA.md。利用者のリポジトリでの読み替えは冒頭の節）
 │   ├── operations/              # 運用手順書（ビルドパイプライン・署名）
 │   ├── ime/                     # IME 使用ガイド
 │   └── tokens/                  # デザイントークン（定義・参照ガイド）
+│
+├── skills/
+│   └── fandhe-app/              # 利用者のアプリへ配る AI スキル（SKILL.md・reference.md。reference.md は fandhe の doctest がコンパイル、#1205）。`.claude/skills/` はこのリポの開発用で別物
 │
 ├── scripts/
 │   ├── help.sh / setup.sh / lint.sh / lib.sh  # Makefile 入口の実体（help は Make 非依存の一覧）

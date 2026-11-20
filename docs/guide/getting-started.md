@@ -3,7 +3,7 @@
 - 対応: #1204、REQ-21 / TASK-21.5
 
 fandhe でアプリを新しく作り、端末機能を足し、各 OS で動かして配布物を作るまでの手順です。
-本書のコマンドとコードは、リポジトリの外の新しいディレクトリで本書どおりに写して確かめました（12 節）。
+本書のコマンドとコードは、リポジトリの外の新しいディレクトリで本書どおりに写して確かめました（13 節）。
 
 v1 前のため API は変わることがあります。crates.io には未公開で、依存は git か path で書きます。
 iOS の `cargo fandhe run`・`build` は未対応です（8.5 節）。
@@ -359,7 +359,7 @@ xcrun simctl launch booted com.example.myapp
 | OS | 作り方 | 状態 |
 | --- | --- | --- |
 | Android | `cargo fandhe build --os android --release` で署名済みの `.aab` | 使える。Play への提出は手で行う |
-| Web | `cargo fandhe build --os web --release`（`wasm-opt -Os` を通す）。`target/fandhe/my-app/web/` を静的ホスティングに置く | 使える（本書の手順では未確認、12 節） |
+| Web | `cargo fandhe build --os web --release`（`wasm-opt -Os` を通す）。`target/fandhe/my-app/web/` を静的ホスティングに置く | 使える（本書の手順では未確認、13 節） |
 | iOS・macOS | `cargo fandhe` での署名・提出は未対応 | #1425。証明書とプロファイルの用意は `docs/environment/apple-developer-setup.md` |
 | Windows | 未対応 | signtool の署名・パッケージ ID は #1208、MSIX とストア提出は #3 |
 
@@ -437,7 +437,36 @@ alarm・image-generation・live-activity・on-device-llm・screen-capture・tran
 - **Web で `Unsupported` になる機能**: 5 節。対応表で Web が done でも、`#[fandhe::main]` のアプリでは未対応のことがあります（#1456）
 - **`gen/` に手を入れない**: 毎回作り直します。変えたいときは追記か `--eject` を使います（7 節）
 
-## 11. 関連文書
+## 11. AI に画面と機能を書かせる
+
+AI（Claude Code など）に、アプリのリポジトリで画面を作らせ、端末機能を足させるためのスキル `fandhe-app` があります。
+手順（画面を作る・端末機能を足す・`check` と `gen` を通す）の `SKILL.md` と、AI 向けの資料 `reference.md` からなります。
+
+依存に入れた fandhe と同じ版のスキルを、cargo が取得した fandhe のソースから写します。アプリの直下で実行します（POSIX シェル）。
+
+```sh
+FANDHE_SRC=$(cargo metadata --format-version 1 \
+  | grep -o '"manifest_path":"[^"]*/crates/fandhe/Cargo.toml"' | head -n 1 \
+  | sed -e 's/^"manifest_path":"//' -e 's#/crates/fandhe/Cargo.toml"$##')
+if [ -d "$FANDHE_SRC/skills/fandhe-app" ]; then
+  mkdir -p .claude/skills
+  cp -R "$FANDHE_SRC/skills/fandhe-app" .claude/skills/
+else
+  echo "fandhe のソースが見つかりません" >&2
+fi
+```
+
+「見つかりません」と出たら、`cargo metadata` のエラーと、`Cargo.toml` に `fandhe` の依存があるかを確かめます。
+
+- Claude Code は `.claude/skills/fandhe-app/SKILL.md` を読み、画面や端末機能を頼むとスキルを使います
+- clone したリポジトリを使うなら `cp -R <clone 先>/skills/fandhe-app .claude/skills/` でも同じです
+- fandhe の版を上げたら、同じ手順で写し直します。スキルの資料は写した時点の API に合わせてあります
+- スキルは、AI に fandhe のソース（`FANDHE_SRC`。git 依存なら `~/.cargo/git/checkouts/` の下）の `docs/ai/SCHEMA.md`・
+  機能 crate の doc・対応表を読ませます。Claude Code は、`claude --add-dir "$FANDHE_SRC"` で起動するか、
+  起動後に `/add-dir <FANDHE_SRC のパス>` で足して、アプリの外のそのディレクトリを読めるようにします
+- スキルを使わない AI ツールには、`reference.md` を最初に読ませます
+
+## 12. 関連文書
 
 | 文書 | 内容 |
 | --- | --- |
@@ -447,7 +476,7 @@ alarm・image-generation・live-activity・on-device-llm・screen-capture・tran
 | `docs/architecture/run-build-cli.md` | `cargo fandhe run`・`build` の手順と前提の検査 |
 | `docs/operations/android-aab-signing.md` | Android の署名鍵の扱い |
 
-## 12. 確かめた範囲
+## 13. 確かめた範囲
 
 macOS（Apple silicon）で、リポジトリの外の新しいディレクトリに本書どおりに作り、依存は git（`main`）で確かめました。
 
@@ -462,5 +491,7 @@ macOS（Apple silicon）で、リポジトリの外の新しいディレクト�
 | 9.1 節の keystore の作成と `build --os android --release` | 署名済みの `.aab` ができる（jarsigner の検証が通る） |
 | 10.1 節の 6 機能の組み込み | screen-capture は、`build.rs` が無いと macOS のリンクが `Undefined symbols` で失敗し、手順どおりに足すと通って起動する。alarm は、`.cargo/config.toml` が無いと 10.1 節の文言で止まり、`build.rs` が無いと iOS シミュレータ向けのリンクが失敗し、両方を足すと通る |
 | 8.5 節の手で組む `.app` | iOS シミュレータで起動し、接続状態が出る |
+| 11 節のスキルの導入（依存は path） | `.claude/skills/fandhe-app/` に写せた。経緯を知らない AI が、スキルだけを頼りに位置情報（`location`）の画面を足し、`cargo fandhe check`・`gen`・macOS の `cargo build`・`cargo test` が通った |
 
 Windows・Linux の `run`・`build`、Web の `--release`、実機での起動は、この手順では確かめていません。
+11 節を git（`main`）依存で入れる手順は、`skills/` が `main` に入るまで確かめられないため、未確認です。

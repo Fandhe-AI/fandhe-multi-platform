@@ -71,6 +71,19 @@ pub use egui;
 #[cfg(feature = "egui")]
 pub use fandhe_macros::main;
 
+/// 利用者向けの AI 向けメタ情報（`skills/fandhe-app/reference.md`、Issue #1205）の Rust のコード例を doctest として
+/// コンパイルし、API の変更で資料が古くなったことを `cargo test` で検知する（`fandhe-core` が `docs/ai/SCHEMA.md` を
+/// 取り込むのと同じ形）。例が使う機能の feature がそろうときだけ有効で、`cargo test --workspace` では
+/// `fandhe-gallery` が全機能を選ぶためそろう。
+#[cfg(all(
+    doctest,
+    feature = "egui",
+    feature = "clipboard",
+    feature = "file-picker"
+))]
+#[doc = include_str!("../../../skills/fandhe-app/reference.md")]
+mod reference_md {}
+
 /// `#[fandhe::main]` が生成するコードから呼ぶ各 OS の入口。利用者は直接使わない（互換を保証しない）。
 #[cfg(feature = "egui")]
 #[doc(hidden)]

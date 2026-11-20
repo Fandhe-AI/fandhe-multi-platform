@@ -21,6 +21,23 @@
 2. 重複するコード例を統合する
 3. それでも収まらない場合はセクション分割・タスク種別ごとの同梱を別 Issue で検討する
 
+## 利用者のリポジトリでの読み替え
+
+本ファイルは本リポジトリ内の開発（`fandhe_core` を直接使う）を基準に書く。`fandhe` を依存に持つ利用者のアプリでは、
+画面の書き方は本ファイルを正とし、アプリの形・effect・端末機能の足し方は `skills/fandhe-app/reference.md` に書く（Issue #1205）。
+利用者のアプリから読むときは次のように読み替える。本ファイルに節を足すときは、次の一覧も見直す。
+
+- パス: `fandhe_core::X` は `fandhe::X`（入口 crate が `fandhe_core` を丸ごと再公開する）、`fandhe_runtime::X` は
+  `fandhe::runtime::X`、`fandhe_render_egui::{Completion, CompletionSender, ProxyApp}` は `fandhe::app::{…}`
+- 状態型・画面・テストは、本ファイルが示す置き場（`crates/fandhe-core/src/screens/`・`tests/`）ではなく利用者の crate に置く。
+  `fandhe::screens`（`fandhe_core::screens`）はカタログの画面で、使わない
+- 参照実装（`crates/…` のパス）は fandhe のソースの中にある。書き方を写してよいが、import はしない
+- 次の段落はリポジトリ内の開発向けで、利用者のアプリには当てはまらない。同じ節のほかの段落（パターン 9 の二段階の状態遷移など）は当てはまる
+  - `generated_screens!` マクロと `registry.rs` の行の書式（`nav`・`init`・`effect` 区画）。
+    利用者は `ProxyApp::with_screen_fn`・`with_effect` を使う
+  - `FANDHE_ITEMS_URL` で取得先を差し替える段落
+  - 端末機能を使う行に `#[cfg(not(target_arch = "wasm32"))]` を付ける段落
+
 ## 公開 API シグネチャ一覧
 
 ### クレートルート再エクスポート（`crates/fandhe-core/src/lib.rs`）
@@ -434,7 +451,8 @@ assert_eq!(assert_iter(screen.iter()), 2);
 （macOS・Android・Windows では AX ノードだけは公開される）。`crates/fandhe-render-egui/tests/widget_coverage.rs` が 1 種ずつ
 `egui::Context::run` で描画し、出力の shape が空画面と同数のままかを確かめている（根拠は
 `render.rs` の `Node::Widget` 分岐が `DialogWidget` / `Checkbox` / `ToggleSwitch` / `Slider` /
-`RadioButton` / `ProgressBar` / `Spinner` / `Separator` / `Menu` / `Tabs` / `Stack` / `Grid` / `Card` / `Tooltip` / `ImageWidget` / `Label` / `Icon` / `CanvasWidget` の 18 種だけを `downcast_ref` していること）。
+`RadioButton` / `ProgressBar` / `Spinner` / `Separator` / `Menu` / `Tabs` / `Stack` / `Grid` / `Card` / `Tooltip` /
+`ImageWidget` / `Label` / `Icon` / `CanvasWidget` の 18 種だけを `downcast_ref` していること）。
 この 18 種以外の `Widget<S>` 実装（`LabelWidget`・`CheckboxWidget`・`TabBarWidget`・`ProgressWidget` 等）は
 `.with_node()` で置いても描画されない。web-dom の対応は本表の対象外。
 描画の配線と API の整理は #1427・#1428・#1429・#1430・#1437（icon）で扱った（すべて対応済み）。
@@ -1279,7 +1297,8 @@ effect は**今必要な識別子だけ**を置く（上の例の `state.items` 
   egui の GPU テクスチャも同時に捨てる。上限は `begin_frame` の有無で変わる。
   - **`begin_frame` が呼ばれていない**（`render_screen` を自前のループで呼ぶ場合など）: 純粋な LRU。今 `put` した 1 枚は捨てないため、
     実際の上限は「64 MiB + 直前の 1 枚（最大約 16 MiB）」で、`put` の直後は `contains` が真
-  - **呼ばれている**（`ProxyApp` は完了・予約の適用（`drain_completions`・`drain_timers`）の後、描画の直前に `image_store::begin_frame()` を呼ぶ。完了の適用中に `put` しても、前のフレームで描かれた画像は「今のフレーム」のまま守られる）: 今のフレームで描かれた（見えている）
+  - **呼ばれている**（`ProxyApp` は完了・予約の適用（`drain_completions`・`drain_timers`）の後、描画の直前に `image_store::begin_frame()` を呼ぶ。
+    完了の適用中に `put` しても、前のフレームで描かれた画像は「今のフレーム」のまま守られる）: 今のフレームで描かれた（見えている）
     画像は、フレーム末尾の effect などが `put` しても追い出されない（このフレームですでに描かれた画像に限る）。追い出す順は 2 段: 描かれていない画像（古い順）、
     足りなければ前のフレームだけで描かれた画像（スクロールで外れた行。古い順。新しく置いた画像もここに入るので、ページ送りで置いたばかりの画像どうしが
     追い出し合わない）。1 行スクロールした直後の `put` は置ける。`begin_frame` の後で行がまだ描かれていない間に届く復号スレッドの `put` は、見えている行を
@@ -1549,7 +1568,8 @@ fn effect(s: &State, sender: &CompletionSender<State>) {
 **Android の配線先（Issue #750）**: `DataDir`（「メモ保存」の保存先）は
 `crates/fandhe-cap-local-storage-kv/src/android.rs` の `data_dir()` が
 `AndroidApp::internal_data_path()`（`getFilesDir()` 相当）を返す。カメラは
-`AndroidCamera`（`fandhe-cap-camera-capture/src/android.rs`）が JNI 経由で `CameraCaptureHelper.request(Activity, long)`（機能 crate の Java の static メソッド。利用者の `MainActivity` に受け口は要らない、#1257）を呼び、
+`AndroidCamera`（`fandhe-cap-camera-capture/src/android.rs`）が JNI 経由で
+`CameraCaptureHelper.request(Activity, long)`（機能 crate の Java の static メソッド。利用者の `MainActivity` に受け口は要らない、#1257）を呼び、
 `CameraCaptureHelper`（同 crate の `android/java`）の `ActivityResultContracts.TakePicturePreview` が撮影した `Bitmap` を
 `nativeOnCameraResult` へ渡す往復で
 `Camera::capture` を実現する。新規画面が Android 固有の端末実装を要る場合は機能 crate の
