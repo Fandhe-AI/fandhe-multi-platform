@@ -39,6 +39,45 @@ fn url_scheme_show_effect(
     fandhe_cap_app_shortcuts::driver::drive_app_shortcuts(state, sender);
 }
 
+/// `row-images` 画面の effect（Issue #1291）。行ごとの画素を `image_store` へ（無い行だけ）置き、時間で戻る表示と定期更新を
+/// `CompletionSender::after` で予約する。毎フレーム呼ばれるが、同じキーの予約が残る間は何もしない。
+fn row_images_effect(
+    state: &fandhe_core::screens::row_images::RowImagesState,
+    sender: &fandhe_runtime::CompletionSender<fandhe_core::screens::row_images::RowImagesState>,
+) {
+    use fandhe_core::screens::row_images as ri;
+    use std::time::Duration;
+    // `send` の結果は次のフレームまで状態へ届かないので、状態の印ではなく保管所で判断する。
+    // 追い出されたら次のフレームで置き直す。置いたら描画を起こす。
+    let mut put_any = false;
+    for i in 0..state.names.len() {
+        let key = ri::image_key(i);
+        if !fandhe_runtime::image_store::contains(&key) {
+            fandhe_runtime::image_store::put(key, ri::demo_pixels(i));
+            put_any = true;
+        }
+    }
+    if put_any {
+        sender.request_repaint_after(Duration::ZERO);
+    }
+    // `Err` は予約が積まれていない（件数の上限・期限が遠すぎる）ことを表す。`Ok(AlreadyPending)` は正常。
+    let report = |r: Result<fandhe_runtime::Armed, fandhe_runtime::TimerRefused>| {
+        if let Err(e) = r {
+            eprintln!("row-images: タイマーを積めなかった: {e}");
+        }
+    };
+    if state.copied {
+        report(sender.after(
+            "copied-reset",
+            Duration::from_secs(ri::COPIED_RESET_SECS),
+            ri::reset_copied,
+        ));
+    } else {
+        sender.cancel_timer("copied-reset");
+    }
+    report(sender.after("tick", Duration::from_secs(1), ri::tick));
+}
+
 generated_screens! {
     "schema_example" => fandhe_core::screens::schema_example_fixture::todo_screen,
     "form" => fandhe_core::screens::form::form_screen,
@@ -56,6 +95,9 @@ generated_screens! {
     init #[cfg(not(target_arch = "wasm32"))]
     "storage_note" => fandhe_core::screens::storage_note::storage_note_screen, fandhe_cap_local_storage_kv::driver::storage_note_state,
 
+    effect
+    "row-images" => fandhe_core::screens::row_images::current_screen,
+    row_images_effect,
     effect
     #[cfg(not(target_arch = "wasm32"))]
     "http_fetch" => fandhe_core::screens::http_fetch::current_screen,

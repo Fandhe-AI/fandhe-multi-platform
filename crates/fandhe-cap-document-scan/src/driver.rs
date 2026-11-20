@@ -322,7 +322,7 @@ fn start_request(
         return false;
     };
     // 前回の画素を先に解放する（失敗・キャンセルの横に前の画像を残さない）。
-    image_store::clear();
+    image_store::remove_prefix("fandhe.scan:");
     let _ = sender.send(Box::new(mark_running));
     if let Err(f) = imp.scan(request_id) {
         bridge.complete_from_os(request_id, Err(f));
@@ -429,7 +429,7 @@ fn apply_outcome(s: &mut DocumentScanShowState, generation: u64, outcome: Outcom
                 return false;
             }
             // 画素を先に置いてから成功を届ける（届いた時点で描ける）。
-            let source = format!("scan:{generation}");
+            let source = format!("fandhe.scan:{generation}");
             image_store::put(source.clone(), d.image.clone());
             Ok(CoreOutcome::Scanned(ShownPage {
                 source,
@@ -855,7 +855,7 @@ mod tests {
             panic!("{:?}", s.result);
         };
         assert_eq!((p.width, p.height, p.page_count), (8, 4, 3));
-        assert_eq!(p.source, format!("scan:{}", s.generation));
+        assert_eq!(p.source, format!("fandhe.scan:{}", s.generation));
         assert_eq!(image_source(&s), p.source);
         assert!(status_text(&s).contains("3 ページ中"));
     }

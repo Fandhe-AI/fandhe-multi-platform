@@ -121,6 +121,9 @@ pub mod menu_tabs;
 /// 一覧の行内に複数の操作を横に並べる例「行の操作」（Issue #1288）。
 pub mod row_actions;
 
+/// 一覧の行ごとの画像と、時間で変わる表示の確認用画面（Issue #1291）。
+pub mod row_images;
+
 /// Phase 11 の拡充ループ型サンプル「バックグラウンド処理」（親 #1042、Issue #1043）。
 pub mod background_task;
 

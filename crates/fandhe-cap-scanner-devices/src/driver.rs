@@ -173,7 +173,7 @@ fn apply_outcome(s: &mut ScannerDevicesImportState, generation: u64, outcome: Ou
             }
             let d = &img.decoded;
             // 画素を先に置いてから成功を届ける（届いた時点で描ける）。
-            let source = format!("scanner:{generation}");
+            let source = format!("fandhe.scanner:{generation}");
             image_store::put(source.clone(), d.image.clone());
             Ok(ShownImage {
                 source,
@@ -233,7 +233,7 @@ fn drive(
         }
         *session.waiting.lock().unwrap_or_else(|e| e.into_inner()) = None;
         // 前回の画素を先に解放する（失敗の横に前の画像を残さない）。
-        image_store::clear();
+        image_store::remove_prefix("fandhe.scanner:");
         let request_id = slot.begin();
         *session.started.lock().unwrap_or_else(|e| e.into_inner()) = Some(started);
         let _ = sender.send(Box::new(mark_running));

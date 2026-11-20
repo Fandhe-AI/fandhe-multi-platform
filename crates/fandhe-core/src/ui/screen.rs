@@ -502,7 +502,7 @@ impl<S> Screen<S> {
     /// **画素はこのメソッドだけでは出ない**。`source` はファイルパスや URL を読み込むものではなく、
     /// アプリ（端末機能の effect ドライバ等）が `fandhe_runtime::image_store::put`（入口 crate からは
     /// `fandhe::runtime::image_store::put`）で同じ識別子の画素を置いたときだけ、`fandhe-render-egui` が
-    /// 実画素を描く。置けるのは同時に 1 枚。一致する画素が無く `source` が空でないときは、`alt` を
+    /// 実画素を描く。識別子ごとに複数枚を置ける（一覧の行ごとの画像は `docs/ai/SCHEMA.md` パターン 7-4）。一致する画素が無く `source` が空でないときは、`alt` を
     /// 文字で描く（`source` が空のときは何も描かない）。固定の画像を出すなら [`Self::rgba_image`]。
     ///
     /// Issue #1427 より、以前の [`super::image::Image`]（egui で描かれない別型）ではなく、

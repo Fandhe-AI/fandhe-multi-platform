@@ -498,7 +498,7 @@ assert_eq!(assert_iter(screen.iter()), 2);
 **識別子はファイルパスや URL を読み込むものではない**。
 
 - 画素を出すには、アプリが `fandhe_runtime::image_store::put`（入口 crate からは `fandhe::runtime::image_store::put`）で
-  同じ識別子の画素を置く。同時に置けるのは 1 枚（保管所は 1 枠）
+  同じ識別子の画素を置く。保管所は識別子ごとに複数枚を持つ（一覧の行ごとに別の画像を出せる。書き方はパターン 7-4）
 - 識別子が一致する画素が無く、ソースが空でないときは、alt を文字で描く（AX を二重にしないため、読み上げは
   合成の Image ノードだけ。web-dom は `role="img"` + `aria-label=alt` のプレースホルダ）。
   ソースが空のとき（選ぶ前の写真選択など）は何も描かず、AX・aria にも名前を出さない
@@ -1203,6 +1203,94 @@ fn main() {
 }
 ```
 
+### パターン 7-4: 一覧の行ごとに別の画像を出す・画像の形式（Issue #1291）
+
+行の画像は、`list` の `expand`（`fn(&S) -> Vec<Node<S>>`）の中で `ImageWidget::fixed(行ごとの WidgetId, 行ごとの識別子, alt)` を作る。
+`expand` は毎フレーム状態から呼ばれるので、識別子は状態から決めてよい（並べ替え・削除しても行に追従する）。
+画素は effect が識別子を付けて `image_store::put` する。参照実装は `crates/fandhe-core/src/screens/row_images.rs`
+（画面）と `crates/fandhe-gallery/src/screens/registry.rs` の `row_images_effect`（画素の登録）。
+
+```rust,ignore
+fn rows(state: &State) -> Vec<Node<State>> {
+    state.items.iter().map(|item| Node::Row {
+        children: vec![
+            // WidgetId は行ごとに一意に（`ROW_ID_BASE + item.id` 等）。識別子は effect が put するキーと同じにする。
+            // `fandhe.` で始まらない識別子を使う（`fandhe.` はフレームワークの予約）
+            Node::Widget(Box::new(ImageWidget::fixed(
+                WidgetId::from_raw(ROW_ID_BASE + item.id), format!("item:{}", item.id), item.name.clone(),
+            ))),
+            Node::Text(item.name.clone()),
+        ],
+        tap: None,
+    }).collect()
+}
+
+// effect（毎フレーム呼ばれる）。`send` の結果は次のフレームまで状態へ届かないので、状態に持った印で「要求済み」を
+// 判断してはいけない（その間に毎フレーム起動し、二重に復号する）。判断は保管所（contains）と、スレッドが
+// 生きている間の印（pending）、失敗した識別子の印（failed）で行う。追い出されると contains が false に戻るので、
+// そのまま置き直しに入る。
+struct Guard { key: String, ok: bool }
+impl Drop for Guard {   // panic しても pending から外れる。成功していなければ failed に入れて読み直さない
+    fn drop(&mut self) {
+        let mut book = BOOK.lock().unwrap();
+        book.pending.remove(&self.key);
+        if !self.ok { book.failed.insert(self.key.clone()); }
+    }
+}
+fn effect(s: &State, sender: &CompletionSender<State>) {
+    for item in &s.items {
+        let key = format!("item:{}", item.id);
+        {   // pending / failed のロックを取ってから contains を見る（逆順だと完了とすれ違って二重に起動する）
+            let mut book = BOOK.lock().unwrap();
+            if book.pending.contains(&key) || book.failed.contains(&key) || image_store::contains(&key) { continue; }
+            book.pending.insert(key.clone());
+        }
+        let (sender, bytes) = (sender.clone(), item.bytes.clone());
+        std::thread::spawn(move || {
+            let mut guard = Guard { key, ok: false };
+            if let Some(px) = decode(&bytes) { image_store::put(guard.key.clone(), px); guard.ok = true; }
+            drop(guard);
+            let _ = sender.send(Box::new(|_: &mut State| {})); // 描画を起こす
+        });
+    }
+}
+```
+
+同じ形の `effect`（`Book { pending, failed }` と `Guard`）は `fandhe-runtime` の `image_store` の module doc にあり、doctest で型検査される。
+失敗した識別子（`failed`）は読み直さない。やり直したいときは `failed` から外す。
+縮小済みの小さな画素なら、スレッドを使わず effect の中で同期的に `put` してよい（`put` の直後に `contains` が真になるため
+二重にならない。参照実装は `crates/fandhe-gallery/src/screens/registry.rs` の `row_images_effect`）。
+
+- **保管所**: `fandhe_runtime::image_store`。`put(識別子, RgbaPixels)` は同じ識別子なら置き換え、別の識別子は残す。
+  `remove(識別子)`・`remove_prefix(接頭辞)`・`clear()` で捨てる。`contains(識別子)` は存在の確認で、最近使った扱いにしない。
+  世代付きの識別子は `remove_prefix` で前の世代を解放する
+- **識別子の名前空間**: `fandhe.` で始まる識別子（`fandhe.photo:`・`fandhe.scan:`・`fandhe.scanner:`）と、`fandhe.` で始まる
+  予約キー（`CompletionSender::after` のキー）はフレームワークが使う。利用者は使わない
+- **容量**: CPU 側の画素の合計は 64 MiB（`BUDGET_BYTES`）が目安。超えると最後に描かれた（`get` された）のが古い画像から捨てる。
+  今 `put` した 1 枚は捨てないため、実際の上限は「64 MiB + 直前の 1 枚（最大約 16 MiB）」。egui の GPU テクスチャも同時に捨てる。
+  - `.virtual_list()`: 見えている行だけを描くので、スクロールで外れた行から消える。長い一覧はこちら
+  - `.list()`: 毎フレーム**全行**を描くので、「画面外から消える」は起きない。全行の画像の合計が 64 MiB を超えると、描いている
+    行どうしが互いを追い出し合う。`.list()` の行の画像は、縮小済みの小さな画素（数十〜数百 px 角）で全行の合計を 64 MiB に収める。
+    収まらないなら `.virtual_list()` を使う
+  - 捨てられた行は alt の文字に戻り、effect が `contains` で気づいて `put` し直せば画像に戻る
+- **形式**: 保管所が受けるのは復号済みの `RgbaPixels`（RGBA8・辺 1〜2048 px）だけで、形式は問わない。フレームワークが復号を同梱するのは次の範囲
+  - PNG: workspace の `image` crate（feature `png`）
+  - JPEG: 写真選択・書類スキャンが使う `fandhe-device` の feature `display-decode`（`decode_for_display`。辺 1024 px 以下へ縮める）
+  - GIF・WebP・AVIF など上記以外: フレームワークは持たない（アニメーションも出せない。1 枚の静止画だけ）
+- **形式を足す手順**: アプリの `Cargo.toml` に `image = { version = "0.25", default-features = false, features = ["gif"] }` のように必要な形式だけ足す
+  （feature は同じ crate を使う依存どうしで和集合になる）。bytes から `image::load_from_memory(bytes)` → `to_rgba8()` →
+  `RgbaPixels::new(幅, 高さ, rgba)` として `put` する。長さ・寸法は復号の前に確かめる（`image::Limits`）。辺が 2048 px を超える画像は
+  縮めてから `RgbaPixels` にする（`RgbaPixels::new` が `None` を返す）。復号は UI スレッドを塞がないよう別スレッドで行う（上の `effect`）。
+  wasm では形式を足すほどバイナリが増える（release・`opt-level = "s"`・LTO で測った `image` の復号一式: png 約 170 KB、
+  png+jpeg 約 320 KB、+gif 約 344 KB、+webp 約 476 KB）。必要な形式だけ足す
+- **web-dom**: 保管所に画素がある識別子は `img`（無圧縮 PNG の data URL）で出す。`(識別子, 通し番号)` で data URL を覚えて
+  作り直さない（覚えるのは URL の合計で保管所の予算の約 1.4 倍まで。足すたびに保管所に無い識別子の分を捨て、超えたら
+  最後に使われたのが古いものから 1 件ずつ捨てる）。**画素数が 512 x 512 を超える画像は
+  data URL にせず、alt の `div role="img"` に落とす**。DOM は作り直しのたびに全 `img` の `src` を組み直し、無圧縮 PNG の base64 は
+  元の約 1.4 倍になるため、最大約 16 MiB の画像を data URL にすると定期更新と組み合わさって CPU とメモリを使い切るから。
+  大きな画像は egui 側（または `blob:` URL）で出す。画素が無い識別子も alt の `div role="img"`
+- 状態に生の RGBA を持たせず、識別子（文字列）だけを持たせる。画素は保管所にある
+
 ### パターン 8: 画面遷移スタック（積む/戻る、Issue #726）
 
 複数 `Screen<S>` を重ねて戻る画面遷移は `ScreenStack<S>` を状態型 `S` のフィールドとして
@@ -1366,6 +1454,49 @@ std::thread::spawn(move || {
 `#[cfg(not(target_arch = "wasm32"))]` を行頭に付ける（Issue #746）。機能 crate は
 `fandhe-gallery/Cargo.toml` の非 wasm32 分岐にだけ依存として置かれているため（Web の実装は
 `fandhe-web-dom` 側）、付けないと wasm32 ビルドで未解決の crate 参照になる。
+
+### パターン 9-2: 一定時間後に状態を変える・定期更新（`CompletionSender::after`、Issue #1291）
+
+「コピーしました」を 2 秒後に戻す、1 秒ごとに値を更新する、のように**時間で状態を変える**ときは、
+スレッドも sleep も書かず、effect の中で `CompletionSender::after(key, delay, completion)` を呼ぶ。
+`ProxyApp` がフレーム先頭で期限の来た予約を `apply` する（上のパターン 9 の完了通知と同じ経路）。
+
+```rust,ignore
+fn effect(s: &State, sender: &CompletionSender<State>) {
+    if s.copied {
+        // 状態が copied の間は毎フレーム呼んでよい。同じキーの予約が残っている間は Ok(AlreadyPending) で何もしない
+        // （期限も延びない）。Err は「積まれていない」ことを表すので捨てない（#[must_use]）
+        if let Err(e) = sender.after("copied-reset", Duration::from_secs(2), |s: &mut State| s.copied = false) {
+            log_refused(e); // Full（予約が 1024 件）・TooFar（期限が遠すぎる）
+        }
+    } else {
+        sender.cancel_timer("copied-reset"); // 先に false になったなら予約も取り下げる
+    }
+    // 定期更新: 期限が来て適用されると、次のフレームの effect が同じキーで積み直す
+    let _ = sender.after("tick", Duration::from_secs(1), |s: &mut State| s.ticks += 1);
+}
+```
+
+- **戻り値**: `Result<Armed, TimerRefused>`。`Ok(Armed::New)` は新しく積んだ、`Ok(Armed::AlreadyPending)` は同じキーが残っていた
+  正常な結果（何もしていない）。`Err(TimerRefused::Full | TooFar)` は**予約が積まれていない**（件数の上限・
+  期限が時計の範囲を超える）。時間で戻る表示が黙って戻らなくなるので、`Err` は握りつぶさずログに出す・状態に失敗を持つ等で扱う
+  （型は `fandhe_runtime::timer`。`#[non_exhaustive]` なので `match` には `_` の腕を置く）
+- **レベルトリガで書く**: 「状態がこうなら予約する」を毎フレーム書く。同じキーの二重予約はされないため、
+  「要求済み」「処理中」の二段の状態は要らない。状態が先に変わったときは `cancel_timer(key)` で取り下げる
+- **キー**: 予約の名前（`&str`）。行ごとの予約は `format!("row-reset:{id}")` のように行の識別子を含める。
+  `fandhe.` で始まるキーはフレームワークが使う。**期限を延ばしたい**ときは、キーに世代を含め（`format!("reset:{}", s.copy_count)`）、
+  適用するクロージャが状態の世代と照合して古ければ何もしない（同じキーの予約は延びないため、世代違いのキーで積む）
+- **上限**: 同時の予約は 1024 件まで（`Err(Full)`）。期限が時計の範囲を超えるとき（Duration が大きすぎる）は
+  `Err(TooFar)`（頭打ちにしない）
+- **時計**: 呼んだ時点から単調時計で測る（システム時刻の変更で狂わない）。期限は早くても過ぎてから適用され、
+  起床が早すぎたときは残り時間で起床を予約し直す。スレッドを作らないので wasm（egui）でも同じに動く
+- **キャンセル・破棄**: 予約は `ProxyApp`（アプリ）ごと。アプリが破棄されれば予約も消え、破棄後に適用されない。
+  画面を切り替えても予約は消えないので、画面が要らなくなった状態では effect が `cancel_timer` するか、
+  適用するクロージャが状態を見て何もしないようにする
+- **web-dom**: 時間で変わる表示を書く口は今は無い（`CompletionSender::after` は egui 経路用。egui は wasm でも同じ経路を通る）
+- 直列な処理の待ち（HTTP の完了など）には使わない。外部の完了はパターン 9 の `send` で届ける
+- 参照実装は `crates/fandhe-core/src/screens/row_images.rs`（状態）と `crates/fandhe-gallery/src/screens/registry.rs` の
+  `row_images_effect`（予約）
 
 ### パターン 10: 端末保存の型サンプル「メモ保存」（Issue #747）
 

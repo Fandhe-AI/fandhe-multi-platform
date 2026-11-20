@@ -384,7 +384,7 @@ fn present(request_id: u64) -> bool {
 fn drive_mobile(state: &PhotoPickState, sender: &CompletionSender<PhotoPickState>) {
     if let Some(generation) = take_request(state) {
         // 前回の画素を先に解放する（失敗・キャンセルの横に前の画像を残さない）。
-        image_store::clear();
+        image_store::remove_prefix("fandhe.photo:");
         let _ = sender.send(Box::new(mark_picking));
         // 公開入口の進行中・未取得の要求は置き換えず、画面側を処理中の失敗で終える。
         let Some(request_id) = bridge::begin_screen() else {
@@ -434,7 +434,7 @@ fn drive_mobile(state: &PhotoPickState, sender: &CompletionSender<PhotoPickState
                     // 画素を先に置いてから成功を届ける（届いた時点で描ける）。
                     // ponytail: slot が参照を持つため表示用複製（<= 1024px、約 4 MiB）を 1 回 clone する。
                     // 気になれば `Arc<ColorImage>` を `image_store` が受けるようにする。
-                    let source = format!("photo:{generation}");
+                    let source = format!("fandhe.photo:{generation}");
                     image_store::put(source.clone(), d.image.clone());
                     ShownPhoto {
                         source,
@@ -467,13 +467,13 @@ fn drive(
         return;
     };
     // 前回の画素を先に解放する（失敗・キャンセルの横に前の画像を残さない）。
-    image_store::clear();
+    image_store::remove_prefix("fandhe.photo:");
     let _ = sender.send(Box::new(mark_picking));
 
     let result = pick_and_decode(picker).map(|opt| {
         opt.map(|d| {
             // 画素を先に置いてから成功を届ける（届いた時点で描ける）。
-            let source = format!("photo:{generation}");
+            let source = format!("fandhe.photo:{generation}");
             image_store::put(source.clone(), d.image);
             ShownPhoto {
                 source,
