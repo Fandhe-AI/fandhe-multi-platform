@@ -462,9 +462,14 @@ impl PublicEntry {
         &self.owner
     }
 
-    /// 開始。進行中の要求と、自分の未取得の結果があれば `None`（busy）。`screen` の届いた未取得の結果は
-    /// 捨てずに受け取り待ちへ移す（[`SlotOwner::begin_parking`]）。
+    /// 開始。進行中の要求と、自分の未回収の要求（結果が届いた・`reset` で失われたのに poll・discard されていない）が
+    /// あれば `None`（busy）。失われた要求の印を上書きすると、その poll が失われた通知を受け取れず `None` のままになるため。
+    /// `screen` の届いた未取得の結果は捨てずに受け取り待ちへ移す（[`SlotOwner::begin_parking`]）。
     pub fn begin<O>(&self, slot: &RequestSlot<O>, screen: &SlotOwner) -> Option<u64> {
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        if self.owner.current() != 0 {
+            return None;
+        }
         self.owner.begin_parking(slot, screen)
     }
 
@@ -1107,6 +1112,20 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(60));
         SLOT.reset();
         assert_eq!(h.join().unwrap(), 99);
+    }
+
+    /// reset で失われた要求を回収するまで、公開入口の次の開始は busy。
+    #[test]
+    fn public_entry_begin_is_busy_until_the_lost_request_is_collected() {
+        let slot: RequestSlot<u8> = RequestSlot::new();
+        let entry = PublicEntry::new();
+        let screen = SlotOwner::new();
+        let a = entry.begin(&slot, &screen).unwrap();
+        slot.reset();
+        // 失われた a を回収する前の開始は busy。a の印を上書きしない。
+        assert_eq!(entry.begin(&slot, &screen), None);
+        assert_eq!(entry.poll(&slot, a, || 99), Some(99));
+        assert!(entry.begin(&slot, &screen).is_some());
     }
 
     /// 別スレッドの discard で印が外れても、同期の待ちが戻る。
