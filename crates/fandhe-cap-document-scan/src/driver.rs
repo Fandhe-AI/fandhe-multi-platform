@@ -322,7 +322,7 @@ fn start_request(
         return false;
     };
     // 前回の画素を先に解放する（失敗・キャンセルの横に前の画像を残さない）。
-    image_store::clear();
+    image_store::remove_prefix("fandhe.scan:");
     let _ = sender.send(Box::new(mark_running));
     if let Err(f) = imp.scan(request_id) {
         bridge.complete_from_os(request_id, Err(f));
@@ -429,16 +429,21 @@ fn apply_outcome(s: &mut DocumentScanShowState, generation: u64, outcome: Outcom
                 return false;
             }
             // 画素を先に置いてから成功を届ける（届いた時点で描ける）。
-            let source = format!("scan:{generation}");
-            image_store::put(source.clone(), d.image.clone());
-            Ok(CoreOutcome::Scanned(ShownPage {
-                source,
-                format: d.format.to_string(),
-                size: d.size,
-                width: d.width,
-                height: d.height,
-                page_count: scan.page_count,
-            }))
+            let source = format!("fandhe.scan:{generation}");
+            // 置けなかった（今見えている（今のフレームで描かれた）画像だけで予算いっぱいのとき。`PutResult::RejectedOverBudget`）ときは、画像を見せられないので
+            // 成功にせず失敗で確定する。見えている画像が減っていれば次の撮影で置ける。モバイルで撮影 UI を出している間は描画ループが止まり
+            // `frame` が進まないので、出す直前に見えていた画像が「今のフレーム」のまま残る。
+            match image_store::put(source.clone(), d.image.clone()) {
+                image_store::PutResult::Stored => Ok(CoreOutcome::Scanned(ShownPage {
+                    source,
+                    format: d.format.to_string(),
+                    size: d.size,
+                    width: d.width,
+                    height: d.height,
+                    page_count: scan.page_count,
+                })),
+                image_store::PutResult::RejectedOverBudget => Err(CoreFailure::Internal),
+            }
         }
         Err(f) => Err(to_core_failure(f)),
     };
@@ -855,7 +860,7 @@ mod tests {
             panic!("{:?}", s.result);
         };
         assert_eq!((p.width, p.height, p.page_count), (8, 4, 3));
-        assert_eq!(p.source, format!("scan:{}", s.generation));
+        assert_eq!(p.source, format!("fandhe.scan:{}", s.generation));
         assert_eq!(image_source(&s), p.source);
         assert!(status_text(&s).contains("3 ページ中"));
     }

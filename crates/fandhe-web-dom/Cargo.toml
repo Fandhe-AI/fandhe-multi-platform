@@ -19,6 +19,8 @@ fandhe-platform-apple = { path = "../fandhe-platform-apple", features = ["build"
 # 依存方向は本クレート（最適化レイヤ）→ fandhe-core（共通コア）の一方向
 # （coding-rust.md 準拠）。共通コアへ本クレートの依存を持ち込まない。
 fandhe-core = { path = "../fandhe-core" }
+# `ImageWidget` の識別子から画素を引く（`image_store`、#1291）。egui 非依存で、依存は fandhe-core のみ。
+fandhe-runtime = { path = "../fandhe-runtime" }
 # `location` モジュールの純関数（native `cargo test` 対象）が
 # `fandhe_device::location` の検証・正規化ロジック（`is_valid_fix`/
 # `normalize_axis` 等）を共有するため、wasm32 限定ではなく全ターゲットの依存にする

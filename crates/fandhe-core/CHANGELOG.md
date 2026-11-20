@@ -5,6 +5,59 @@
 
 ## [Unreleased]
 
+一覧の行ごとに別の画像を出せるようにし、一定時間後に状態を変える書き方を足す（Issue #1291）。
+
+画素の保管所（`fandhe_runtime::image_store`）が 1 枠だったため、一覧の行ごとに別の画像を出せなかった。
+また effect は毎フレーム呼ばれる状態なしの関数で、時間で戻る表示はスレッドと sleep を利用者が毎回書く必要があった。
+
+### 破壊的変更（BREAKING CHANGE）
+
+- `fandhe_runtime::image_store::put` は、同じ識別子だけを置き換え、別の識別子の画像を残す（旧版は 1 枠で、後から置いた画像が先の画像を消していた）。
+  `clear()` は従来どおり全部を捨てる。写真選択・書類スキャン・スキャナーが世代付きの識別子で前の画像を解放していたのは
+  `remove_prefix`（`fandhe.photo:`・`fandhe.scan:`・`fandhe.scanner:`）へ変えた
+- 機能 crate のドライバが `image_store` に置く識別子を `photo:<世代>`・`scan:<世代>`・`scanner:<世代>` から
+  `fandhe.photo:<世代>`・`fandhe.scan:<世代>`・`fandhe.scanner:<世代>` へ変更（`fandhe.` で始まる識別子とタイマーのキーはフレームワークの予約。
+  利用者の識別子との衝突を避ける）。状態が持つ識別子はドライバが作る値なので、利用者側の変更は不要
+- `image_store::set_on_clear(fn())` を `set_on_remove(fn(&str))` へ変更（捨てた識別子ごとに呼ぶ。レンダラが GPU テクスチャを同時に捨てる用）
+
+### 追加
+
+- `image_store::begin_frame()`（`ProxyApp` が完了・予約の適用の後、描画の直前に呼ぶ）: このフレームですでに描かれた画像は、フレーム末尾の effect などの
+  `put` で追い出さない（追い出す順は、描かれていない画像、足りなければ前のフレームだけで描かれた画像。新しく置いた画像は後者に入れ、
+  ページ送りで置いたばかりの画像どうしが追い出し合わない）。守らない範囲: `begin_frame` の後、行がまだ描かれていない間に届く
+  復号スレッドの `put` では、見えている行が一時的に alt になりうる。今のフレームで描かれた
+  画像だけで予算いっぱいのときは、何も追い出さずに今置く画像のほうを捨てる。呼ばなければ純粋な LRU
+- `image_store::put` が `PutResult`（`Stored` / `RejectedOverBudget`。`#[must_use]`）を返す。`RejectedOverBudget` は画像が保管所に入って
+  いない（`contains` が偽）ことを表すので、effect は失敗として扱い読み直さない（`image_store` の doc の例）。写真選択・書類スキャン・
+  スキャナーのドライバは、置けなかったとき成功にせず失敗として確定する
+- `image_store`: 識別子ごとに複数枚を保持。`remove`・`remove_prefix`・`contains`（順位を上げない確認）・`BUDGET_BYTES`（合計 64 MiB。
+  超えたら最後に描かれたのが古い画像から捨てる。`begin_frame` が呼ばれていなければ今置いた 1 枚は残すため、実際の上限は 64 MiB + 直前の 1 枚。
+  呼ばれていれば、今置く画像が置けないことがあり（`put` の直後でも `contains` が偽）、上限は描かれた画像の合計と予算の大きいほう）。`.list()` は全行を描くので、
+  全行の合計を収めるか `.virtual_list()` を使う
+- `CompletionSender::after(key, delay, impl FnOnce(&mut S) + Send + 'static) -> Result<Armed, TimerRefused>`・`cancel_timer(key)`。
+  `Ok(Armed::New)` は積んだ、`Ok(Armed::AlreadyPending)` は同じキーが残っていた（正常）、`Err(Full | TooFar | Closed)` は積まれていない
+  （同時の予約が 1024 件に達した・期限が時計の範囲を超えた・アプリが破棄済み）。戻り値は `#[must_use]` で、`Err` を捨てると警告になる。
+  同じキーの予約が残る間の呼び出しは何もしないため、effect で毎フレーム「状態がこうなら予約する」と書ける。
+  期限は単調時計（`web-time`）で測り、`ProxyApp` がフレーム先頭で適用する。表の持ち主は `ProxyApp` だけで、sender は弱く参照する
+  （予約のクロージャが sender の複製を抱えても循環しない。アプリの破棄で予約・捕まえた資源が解放される）
+- `CompletionSender::with_timers(&Arc<Timers>)`、`fandhe_runtime::timer::{Timers, drain_timers}`: 予約表を描画ループの持ち主と共有して流すための口
+  （`ProxyApp` は配線済みで、利用者は通常使わない）
+- web-dom は `image_store` に画素がある `ImageWidget` を `img`（PNG の data URL）で出す。`(識別子, 通し番号)` で URL を覚え
+  （合計バイト数に上限。足すたびに保管所に無い識別子を捨て、超えたら古いものから 1 件ずつ捨てる）、
+  画素数が 512 x 512 を超える画像は data URL にせず alt の `div` にする
+- gallery の `row-images` 画面
+- 画像形式の対応範囲と形式を足す手順（`docs/ai/SCHEMA.md` パターン 7-4）、時間で状態を変える書き方（同 9-2）
+
+### 移行手順
+
+1. 1 枚だけ置いて「前の画像は置き換えで消える」ことに頼っていた effect は、不要になった画像を `remove` / `remove_prefix` で捨てる
+   （捨てなくても合計 64 MiB を超えれば古い順に捨てられる）
+2. `set_on_clear` を使っていたレンダラ実装は `set_on_remove` へ（引数が識別子になる）
+3. `CompletionSender::new` は従来のまま使えるが、`with_timers` で表につないでいない sender の `after` は `Err(Closed)` で断る。
+   予約を流すのは `with_timers(&Arc<Timers>)` で渡した表を `drain_timers` するループの持ち主だけ（`ProxyApp` は配線済み）
+4. `image_store::put` の戻り値（`PutResult`、`#[must_use]`）を扱う。`let _ =` で捨てると、置けなかった識別子を毎フレーム復号し直す
+   ことになりうる（`image_store` の doc の例のように、置けなかったら失敗として読み直さない）
+
 `.icon()` / `.icon_bound()` を egui・web-dom で描かれるようにし、名前を文字列から列挙型 `IconName` へ変える（Issue #1437）。
 
 名前の語彙が決まっておらず、図柄を引く仕組みも無かったため egui で何も描かれなかった。閉じた語彙にして、

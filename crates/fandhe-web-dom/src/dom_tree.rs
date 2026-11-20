@@ -26,7 +26,8 @@
 //! | `Node::Widget(RadioButton)` | `label` + `input type="radio"`（Issue #993） |
 //! | `Node::RgbaImage` | `img`（`src` は無圧縮 PNG の data URL、Issue #5） |
 //! | `Node::Widget(ImageWidget)`（ソースが `blob:` で始まるとき） | `img`（Issue #1103） |
-//! | `Node::Widget(ImageWidget)`（ソースが空でなく `blob:` でない） | `div role="img" aria-label=alt`（Issue #1427。画素は出ない） |
+//! | `Node::Widget(ImageWidget)`（ソースの画素が `image_store` にある。一覧の行ごとの画像、#1291） | `img`（`src` は無圧縮 PNG の data URL。画素数が 512 x 512 を超えると下の `div`） |
+//! | `Node::Widget(ImageWidget)`（ソースが空でなく `blob:` でも `image_store` にも無い） | `div role="img" aria-label=alt`（Issue #1427。画素は出ない） |
 //! | `Node::Widget(ImageWidget)`（ソースが空。写真選択の選ぶ前など） | 属性なしの空 `div` |
 //! | `Node::Widget(Icon)`（Issue #1437） | `span.fandhe-icon`（本文は `IconName::glyph` + U+FE0E。ラベルがあれば `role="img" aria-label`、空なら `aria-hidden="true"`） |
 
@@ -509,10 +510,66 @@ fn convert_node<S: 'static>(
     }
 }
 
-/// `ImageWidget` を `img` へ変換する（Issue #1103、写真選択）。`src` へ出すのは
-/// `blob:` で始まるソースだけ（橋渡し層が復号確認後に作った URL。`javascript:`・`data:`・
-/// リモート URL・未配線の識別子は出さない、A03）。`blob:` 以外は、ソースが空なら属性なしの空 `div`、
-/// 空でなければ alt を名前にした `role="img"` の `div`（Issue #1427）にする。
+/// 保管所の画素を data URL にして `img` へ出す上限の画素数（512 x 512 = 約 1 MiB の RGBA）。DOM は作り直しのたびに
+/// 全 `img` の `src` を組み直し、無圧縮 PNG の base64 は元の約 1.4 倍になる。上限を超える画像（最大約 16 MiB）を
+/// data URL にすると、定期更新と組み合わさって CPU とメモリを使い切るため、超える画像は alt の `div` に落とす。
+/// 大きな画像は egui 側か、`blob:` URL（橋渡し層が作る）で出す。
+pub(crate) const DATA_URL_MAX_PIXELS: u64 = 512 * 512;
+
+thread_local! {
+    /// 識別子 → (保管所の通し番号, data URL)。同じ通し番号なら符号化し直さない。合計バイト数に上限がある
+    /// （[`crate::data_url_cache`]）。
+    static DATA_URLS: std::cell::RefCell<crate::data_url_cache::UrlCache> =
+        std::cell::RefCell::new(crate::data_url_cache::UrlCache::new(crate::data_url_cache::CAP_BYTES));
+    /// テスト用: 符号化した回数。
+    #[cfg(test)]
+    static ENCODES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// 保管所の画素を引いた結果。
+enum Stored {
+    /// 保管所に無い。
+    Absent,
+    /// 画素の数が [`DATA_URL_MAX_PIXELS`] を超える（data URL にしない）。
+    TooLarge,
+    Url(String),
+}
+
+/// `source` の画素を data URL にして返す。`(識別子, 通し番号)` が同じなら覚えた URL を返し、符号化し直さない。
+fn stored_data_url(source: &str) -> Stored {
+    let Some((serial, px)) = fandhe_runtime::image_store::get(source) else {
+        DATA_URLS.with(|c| c.borrow_mut().remove(source));
+        return Stored::Absent;
+    };
+    if u64::from(px.width()) * u64::from(px.height()) > DATA_URL_MAX_PIXELS {
+        DATA_URLS.with(|c| c.borrow_mut().remove(source));
+        return Stored::TooLarge;
+    }
+    if let Some(url) = DATA_URLS.with(|c| c.borrow_mut().get(source, serial)) {
+        return Stored::Url(url);
+    }
+    #[cfg(test)]
+    ENCODES.with(|e| e.set(e.get() + 1));
+    let url = crate::png_data_url::png_data_url(&px);
+    DATA_URLS.with(|c| {
+        c.borrow_mut().insert(
+            source,
+            serial,
+            url.clone(),
+            fandhe_runtime::image_store::contains,
+        )
+    });
+    Stored::Url(url)
+}
+
+/// `ImageWidget` を `img` へ変換する（Issue #1103、写真選択）。`src` へ出すのは次の 2 つだけ
+/// （`javascript:`・`data:` 入りの識別子・リモート URL・未配線の識別子は出さない、A03）。
+/// - `blob:` で始まるソース（橋渡し層が復号確認後に作った URL）
+/// - `fandhe_runtime::image_store` に画素があるソース（一覧の行ごとの画像、#1291）。復号確認済みの画素を
+///   `Node::RgbaImage` と同じ無圧縮 PNG の data URL にして出す。`(識別子, 通し番号)` で URL を覚えて作り直さず、
+///   画素数が [`DATA_URL_MAX_PIXELS`] を超える画像は data URL にせず alt の `div` に落とす
+///
+/// どちらでもないときは、ソースが空なら属性なしの空 `div`、空でなければ alt を名前にした `role="img"` の `div`（Issue #1427）にする。
 /// 複製へ `sync_from_state` をかけて読む（`convert_input_widget` と同じ）。
 fn convert_image_widget<S: 'static>(widget: &dyn Widget<S>, state: &S) -> Option<DomNode> {
     if !widget
@@ -525,7 +582,15 @@ fn convert_image_widget<S: 'static>(widget: &dyn Widget<S>, state: &S) -> Option
     synced.sync_from_state(state);
     let img = synced.as_any()?.downcast_ref::<ImageWidget<S>>()?;
     let src = img.source_text();
-    if !src.starts_with("blob:") {
+    let stored = match stored_data_url(src) {
+        Stored::Url(url) => Some(url),
+        Stored::Absent | Stored::TooLarge => None,
+    };
+    let src = match &stored {
+        Some(url) => url.as_str(),
+        None => src,
+    };
+    if !src.starts_with("blob:") && stored.is_none() {
         let attrs = if src.is_empty() {
             Vec::new()
         } else {
@@ -2005,6 +2070,103 @@ mod tests {
         assert!(img
             .attrs
             .contains(&("alt".to_string(), "サムネイル".to_string())));
+    }
+
+    /// 一覧の行ごとの画像（#1291）: `image_store` に置いた画素が行ごとに別の `img` になり、置いていない行は alt の `div`。
+    #[test]
+    fn list_rows_emit_img_per_stored_source() {
+        use fandhe_core::{ImageWidget, Node, WidgetId};
+        fn rows(_: &CounterState) -> Vec<Node<CounterState>> {
+            ["web-row:1", "web-row:2", "web-row:none"]
+                .iter()
+                .enumerate()
+                .map(|(i, k)| {
+                    let id = WidgetId::from_raw(10 + i as u64);
+                    Node::Widget(Box::new(ImageWidget::fixed(id, *k, format!("行{i}"))))
+                })
+                .collect()
+        }
+        let px = |c: u8| fandhe_core::RgbaPixels::new(1, 1, vec![c, 0, 0, 255]).unwrap();
+        let _ = fandhe_runtime::image_store::put("web-row:1".into(), px(10));
+        let _ = fandhe_runtime::image_store::put("web-row:2".into(), px(200));
+        let screen: Screen<CounterState> = Screen::new("t").list(rows);
+        let dom = build_dom_tree(&screen, &empty_state(), 0);
+        let mut found = Vec::new();
+        fn walk(n: &DomNode, out: &mut Vec<DomNode>) {
+            if n.tag == "img" || n.attrs.iter().any(|(k, v)| k == "role" && v == "img") {
+                out.push(n.clone());
+            }
+            n.children.iter().for_each(|c| walk(c, out));
+        }
+        walk(&dom, &mut found);
+        fandhe_runtime::image_store::remove_prefix("web-row:");
+        let src = |n: &DomNode| {
+            n.attrs
+                .iter()
+                .find(|(k, _)| k == "src")
+                .map(|(_, v)| v.clone())
+        };
+        assert_eq!(found.len(), 3, "{found:?}");
+        assert!(found[0].tag == "img" && found[1].tag == "img");
+        assert_ne!(src(&found[0]), src(&found[1]), "行ごとに別の画素");
+        assert!(src(&found[0])
+            .unwrap()
+            .starts_with("data:image/png;base64,"));
+        assert_eq!(found[2].tag, "div", "画素が無い行は alt の div");
+    }
+
+    /// 同じ通し番号では符号化し直さず、置き直せば作り直す。大きすぎる画像は data URL にせず alt の `div` にする。
+    #[test]
+    fn data_url_is_cached_by_serial_and_oversize_falls_back_to_div() {
+        use fandhe_core::{ImageWidget, WidgetId};
+        let screen_for = |key: &str| -> Screen<CounterState> {
+            Screen::new("t").with_node(fandhe_core::Node::Widget(Box::new(ImageWidget::fixed(
+                WidgetId::from_raw(1),
+                key.to_string(),
+                "代替",
+            ))))
+        };
+        let tag = |key: &str| {
+            let dom = build_dom_tree(&screen_for(key), &empty_state(), 0);
+            let n = dom
+                .children
+                .iter()
+                .find(|c| c.tag == "img" || c.tag == "div" && !c.attrs.is_empty())
+                .cloned();
+            n.map(|n| n.tag)
+        };
+        let px = |w: u32, h: u32| {
+            fandhe_core::RgbaPixels::new(w, h, vec![9u8; (w * h * 4) as usize]).unwrap()
+        };
+        let encodes = || ENCODES.with(|e| e.get());
+
+        let _ = fandhe_runtime::image_store::put("web-cache:a".into(), px(2, 2));
+        let before = encodes();
+        assert_eq!(tag("web-cache:a").as_deref(), Some("img"));
+        assert_eq!(tag("web-cache:a").as_deref(), Some("img"));
+        assert_eq!(encodes(), before + 1, "同じ通し番号では作り直さない");
+
+        let _ = fandhe_runtime::image_store::put("web-cache:a".into(), px(2, 2));
+        assert_eq!(tag("web-cache:a").as_deref(), Some("img"));
+        assert_eq!(encodes(), before + 2, "置き直せば作り直す");
+
+        // 512 x 513 は上限を超える。data URL にせず alt の div（符号化もしない）。
+        let _ = fandhe_runtime::image_store::put("web-cache:big".into(), px(512, 513));
+        assert_eq!(tag("web-cache:big").as_deref(), Some("div"));
+        assert_eq!(encodes(), before + 2, "大きすぎる画像は符号化しない");
+        // 上限ちょうどは img のまま。
+        let _ = fandhe_runtime::image_store::put("web-cache:max".into(), px(512, 512));
+        assert_eq!(tag("web-cache:max").as_deref(), Some("img"));
+
+        // 保管所から消えた識別子の覚えは、次の参照で捨てる。
+        fandhe_runtime::image_store::remove("web-cache:a");
+        assert_eq!(
+            tag("web-cache:a").as_deref(),
+            Some("div"),
+            "画素が無ければ alt の div"
+        );
+        assert!(DATA_URLS.with(|c| !c.borrow().contains("web-cache:a")));
+        fandhe_runtime::image_store::remove_prefix("web-cache:");
     }
 
     /// 写真選択（Issue #1103）: `blob:` のソースだけ `img` を出し、他は出さない。

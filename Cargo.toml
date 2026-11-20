@@ -212,6 +212,8 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 wasm-bindgen = "=0.2.126"
 wasm-bindgen-futures = "0.4"
 web-sys = "0.3"
+# 単調時計（native は std の Instant、wasm は performance.now）。fandhe-runtime の予約表（#1291）。egui 経由で既に解決済み。
+web-time = "1"
 console_error_panic_hook = "0.1"
 # TASK-8.5-S26（REQ-8 / M3、Issue #207）: `fandhe-core` の `ui::text_selection` が
 # grapheme cluster 境界（UAX #29）を判定するために使う。絵文字（肌色修飾子・ZWJ 連結・

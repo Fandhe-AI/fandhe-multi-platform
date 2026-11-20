@@ -28,7 +28,7 @@ use crate::recyclers::VirtualListRecyclers;
 pub type InsetMarginSupplier = Box<dyn Fn(&egui::Context) -> egui::Margin>;
 
 use fandhe_runtime::{
-    drain_completions, HostView, Renderer, RepaintWaker, Screenshot, TextInputHint,
+    drain_completions, drain_timers, HostView, Renderer, RepaintWaker, Screenshot, TextInputHint,
     TextInputHintError, WindowCommand, WindowRect, WindowState,
 };
 /// 起床と完了通知の型は egui 非依存の `fandhe-runtime` が持つ（Issue #1162）。
@@ -348,6 +348,9 @@ pub struct ProxyApp<S = SampleState> {
     /// [`Self::with_effect`] 経由で注入される。既定 `None`（大半の画面は端末 I/O を
     /// 持たないため、フックなしのまま何もしない）。
     effect: Option<EffectFn<S>>,
+    /// 「一定時間後に状態を変える」予約表（#1291）。effect が [`CompletionSender::after`] で積み、
+    /// `update` のフレーム先頭で [`drain_timers`] が流す。アプリごとに 1 つで、アプリの破棄とともに消える。
+    timers: Arc<fandhe_runtime::Timers<S>>,
     /// このフレームに来た戻る操作を画面が処理しなかった（[`ProxyAppDyn::take_unhandled_back`]）。
     unhandled_back: bool,
 }
@@ -445,6 +448,7 @@ impl<S> ProxyApp<S> {
             completions_rx,
             waker: Arc::new(EguiWaker(ctx.clone())),
             effect: None,
+            timers: Arc::new(fandhe_runtime::Timers::default()),
             unhandled_back: false,
         }
     }
@@ -468,6 +472,7 @@ impl<S> ProxyApp<S> {
     /// 取り出して `StateStore::apply` へ渡す。
     pub fn completion_sender(&self) -> CompletionSender<S> {
         CompletionSender::new(self.completions_tx.clone(), self.waker.clone())
+            .with_timers(&self.timers)
     }
 
     /// window insets 供給関数を注入する（Issue #579、`fandhe` の `src/entry/android.rs` からのみ呼ばれる）。
@@ -547,6 +552,14 @@ impl<S: 'static> EguiApp for ProxyApp<S> {
         // 外部 I/O 完了の反映はフレーム先頭・単一スレッド（UI スレッド）に限定し、
         // `dispatch`（描画内のボタン処理等）との書き込み競合を避ける（Issue #745）。
         drain_completions(&mut self.store, &self.completions_rx);
+        // 期限の来た `after` の予約も同じ位置（描画・dispatch より前）で反映する（#1291）。
+        drain_timers(&mut self.store, &self.timers, &*self.waker);
+        // 画像の保管所へフレームの区切りを知らせる。**完了・予約の適用（上の 2 行）より後、描画の直前**に呼ぶ。
+        // 完了の適用（モバイルの写真選択・書類スキャン・スキャナーが `put` する）の間は、前のフレームで描いた画像が
+        // 「今のフレーム」のままで、追い出されず拒否もされる。ここで区切りを進めると、このフレームで描かれた画像は
+        // フレーム末尾の effect の `put` でも追い出されない（見えている行が alt との間でちらつかない。
+        // `image_store::begin_frame` 参照、#1291）。
+        fandhe_runtime::image_store::begin_frame();
 
         if let Some(autoshot) = &mut self.autoshot {
             // Xvfb には入力イベントが来ないため、`request_repaint` で明示的に

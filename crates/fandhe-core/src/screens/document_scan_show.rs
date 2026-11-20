@@ -66,7 +66,7 @@ fn scanned_status(page: &ShownPage) -> String {
 /// 表示中の 1 ページ目の情報（画素は `image_store` にあり、ここには持たない）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShownPage {
-    /// 画像ウィジェットが読むソース識別子（`scan:{世代}`）。
+    /// 画像ウィジェットが読むソース識別子（`fandhe.scan:{世代}`）。
     pub source: String,
     /// 形式名（例: `JPEG`）。
     pub format: String,

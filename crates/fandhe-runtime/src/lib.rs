@@ -12,7 +12,8 @@
 //!   （レンダラ実装が起動時に [`set_repaint_waker`] で登録する）
 //! - 描画層の観測値と操作（フォーカス・ファイルのドラッグ・拡大率・画面の読み戻し・ウィンドウ操作・入力欄のヒント）は [`HostView`]。
 //!   [`Renderer`] には載せず、[`RepaintWaker::host_view`] で [`CompletionSender::host_view`] へ届ける
-//! - [`image_store`] は effect ドライバが復号済みの画素を描画側へ渡す 1 枠の保管所
+//! - [`image_store`] は effect ドライバが復号済みの画素を、識別子ごとに複数枚、描画側へ渡す保管所（容量上限と LRU の追い出しつき）
+//! - [`timer`] は「一定時間後に状態を変える」予約表。effect からは [`CompletionSender::after`] で使う
 //! - [`request_slot`] は request/response 型の端末機能が使う「要求 1 件の追跡」
 //! - [`tick`] は時間で進む画面の effect ドライバが共用する、フレームごとの経過時間の実測
 
@@ -22,11 +23,14 @@ pub mod host_view;
 pub mod image_store;
 pub mod request_slot;
 pub mod tick;
+pub mod timer;
 
 use std::any::Any;
 use std::sync::mpsc::{Receiver, SendError, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
+
+pub use timer::{Armed, TimerRefused, Timers, drain_timers};
 
 /// 描画命令。定義は `fandhe-core`（`Widget::paint` が返すため）にあり、ここは再公開のみ。
 pub use fandhe_core::PaintCommand;
@@ -114,6 +118,9 @@ pub type EffectFn<S> = fn(&S, &CompletionSender<S>);
 pub struct CompletionSender<S> {
     tx: Sender<Completion<S>>,
     waker: Arc<dyn RepaintWaker>,
+    /// 予約表への**弱い**参照。表の持ち主は描画ループの持ち主（`ProxyApp`）だけ。予約のクロージャが sender の複製を
+    /// 抱えても `Timers → クロージャ → sender → Timers` の循環にならず、持ち主の破棄で予約・捕まえた資源が解放される。
+    timers: Weak<Timers<S>>,
 }
 
 // `#[derive(Clone)]` は `S: Clone` を要求するため手動実装する（S 自体は複製しない）。
@@ -122,14 +129,57 @@ impl<S> Clone for CompletionSender<S> {
         Self {
             tx: self.tx.clone(),
             waker: self.waker.clone(),
+            timers: self.timers.clone(),
         }
     }
 }
 
 impl<S> CompletionSender<S> {
     /// 送信側と起床口から構築する。レンダラ実装（`ProxyApp::completion_sender` 等）が呼ぶ。
+    ///
+    /// 予約表（[`Self::after`]）の持ち主はまだ無い。描画ループの持ち主が [`drain_timers`] で流す表と
+    /// 共有するときは [`Self::with_timers`] で渡す（渡さない送信側の `after` は [`TimerRefused::Closed`] で断る）。
     pub fn new(tx: Sender<Completion<S>>, waker: Arc<dyn RepaintWaker>) -> Self {
-        Self { tx, waker }
+        Self {
+            tx,
+            waker,
+            timers: Weak::new(),
+        }
+    }
+
+    /// 予約表を、描画ループの持ち主が [`drain_timers`] で流す表へつなぐ。送信側は表を**弱く**参照する
+    /// （持ち主が `Arc` を手放せば表は解放され、予約は取り下げられ、以後の `after` は [`TimerRefused::Closed`]）。
+    pub fn with_timers(mut self, timers: &Arc<Timers<S>>) -> Self {
+        self.timers = Arc::downgrade(timers);
+        self
+    }
+
+    /// `delay` 後に `completion` を状態へ適用する予約をする。スレッドも sleep も要らない。
+    ///
+    /// `key` は予約の名前。同じ `key` の予約が残っている間は何もせず `Ok(Armed::AlreadyPending)` を返す（期限は延びない）ため、
+    /// effect で「状態がこうなら」と毎フレーム呼んでよい。新しく積んだときは `Ok(Armed::New)`。
+    /// **積まなかった**ときは `Err`（同時の予約が [`timer::MAX_PENDING`] 件に達した `Full`、期限が時計の範囲を超える `TooFar`、
+    /// 表の持ち主（アプリ）が破棄済み・表につながっていない `Closed`）。
+    /// `AlreadyPending` と `Err` は別物なので、`Err` は捨てずに扱う。
+    /// 期限は呼んだ時点から単調時計で測り、来たらフレーム先頭で適用される（詳細と書き方は [`timer`] 参照）。
+    #[must_use = "Err は予約が積まれていないことを表す"]
+    pub fn after(
+        &self,
+        key: &str,
+        delay: Duration,
+        completion: impl FnOnce(&mut S) + Send + 'static,
+    ) -> Result<Armed, TimerRefused> {
+        let timers = self.timers.upgrade().ok_or(TimerRefused::Closed)?;
+        let armed = timers.arm_at(web_time::Instant::now(), key, delay, Box::new(completion))?;
+        if armed == Armed::New {
+            self.waker.wake_after(delay);
+        }
+        Ok(armed)
+    }
+
+    /// [`Self::after`] の予約を取り下げる。あれば `true`。
+    pub fn cancel_timer(&self, key: &str) -> bool {
+        self.timers.upgrade().is_some_and(|t| t.cancel(key))
     }
 
     /// 完了クロージャをキューへ積み、直後に起床する。受信側が drop 済みのときだけ `Err`
@@ -332,6 +382,80 @@ mod tests {
         let sender = CompletionSender::new(tx, waker.clone());
         assert!(sender.send(Box::new(|_| {})).is_err());
         assert_eq!(waker.wakes.load(Ordering::SeqCst), 0);
+    }
+
+    /// `after` は同じキーの二重予約を積まず、起床も 1 回だけ予約する。取り下げたキーは積み直せる。
+    #[test]
+    fn after_arms_once_per_key_and_cancel_rearms() {
+        let waker = Arc::new(FakeWaker::default());
+        let (tx, _rx) = channel::<Completion<Counter>>();
+        let timers = Arc::new(Timers::default());
+        let sender = CompletionSender::new(tx, waker.clone()).with_timers(&timers);
+        let d = Duration::from_secs(60);
+        assert_eq!(
+            sender.after("k", d, |s: &mut Counter| s.count += 1),
+            Ok(Armed::New)
+        );
+        assert_eq!(
+            sender.after("k", d, |s: &mut Counter| s.count += 10),
+            Ok(Armed::AlreadyPending)
+        );
+        assert_eq!(*waker.afters.lock().unwrap(), vec![d]);
+        assert!(
+            sender.clone().cancel_timer("k"),
+            "複製の送信側とも予約表を共有する"
+        );
+        assert_eq!(sender.after("k", d, |_: &mut Counter| {}), Ok(Armed::New));
+        assert_eq!(waker.afters.lock().unwrap().len(), 2);
+        // 溢れる期限は積まず、起床も予約しない。
+        assert_eq!(
+            sender.after("huge", Duration::MAX, |_: &mut Counter| {}),
+            Err(TimerRefused::TooFar)
+        );
+        assert_eq!(waker.afters.lock().unwrap().len(), 2);
+    }
+
+    /// 予約のクロージャが sender の複製と資源を抱えても、持ち主（表の `Arc`）を手放せば解放される（循環しない）。
+    /// 外のワーカーが sender を持ち続けても、破棄後の `after` は断られ、予約は残らない。
+    #[test]
+    fn dropping_the_timer_owner_frees_closures_even_if_they_hold_the_sender() {
+        let waker = Arc::new(FakeWaker::default());
+        let (tx, _rx) = channel::<Completion<Counter>>();
+        let owner = Arc::new(Timers::default());
+        let sender = CompletionSender::new(tx, waker).with_timers(&owner);
+        let resource = Arc::new(());
+
+        let (captured_sender, captured_res) = (sender.clone(), resource.clone());
+        let armed = sender.after("k", Duration::from_secs(60), move |_: &mut Counter| {
+            let _ = (&captured_sender, &captured_res);
+        });
+        assert_eq!(armed, Ok(Armed::New));
+        assert_eq!(Arc::strong_count(&resource), 2, "予約が資源を抱えている");
+
+        let outside = sender.clone(); // 外のワーカーが持ち続ける sender
+        drop(sender);
+        drop(owner); // アプリの破棄
+        assert_eq!(
+            Arc::strong_count(&resource),
+            1,
+            "持ち主の破棄で予約・捕まえた資源が解放される"
+        );
+        assert_eq!(
+            outside.after("again", Duration::from_secs(1), |_: &mut Counter| {}),
+            Err(TimerRefused::Closed)
+        );
+        assert!(!outside.cancel_timer("k"));
+    }
+
+    /// 表につないでいない sender の `after` は断る（誰も流さない予約を黙って溜めない）。
+    #[test]
+    fn after_without_an_owner_is_closed() {
+        let (tx, _rx) = channel::<Completion<Counter>>();
+        let sender = CompletionSender::new(tx, Arc::new(FakeWaker::default()));
+        assert_eq!(
+            sender.after("k", Duration::from_secs(1), |_: &mut Counter| {}),
+            Err(TimerRefused::Closed)
+        );
     }
 
     #[test]

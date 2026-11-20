@@ -145,6 +145,7 @@
 //! （`Closure` 等）のみで構成し、`unsafe` を要求しない（coding-rust.md 準拠）。
 #![forbid(unsafe_code)]
 
+mod data_url_cache;
 pub mod dom_tree;
 pub mod html;
 pub mod ime;

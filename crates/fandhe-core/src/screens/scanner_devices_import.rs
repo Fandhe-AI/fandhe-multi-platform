@@ -82,7 +82,7 @@ fn imported_status(image: &ShownImage) -> String {
 /// 表示中の画像の情報（画素は `image_store` にあり、ここには持たない）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShownImage {
-    /// 画像ウィジェットが読むソース識別子（`scanner:{世代}`）。
+    /// 画像ウィジェットが読むソース識別子（`fandhe.scanner:{世代}`）。
     pub source: String,
     /// 取り込み元の機器の種類。
     pub kind: CoreKind,

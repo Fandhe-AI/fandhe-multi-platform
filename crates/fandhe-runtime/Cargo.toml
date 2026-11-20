@@ -11,6 +11,8 @@ publish = false
 [dependencies]
 # drain_completions が StateStore を使う。egui には依存しない（docs/architecture/consumer-app-structure.md §3・§7）。
 fandhe-core = { path = "../fandhe-core" }
+# 予約表（`timer`）の単調時計。wasm32-unknown-unknown では std の `Instant` が使えないため。
+web-time = { workspace = true }
 
 [lints]
 workspace = true
