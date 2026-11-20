@@ -154,6 +154,29 @@ fn visible_rows_do_not_flicker_when_an_effect_puts_after_the_frame() {
         "置けなかった識別子を毎フレーム復号し直さない"
     );
 
+    // 完了の適用（モバイルの写真選択などが `put` する経路）の間は、前のフレームで描いた画像が「今のフレーム」のまま守られる。
+    // `begin_frame` を `drain_completions` より先に呼ぶと、その画像が 2 段目に落ちて追い出される（見えている行が alt になる）。
+    let sender = h.state().completion_sender();
+    sender
+        .send(Box::new(|_: &mut St| {
+            assert_eq!(
+                fandhe_runtime::image_store::put("rowvis:via-completion".into(), big(77)),
+                PutResult::RejectedOverBudget,
+                "完了の適用中の `put` は、前のフレームで見えていた行を追い出さない"
+            );
+        }))
+        .expect("送れる");
+    h.step();
+    for i in 0..ROWS {
+        assert!(
+            fandhe_runtime::image_store::contains(&format!("rowvis:{i}")),
+            "完了の適用で見えている行が追い出されない"
+        );
+    }
+    assert!(!fandhe_runtime::image_store::contains(
+        "rowvis:via-completion"
+    ));
+
     // 行が見えなくなったら（描かれなくなったら）保護も外れ、次のフレームの `put` は古い行から追い出せる。
     // `ProxyApp` がフレームごとに `begin_frame` を呼ばないと、最後に描いた印が残り続けて、ここが成り立たない。
     HIDE.store(true, std::sync::atomic::Ordering::SeqCst);

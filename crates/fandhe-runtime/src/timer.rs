@@ -28,6 +28,14 @@
 //! # let _ = effect;
 //! ```
 //!
+//! # ロックの内側で drop しない
+//!
+//! 予約のクロージャは任意の資源を捕まえる。その `Drop` が同じ表（`sender.cancel_timer` など）を呼ぶと、表のロックを持ったまま
+//! drop した場合に再入で止まる。表のロックの内側では予約を表から取り出すだけにし、drop は**ロックを手放してから**行う
+//! （[`Timers::cancel`]・`cancel_all`・満杯や既存キーで断る `arm_at`。期限が来た予約は取り出して `apply` するだけで、
+//! `drain_timers` はロックの外で処理する）。表そのものの drop（`ProxyApp` の破棄）では、`Arc` の強参照がすでに 0 なので、
+//! 捕まえた sender の `cancel_timer` は表に触れず `false` を返す。
+//!
 //! # 契約
 //!
 //! - 時間は単調時計（`web_time::Instant`。wasm では `performance.now`）で測る。システム時刻の変更で狂わない（契約表 3）。
@@ -128,10 +136,16 @@ impl<S> Timers<S> {
     ) -> Result<Armed, TimerRefused> {
         let due = now.checked_add(delay).ok_or(TimerRefused::TooFar)?;
         let mut slots = self.lock();
+        // 断る経路では、先にロックを手放してから、引数の `completion`（と捕まえた資源）を drop する
+        // （モジュール doc「ロックの内側で drop しない」）。
         if slots.iter().any(|s| s.key == key) {
+            drop(slots);
+            drop(completion);
             return Ok(Armed::AlreadyPending);
         }
         if slots.len() >= MAX_PENDING {
+            drop(slots);
+            drop(completion);
             return Err(TimerRefused::Full);
         }
         slots.push(Slot {
@@ -144,15 +158,23 @@ impl<S> Timers<S> {
 
     /// `key` の予約を取り下げる。あれば `true`。
     pub fn cancel(&self, key: &str) -> bool {
-        let mut slots = self.lock();
-        let before = slots.len();
-        slots.retain(|s| s.key != key);
-        slots.len() != before
+        // ロックの内側では表から取り出すだけ。drop（予約のクロージャと捕まえた資源の `Drop`）はロックを手放してから行う。
+        let removed: Vec<Slot<S>> = {
+            let mut slots = self.lock();
+            let (gone, kept): (Vec<_>, Vec<_>) = slots.drain(..).partition(|s| s.key == key);
+            *slots = kept;
+            gone
+        };
+        let existed = !removed.is_empty();
+        drop(removed);
+        existed
     }
 
     /// 予約をすべて取り下げる。
     pub fn cancel_all(&self) {
-        self.lock().clear();
+        // `let` の文の終わりでロックが外れ、そのあとで drop する。
+        let taken = std::mem::take(&mut *self.lock());
+        drop(taken);
     }
 
     /// 期限が `now` までに来た予約を、期限の早い順に取り出す（取り出した分は表から消える）。
@@ -335,6 +357,92 @@ mod tests {
         );
         assert!(timers.cancel("k0"));
         assert_eq!(timers.arm_at(t0, "over", ms(10), push('b')), Ok(Armed::New));
+    }
+
+    /// `f` が 5 秒以内に終わることを別スレッドで確かめる（再入でロックを取り直して止まる実装はここで落ちる）。
+    fn finishes_within_timeout(f: impl FnOnce() + Send + 'static) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            f();
+            let _ = tx.send(());
+        });
+        assert!(
+            rx.recv_timeout(Duration::from_secs(5)).is_ok(),
+            "表のロックを持ったまま drop して再入で止まった"
+        );
+    }
+
+    /// drop のときに同じ表の `cancel("other")` を呼ぶ資源。ロックの内側で drop すると、同じ `Mutex` を取り直して止まる。
+    struct ReentrantGuard(Arc<Timers<St>>);
+    impl Drop for ReentrantGuard {
+        fn drop(&mut self) {
+            self.0.cancel("other");
+        }
+    }
+
+    fn arm_with_guard(timers: &Arc<Timers<St>>, key: &str) -> Result<Armed, TimerRefused> {
+        let guard = ReentrantGuard(timers.clone());
+        timers.arm_at(
+            Instant::now(),
+            key,
+            ms(60_000),
+            Box::new(move |_: &mut St| {
+                let _ = &guard;
+            }),
+        )
+    }
+
+    /// 取り下げる予約のクロージャが、`Drop` で同じ表の別の予約を取り下げても止まらない。
+    #[test]
+    fn cancel_does_not_drop_closures_under_the_lock() {
+        finishes_within_timeout(|| {
+            let timers = Arc::new(Timers::default());
+            arm_with_guard(&timers, "victim").unwrap();
+            timers
+                .arm_at(Instant::now(), "other", ms(60_000), push('o'))
+                .unwrap();
+            assert!(timers.cancel("victim"));
+            assert!(!timers.cancel("other"), "Drop が取り下げ済み");
+        });
+    }
+
+    #[test]
+    fn cancel_all_does_not_drop_closures_under_the_lock() {
+        finishes_within_timeout(|| {
+            let timers = Arc::new(Timers::default());
+            arm_with_guard(&timers, "victim").unwrap();
+            timers
+                .arm_at(Instant::now(), "other", ms(60_000), push('o'))
+                .unwrap();
+            timers.cancel_all();
+            assert!(timers.next_in_at(Instant::now()).is_none());
+        });
+    }
+
+    /// 既存キー・満杯で断る `arm_at` が、引数のクロージャをロックを手放してから drop する。
+    #[test]
+    fn refused_arm_does_not_drop_the_closure_under_the_lock() {
+        finishes_within_timeout(|| {
+            let timers = Arc::new(Timers::default());
+            arm_with_guard(&timers, "k").unwrap();
+            timers
+                .arm_at(Instant::now(), "other", ms(60_000), push('o'))
+                .unwrap();
+            // 既存キー: 引数のクロージャ（ガード付き）が drop され、Drop が "other" を取り下げる。
+            assert_eq!(arm_with_guard(&timers, "k"), Ok(Armed::AlreadyPending));
+            assert!(!timers.cancel("other"));
+            // 満杯: 同じ形。
+            for i in 0..MAX_PENDING - 2 {
+                timers
+                    .arm_at(Instant::now(), &format!("f{i}"), ms(60_000), push('f'))
+                    .unwrap();
+            }
+            timers
+                .arm_at(Instant::now(), "other", ms(60_000), push('o'))
+                .unwrap();
+            assert_eq!(arm_with_guard(&timers, "full"), Err(TimerRefused::Full));
+            assert!(!timers.cancel("other"));
+        });
     }
 
     #[test]

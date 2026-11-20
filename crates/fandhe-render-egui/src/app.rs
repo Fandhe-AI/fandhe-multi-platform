@@ -549,14 +549,17 @@ impl<S: 'static> EguiApp for ProxyApp<S> {
     /// この 1 メソッド内で順に行う（PR #306 CI 是正: rustc 1.88 互換の egui/eframe
     /// 0.33 系へダウングレードしたことに伴う API 差分の追随）。
     fn update(&mut self, ctx: &egui::Context) {
-        // 画像の保管所へフレームの区切りを知らせる。このフレームで描かれた画像は、フレーム末尾の effect の `put` でも
-        // 追い出されない（見えている行が alt との間でちらつかない。`image_store::begin_frame` 参照、#1291）。
-        fandhe_runtime::image_store::begin_frame();
         // 外部 I/O 完了の反映はフレーム先頭・単一スレッド（UI スレッド）に限定し、
         // `dispatch`（描画内のボタン処理等）との書き込み競合を避ける（Issue #745）。
         drain_completions(&mut self.store, &self.completions_rx);
         // 期限の来た `after` の予約も同じ位置（描画・dispatch より前）で反映する（#1291）。
         drain_timers(&mut self.store, &self.timers, &*self.waker);
+        // 画像の保管所へフレームの区切りを知らせる。**完了・予約の適用（上の 2 行）より後、描画の直前**に呼ぶ。
+        // 完了の適用（モバイルの写真選択・書類スキャン・スキャナーが `put` する）の間は、前のフレームで描いた画像が
+        // 「今のフレーム」のままで、追い出されず拒否もされる。ここで区切りを進めると、このフレームで描かれた画像は
+        // フレーム末尾の effect の `put` でも追い出されない（見えている行が alt との間でちらつかない。
+        // `image_store::begin_frame` 参照、#1291）。
+        fandhe_runtime::image_store::begin_frame();
 
         if let Some(autoshot) = &mut self.autoshot {
             // Xvfb には入力イベントが来ないため、`request_repaint` で明示的に
