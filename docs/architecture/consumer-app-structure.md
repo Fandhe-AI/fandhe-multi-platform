@@ -252,6 +252,12 @@ fn app(ctx: &fandhe::egui::Context) -> Box<dyn fandhe::app::ProxyAppDyn> {
   - 結果が届かないまま失われた要求は、失敗として 1 回だけ知らせます
   - discard は Rust 側の記録だけを捨てます。遅れて届いた結果は id で照合して捨て、新しい要求へ結びつけません
   - OS 側でまだ進行中なら、次の begin を OS の観測で busy にします
+- 同期の入口が OS の完了まで待つ機能（calendar の `platform_calendar().add_event`・live-activity の `run_live_activity` など）も、
+  同じ begin / poll / discard を公開します。同期の入口は期限を持たず（OS の操作は取り消せず、推測の期限で失敗を返すと後から効いて再試行で
+  重複するため）、OS のコールバックが失われると呼び出し側のスレッドが戻りません。待ちを打ち切りたい呼び出し側は begin と poll を使い、
+  戻れなくなったら discard します。discard は「未確定」を表し、失敗とは違います。OS 側で後から完了しうるので、結果は届かず、
+  OS が進行中の間は次の begin が busy になります。同期の入口は begin と同じ経路の上で `PublicEntry::wait` が完了まで待つだけで、
+  別の追跡を持ちません（実装は `fandhe_runtime::request_slot::PublicEntry`）
 - 次の機能は非同期の入口を要しません。同期の入口が OS の完了まで待って実結果を返せる機能と、
   実機能に届く経路がどこにもない OS（対応表で `no` や保留のもの。`Unsupported` 固定）です
 - 保存先の解決（Android の `data_dir`・iOS の `documents_dir`・デスクトップの既定）は `fandhe-cap-local-storage-kv` が持ちます。

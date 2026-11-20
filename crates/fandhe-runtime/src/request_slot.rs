@@ -262,6 +262,22 @@ impl<O> RequestSlot<O> {
         false
     }
 
+    /// `request_id` が受け口の現在の要求か（結果が届いているかは問わない）。`O: Clone` を要さず照合できる。
+    pub fn is_current(&self, request_id: u64) -> bool {
+        self.lock()
+            .current
+            .as_ref()
+            .is_some_and(|p| p.request_id == request_id)
+    }
+
+    /// `request_id` が受け口の現在の要求で、結果が未着（OS が進行中）か。
+    pub fn is_pending(&self, request_id: u64) -> bool {
+        self.lock()
+            .current
+            .as_ref()
+            .is_some_and(|p| p.request_id == request_id && p.ready.is_none())
+    }
+
     /// 照合なしで丸ごと捨てる（受け取り待ちの結果も捨てる。機能の破棄での解放）。Android の Activity 再生成直後に呼ぶ想定
     /// （`biometric_auth::reset_pending_tracking` の唯一の呼び出し元、PR #917 の
     /// codex-review 指摘由来）。share / file_pick は呼ばない（既存挙動を変えない）。
@@ -414,6 +430,111 @@ impl SlotOwner {
 }
 
 impl Default for SlotOwner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// 同期入口が待ちを打ち切れるようにする公開入口（begin / poll / discard、`consumer-app-structure.md` §8.2）の共通部品。
+/// [`RequestSlot`] を画面 effect と共有し、公開入口が追う自分の分の印（[`SlotOwner`]）と、poll・discard を直列にする
+/// ロックを持つ。機能 crate は `bridge` に static で 1 個置き、`begin_<stem>` / `poll_<stem>` / `discard_<stem>` の本体にする。
+/// 同期の入口は [`PublicEntry::wait`] で同じ経路を通り、完了まで待つ。
+///
+/// 打ち切り（[`PublicEntry::discard`]）は受け取りの印だけを外す（OS が進行中なら slot は残す）。OS 側で後から完了しうる要求の結果は id で照合して捨て、
+/// 新しい要求へ結びつけない。OS がまだ進行中の間は slot を残すため、次の開始は busy で断られる。
+pub struct PublicEntry {
+    owner: SlotOwner,
+    /// poll・discard の本体を直列にする。並行 poll で結果が二重に返らないため。
+    lock: Mutex<()>,
+}
+
+impl PublicEntry {
+    /// static 初期化用。機能 crate の `bridge` に 1 個置く。
+    pub const fn new() -> Self {
+        Self {
+            owner: SlotOwner::new(),
+            lock: Mutex::new(()),
+        }
+    }
+
+    /// 画面側が `begin_excluding` へ渡す、この入口の持ち主の印。
+    pub fn owner(&self) -> &SlotOwner {
+        &self.owner
+    }
+
+    /// 開始。進行中の要求と、自分の未回収の要求（結果が届いた・`reset` で失われたのに poll・discard されていない）が
+    /// あれば `None`（busy）。失われた要求の印を上書きすると、その poll が失われた通知を受け取れず `None` のままになるため。
+    /// `screen` の届いた未取得の結果は捨てずに受け取り待ちへ移す（[`SlotOwner::begin_parking`]）。
+    pub fn begin<O>(&self, slot: &RequestSlot<O>, screen: &SlotOwner) -> Option<u64> {
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        if self.owner.current() != 0 {
+            return None;
+        }
+        self.owner.begin_parking(slot, screen)
+    }
+
+    /// 結果の取得。届いていれば 1 度だけ `Some` で印を外す。未着・他人の id・取得済み・捨てた id・0 は `None`。
+    /// slot から要求が消えた（`reset`・別の要求への置き換え）ときは `lost()` を 1 度だけ返す。
+    pub fn poll<O>(
+        &self,
+        slot: &RequestSlot<O>,
+        request_id: u64,
+        lost: impl FnOnce() -> O,
+    ) -> Option<O> {
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        if request_id == 0 || self.owner.current() != request_id {
+            return None;
+        }
+        if let Some(result) = slot.take_ready(request_id) {
+            self.owner.release(request_id);
+            return Some(result);
+        }
+        if slot.is_current(request_id) {
+            return None;
+        }
+        self.owner.release(request_id);
+        Some(lost())
+    }
+
+    /// 待ちの打ち切り。自分の `request_id` のときだけ印を外して `true`（他人の id・取得済み・0 は `false`）。
+    /// 結果が届いていれば slot も空ける。進行中なら slot は残し、OS の完了が届くまで次の開始を busy にする
+    /// （完了の通知が来るまで未解放の記録を消さない）。届いた結果は持ち主がいないため、次の開始が置き換えて捨てる。
+    pub fn discard<O>(&self, slot: &RequestSlot<O>, request_id: u64) -> bool {
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        if request_id == 0 || self.owner.current() != request_id {
+            return false;
+        }
+        if !slot.is_pending(request_id) {
+            slot.clear(request_id);
+        }
+        self.owner.release(request_id);
+        true
+    }
+
+    /// 依頼自体が失敗したときの後片付け（結果は届かないので slot と印を空ける）。
+    pub fn abort<O>(&self, slot: &RequestSlot<O>, request_id: u64) {
+        slot.clear(request_id);
+        self.owner.release(request_id);
+    }
+
+    /// 同期入口用。結果が届くか要求が失われるまで、[`POLL_INTERVAL`] ごとに [`PublicEntry::poll`] して待つ。
+    /// 期限は持たない（OS の操作は取り消せず、推測の期限で失敗を返すと後から効いて再試行で重複するため）。
+    /// 別スレッドの `discard` などで印が外れたら `lost()` で戻る。打ち切りたい呼び出し側は `begin` と `poll` と `discard` を使う。
+    pub fn wait<O>(&self, slot: &RequestSlot<O>, request_id: u64, lost: impl Fn() -> O) -> O {
+        loop {
+            if let Some(result) = self.poll(slot, request_id, &lost) {
+                return result;
+            }
+            // 別スレッドの poll・discard で印が外れた要求は、以後 poll が `None` のままになる。待ち続けず失われた要求として戻る。
+            if self.owner.current() != request_id {
+                return lost();
+            }
+            std::thread::sleep(POLL_INTERVAL);
+        }
+    }
+}
+
+impl Default for PublicEntry {
     fn default() -> Self {
         Self::new()
     }
@@ -916,5 +1037,110 @@ mod tests {
         SLOT.clear(a);
         assert!(B.begin_excluding(&SLOT, &[&A]).is_some());
         SLOT.reset();
+    }
+
+    #[test]
+    fn public_entry_poll_returns_result_once_and_lost_once() {
+        let (slot, screen, entry) = (
+            RequestSlot::<u8>::new(),
+            SlotOwner::new(),
+            PublicEntry::new(),
+        );
+        let id = entry.begin(&slot, &screen).unwrap();
+        assert_eq!(entry.poll(&slot, id, || 99), None);
+        assert!(slot.deliver(id, 7));
+        assert_eq!(entry.poll(&slot, id, || 99), Some(7));
+        assert_eq!(entry.poll(&slot, id, || 99), None);
+        // reset で要求が消えたら失われた要求を 1 度だけ知らせる。
+        let id = entry.begin(&slot, &screen).unwrap();
+        slot.reset();
+        assert_eq!(entry.poll(&slot, id, || 99), Some(99));
+        assert_eq!(entry.poll(&slot, id, || 99), None);
+    }
+
+    /// 打ち切り後に届いた結果は捨て、次の要求へ結びつけない。OS が進行中の間は次の開始が busy。
+    #[test]
+    fn public_entry_discard_drops_late_result_and_blocks_until_os_completes() {
+        let (slot, screen, entry) = (
+            RequestSlot::<u8>::new(),
+            SlotOwner::new(),
+            PublicEntry::new(),
+        );
+        let first = entry.begin(&slot, &screen).unwrap();
+        assert!(!entry.discard(&slot, first + 1000));
+        assert!(entry.discard(&slot, first));
+        assert!(!entry.discard(&slot, first));
+        assert_eq!(entry.poll(&slot, first, || 99), None);
+        // OS がまだ進行中: 次の開始は busy。
+        assert!(entry.begin(&slot, &screen).is_none());
+        // 後から届いた結果は持ち主がいない。次の開始が置き換えて捨てる。
+        assert!(slot.deliver(first, 1));
+        let second = entry.begin(&slot, &screen).unwrap();
+        assert_ne!(first, second);
+        assert_eq!(entry.poll(&slot, first, || 99), None);
+        assert!(!slot.deliver(first, 2));
+        assert!(slot.deliver(second, 3));
+        assert_eq!(entry.poll(&slot, second, || 99), Some(3));
+    }
+
+    #[test]
+    fn public_entry_discard_after_result_frees_slot() {
+        let (slot, screen, entry) = (
+            RequestSlot::<u8>::new(),
+            SlotOwner::new(),
+            PublicEntry::new(),
+        );
+        let id = entry.begin(&slot, &screen).unwrap();
+        assert!(slot.deliver(id, 1));
+        assert!(entry.discard(&slot, id));
+        assert!(!slot.is_current(id));
+        assert!(entry.begin(&slot, &screen).is_some());
+    }
+
+    #[test]
+    fn public_entry_wait_returns_on_result_and_on_lost() {
+        static SLOT: RequestSlot<u8> = RequestSlot::new();
+        static ENTRY: PublicEntry = PublicEntry::new();
+        let screen = SlotOwner::new();
+        let id = ENTRY.begin(&SLOT, &screen).unwrap();
+        let h = std::thread::spawn(move || ENTRY.wait(&SLOT, id, || 99));
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        assert!(SLOT.deliver(id, 5));
+        assert_eq!(h.join().unwrap(), 5);
+        let id = ENTRY.begin(&SLOT, &screen).unwrap();
+        let h = std::thread::spawn(move || ENTRY.wait(&SLOT, id, || 99));
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        SLOT.reset();
+        assert_eq!(h.join().unwrap(), 99);
+    }
+
+    /// reset で失われた要求を回収するまで、公開入口の次の開始は busy。
+    #[test]
+    fn public_entry_begin_is_busy_until_the_lost_request_is_collected() {
+        let slot: RequestSlot<u8> = RequestSlot::new();
+        let entry = PublicEntry::new();
+        let screen = SlotOwner::new();
+        let a = entry.begin(&slot, &screen).unwrap();
+        slot.reset();
+        // 失われた a を回収する前の開始は busy。a の印を上書きしない。
+        assert_eq!(entry.begin(&slot, &screen), None);
+        assert_eq!(entry.poll(&slot, a, || 99), Some(99));
+        assert!(entry.begin(&slot, &screen).is_some());
+    }
+
+    /// 別スレッドの discard で印が外れても、同期の待ちが戻る。
+    #[test]
+    fn public_entry_wait_returns_when_discarded_by_another_thread() {
+        static SLOT: RequestSlot<u8> = RequestSlot::new();
+        static ENTRY: PublicEntry = PublicEntry::new();
+        let screen = SlotOwner::new();
+        let id = ENTRY.begin(&SLOT, &screen).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || tx.send(ENTRY.wait(&SLOT, id, || 99)));
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        assert!(ENTRY.discard(&SLOT, id));
+        // 戻らない退行をハングでなく失敗として出すため、期限つきで受け取る。
+        let got = rx.recv_timeout(std::time::Duration::from_secs(5));
+        assert_eq!(got, Ok(99));
     }
 }

@@ -29,7 +29,7 @@ unsafe extern "C" {
 
 /// 検査済みの予定を EventKit へ渡す依頼を出す。`false` は依頼自体が受理されなかった
 /// （呼び出し元が `Internal` として `bridge::deliver` する）。`request_id` は
-/// `bridge::begin` が払い出したプロセス内一意な ID。
+/// `bridge::begin_screen` / `bridge::begin_public` が払い出したプロセス内一意な ID。
 #[allow(unsafe_code)]
 pub(crate) fn present(request_id: u64, draft: &EventDraft) -> bool {
     // `EventDraft::parse` が NUL を弾いているため通常は失敗しない。

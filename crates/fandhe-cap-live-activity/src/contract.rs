@@ -28,6 +28,16 @@
 //!
 //! [`LiveActivity::submit`] の `Ok(())` は受理で、結果は同じ `request_id` で 1 回だけ本 crate の `driver.rs` の
 //! `bridge::deliver` へ届く。`request_id` が合わない完了は Rust 側と OS 側の両方で捨てる。
+//!
+//! # 待ちの終わり方と未確定（画面の外からの入口）
+//!
+//! 同期の [`run_live_activity`](crate::run_live_activity) は OS の完了まで呼び出しスレッドを塞ぐ。終わり方は、OS の結果が届く・
+//! 先行があれば `Internal("live_activity busy")` で即座に戻る・Android の Activity 再生成か、別スレッドが同じ id を打ち切ったときに `Internal("live_activity reset")` で戻る、
+//! のいずれか。OS のコールバックが失われると戻らない。待ちを打ち切りたいときは
+//! [`begin_live_activity`](crate::begin_live_activity) / [`poll_live_activity`](crate::poll_live_activity) /
+//! [`discard_live_activity`](crate::discard_live_activity) を使う。discard した要求は「未確定」で、失敗ではない。
+//! OS 側で後から開始・更新・終了されうる（結果は届かず、id で照合して捨てる）。OS が進行中の間は次の要求を `busy` で断る。
+//! 守らない範囲: OS の結果が届かないまま失われると、プロセス終了（Android は再生成の reset）まで busy が続く。重複開始を避けるための上限。
 //! 期限は持たない（経過時間を足すときは単調時計 `Instant` で測る）。
 //!
 //! # 守る範囲 / 守らない範囲（契約表 11）

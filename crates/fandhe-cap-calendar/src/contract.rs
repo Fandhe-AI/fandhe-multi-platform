@@ -173,6 +173,16 @@ impl EventDraft {
 /// 予定追加の契約。
 pub trait CalendarEvents: Send + Sync {
     /// 予定を 1 件追加する。固定タイムアウトは掛けない。
+    ///
+    /// コールバック型の OS（macOS・iOS・Android）では、[`platform_calendar`](crate::platform_calendar) が返す実装は
+    /// OS の完了まで呼び出しスレッドを塞ぐ。待ちの終わり方は、OS の結果が届く・同時に 1 件のため先行があれば `Internal("calendar busy")` で
+    /// 即座に戻る・Android の Activity 再生成か、別スレッドが同じ id を打ち切ったときに `Internal("calendar reset")` で戻る、のいずれか。OS のコールバックが失われると
+    /// 戻らない。待ちを打ち切りたいときは [`begin_add_event`](crate::begin_add_event) /
+    /// [`poll_add_event`](crate::poll_add_event) / [`discard_add_event`](crate::discard_add_event) を使う。
+    /// discard した要求は「未確定」で、失敗ではない。OS 側で後から保存されうる（結果は届かず、id で照合して捨てる）。
+    /// OS が進行中の間は次の要求を `busy` で断る（重複して保存しないため）。
+    ///
+    /// 守らない範囲: OS の結果が届かないまま失われると、プロセス終了（Android は再生成の reset）まで busy が続く。重複保存を避けるための上限。
     fn add_event(&self, draft: &EventDraft) -> Result<AddEventOutcome, CalendarError>;
 }
 

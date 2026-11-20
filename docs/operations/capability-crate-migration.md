@@ -839,3 +839,21 @@ macOS・iOS・Android は同期の `platform_share_sheet` で OS まで届く。
 | discard | 共有 UI は閉じず、進行中でも slot の記録を消す（後から届く結果は id の照合で捨てる） |
 | 失われた要求 | 画面側は固定文言（`LOST`）の失敗で終える。公開側の poll は slot から消えた要求に `Err(Internal)` を 1 度だけ返す |
 | ホストのテスト | `bridge` を `test` でもコンパイルし、結果の変換・受け取り待ち・discard・lost・同じ poll でのキャンセルを確かめる |
+
+## 33. 同期入口の待ちを打ち切れるようにする（#1304）
+
+calendar の `platform_calendar().add_event` と live-activity の `run_live_activity` は、OS の完了まで期限なしで待つ
+（期限で失敗を返すと、後から OS 側で保存・開始が起き、再試行で重複するため）。macOS・iOS で OS のコールバックが失われると、
+呼び出し側のスレッドが戻らず、後続の要求も busy で断られ続けた。§8.2 の begin / poll / discard を足して、呼び出し側が待ちを打ち切れるようにした。
+
+| 項目 | 扱い |
+| --- | --- |
+| 入口 | calendar は `begin_add_event(&EventDraft)`・`poll_add_event`・`discard_add_event`（macOS・iOS・Android。ほかは `Unsupported`・`None`・`false`）。live-activity は `begin_live_activity(op)`・`poll_live_activity`・`discard_live_activity`。crate ルートから出す |
+| 同期の入口 | 残す。`begin` と同じ経路で始め、`PublicEntry::wait` が結果か失われた要求まで待つ。doc に「OS の完了まで待つ。打ち切りたいときは begin / poll / discard を使う」と書いた |
+| 共通部品 | `fandhe_runtime::request_slot::PublicEntry`。`RequestSlot` と `SlotOwner` の上に、公開入口の持ち主の印と poll・discard の直列化だけを足した（各 crate に複製していた `WAITERS`・`begin_external`・`cancel_external` を消した）。#1450 で app-badge・passkey-signin・notification も載せる |
+| slot | 結果は OS の生の値（`Result<AddEventOutcome, CalendarError>`・`Result<LiveOutcome, LiveActivityError>`）で置き、画面が取り出すときに写す。画面は `begin_excluding(&[PUBLIC])` と `poll_and_finish_owned`、公開入口は `begin_parking`（前例は compose-mail-sms） |
+| 未確定 | `poll` が `None` のまま `discard` した要求。失敗ではなく、OS 側で後から完了しうる。結果は届かない（id で照合して捨てる） |
+| busy | 進行中の要求（画面経由を含む）と公開側の未取得の結果は、どちらの開始も `Internal("… busy")` で断る。discard は OS の操作を取り消さず、OS の結果が届くまで slot を残す（完了の通知が来るまで記録を消さない）。OS の結果が届かないままなら、プロセス終了まで busy のまま残る（天井。Android は `reset` で解ける） |
+| 失われた要求 | Android の再生成の `reset` で消えた要求は、`poll`（同期の待ちを含む）が `Internal("… reset")` を 1 度だけ返す |
+| 旧版からの変更 | 画面の slot は画面用の結果（`AddOutcome`・`LiveResult`）ではなく生の値を持つ。画面が Android の再生成の `reset` で要求を失ったときは、失敗で終える |
+| ホストのテスト | `bridge` を `test` でもコンパイルし、打ち切り・遅れて届いた結果の破棄・次の要求・画面との排他・同期の待ちの復帰を確かめる |

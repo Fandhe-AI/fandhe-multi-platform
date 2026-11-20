@@ -10,7 +10,7 @@
       "status": "done",
       "api": "ActivityKit（`Activity<Attributes>.request(attributes:content:pushType:)` / `update` / `end`、iOS 16.1+）。表示は Widget Extension の `ActivityConfiguration`（SwiftUI）",
       "url": "https://developer.apple.com/documentation/activitykit",
-      "note": "Swift 薄層（`@_cdecl`）と Widget Extension で実装。`Activity` は Swift 専用 API のため `build.rs` が swiftc で静的ライブラリ化して C ABI で呼ぶ。拡張はシミュレータ向けバンドルにだけ `PlugIns/` として同梱する。実機ビルドは拡張を同梱せず、開始は `Unsupported` を返す（成功に見せない）。理由は実機の署名手順がアプリ 1 つ分しか無いこと。追跡は #293。ユーザーがライブアクティビティを無効にしていると `PermissionDenied`、利用者が閉じた後の更新は `Dismissed`。守る範囲: 1 プロセス内の要求と完了の順序（main actor の直列チェーン）、失敗を成功へ倒さない、`ActivityAuthorizationError` の全種の写像。守らない範囲: プロセス死後の表示の残り（次回起動で片付ける）、利用者が閉じてから次の操作までの表示の食い違い、OS が描画へ反映するまでの時間差、iOS の 8 時間上限",
+      "note": "Swift 薄層（`@_cdecl`）と Widget Extension で実装。`Activity` は Swift 専用 API のため `build.rs` が swiftc で静的ライブラリ化して C ABI で呼ぶ。拡張はシミュレータ向けバンドルにだけ `PlugIns/` として同梱する。実機ビルドは拡張を同梱せず、開始は `Unsupported` を返す（成功に見せない）。理由は実機の署名手順がアプリ 1 つ分しか無いこと。追跡は #293。ユーザーがライブアクティビティを無効にしていると `PermissionDenied`、利用者が閉じた後の更新は `Dismissed`。守る範囲: 1 プロセス内の要求と完了の順序（main actor の直列チェーン）、失敗を成功へ倒さない、`ActivityAuthorizationError` の全種の写像。守らない範囲: プロセス死後の表示の残り（次回起動で片付ける）、利用者が閉じてから次の操作までの表示の食い違い、OS が描画へ反映するまでの時間差、iOS の 8 時間上限。 画面の外からの入口: 同期の `run_live_activity` は OS の完了まで待つ。待ちを打ち切るときは `begin_live_activity` / `poll_live_activity` / `discard_live_activity` を使う（discard した要求は未確定で、OS 側で後から完了しうる。結果は id で照合して捨て、OS が進行中の間は次の要求を busy で断る）。守らない範囲: OS の結果が届かないまま失われると、プロセス終了（Android は再生成の reset）まで busy が続く。重複保存・重複開始を避けるための上限",
       "sourceName": [
         "ライブアクティビティ"
       ],
@@ -22,7 +22,7 @@
       "status": "done",
       "api": "進行中通知 `NotificationCompat.Builder.setOngoing(true)` + `setProgress`。タグ付きの固定 ID 通知 1 件、専用チャンネル `IMPORTANCE_LOW`。Live Updates（API 36）は使わない",
       "url": "https://developer.android.com/develop/ui/views/notifications/live-update",
-      "note": "実装済み（Issue #296）。数値 1 つの開始・更新・終了、同時 1 件。API 24〜25 は Unsupported。拒否・通知オフ・チャンネルブロックは PermissionDenied。更新時に通知が無ければ Dismissed（再投稿しない）。終了は冪等で許可を求めない。Cancelled は出さない。再生成時と起動時は保留中の要求を破棄し、通知を閉じる。守る範囲: 1 プロセス内の要求順序・拒否/通知オフを成功に畳まないこと・通知の解放。守らない範囲: 利用者が閉じてから次の操作までの画面表示の食い違い、OEM 独自の表示規則。Live Updates への昇格は範囲外（compileSdk 36 と androidx.core の引き上げが要る）",
+      "note": "実装済み（Issue #296）。数値 1 つの開始・更新・終了、同時 1 件。API 24〜25 は Unsupported。拒否・通知オフ・チャンネルブロックは PermissionDenied。更新時に通知が無ければ Dismissed（再投稿しない）。終了は冪等で許可を求めない。Cancelled は出さない。再生成時と起動時は保留中の要求を破棄し、通知を閉じる。守る範囲: 1 プロセス内の要求順序・拒否/通知オフを成功に畳まないこと・通知の解放。守らない範囲: 利用者が閉じてから次の操作までの画面表示の食い違い、OEM 独自の表示規則。Live Updates への昇格は範囲外（compileSdk 36 と androidx.core の引き上げが要る）。 画面の外からの入口: 同期の `run_live_activity` は OS の完了まで待つ。待ちを打ち切るときは `begin_live_activity` / `poll_live_activity` / `discard_live_activity` を使う（discard した要求は未確定で、OS 側で後から完了しうる。結果は id で照合して捨て、OS が進行中の間は次の要求を busy で断る）。守らない範囲: OS の結果が届かないまま失われると、プロセス終了（Android は再生成の reset）まで busy が続く。重複保存・重複開始を避けるための上限",
       "detail": "できている（Android 実機確認待ち）",
       "implStatus": "Android 実機確認待ち（#293）",
       "impl": "crates/fandhe-cap-live-activity/src/android.rs + crates/fandhe-cap-live-activity/android/java/com/fandhe/platform/LiveActivityHelper.java + crates/fandhe-cap-live-activity/src/driver.rs + crates/fandhe-core/src/screens/live_activity_show.rs + crates/fandhe-cap-live-activity/src/contract.rs、Issue #296"
