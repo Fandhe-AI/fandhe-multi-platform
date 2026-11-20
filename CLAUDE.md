@@ -48,6 +48,7 @@ fandhe-multi-platform/
 ├── docs/
 │   ├── spec/                    # 仕様書サブモジュール（読み取り専用・別リポ管理）
 │   │                             # REQ-N / TASK-N.M・マイルストーン M1〜M6
+│   ├── guide/                   # 利用者向けの導入手順（getting-started.md）
 │   ├── architecture/            # 設計文書（責務分界・IME・トークン・Web・SwiftUI ブリッジ等）
 │   ├── environment/             # 開発環境のセットアップ手順
 │   ├── device/                  # 端末機能の対応表（SSOT は capabilities/*.json、生成物は git 管理外）
