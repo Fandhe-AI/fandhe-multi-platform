@@ -53,8 +53,9 @@ fn row_images_effect(
     for i in 0..state.names.len() {
         let key = ri::image_key(i);
         if !fandhe_runtime::image_store::contains(&key) {
-            fandhe_runtime::image_store::put(key, ri::demo_pixels(i));
-            put_any = true;
+            // 置けなかった（予算いっぱい）ときは起こさない。この画面の行は小さな画素で、予算に収まる。
+            put_any |= fandhe_runtime::image_store::put(key, ri::demo_pixels(i))
+                == fandhe_runtime::image_store::PutResult::Stored;
         }
     }
     if put_any {

@@ -2087,8 +2087,8 @@ mod tests {
                 .collect()
         }
         let px = |c: u8| fandhe_core::RgbaPixels::new(1, 1, vec![c, 0, 0, 255]).unwrap();
-        fandhe_runtime::image_store::put("web-row:1".into(), px(10));
-        fandhe_runtime::image_store::put("web-row:2".into(), px(200));
+        let _ = fandhe_runtime::image_store::put("web-row:1".into(), px(10));
+        let _ = fandhe_runtime::image_store::put("web-row:2".into(), px(200));
         let screen: Screen<CounterState> = Screen::new("t").list(rows);
         let dom = build_dom_tree(&screen, &empty_state(), 0);
         let mut found = Vec::new();
@@ -2140,22 +2140,22 @@ mod tests {
         };
         let encodes = || ENCODES.with(|e| e.get());
 
-        fandhe_runtime::image_store::put("web-cache:a".into(), px(2, 2));
+        let _ = fandhe_runtime::image_store::put("web-cache:a".into(), px(2, 2));
         let before = encodes();
         assert_eq!(tag("web-cache:a").as_deref(), Some("img"));
         assert_eq!(tag("web-cache:a").as_deref(), Some("img"));
         assert_eq!(encodes(), before + 1, "同じ通し番号では作り直さない");
 
-        fandhe_runtime::image_store::put("web-cache:a".into(), px(2, 2));
+        let _ = fandhe_runtime::image_store::put("web-cache:a".into(), px(2, 2));
         assert_eq!(tag("web-cache:a").as_deref(), Some("img"));
         assert_eq!(encodes(), before + 2, "置き直せば作り直す");
 
         // 512 x 513 は上限を超える。data URL にせず alt の div（符号化もしない）。
-        fandhe_runtime::image_store::put("web-cache:big".into(), px(512, 513));
+        let _ = fandhe_runtime::image_store::put("web-cache:big".into(), px(512, 513));
         assert_eq!(tag("web-cache:big").as_deref(), Some("div"));
         assert_eq!(encodes(), before + 2, "大きすぎる画像は符号化しない");
         // 上限ちょうどは img のまま。
-        fandhe_runtime::image_store::put("web-cache:max".into(), px(512, 512));
+        let _ = fandhe_runtime::image_store::put("web-cache:max".into(), px(512, 512));
         assert_eq!(tag("web-cache:max").as_deref(), Some("img"));
 
         // 保管所から消えた識別子の覚えは、次の参照で捨てる。

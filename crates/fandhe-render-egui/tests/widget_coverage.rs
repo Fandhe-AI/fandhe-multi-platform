@@ -127,7 +127,7 @@ fn walk(shape: &egui::Shape, count: &mut usize, text: &mut String) {
 #[test]
 fn rendered_or_not() {
     // `.image()` が描くのは識別子が保管所に一致するときだけなので、先に置く。
-    fandhe_render_egui::image_store::put(
+    let _ = fandhe_render_egui::image_store::put(
         "img-1290".into(),
         RgbaPixels::new(1, 1, vec![255u8; 4]).unwrap(),
     );

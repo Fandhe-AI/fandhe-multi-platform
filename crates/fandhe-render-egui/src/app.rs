@@ -472,7 +472,7 @@ impl<S> ProxyApp<S> {
     /// 取り出して `StateStore::apply` へ渡す。
     pub fn completion_sender(&self) -> CompletionSender<S> {
         CompletionSender::new(self.completions_tx.clone(), self.waker.clone())
-            .with_timers(self.timers.clone())
+            .with_timers(&self.timers)
     }
 
     /// window insets 供給関数を注入する（Issue #579、`fandhe` の `src/entry/android.rs` からのみ呼ばれる）。
@@ -549,6 +549,9 @@ impl<S: 'static> EguiApp for ProxyApp<S> {
     /// この 1 メソッド内で順に行う（PR #306 CI 是正: rustc 1.88 互換の egui/eframe
     /// 0.33 系へダウングレードしたことに伴う API 差分の追随）。
     fn update(&mut self, ctx: &egui::Context) {
+        // 画像の保管所へフレームの区切りを知らせる。このフレームで描かれた画像は、フレーム末尾の effect の `put` でも
+        // 追い出されない（見えている行が alt との間でちらつかない。`image_store::begin_frame` 参照、#1291）。
+        fandhe_runtime::image_store::begin_frame();
         // 外部 I/O 完了の反映はフレーム先頭・単一スレッド（UI スレッド）に限定し、
         // `dispatch`（描画内のボタン処理等）との書き込み競合を避ける（Issue #745）。
         drain_completions(&mut self.store, &self.completions_rx);

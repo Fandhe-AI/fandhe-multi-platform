@@ -122,6 +122,16 @@ fn failure_message(e: &PhotoPickerError) -> String {
     }
 }
 
+/// 画素を `image_store` へ置く。置けなかった（今見えている（今のフレームで描かれた）画像だけで予算いっぱいのとき。`PutResult::RejectedOverBudget`）ときは、
+/// 画像を見せられないので成功にせず失敗の文言にする（嘘の成功の禁止）。見えている画像が減っていれば、次に選び直したときに置ける。
+/// モバイルで OS の選択画面を出している間は描画ループが止まり `frame` が進まないので、出す直前に見えていた画像が「今のフレーム」のまま残る。
+fn store_shown(source: String, image: fandhe_core::RgbaPixels) -> Result<String, String> {
+    match image_store::put(source.clone(), image) {
+        image_store::PutResult::Stored => Ok(source),
+        image_store::PutResult::RejectedOverBudget => Err("画像を表示できませんでした".to_string()),
+    }
+}
+
 /// 選択 → 復号確認までを行い 3 値へ写す。キャンセルは `Ok(None)`。
 #[cfg(any(test, not(any(target_os = "ios", target_os = "android"))))]
 fn pick_and_decode(picker: &dyn PhotoPicker) -> Result<Option<Decoded>, String> {
@@ -429,21 +439,21 @@ fn drive_mobile(state: &PhotoPickState, sender: &CompletionSender<PhotoPickState
                     "photo_picker outcome",
                 ))),
             };
-            let result = result.map(|opt| {
+            let result = result.and_then(|opt| {
                 opt.map(|d| {
                     // 画素を先に置いてから成功を届ける（届いた時点で描ける）。
                     // ponytail: slot が参照を持つため表示用複製（<= 1024px、約 4 MiB）を 1 回 clone する。
                     // 気になれば `Arc<ColorImage>` を `image_store` が受けるようにする。
                     let source = format!("fandhe.photo:{generation}");
-                    image_store::put(source.clone(), d.image.clone());
-                    ShownPhoto {
+                    store_shown(source, d.image.clone()).map(|source| ShownPhoto {
                         source,
                         format: d.format.to_string(),
                         size: d.size,
                         width: d.width,
                         height: d.height,
-                    }
+                    })
                 })
+                .transpose()
             });
             finish_pick(s, generation, result);
             true
@@ -470,19 +480,19 @@ fn drive(
     image_store::remove_prefix("fandhe.photo:");
     let _ = sender.send(Box::new(mark_picking));
 
-    let result = pick_and_decode(picker).map(|opt| {
+    let result = pick_and_decode(picker).and_then(|opt| {
         opt.map(|d| {
             // 画素を先に置いてから成功を届ける（届いた時点で描ける）。
             let source = format!("fandhe.photo:{generation}");
-            image_store::put(source.clone(), d.image);
-            ShownPhoto {
+            store_shown(source, d.image).map(|source| ShownPhoto {
                 source,
                 format: d.format.to_string(),
                 size: d.size,
                 width: d.width,
                 height: d.height,
-            }
+            })
         })
+        .transpose()
     });
     let _ = sender.send(Box::new(move |s: &mut PhotoPickState| {
         finish_pick(s, generation, result);

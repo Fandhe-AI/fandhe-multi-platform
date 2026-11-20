@@ -36,10 +36,11 @@
 //! - 期限を**延ばしたい**ときは、キーに世代を含め（`format!("reset:{}", s.copy_count)`）、適用するクロージャが
 //!   状態の世代と照合して古ければ何もしない。同じキーの予約は延びないため、世代違いのキーで積む。
 //! - 戻り値は `Result<`[`Armed`]`, `[`TimerRefused`]`>`。`Ok(AlreadyPending)` は同じキーが残っていた正常な結果で、
-//!   `Err(Full | TooFar)` は**積まれていない**（件数が [`MAX_PENDING`] に達した・期限が時計の範囲を超えた）。
+//!   `Err(Full | TooFar | Closed)` は**積まれていない**（件数が [`MAX_PENDING`] に達した・期限が時計の範囲を超えた・持ち主が破棄済み）。
 //!   毎フレーム呼ぶ effect は `Err` を捨てずに扱う（ログに出す・状態に失敗を持つ等。黙って時間で戻らなくなる）。
 //! - キーのうち `fandhe.` で始まるものはフレームワークが使う。利用者は使わない。
-//! - 予約は描画ループの持ち主ごと。アプリ（ウィンドウ・マウント）が破棄されれば予約も一緒に消え、
+//! - 予約は描画ループの持ち主ごと。表の持ち主は `ProxyApp` だけで、sender は表を**弱く**参照する。
+//!   アプリが破棄されれば予約も（予約のクロージャが抱えた sender の複製・資源ごと）解放され、以後の `after` は `Err(Closed)`。
 //!   破棄後に状態へ適用されることはない。画面を切り替えても予約は消えない。画面が要らなくなる状態では
 //!   effect が [`cancel_timer`](crate::CompletionSender::cancel_timer) するか、適用側で状態を見て何もしない。
 //! - 起床は期限の瞬間ちょうどに来るとは限らない（OS・描画ループの粒度）。早く起きて期限前だったときは、
@@ -73,6 +74,10 @@ pub enum TimerRefused {
     Full,
     /// 期限が時計の範囲を超える（`Instant` に足せない）。
     TooFar,
+    /// 表の持ち主（描画ループの持ち主。`ProxyApp`）が破棄済み、または表につながっていない送信側。
+    /// 外のワーカーが sender を持ち続けていても、破棄後の予約はここで断る（予約も、予約が抱えた資源も残らない）。
+    /// 守らない範囲: 破棄と重なった呼び出し（表を取った直後に持ち主が破棄された）は `Ok` を返しても発火しない。
+    Closed,
 }
 
 impl std::fmt::Display for TimerRefused {
@@ -80,6 +85,7 @@ impl std::fmt::Display for TimerRefused {
         f.write_str(match self {
             TimerRefused::Full => "timer table is full",
             TimerRefused::TooFar => "timer delay is too far",
+            TimerRefused::Closed => "timer owner is closed",
         })
     }
 }
@@ -92,7 +98,8 @@ struct Slot<S> {
     completion: Completion<S>,
 }
 
-/// キー付きの予約表。`CompletionSender`（effect 側）と描画ループの持ち主（[`drain_timers`]）が `Arc` で共有する。
+/// キー付きの予約表。持ち主（描画ループの持ち主。`ProxyApp`）が `Arc` を持ち、`CompletionSender`（effect 側）は `Weak` で
+/// 参照する（予約のクロージャが sender の複製を抱えても循環しない）。持ち主が [`drain_timers`] で流す。
 pub struct Timers<S> {
     slots: Mutex<Vec<Slot<S>>>,
 }

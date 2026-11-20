@@ -174,17 +174,21 @@ fn apply_outcome(s: &mut ScannerDevicesImportState, generation: u64, outcome: Ou
             let d = &img.decoded;
             // 画素を先に置いてから成功を届ける（届いた時点で描ける）。
             let source = format!("fandhe.scanner:{generation}");
-            image_store::put(source.clone(), d.image.clone());
-            Ok(ShownImage {
-                source,
-                kind: match img.kind {
-                    DeviceKind::Camera => CoreKind::Camera,
-                    DeviceKind::Scanner => CoreKind::Scanner,
-                },
-                found: img.found,
-                width: d.width,
-                height: d.height,
-            })
+            // 置けなかった（今見えている（今のフレームで描かれた）画像だけで予算いっぱいのとき。`PutResult::RejectedOverBudget`）ときは、画像を見せられないので
+            // 成功にせず失敗で確定する。見えている画像が減っていれば次の取り込みで置ける。
+            match image_store::put(source.clone(), d.image.clone()) {
+                image_store::PutResult::Stored => Ok(ShownImage {
+                    source,
+                    kind: match img.kind {
+                        DeviceKind::Camera => CoreKind::Camera,
+                        DeviceKind::Scanner => CoreKind::Scanner,
+                    },
+                    found: img.found,
+                    width: d.width,
+                    height: d.height,
+                }),
+                image_store::PutResult::RejectedOverBudget => Err(CoreFailure::Failed),
+            }
         }
         Err(f) => Err(to_core_failure(f)),
     };

@@ -22,15 +22,25 @@
 
 ### 追加
 
+- `image_store::begin_frame()`（`ProxyApp` がフレーム冒頭で呼ぶ）: このフレームですでに描かれた画像は、フレーム末尾の effect などの
+  `put` で追い出さない（追い出す順は、描かれていない画像、足りなければ前のフレームだけで描かれた画像。新しく置いた画像は後者に入れ、
+  ページ送りで置いたばかりの画像どうしが追い出し合わない）。守らない範囲: `begin_frame` の後、行がまだ描かれていない間に届く
+  復号スレッドの `put` では、見えている行が一時的に alt になりうる。今のフレームで描かれた
+  画像だけで予算いっぱいのときは、何も追い出さずに今置く画像のほうを捨てる。呼ばなければ純粋な LRU
+- `image_store::put` が `PutResult`（`Stored` / `RejectedOverBudget`。`#[must_use]`）を返す。`RejectedOverBudget` は画像が保管所に入って
+  いない（`contains` が偽）ことを表すので、effect は失敗として扱い読み直さない（`image_store` の doc の例）。写真選択・書類スキャン・
+  スキャナーのドライバは、置けなかったとき成功にせず失敗として確定する
 - `image_store`: 識別子ごとに複数枚を保持。`remove`・`remove_prefix`・`contains`（順位を上げない確認）・`BUDGET_BYTES`（合計 64 MiB。
-  超えたら最後に描かれたのが古い画像から捨てる。今置いた 1 枚は残すため、実際の上限は 64 MiB + 直前の 1 枚）。`.list()` は全行を描くので、
+  超えたら最後に描かれたのが古い画像から捨てる。`begin_frame` が呼ばれていなければ今置いた 1 枚は残すため、実際の上限は 64 MiB + 直前の 1 枚。
+  呼ばれていれば、今置く画像が置けないことがあり（`put` の直後でも `contains` が偽）、上限は描かれた画像の合計と予算の大きいほう）。`.list()` は全行を描くので、
   全行の合計を収めるか `.virtual_list()` を使う
 - `CompletionSender::after(key, delay, impl FnOnce(&mut S) + Send + 'static) -> Result<Armed, TimerRefused>`・`cancel_timer(key)`。
-  `Ok(Armed::New)` は積んだ、`Ok(Armed::AlreadyPending)` は同じキーが残っていた（正常）、`Err(Full | TooFar)` は積まれていない
-  （同時の予約が 1024 件に達した・期限が時計の範囲を超えた）。戻り値は `#[must_use]` で、`Err` を捨てると警告になる。
+  `Ok(Armed::New)` は積んだ、`Ok(Armed::AlreadyPending)` は同じキーが残っていた（正常）、`Err(Full | TooFar | Closed)` は積まれていない
+  （同時の予約が 1024 件に達した・期限が時計の範囲を超えた・アプリが破棄済み）。戻り値は `#[must_use]` で、`Err` を捨てると警告になる。
   同じキーの予約が残る間の呼び出しは何もしないため、effect で毎フレーム「状態がこうなら予約する」と書ける。
-  期限は単調時計（`web-time`）で測り、`ProxyApp` がフレーム先頭で適用する。アプリの破棄で予約も消える
-- `CompletionSender::with_timers`、`fandhe_runtime::timer::{Timers, drain_timers}`: 予約表を描画ループの持ち主と共有して流すための口
+  期限は単調時計（`web-time`）で測り、`ProxyApp` がフレーム先頭で適用する。表の持ち主は `ProxyApp` だけで、sender は弱く参照する
+  （予約のクロージャが sender の複製を抱えても循環しない。アプリの破棄で予約・捕まえた資源が解放される）
+- `CompletionSender::with_timers(&Arc<Timers>)`、`fandhe_runtime::timer::{Timers, drain_timers}`: 予約表を描画ループの持ち主と共有して流すための口
   （`ProxyApp` は配線済みで、利用者は通常使わない）
 - web-dom は `image_store` に画素がある `ImageWidget` を `img`（PNG の data URL）で出す。`(識別子, 通し番号)` で URL を覚え
   （合計バイト数に上限。足すたびに保管所に無い識別子を捨て、超えたら古いものから 1 件ずつ捨てる）、
@@ -43,8 +53,10 @@
 1. 1 枚だけ置いて「前の画像は置き換えで消える」ことに頼っていた effect は、不要になった画像を `remove` / `remove_prefix` で捨てる
    （捨てなくても合計 64 MiB を超えれば古い順に捨てられる）
 2. `set_on_clear` を使っていたレンダラ実装は `set_on_remove` へ（引数が識別子になる）
-3. `CompletionSender::new` は従来のまま使えるが、`after` の予約を流すのは `with_timers` で渡した表を `drain_timers` するループの持ち主だけ
-   （`ProxyApp` は配線済み）
+3. `CompletionSender::new` は従来のまま使えるが、`with_timers` で表につないでいない sender の `after` は `Err(Closed)` で断る。
+   予約を流すのは `with_timers(&Arc<Timers>)` で渡した表を `drain_timers` するループの持ち主だけ（`ProxyApp` は配線済み）
+4. `image_store::put` の戻り値（`PutResult`、`#[must_use]`）を扱う。`let _ =` で捨てると、置けなかった識別子を毎フレーム復号し直す
+   ことになりうる（`image_store` の doc の例のように、置けなかったら失敗として読み直さない）
 
 `.icon()` / `.icon_bound()` を egui・web-dom で描かれるようにし、名前を文字列から列挙型 `IconName` へ変える（Issue #1437）。
 

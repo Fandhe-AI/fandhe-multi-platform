@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-pub use fandhe_runtime::image_store::{clear, put, remove, remove_prefix};
+pub use fandhe_runtime::image_store::{begin_frame, clear, put, remove, remove_prefix, PutResult};
 
 /// GPU へ上げ済みのテクスチャと、その元になった保管所の通し番号。
 struct Cached {
@@ -93,8 +93,8 @@ mod tests {
         clear();
         assert!(texture(&ctx, "user:1").is_none());
 
-        put("user:1".into(), img());
-        put("user:2".into(), img());
+        let _ = put("user:1".into(), img());
+        let _ = put("user:2".into(), img());
         assert!(texture(&ctx, "user:3").is_none(), "識別子が違えば描かない");
         let t1 = texture(&ctx, "user:1").unwrap();
         let t2 = texture(&ctx, "user:2").unwrap();
@@ -106,7 +106,7 @@ mod tests {
         );
         assert_eq!(cached(), 2);
 
-        put("user:1".into(), img());
+        let _ = put("user:1".into(), img());
         assert_ne!(
             texture(&ctx, "user:1").unwrap().id(),
             t1.id(),
@@ -122,19 +122,19 @@ mod tests {
         assert_eq!(cached(), 0, "clear で GPU 側も捨てる");
 
         // 保管所に無くなった識別子の登録は、`get` が `None` を返した時点で捨てる（競合で取りこぼしたフックの保険）。
-        put("race:1".into(), img());
+        let _ = put("race:1".into(), img());
         assert!(texture(&ctx, "race:1").is_some());
         assert_eq!(cached(), 1);
         assert!(texture_with(&ctx, "race:1", |_| None).is_none());
         assert_eq!(cached(), 0, "get が None なら登録も消える");
 
         // 容量超過の追い出しでもフックが呼ばれ、GPU 側のテクスチャが減る。
-        put("evict:0".into(), img());
+        let _ = put("evict:0".into(), img());
         assert!(texture(&ctx, "evict:0").is_some());
         assert_eq!(cached(), 1);
         let big = |c: u8| RgbaPixels::new(2048, 2048, vec![c; 2048 * 2048 * 4]).unwrap();
         for k in 0..5 {
-            put(format!("evict:big:{k}"), big(k));
+            let _ = put(format!("evict:big:{k}"), big(k));
         }
         assert!(
             fandhe_runtime::image_store::get("evict:0").is_none(),

@@ -90,3 +90,32 @@ fn state_reverts_after_delay_and_periodic_update_repeats() {
         TICKS.load(SeqCst)
     );
 }
+
+/// アプリを破棄すれば、予約のクロージャが抱えた sender の複製と資源も解放される（`Timers → クロージャ → sender → Timers` の
+/// 循環にならない）。外のワーカーが sender を持ち続けていても、破棄後の `after` は断られる。
+#[test]
+fn dropping_the_app_frees_timers_even_if_they_hold_the_sender() {
+    let ctx = egui::Context::default();
+    let app = ProxyApp::with_screen_fn(&ctx, screen, St::default());
+    let sender = app.completion_sender();
+    let resource = std::sync::Arc::new(());
+
+    let (captured_sender, captured_res) = (sender.clone(), resource.clone());
+    sender
+        .after("k", Duration::from_secs(60), move |_: &mut St| {
+            let _ = (&captured_sender, &captured_res);
+        })
+        .expect("積める");
+    assert_eq!(std::sync::Arc::strong_count(&resource), 2);
+
+    drop(app);
+    assert_eq!(
+        std::sync::Arc::strong_count(&resource),
+        1,
+        "アプリの破棄で予約と捕まえた資源が解放される"
+    );
+    assert_eq!(
+        sender.after("again", Duration::from_secs(1), |_: &mut St| {}),
+        Err(fandhe_runtime::TimerRefused::Closed)
+    );
+}

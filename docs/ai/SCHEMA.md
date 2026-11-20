@@ -1248,17 +1248,26 @@ fn effect(s: &State, sender: &CompletionSender<State>) {
         let (sender, bytes) = (sender.clone(), item.bytes.clone());
         std::thread::spawn(move || {
             let mut guard = Guard { key, ok: false };
-            if let Some(px) = decode(&bytes) { image_store::put(guard.key.clone(), px); guard.ok = true; }
+            if let Some(px) = decode(&bytes) {
+                // 置けたときだけ成功にする。RejectedOverBudget（予算に収まらない）は ok を立てず、Guard が failed に入れる
+                guard.ok = image_store::put(guard.key.clone(), px) == PutResult::Stored;
+            }
+            let stored = guard.ok;
             drop(guard);
-            let _ = sender.send(Box::new(|_: &mut State| {})); // 描画を起こす
+            if stored { let _ = sender.send(Box::new(|_: &mut State| {})); } // 描画を起こす（置けなかったときは起こさない）
         });
     }
 }
 ```
 
+effect は**今必要な識別子だけ**を置く（上の例の `state.items` は、`virtual_list` なら見えている範囲に絞る。全件を毎フレーム置くと、
+予算に収まらない分を置いては追い出す復号の繰り返しになる）。
 同じ形の `effect`（`Book { pending, failed }` と `Guard`）は `fandhe-runtime` の `image_store` の module doc にあり、doctest で型検査される。
-失敗した識別子（`failed`）は読み直さない。やり直したいときは `failed` から外す。
-縮小済みの小さな画素なら、スレッドを使わず effect の中で同期的に `put` してよい（`put` の直後に `contains` が真になるため
+失敗した識別子（`failed`）は読み直さない。やり直したいときは条件が変わってから（行が見えなくなった・別の画像を `remove` した等）
+`failed` から外す。
+`put` は `PutResult`（`#[must_use]`）を返す。`RejectedOverBudget` は**画像が保管所に入っていない**（`contains` は偽のまま）ことを表すので、
+例のように `ok` を立てず `failed` へ入れ、再描画も起こさない（読み直すと、復号と再描画が止まらなくなる）。
+縮小済みの小さな画素なら、スレッドを使わず effect の中で同期的に `put` してよい（置けたとき（`Stored`）は直後に `contains` が真なので
 二重にならない。参照実装は `crates/fandhe-gallery/src/screens/registry.rs` の `row_images_effect`）。
 
 - **保管所**: `fandhe_runtime::image_store`。`put(識別子, RgbaPixels)` は同じ識別子なら置き換え、別の識別子は残す。
@@ -1267,12 +1276,29 @@ fn effect(s: &State, sender: &CompletionSender<State>) {
 - **識別子の名前空間**: `fandhe.` で始まる識別子（`fandhe.photo:`・`fandhe.scan:`・`fandhe.scanner:`）と、`fandhe.` で始まる
   予約キー（`CompletionSender::after` のキー）はフレームワークが使う。利用者は使わない
 - **容量**: CPU 側の画素の合計は 64 MiB（`BUDGET_BYTES`）が目安。超えると最後に描かれた（`get` された）のが古い画像から捨てる。
-  今 `put` した 1 枚は捨てないため、実際の上限は「64 MiB + 直前の 1 枚（最大約 16 MiB）」。egui の GPU テクスチャも同時に捨てる。
+  egui の GPU テクスチャも同時に捨てる。上限は `begin_frame` の有無で変わる。
+  - **`begin_frame` が呼ばれていない**（`render_screen` を自前のループで呼ぶ場合など）: 純粋な LRU。今 `put` した 1 枚は捨てないため、
+    実際の上限は「64 MiB + 直前の 1 枚（最大約 16 MiB）」で、`put` の直後は `contains` が真
+  - **呼ばれている**（`ProxyApp` はフレームの冒頭で `image_store::begin_frame()` を呼ぶ）: 今のフレームで描かれた（見えている）
+    画像は、フレーム末尾の effect などが `put` しても追い出されない（このフレームですでに描かれた画像に限る）。追い出す順は 2 段: 描かれていない画像（古い順）、
+    足りなければ前のフレームだけで描かれた画像（スクロールで外れた行。古い順。新しく置いた画像もここに入るので、ページ送りで置いたばかりの画像どうしが
+    追い出し合わない）。1 行スクロールした直後の `put` は置ける。`begin_frame` の後で行がまだ描かれていない間に届く復号スレッドの `put` は、見えている行を
+    2 段目の候補として扱うため、その行が一時的に alt になりうる（守らない範囲）。
+    **今のフレームで描かれた画像だけで予算いっぱい**のとき（今置く画像を足すと予算を超える）は、**何も追い出さずに今置く画像のほうを捨てる**
+    （`PutResult::RejectedOverBudget`。この場合は `put` の直後でも `contains` が偽で、その行は alt のまま。見えている行が減るまで置けない）。
+    上限は「今のフレームで描かれた画像の合計と予算の大きいほう」。予算を超えて保持するのは、**描かれている画像の差し替え**で今のフレームの
+    合計が予算を超えたときに限る（まだ無い行の画像は捨てられ、alt のまま）
   - `.virtual_list()`: 見えている行だけを描くので、スクロールで外れた行から消える。長い一覧はこちら
   - `.list()`: 毎フレーム**全行**を描くので、「画面外から消える」は起きない。全行の画像の合計が 64 MiB を超えると、描いている
     行どうしが互いを追い出し合う。`.list()` の行の画像は、縮小済みの小さな画素（数十〜数百 px 角）で全行の合計を 64 MiB に収める。
     収まらないなら `.virtual_list()` を使う
   - 捨てられた行は alt の文字に戻り、effect が `contains` で気づいて `put` し直せば画像に戻る
+  - **守らない範囲**: 写真選択・書類スキャン・スキャナーの画像（`fandhe.photo:`・`fandhe.scan:`・`fandhe.scanner:`）も同じ保管所にある。
+    行の画像を多く置くと追い出されうる。ドライバは置き直さないので、次に選ぶ・撮るまで alt の文字のままになる（表示だけの欠け）。
+    ドライバの `put` が置けなかった（`RejectedOverBudget` = **今見えている（今のフレームで描かれた）画像だけで予算いっぱい**のとき）は、
+    画像を見せられないので成功にせず失敗として確定する（写真選択は「画像を表示できませんでした」、書類スキャンは `Internal`、
+    スキャナーは `Failed`）。見えている画像が減っていれば、次に選ぶ・撮るときに置ける。モバイルで OS の選択画面を出している間は描画ループが
+    止まり `frame` が進まないので、出す直前に見えていた画像が「今のフレーム」のまま残る（それらで予算いっぱいでなければ影響しない）
 - **形式**: 保管所が受けるのは復号済みの `RgbaPixels`（RGBA8・辺 1〜2048 px）だけで、形式は問わない。フレームワークが復号を同梱するのは次の範囲
   - PNG: workspace の `image` crate（feature `png`）
   - JPEG: 写真選択・書類スキャンが使う `fandhe-device` の feature `display-decode`（`decode_for_display`。辺 1024 px 以下へ縮める）
@@ -1478,8 +1504,8 @@ fn effect(s: &State, sender: &CompletionSender<State>) {
 ```
 
 - **戻り値**: `Result<Armed, TimerRefused>`。`Ok(Armed::New)` は新しく積んだ、`Ok(Armed::AlreadyPending)` は同じキーが残っていた
-  正常な結果（何もしていない）。`Err(TimerRefused::Full | TooFar)` は**予約が積まれていない**（件数の上限・
-  期限が時計の範囲を超える）。時間で戻る表示が黙って戻らなくなるので、`Err` は握りつぶさずログに出す・状態に失敗を持つ等で扱う
+  正常な結果（何もしていない）。`Err(TimerRefused::Full | TooFar | Closed)` は**予約が積まれていない**（件数の上限・
+  期限が時計の範囲を超える・アプリが破棄済み）。時間で戻る表示が黙って戻らなくなるので、`Err` は握りつぶさずログに出す・状態に失敗を持つ等で扱う
   （型は `fandhe_runtime::timer`。`#[non_exhaustive]` なので `match` には `_` の腕を置く）
 - **レベルトリガで書く**: 「状態がこうなら予約する」を毎フレーム書く。同じキーの二重予約はされないため、
   「要求済み」「処理中」の二段の状態は要らない。状態が先に変わったときは `cancel_timer(key)` で取り下げる
@@ -1490,7 +1516,9 @@ fn effect(s: &State, sender: &CompletionSender<State>) {
   `Err(TooFar)`（頭打ちにしない）
 - **時計**: 呼んだ時点から単調時計で測る（システム時刻の変更で狂わない）。期限は早くても過ぎてから適用され、
   起床が早すぎたときは残り時間で起床を予約し直す。スレッドを作らないので wasm（egui）でも同じに動く
-- **キャンセル・破棄**: 予約は `ProxyApp`（アプリ）ごと。アプリが破棄されれば予約も消え、破棄後に適用されない。
+- **キャンセル・破棄**: 予約は `ProxyApp`（アプリ）ごと。表の持ち主は `ProxyApp` だけで、`CompletionSender` は表を弱く参照する。
+  アプリが破棄されれば予約も、予約のクロージャが抱えた sender の複製・捕まえた資源ごと解放され（循環しない）、破棄後に適用されない。
+  外のワーカーが sender を持ち続けていても、破棄後の `after` は `Err(Closed)`
   画面を切り替えても予約は消えないので、画面が要らなくなった状態では effect が `cancel_timer` するか、
   適用するクロージャが状態を見て何もしないようにする
 - **web-dom**: 時間で変わる表示を書く口は今は無い（`CompletionSender::after` は egui 経路用。egui は wasm でも同じ経路を通る）

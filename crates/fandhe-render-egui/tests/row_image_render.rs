@@ -92,7 +92,10 @@ fn rows_show_their_own_images_and_evicted_ones_fall_back_to_alt() {
 
     // 行ごとに別の画像を置くと、行ごとに別のテクスチャが出る（旧版は最後の 1 枚だけ）。
     for i in 0..3 {
-        fandhe_runtime::image_store::put(format!("rowimg-test:{i}"), solid(8, 40 * (i as u8 + 1)));
+        let _ = fandhe_runtime::image_store::put(
+            format!("rowimg-test:{i}"),
+            solid(8, 40 * (i as u8 + 1)),
+        );
     }
     let (n, text) = paint(&ctx, &screen);
     assert_eq!(n, 3, "3 行に 3 枚: {text}");
@@ -113,7 +116,7 @@ fn rows_show_their_own_images_and_evicted_ones_fall_back_to_alt() {
     // 容量を超える大きな画像を置くと、最後に使われたのが古い行から捨てられ、その行は alt に戻る。
     let big = |c| solid(2048, c); // 約 16 MiB。上限 64 MiB を超えるまで置く
     for k in 0..5 {
-        fandhe_runtime::image_store::put(format!("rowimg-big:{k}"), big(k as u8));
+        let _ = fandhe_runtime::image_store::put(format!("rowimg-big:{k}"), big(k as u8));
     }
     let (_, text) = paint(&ctx, &screen);
     assert!(

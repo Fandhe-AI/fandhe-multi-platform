@@ -430,15 +430,20 @@ fn apply_outcome(s: &mut DocumentScanShowState, generation: u64, outcome: Outcom
             }
             // 画素を先に置いてから成功を届ける（届いた時点で描ける）。
             let source = format!("fandhe.scan:{generation}");
-            image_store::put(source.clone(), d.image.clone());
-            Ok(CoreOutcome::Scanned(ShownPage {
-                source,
-                format: d.format.to_string(),
-                size: d.size,
-                width: d.width,
-                height: d.height,
-                page_count: scan.page_count,
-            }))
+            // 置けなかった（今見えている（今のフレームで描かれた）画像だけで予算いっぱいのとき。`PutResult::RejectedOverBudget`）ときは、画像を見せられないので
+            // 成功にせず失敗で確定する。見えている画像が減っていれば次の撮影で置ける。モバイルで撮影 UI を出している間は描画ループが止まり
+            // `frame` が進まないので、出す直前に見えていた画像が「今のフレーム」のまま残る。
+            match image_store::put(source.clone(), d.image.clone()) {
+                image_store::PutResult::Stored => Ok(CoreOutcome::Scanned(ShownPage {
+                    source,
+                    format: d.format.to_string(),
+                    size: d.size,
+                    width: d.width,
+                    height: d.height,
+                    page_count: scan.page_count,
+                })),
+                image_store::PutResult::RejectedOverBudget => Err(CoreFailure::Internal),
+            }
         }
         Err(f) => Err(to_core_failure(f)),
     };
