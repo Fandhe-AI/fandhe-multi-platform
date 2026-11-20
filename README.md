@@ -18,6 +18,7 @@ iOS / Android / Android TV / iPad / watchOS / Vision Pro / macOS / Windows / Lin
 
 | ディレクトリ | 内容 |
 | --- | --- |
+| `docs/guide/` | 利用者向けの導入手順（新規作成・機能の追加・実行・配布） |
 | `docs/architecture/` | 設計文書（責務分界・IME・トークン・Web・SwiftUI ブリッジ等） |
 | `docs/environment/` | 開発環境のセットアップ手順（Android NDK・Apple Developer） |
 | `docs/operations/` | 運用手順書（ビルドパイプライン・署名・上流クレート監視） |
@@ -28,7 +29,10 @@ iOS / Android / Android TV / iPad / watchOS / Vision Pro / macOS / Windows / Lin
 
 ## 使い方
 
-デスクトップでサンプル画面を起動します。
+自分のアプリを作る手順（新規作成・端末機能の追加・権限の説明文・各 OS での実行・配布）は
+[`docs/guide/getting-started.md`](./docs/guide/getting-started.md) を参照してください。
+
+以下は本リポジトリのサンプルを動かす手順です。デスクトップでサンプル画面を起動します。
 
 ```bash
 cargo run -p fandhe-gallery
