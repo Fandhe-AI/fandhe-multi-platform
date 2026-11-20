@@ -169,12 +169,14 @@ fn effect(s: &Share, tx: &CompletionSender<Share>) {
             },
             Err(message) => message.to_string(),
         };
+        // コピーし直したら、前の結果の予約を取り下げる（下の after が新しい結果から 2 秒で予約し直す）。
+        tx.cancel_timer("status-reset");
         let _ = tx.send(Box::new(move |s: &mut Share| {
             s.copy_requested = false;
             s.status = status;
         }));
     }
-    // 表示が出ている間は毎フレーム呼んでよい（同じキーの予約が残っていれば何もしない）。
+    // 表示が出ている間は毎フレーム呼んでよい（同じキーの予約が残っていれば何もしない。期限は延びない）。
     if !s.status.is_empty() {
         if let Err(e) = tx.after("status-reset", Duration::from_secs(2), |s: &mut Share| {
             s.status.clear()
