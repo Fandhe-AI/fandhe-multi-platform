@@ -6,6 +6,8 @@
 //! 呼び出し元: 利用側（`fandhe-gallery` の `screens/registry.rs`）が [`calendar_add_effect`] を画面
 //! （`fandhe_core::screens::calendar_add`）の effect として登録する。Activity 再生成では gallery の
 //! `android_main` から Android 限定の `reset_pending_tracking` を呼ぶ。egui・`fandhe-device` には依存しない。
+//! 画面の外からは、OS の完了まで待つ同期の [`platform_calendar`] と、待ちを打ち切れる [`begin_add_event`] /
+//! [`poll_add_event`] / [`discard_add_event`] を使う（打ち切った要求は OS 側で後から保存されうる）。
 //!
 //! 守る範囲と守らない範囲は `contract.rs` の契約を参照。
 
@@ -31,9 +33,9 @@ pub mod driver;
 mod error;
 
 pub use contract::*;
-pub use driver::platform_calendar;
 #[cfg(target_os = "android")]
 pub use driver::reset_pending_tracking;
+pub use driver::{begin_add_event, discard_add_event, platform_calendar, poll_add_event};
 // OS 実装（`apple.rs` 等）が crate 直下の名前で使うドライバ内の共有の状態・関数。
 #[allow(unused_imports)]
 pub(crate) use driver::*;

@@ -47,6 +47,14 @@
   画素数が 512 x 512 を超える画像は data URL にせず alt の `div` にする
 - gallery の `row-images` 画面
 - 画像形式の対応範囲と形式を足す手順（`docs/ai/SCHEMA.md` パターン 7-4）、時間で状態を変える書き方（同 9-2）
+- `fandhe_runtime::request_slot::PublicEntry`（begin / poll / discard / abort / wait）と `RequestSlot::is_current` / `is_pending`:
+  画面の外の同期入口が OS の完了まで待ち続け、コールバックが失われると呼び出し側のスレッドが止まる問題（Issue #1304）への共通部品。
+  `RequestSlot` と `SlotOwner` の上に、公開入口が追う自分の分の印と poll・discard の直列化だけを足した
+- 機能 crate `fandhe-cap-calendar` に `begin_add_event` / `poll_add_event` / `discard_add_event`（macOS・iOS・Android。ほかは `Unsupported`）、
+  `fandhe-cap-live-activity` に `begin_live_activity` / `poll_live_activity` / `discard_live_activity`。同期の
+  `platform_calendar().add_event` と `run_live_activity` は残し、同じ経路の上で OS の完了まで待つ。待ちを打ち切りたいときは begin と poll と discard を使う。
+  discard した要求は OS 側で後から完了しうる（未確定）。後から届いた結果は id で照合して捨て、OS が進行中の間は次の開始を busy にする
+- 画面（calendar・live-activity）が Android の再生成の `reset` で要求を失ったとき、「処理中」のまま止まらず失敗で終える
 
 ### 移行手順
 
