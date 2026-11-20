@@ -23,7 +23,8 @@ iOS / Android / Android TV / iPad / watchOS / Vision Pro / macOS / Windows / Lin
 | `docs/environment/` | 開発環境のセットアップ手順（Android NDK・Apple Developer） |
 | `docs/operations/` | 運用手順書（ビルドパイプライン・署名・上流クレート監視） |
 | `docs/device/` | 端末機能の対応表（SSOT は `capabilities/*.json`） |
-| `docs/ai/SCHEMA.md` | AI 向けメタ情報 |
+| `docs/ai/SCHEMA.md` | AI 向けメタ情報（画面の書き方） |
+| `skills/fandhe-app/` | 利用者のアプリで AI に画面と端末機能を書かせるスキル（入れ方は `docs/guide/getting-started.md` 11 節） |
 | `docs/tokens/` | デザイントークン（定義・参照ガイド） |
 | `docs/ime/` | IME 使用ガイド |
 
@@ -31,6 +32,7 @@ iOS / Android / Android TV / iPad / watchOS / Vision Pro / macOS / Windows / Lin
 
 自分のアプリを作る手順（新規作成・端末機能の追加・権限の説明文・各 OS での実行・配布）は
 [`docs/guide/getting-started.md`](./docs/guide/getting-started.md) を参照してください。
+AI（Claude Code 等）に画面と端末機能を書かせるときは、同書 11 節のとおりスキル `fandhe-app` をアプリへ入れます。
 
 以下は本リポジトリのサンプルを動かす手順です。デスクトップでサンプル画面を起動します。
 
