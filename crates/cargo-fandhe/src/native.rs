@@ -1324,7 +1324,7 @@ pub(crate) fn app_root(meta: &Value) -> Result<(PathBuf, Value, Value), Vec<Stri
 /// `manifest`（省略時はカレントのパッケージ）のアプリが選んだ機能から、ネイティブ設定を生成する。
 /// 宣言・入力に問題が 1 件でもあれば何も返さない（check と同じ厳しさ）。書き出しは [`write`]。
 pub fn generate(manifest: Option<&Path>) -> Result<Generated, Vec<String>> {
-    generate_for(manifest, None, None).map(|(g, _)| g)
+    generate_for(manifest, None, None, IOS_TRIPLE).map(|(g, _)| g)
 }
 
 /// Android の分だけ生成する（`cargo fandhe run|build --os android` 用の内部入口）。iOS・macOS の殻の必須条件を検査しない。
@@ -1334,16 +1334,18 @@ pub(crate) fn generate_android(
     manifest: Option<&Path>,
     gen_dir: PathBuf,
 ) -> Result<(Generated, ShellInput), Vec<String>> {
-    generate_for(manifest, Some("android"), Some(gen_dir))
+    generate_for(manifest, Some("android"), Some(gen_dir), IOS_TRIPLE)
 }
 
 /// iOS の分だけ生成する（`cargo fandhe run|build --os ios` 用の内部入口、#1424）。Android・macOS の必須条件を検査しない。
+/// 依存は `triple`（ビルドと同じシミュレータの triple）で解く。`target_abi = "sim"` などで分けた依存も、ビルドと同じ集合で設定を作る。
 /// 出力先は `gen_dir`（アプリの `gen/` には触れない）。bundle id は戻りの [`ShellInput`] に入る。
 pub(crate) fn generate_ios(
     manifest: Option<&Path>,
     gen_dir: PathBuf,
+    triple: &str,
 ) -> Result<(Generated, ShellInput), Vec<String>> {
-    generate_for(manifest, Some("ios"), Some(gen_dir))
+    generate_for(manifest, Some("ios"), Some(gen_dir), triple)
 }
 
 /// 殻（run・build が target 配下に作る Gradle プロジェクト・`.app`）へ渡すアプリの入力。gen の出力には入らない。
@@ -1359,23 +1361,26 @@ fn generate_for(
     manifest: Option<&Path>,
     only: Option<&str>,
     gen_dir: Option<PathBuf>,
+    ios_triple: &str,
 ) -> Result<(Generated, ShellInput), Vec<String>> {
-    let (mut g, shell, dir) = generate_parts(manifest, only, gen_dir)?;
+    let (mut g, shell, dir) = generate_parts(manifest, only, gen_dir, ios_triple)?;
     apply_eject(&dir, only, &mut g.files, &mut g.notes)?;
     Ok((g, shell))
 }
 
 /// eject の差し替え前の生成結果と、アプリの crate のディレクトリ。`--eject` の書き出し元（生成値そのもの）でもある。
+/// `ios_triple` は iOS の依存を解く triple（gen は実機向け、`run|build --os ios` はシミュレータ向け）。
 fn generate_parts(
     manifest: Option<&Path>,
     only: Option<&str>,
     gen_dir: Option<PathBuf>,
+    ios_triple: &str,
 ) -> Result<(Generated, ShellInput, PathBuf), Vec<String>> {
     let mut sets: Vec<Vec<Found>> = Vec::new();
     let mut app: Option<(PathBuf, Value, Value)> = None;
     for (os, triple) in [
         ("android", ANDROID_TRIPLE),
-        ("ios", IOS_TRIPLE),
+        ("ios", ios_triple),
         ("macos", MACOS_TRIPLE),
     ] {
         if only.is_some_and(|o| o != os) {
@@ -1642,7 +1647,7 @@ pub fn eject(manifest: Option<&Path>, rels: &[String]) -> Result<Vec<PathBuf>, V
     // android/ だけを書き出すなら Android の分だけ生成する（iOS の bundle-id が無いアプリでも使える）。
     let only =
         (!rels.is_empty() && rels.iter().all(|r| r.starts_with("android/"))).then_some("android");
-    let (g, _, dir) = generate_parts(manifest, only, None)?;
+    let (g, _, dir) = generate_parts(manifest, only, None, IOS_TRIPLE)?;
     let mut errs = Vec::new();
     let mut plan = Vec::new();
     for rel in rels.iter().collect::<BTreeSet<_>>() {

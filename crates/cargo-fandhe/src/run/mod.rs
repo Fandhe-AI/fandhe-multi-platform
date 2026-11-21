@@ -27,7 +27,7 @@ use std::process::Command;
 
 use crate::native::{
     app_root, generate_android, generate_ios, generate_web, shell_overlay, AppInfo, ANDROID_TRIPLE,
-    EJECT_NOTE, IOS_TRIPLE, WEB_MANIFEST_PATH, WEB_TRIPLE,
+    EJECT_NOTE, WEB_MANIFEST_PATH, WEB_TRIPLE,
 };
 use crate::workspace::run_metadata;
 
@@ -84,7 +84,7 @@ impl Os {
         match self {
             Os::Web => Some(WEB_TRIPLE),
             Os::Android => Some(ANDROID_TRIPLE),
-            Os::Ios => Some(IOS_TRIPLE),
+            Os::Ios => Some(ios::host_simulator_triple()),
             Os::Macos | Os::Windows | Os::Linux => None,
         }
     }
@@ -449,7 +449,11 @@ pub fn load_app(opts: &Options, os: Os) -> Result<App, Vec<String>> {
         Os::Ios => {
             // Android と同じく、gen の出力はアプリの `gen/` ではなく成果物の置き場へ出す。
             let gen_dir = out_dir(&app, Os::Ios).join("gen");
-            let (g, shell) = generate_ios(opts.manifest.as_deref(), gen_dir)?;
+            let (g, shell) = generate_ios(
+                opts.manifest.as_deref(),
+                gen_dir,
+                ios::host_simulator_triple(),
+            )?;
             for n in g.notes.iter().filter(|n| n.starts_with(EJECT_NOTE)) {
                 eprintln!("{n}");
             }

@@ -1886,3 +1886,28 @@ fn info_plist_checks_read_only_the_top_dict() {
         .expect("足せる")
         .contains("<string>com.example.app</string>"));
 }
+
+#[test]
+fn ios_gen_resolves_dependencies_with_the_simulator_triple() {
+    // シミュレータでだけ効く依存（`target_abi = "sim"`）の宣言も、ビルドと同じく設定に入る。
+    let m = standalone(
+        "ios-sim-dep",
+        "[target.'cfg(all(target_os = \"ios\", target_abi = \"sim\"))'.dependencies]\n\
+         fandhe-cap-cam = { path = \"cam\" }\n\n\
+         [package.metadata.fandhe-app.ios]\nbundle-id = \"com.example.app\"\n\n\
+         [package.metadata.fandhe-app.ios.usage-descriptions]\nNSCameraUsageDescription = \"camera\"\n",
+    );
+    let cam = m.parent().expect("親").join("cam");
+    std::fs::create_dir_all(cam.join("src")).expect("作成");
+    std::fs::write(cam.join("src/lib.rs"), "").expect("書き込み");
+    std::fs::write(
+        cam.join("Cargo.toml"),
+        "[package]\nname = \"fandhe-cap-cam\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n\
+         [package.metadata.fandhe]\nid = \"cam\"\n\n\
+         [package.metadata.fandhe.ios]\nusage-descriptions = [\"NSCameraUsageDescription\"]\n",
+    )
+    .expect("書き込み");
+    let app = load(&m, Os::Ios).unwrap_or_else(|e| panic!("{e:?}"));
+    let plist = &app.ios_gen.as_ref().expect("生成済み")["ios/Info.plist"];
+    assert!(plist.contains("NSCameraUsageDescription"), "{plist}");
+}

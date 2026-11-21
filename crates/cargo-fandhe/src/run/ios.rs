@@ -22,7 +22,7 @@ use std::hash::{Hash, Hasher};
 use std::path::Path;
 
 use super::{output_of, Action, App, Env, Op, Options, Step};
-use crate::native::{esc_xml, IOS_MIN_VERSION};
+use crate::native::{esc_xml, IOS_MIN_VERSION, IOS_TRIPLE};
 
 /// gen の出力のうち本体の Info.plist と entitlements（`gen/` からの相対）。
 const INFO_PLIST: &str = "ios/Info.plist";
@@ -127,6 +127,12 @@ pub(crate) fn simulator_triple(arch: &str) -> Option<&'static str> {
         "x86_64" => Some("x86_64-apple-ios"),
         _ => None,
     }
+}
+
+/// この cargo-fandhe が動く CPU のシミュレータの triple。`load_app` の metadata と iOS の gen が、
+/// ビルド（[`simulator_triple`]）と同じ依存集合を使うために使う。対応しない CPU は実機向けで代用する（`prepare` が止める）。
+pub(crate) fn host_simulator_triple() -> &'static str {
+    simulator_triple(std::env::consts::ARCH).unwrap_or(IOS_TRIPLE)
 }
 
 /// 実環境を観測する。`commands` は PATH 上にあったコマンド名。

@@ -96,7 +96,8 @@ cargo fandhe run|build [--os macos|windows|linux|web|android|ios] [--release] [-
 - Xcode プロジェクトを持たず、xcodebuild にも委譲しません（#1201）。`.app` と gen の出力は `<target_dir>/fandhe/<package 名>/ios/` に置きます
   （`<package 名>.app` と `gen/`。アプリの `gen/` には触れません）。`.app` は cargo が成功したあとに作り直します（コンパイルに失敗しても前回の `.app` は残ります）
 - gen は iOS の分だけ生成します（Android の application-id・macOS の bundle-id が無くても止まりません）。`eject/ios/` のファイルも通ります
-- target はホストの CPU で決めます（Apple silicon は `aarch64-apple-ios-sim`、Intel は `x86_64-apple-ios`）
+- target はホストの CPU で決めます（Apple silicon は `aarch64-apple-ios-sim`、Intel は `x86_64-apple-ios`）。
+  設定の生成（機能の宣言を集める依存の解決）も同じ triple で行うため、`target_abi = "sim"` で分けた依存もビルドと同じ集合になります
 - Info.plist は gen の出力に `CFBundleSupportedPlatforms`（`iPhoneSimulator`）を最上位の dict の末尾へ足したものです。
   gen はシミュレータか実機かを知らないため出しません。eject した Info.plist や `info-plist` の追記に既にあれば止めます
 - 最終の Info.plist の `CFBundleIdentifier`・`CFBundleExecutable`・`MinimumOSVersion` が、Cargo.toml の bundle-id・bin 名・17.0 と違えば止めます。
