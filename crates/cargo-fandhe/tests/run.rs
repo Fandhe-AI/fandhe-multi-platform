@@ -1,4 +1,4 @@
-//! `cargo fandhe run|build` の手順の組み立てと前提検査のテスト（Issue #1422）。
+//! `cargo fandhe run|build` の手順の組み立てと前提検査のテスト（Issue #1422・#1423・#1424）。
 //!
 //! 入力は fandhe-gallery の実メタデータ（`load_app`）と、引数で与える環境のスナップショット。
 //! 手順の組み立て（`prepare`）では実行せず、「何を書き、何を実行するか」と「何が足りないと止まるか」を固定する。
@@ -8,8 +8,9 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use cargo_fandhe::run::{
-    execute, load_app, parse_adb_devices, parse_args, prepare, Action, AndroidEnv, App, Env, Op,
-    Options, Os, Step,
+    check_os, execute, load_app, parse_adb_devices, parse_args, parse_booted_simulators, prepare,
+    run_cli, simulator_entitlements, simulator_info_plist, Action, AndroidEnv, App, Env, IosEnv,
+    Op, Options, Os, Simulator, Step,
 };
 
 const SECRET: &str = "/secret-cargo-path-7f3a";
@@ -24,6 +25,7 @@ fn opts(action: Action, os: Os, release: bool) -> Options {
         os: Some(os),
         release,
         manifest: Some(gallery_manifest()),
+        device: false,
     }
 }
 
@@ -38,6 +40,7 @@ fn env(host: Os, cmds: &[&str], bindgen: &str) -> Env {
         installed_targets: Some(BTreeSet::from(["wasm32-unknown-unknown".to_string()])),
         wasm_bindgen_version: Some(bindgen.to_string()),
         android: AndroidEnv::default(),
+        ios: IosEnv::default(),
         cargo: SECRET.into(),
     }
 }
@@ -395,6 +398,7 @@ fn load(m: &Path, os: Os) -> Result<App, Vec<String>> {
         os: Some(os),
         release: false,
         manifest: Some(m.to_path_buf()),
+        device: false,
     };
     load_app(&o, os)
 }
@@ -504,6 +508,7 @@ fn execute_writes_copies_and_recreates_directories() {
         Op::Copy {
             from: src.join("a.txt"),
             to: out.join("c/a2.txt"),
+            within: t.join("target"),
         },
     ])
     .expect("通る");
@@ -1157,7 +1162,7 @@ fn step_env_reaches_the_child_process() {
 }
 
 #[test]
-fn detect_env_reads_rust_targets_for_web_and_android_only() {
+fn detect_env_reads_rust_targets_for_web_android_and_ios_only() {
     use cargo_fandhe::run::detect_env;
     if std::process::Command::new("rustup")
         .arg("--version")
@@ -1166,7 +1171,7 @@ fn detect_env_reads_rust_targets_for_web_and_android_only() {
     {
         return; // rustup が無い環境では観測されない（検査は飛ばす仕様）
     }
-    for os in [Os::Web, Os::Android] {
+    for os in [Os::Web, Os::Android, Os::Ios] {
         let e = detect_env(os, Action::Build);
         assert!(e.installed_targets.is_some(), "{os:?}");
     }
@@ -1314,4 +1319,628 @@ fn android_application_attributes_default_and_reserved_keys() {
         let e = load(&m, Os::Android).expect_err(k).join("\n");
         assert!(e.contains(k) && e.contains(hint), "{k}: {e}");
     }
+}
+
+// ---- iOS シミュレータ（#1424）----
+
+const UDID: &str = "00000000-0000-0000-0000-000000000001";
+
+fn sim(name: &str, version: (u32, u32)) -> Simulator {
+    Simulator {
+        udid: UDID.into(),
+        name: name.into(),
+        version,
+    }
+}
+
+/// すべてそろった iOS 環境（Apple silicon・起動中のシミュレータ 1 台）。
+fn ienv() -> Env {
+    let mut e = env(Os::Macos, &["rustup", "xcrun"], "0");
+    e.installed_targets = Some(BTreeSet::from(["aarch64-apple-ios-sim".to_string()]));
+    e.ios = IosEnv {
+        arch: "aarch64".into(),
+        sdk: true,
+        simctl: true,
+        booted: vec![sim("iPhone 17 Pro", (26, 5))],
+    };
+    e
+}
+
+fn ios_dir(app: &App) -> PathBuf {
+    app.target_dir.join("fandhe").join(&app.name).join("ios")
+}
+
+#[test]
+fn parse_args_accepts_ios_and_device_once() {
+    let o = parse_args(&["run", "--os", "ios", "--device"]).expect("解釈できる");
+    assert_eq!((o.os, o.device), (Some(Os::Ios), true));
+    assert!(!parse_args(&["build", "--os", "ios"]).expect("既定").device);
+    assert!(parse_args(&["run", "--device", "--device"]).is_none());
+}
+
+#[test]
+fn ios_build_sequence_for_gallery() {
+    let app = gallery(Os::Ios);
+    assert_eq!(app.bundle_id.as_deref(), Some("com.fandhe.iosapp"));
+    let files = app.ios_gen.as_ref().expect("生成する");
+    // gen は iOS の分だけ。
+    assert!(files
+        .keys()
+        .all(|k| !k.starts_with("android/") && !k.starts_with("macos/")));
+    let ops = prepare(&app, &opts(Action::Build, Os::Ios, false), &ienv()).expect("通る");
+    let dir = ios_dir(&app);
+    let bundle = dir.join("fandhe-gallery.app");
+    let within = app.target_dir.clone();
+    // gen（アプリの gen/ ではなく成果物の置き場）→ entitlements の置き場 → cargo → .app の作り直し → 実行体 → Info.plist → codesign。
+    assert!(
+        matches!(&ops[0], Op::Gen { dir: d, within: w, .. } if *d == dir.join("gen") && *w == within)
+    );
+    assert_eq!(
+        ops[1],
+        Op::Reset {
+            dir: dir.join("entitlements"),
+            within: within.clone()
+        }
+    );
+    let Op::Write {
+        path: ent, body, ..
+    } = &ops[2]
+    else {
+        panic!("entitlements を書くはず: {:?}", ops[2]);
+    };
+    // HealthKit はシミュレータでも application-identifier を見るため、bundle id を値として足したものを埋める。
+    assert_eq!(
+        body,
+        &simulator_entitlements(&files["ios/App.entitlements"], "com.fandhe.iosapp")
+            .expect("足せる")
+    );
+    assert!(
+        body.contains("<key>application-identifier</key>\n\t<string>com.fandhe.iosapp</string>")
+    );
+    assert!(ent.starts_with(dir.join("entitlements")));
+    let Op::Spawn(cargo) = &ops[3] else {
+        panic!("cargo のはず");
+    };
+    let ent = ent.display().to_string();
+    let mut want: Vec<String> = [
+        "rustc",
+        "--bin",
+        "fandhe-gallery-desktop",
+        "--target",
+        "aarch64-apple-ios-sim",
+        "--manifest-path",
+        &app.manifest.display().to_string(),
+        "--",
+    ]
+    .map(String::from)
+    .into();
+    for a in ["-sectcreate", "__TEXT", "__entitlements", &ent] {
+        want.extend([
+            "-C".into(),
+            "link-arg=-Xlinker".into(),
+            "-C".into(),
+            format!("link-arg={a}"),
+        ]);
+    }
+    assert_eq!(cargo.stage, "cargo");
+    assert_eq!(cargo.program, SECRET);
+    assert_eq!(cargo.args, want);
+    // gen の Info.plist の MinimumOSVersion と同じ最小 OS を cargo へ渡す。
+    assert_eq!(
+        cargo.env,
+        vec![("IPHONEOS_DEPLOYMENT_TARGET".to_string(), "17.0".into())]
+    );
+    assert!(
+        files["ios/Info.plist"].contains("<key>MinimumOSVersion</key>\n\t<string>17.0</string>")
+    );
+    assert_eq!(
+        ops[4],
+        Op::Reset {
+            dir: bundle.clone(),
+            within: within.clone()
+        }
+    );
+    assert_eq!(
+        ops[5],
+        Op::Copy {
+            from: app
+                .target_dir
+                .join("aarch64-apple-ios-sim/debug/fandhe-gallery-desktop"),
+            to: bundle.join("fandhe-gallery-desktop"),
+            within: within.clone(),
+        }
+    );
+    assert_eq!(
+        ops[6],
+        Op::Write {
+            path: bundle.join("Info.plist"),
+            within: within.clone(),
+            body: simulator_info_plist(&files["ios/Info.plist"]).expect("足せる"),
+        }
+    );
+    // entitlements は署名に入れない（ad-hoc 署名に制限付きの entitlements があるとシミュレータが起動を拒否する）。
+    assert_eq!(
+        ops[7],
+        Op::Spawn(Step {
+            stage: "codesign",
+            program: "codesign".into(),
+            args: vec![
+                "--force".into(),
+                "--sign".into(),
+                "-".into(),
+                "--timestamp=none".into(),
+                bundle.display().to_string()
+            ],
+            env: vec![],
+        })
+    );
+    // 拡張は組み込まず、その旨を出す。build は simctl を呼ばない。
+    assert!(ops
+        .iter()
+        .any(|o| matches!(o, Op::Say(m) if m.contains("FandheLiveActivity"))));
+    assert_eq!(
+        spawns(&ops).iter().map(|s| s.stage).collect::<Vec<_>>(),
+        ["cargo", "codesign"]
+    );
+}
+
+#[test]
+fn ios_run_installs_and_launches_on_the_booted_simulator() {
+    let app = gallery(Os::Ios);
+    let ops = prepare(&app, &opts(Action::Run, Os::Ios, true), &ienv()).expect("通る");
+    let bundle = ios_dir(&app).join("fandhe-gallery.app");
+    let steps = spawns(&ops);
+    assert_eq!(
+        steps.iter().map(|s| s.stage).collect::<Vec<_>>(),
+        ["cargo", "codesign", "simctl-install", "simctl-launch"]
+    );
+    // run でも cargo は build 相当（実行体はホストで動かない）。--release は release のディレクトリから写す。
+    assert!(steps[0].args.contains(&"--release".to_string()));
+    assert!(ops.iter().any(|o| matches!(o, Op::Copy { from, .. } if from.ends_with("aarch64-apple-ios-sim/release/fandhe-gallery-desktop"))));
+    assert_eq!(steps[2].program, "xcrun");
+    assert_eq!(
+        steps[2].args,
+        ["simctl", "install", UDID, &bundle.display().to_string()]
+    );
+    assert_eq!(
+        steps[3].args,
+        [
+            "simctl",
+            "launch",
+            "--terminate-running-process",
+            UDID,
+            "com.fandhe.iosapp"
+        ]
+    );
+}
+
+#[test]
+fn ios_target_follows_the_host_cpu() {
+    let app = gallery(Os::Ios);
+    let mut e = ienv();
+    e.ios.arch = "x86_64".into();
+    e.installed_targets = Some(BTreeSet::from(["x86_64-apple-ios".to_string()]));
+    let ops = prepare(&app, &opts(Action::Build, Os::Ios, false), &e).expect("通る");
+    assert!(spawns(&ops)[0]
+        .args
+        .contains(&"x86_64-apple-ios".to_string()));
+    e.ios.arch = "powerpc".into();
+    let p = errs(prepare(&app, &opts(Action::Build, Os::Ios, false), &e));
+    assert!(p.iter().any(|l| l.contains("powerpc")), "{p:?}");
+}
+
+#[test]
+fn ios_prerequisites_are_all_collected_one_line_each() {
+    let app = gallery(Os::Ios);
+    let run = opts(Action::Run, Os::Ios, false);
+    let mut e = ienv();
+    e.installed_targets = Some(BTreeSet::new());
+    e.ios.booted.clear();
+    let p = errs(prepare(&app, &run, &e));
+    assert_eq!(p.len(), 2, "{p:?}");
+    assert!(
+        p[0].contains("rustup target add aarch64-apple-ios-sim"),
+        "{p:?}"
+    );
+    assert!(
+        p[1].contains("起動中の iOS シミュレータがありません")
+            && p[1].contains("xcrun simctl boot"),
+        "{p:?}"
+    );
+    // Xcode の不足は段ごとに 1 行（xcrun → SDK → simctl）。
+    let mut e = ienv();
+    e.commands.remove("xcrun");
+    assert!(errs(prepare(&app, &run, &e))[0].contains("xcrun がありません"));
+    let mut e = ienv();
+    e.ios.sdk = false;
+    assert!(errs(prepare(&app, &run, &e))[0].contains("SDK が見つかりません"));
+    let mut e = ienv();
+    e.ios.simctl = false;
+    assert!(errs(prepare(&app, &run, &e))[0].contains("simctl が使えません"));
+    // build は simctl もシミュレータも要らない。
+    e.ios.booted.clear();
+    assert!(prepare(&app, &opts(Action::Build, Os::Ios, false), &e).is_ok());
+    // macOS 以外のホストでは、その 1 行だけ。
+    let mut e = ienv();
+    e.host = Some(Os::Linux);
+    e.commands.clear();
+    let p = errs(prepare(&app, &run, &e));
+    assert_eq!(p.len(), 1);
+    assert!(p[0].contains("macOS でだけ"), "{p:?}");
+    // 実機は未対応、--device は iOS だけ。
+    let mut dev = run.clone();
+    dev.device = true;
+    assert!(errs(prepare(&app, &dev, &ienv()))[0].contains("#1425"));
+    let mut dev = opts(Action::Build, Os::Macos, false);
+    dev.device = true;
+    assert!(errs(prepare(&gallery(Os::Macos), &dev, &ienv()))[0].contains("--os ios でだけ"));
+}
+
+#[test]
+fn ios_simulator_selection_branches() {
+    let app = gallery(Os::Ios);
+    let run = opts(Action::Run, Os::Ios, false);
+    let mut e = ienv();
+    // 最小 OS より古いものは数えない。使えるものが 1 台なら、それを選ぶ。
+    e.ios.booted = vec![
+        sim("Old", (16, 4)),
+        Simulator {
+            udid: "U2".into(),
+            ..sim("New", (17, 0))
+        },
+    ];
+    let ops = prepare(&app, &run, &e).expect("通る");
+    assert!(spawns(&ops)[2].args.contains(&"U2".to_string()));
+    e.ios.booted = vec![sim("Old", (16, 4))];
+    let p = errs(prepare(&app, &run, &e));
+    assert!(
+        p[0].contains("Old（iOS 16.4）") && p[0].contains("17.0"),
+        "{p:?}"
+    );
+    e.ios.booted = vec![sim("A", (26, 5)), sim("B", (18, 0))];
+    let p = errs(prepare(&app, &run, &e));
+    assert!(
+        p[0].contains("複数") && p[0].contains("A（iOS 26.5）・B（iOS 18.0）"),
+        "{p:?}"
+    );
+    // エラーに UDID を出さない。
+    assert!(!p[0].contains(UDID));
+}
+
+#[test]
+fn simulator_info_plist_adds_the_platform_inside_the_top_dict() {
+    let body = "<?xml version=\"1.0\"?>\n<plist version=\"1.0\">\n<dict>\n\t<key>A</key>\n\t<dict>\n\t</dict>\n</dict>\n</plist>\n";
+    let out = simulator_info_plist(body).expect("足せる");
+    assert_eq!(
+        out,
+        "<?xml version=\"1.0\"?>\n<plist version=\"1.0\">\n<dict>\n\t<key>A</key>\n\t<dict>\n\t</dict>\n\t<key>CFBundleSupportedPlatforms</key>\n\t<array>\n\t\t<string>iPhoneSimulator</string>\n\t</array>\n</dict>\n</plist>\n"
+    );
+    // 既にあれば（eject・追記）拒否、dict が無ければ拒否。
+    assert!(simulator_info_plist(&out)
+        .expect_err("拒否")
+        .contains("CFBundleSupportedPlatforms"));
+    assert!(simulator_info_plist("<plist/>").is_err());
+}
+
+#[test]
+fn entitlements_path_changes_with_its_content() {
+    // cargo はリンク引数が指すファイルの中身を見ないため、中身が変われば引数が変わり、再リンクされる。
+    let app = gallery(Os::Ios);
+    let o = opts(Action::Build, Os::Ios, false);
+    let link = |app: &App| {
+        spawns(&prepare(app, &o, &ienv()).expect("通る"))[0]
+            .args
+            .clone()
+    };
+    let mut other = app.clone();
+    other
+        .ios_gen
+        .as_mut()
+        .expect("生成済み")
+        .entry("ios/App.entitlements".into())
+        .and_modify(|b| b.push(' '));
+    assert_ne!(link(&app), link(&other));
+    assert_eq!(link(&app), link(&app.clone()));
+    // entitlements が無ければ追加引数も無い。
+    other
+        .ios_gen
+        .as_mut()
+        .expect("生成済み")
+        .remove("ios/App.entitlements");
+    let ops = prepare(&other, &o, &ienv()).expect("通る");
+    assert!(!spawns(&ops)[0].args.contains(&"--".to_string()));
+    assert!(!ops
+        .iter()
+        .any(|o| matches!(o, Op::Reset { dir, .. } if dir.ends_with("entitlements"))));
+}
+
+#[test]
+fn ios_requires_gen_output_bundle_id_and_one_bin() {
+    let mut app = gallery(Os::Ios);
+    app.ios_gen = None;
+    app.bundle_id = None;
+    app.bins.push("second".into());
+    let p = errs(prepare(&app, &opts(Action::Build, Os::Ios, false), &ienv()));
+    assert_eq!(p.len(), 3, "{p:?}");
+    for want in [
+        "iOS の gen 出力がありません",
+        "bundle id がありません",
+        "ちょうど 1 つ",
+    ] {
+        assert!(p.iter().any(|l| l.contains(want)), "{want}: {p:?}");
+    }
+}
+
+#[test]
+fn ios_generation_is_limited_to_ios_and_leaves_the_apps_gen_alone() {
+    let m = standalone(
+        "ios-only",
+        "[package.metadata.fandhe-app.ios]\nbundle-id = \"com.example.myapp\"\n",
+    );
+    let app = load(&m, Os::Ios).unwrap_or_else(|e| panic!("{e:?}"));
+    assert_eq!(app.bundle_id.as_deref(), Some("com.example.myapp"));
+    let files = app.ios_gen.as_ref().expect("生成する");
+    assert!(files["ios/Info.plist"].contains("<string>my-app-desktop</string>"));
+    assert!(files
+        .keys()
+        .all(|k| !k.starts_with("android/") && !k.starts_with("macos/")));
+    // 書き出しは成果物の置き場の gen/（アプリの gen/ ではない）。entitlements が無いので追加の引数も無い。
+    let ops = prepare(&app, &opts(Action::Build, Os::Ios, false), &ienv()).expect("通る");
+    assert!(matches!(&ops[0], Op::Gen { dir, .. } if *dir == ios_dir(&app).join("gen")));
+    assert!(!m.parent().expect("親").join("gen").exists());
+    // bundle-id が無ければ gen と同じ文言で止まる。
+    let e = load(&standalone("ios-nobid", ""), Os::Ios)
+        .expect_err("止まる")
+        .join("\n");
+    assert!(e.contains("bundle-id"), "{e}");
+}
+
+#[test]
+fn parses_simctl_booted_devices() {
+    let json = r#"{"devices": {
+        "com.apple.CoreSimulator.SimRuntime.iOS-26-5": [
+            {"udid": "A", "name": "iPhone", "state": "Booted", "isAvailable": true},
+            {"udid": "B", "name": "Off", "state": "Shutdown", "isAvailable": true},
+            {"udid": "C", "name": "Gone", "state": "Booted", "isAvailable": false}
+        ],
+        "com.apple.CoreSimulator.SimRuntime.watchOS-11-0": [
+            {"udid": "D", "name": "Watch", "state": "Booted", "isAvailable": true}
+        ],
+        "com.apple.CoreSimulator.SimRuntime.iOS-17": [
+            {"udid": "E", "name": "Pad", "state": "Booted"}
+        ]
+    }}"#;
+    let mut got = parse_booted_simulators(json);
+    got.sort_by(|a, b| a.udid.cmp(&b.udid));
+    assert_eq!(
+        got,
+        vec![
+            Simulator {
+                udid: "A".into(),
+                name: "iPhone".into(),
+                version: (26, 5)
+            },
+            Simulator {
+                udid: "E".into(),
+                name: "Pad".into(),
+                version: (17, 0)
+            },
+        ]
+    );
+    assert!(parse_booted_simulators("not json").is_empty());
+}
+
+#[test]
+fn check_os_refuses_device_and_non_mac_ios_before_reading_the_app() {
+    let o = |os: Os, device: bool| Options {
+        device,
+        ..opts(Action::Run, os, false)
+    };
+    assert!(check_os(&o(Os::Ios, true), Some(Os::Macos)).expect_err("止まる")[0].contains("#1425"));
+    for os in [Os::Android, Os::Macos, Os::Web] {
+        assert!(
+            check_os(&o(os, true), Some(Os::Macos)).expect_err("止まる")[0]
+                .contains("--os ios でだけ")
+        );
+    }
+    for host in [Some(Os::Linux), Some(Os::Windows), None] {
+        let p = check_os(&o(Os::Ios, false), host).expect_err("止まる");
+        assert_eq!(p.len(), 1);
+        assert!(p[0].contains("macOS でだけ"), "{p:?}");
+    }
+    assert_eq!(check_os(&o(Os::Ios, false), Some(Os::Macos)), Ok(Os::Ios));
+    assert_eq!(
+        check_os(&o(Os::Android, false), Some(Os::Linux)),
+        Ok(Os::Android)
+    );
+}
+
+#[test]
+fn run_cli_checks_os_before_loading_the_app() {
+    // 読めない manifest でも、--device・ホストの不足が gen（cargo metadata）のエラーより先に出る。
+    let bad = Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-such-app/Cargo.toml");
+    let o = |os: Os, device: bool| Options {
+        device,
+        manifest: Some(bad.clone()),
+        ..opts(Action::Build, os, false)
+    };
+    assert!(run_cli(&o(Os::Ios, true)).expect_err("止まる")[0].contains("#1425"));
+    assert!(run_cli(&o(Os::Android, true)).expect_err("止まる")[0].contains("--os ios でだけ"));
+    // ホストが macOS でなければ（CI の Linux）、gen より先にホストの 1 行で止まる。
+    if Os::host() != Some(Os::Macos) {
+        let p = run_cli(&o(Os::Ios, false)).expect_err("止まる");
+        assert_eq!(p.len(), 1);
+        assert!(p[0].contains("macOS でだけ"), "{p:?}");
+    }
+}
+
+/// gallery の gen の Info.plist の `key` の値を `to` に変える（eject で書き換えた Info.plist の代わり）。
+fn with_plist(app: &App, from: &str, to: &str) -> App {
+    let mut a = app.clone();
+    let p = a
+        .ios_gen
+        .as_mut()
+        .expect("生成済み")
+        .get_mut("ios/Info.plist")
+        .expect("Info.plist");
+    assert!(p.contains(from), "{from}");
+    *p = p.replace(from, to);
+    a
+}
+
+#[test]
+fn ejected_info_plist_must_match_bundle_id_bin_and_min_os() {
+    let app = gallery(Os::Ios);
+    let build = opts(Action::Build, Os::Ios, false);
+    for (from, to, key) in [
+        (
+            "<string>com.fandhe.iosapp</string>",
+            "<string>com.other.app</string>",
+            "CFBundleIdentifier",
+        ),
+        (
+            "<string>fandhe-gallery-desktop</string>",
+            "<string>other-bin</string>",
+            "CFBundleExecutable",
+        ),
+        (
+            "<string>17.0</string>",
+            "<string>18.0</string>",
+            "MinimumOSVersion",
+        ),
+        (
+            "<key>MinimumOSVersion</key>",
+            "<key>MinimumOSVersionX</key>",
+            "MinimumOSVersion",
+        ),
+    ] {
+        let p = errs(prepare(&with_plist(&app, from, to), &build, &ienv()));
+        assert_eq!(p.len(), 1, "{p:?}");
+        assert!(
+            p[0].contains(key) && p[0].contains("eject/ios/Info.plist"),
+            "{p:?}"
+        );
+    }
+    // XML のエスケープは戻して比べる（値そのものが同じなら通る）。
+    assert!(prepare(&app, &build, &ienv()).is_ok());
+}
+
+#[test]
+fn simulator_entitlements_adds_application_identifier_only_when_missing() {
+    let body = "<plist version=\"1.0\">\n<dict>\n\t<key>com.apple.developer.healthkit</key>\n\t<true/>\n</dict>\n</plist>\n";
+    let out = simulator_entitlements(body, "com.example.app").expect("足せる");
+    assert_eq!(
+        out,
+        "<plist version=\"1.0\">\n<dict>\n\t<key>com.apple.developer.healthkit</key>\n\t<true/>\n\t<key>application-identifier</key>\n\t<string>com.example.app</string>\n</dict>\n</plist>\n"
+    );
+    // 既にあれば（eject で書いた値）そのまま。
+    assert_eq!(
+        simulator_entitlements(&out, "com.other").expect("通る"),
+        out
+    );
+    assert!(simulator_entitlements("<plist/>", "com.example.app").is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn copy_refuses_destinations_outside_or_through_symlinks() {
+    let t = scratch("copy-within");
+    let within = t.join("target");
+    let victim = t.join("victim");
+    std::fs::create_dir_all(&within).expect("作成");
+    std::fs::create_dir_all(&victim).expect("作成");
+    std::fs::write(t.join("src.txt"), "s").expect("書き込み");
+    let copy = |to: PathBuf| {
+        execute(&[Op::Copy {
+            from: t.join("src.txt"),
+            to,
+            within: within.clone(),
+        }])
+    };
+    assert!(copy(t.join("outside.txt"))
+        .expect_err("拒否")
+        .contains("配下ではない"));
+    assert!(!t.join("outside.txt").exists());
+    std::os::unix::fs::symlink(&victim, within.join("link")).expect("link");
+    assert!(copy(within.join("link/a.txt"))
+        .expect_err("拒否")
+        .contains("symlink"));
+    assert!(!victim.join("a.txt").exists());
+    copy(within.join("ok/a.txt")).expect("配下は写せる");
+}
+
+#[test]
+fn info_plist_checks_read_only_the_top_dict() {
+    // 入れ子の dict（`info-plist` の追記）に同名キーが先に出ても、最上位の値で照合する。
+    let app = gallery(Os::Ios);
+    let build = opts(Action::Build, Os::Ios, false);
+    let nested = with_plist(
+        &app,
+        "<key>CFBundleExecutable</key>",
+        "<key>A</key>\n\t<dict>\n\t\t<key>CFBundleExecutable</key>\n\t\t<string>other</string>\n\t\t<key>CFBundleSupportedPlatforms</key>\n\t\t<array/>\n\t</dict>\n\t<key>CFBundleExecutable</key>",
+    );
+    assert!(prepare(&nested, &build, &ienv()).is_ok());
+    // 入れ子の application-identifier は最上位に足すのを妨げない。
+    let body = "<plist version=\"1.0\">\n<dict>\n\t<key>A</key>\n\t<dict>\n\t\t<key>application-identifier</key>\n\t\t<string>x</string>\n\t</dict>\n</dict>\n</plist>\n";
+    assert!(simulator_entitlements(body, "com.example.app")
+        .expect("足せる")
+        .contains("<string>com.example.app</string>"));
+}
+
+#[test]
+fn ios_gen_resolves_dependencies_with_the_simulator_triple() {
+    // シミュレータでだけ効く依存（`target_abi = "sim"`）の宣言も、ビルドと同じく設定に入る。
+    let m = standalone(
+        "ios-sim-dep",
+        "[target.'cfg(all(target_os = \"ios\", target_abi = \"sim\"))'.dependencies]\n\
+         fandhe-cap-cam = { path = \"cam\" }\n\n\
+         [package.metadata.fandhe-app.ios]\nbundle-id = \"com.example.app\"\n\n\
+         [package.metadata.fandhe-app.ios.usage-descriptions]\nNSCameraUsageDescription = \"camera\"\n",
+    );
+    let cam = m.parent().expect("親").join("cam");
+    std::fs::create_dir_all(cam.join("src")).expect("作成");
+    std::fs::write(cam.join("src/lib.rs"), "").expect("書き込み");
+    std::fs::write(
+        cam.join("Cargo.toml"),
+        "[package]\nname = \"fandhe-cap-cam\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n\
+         [package.metadata.fandhe]\nid = \"cam\"\n\n\
+         [package.metadata.fandhe.ios]\nusage-descriptions = [\"NSCameraUsageDescription\"]\n",
+    )
+    .expect("書き込み");
+    let app = load(&m, Os::Ios).unwrap_or_else(|e| panic!("{e:?}"));
+    let plist = &app.ios_gen.as_ref().expect("生成済み")["ios/Info.plist"];
+    assert!(plist.contains("NSCameraUsageDescription"), "{plist}");
+}
+
+#[test]
+fn empty_self_closing_top_dict_accepts_inserted_keys() {
+    // eject で entitlement をすべて消した `<dict/>` も有効な plist。展開してから足す。
+    let out = simulator_entitlements("<plist version=\"1.0\"><dict/></plist>", "com.example.app")
+        .expect("足せる");
+    assert_eq!(
+        out,
+        "<plist version=\"1.0\"><dict>\n\t<key>application-identifier</key>\n\t<string>com.example.app</string>\n</dict></plist>"
+    );
+    assert!(
+        simulator_info_plist("<plist version=\"1.0\"><dict /></plist>")
+            .expect("足せる")
+            .contains("<key>CFBundleSupportedPlatforms</key>")
+    );
+}
+
+#[test]
+fn plist_insertion_ignores_closing_tags_in_comments() {
+    // コメントの中の `</dict>` は最上位の終わりではない。キーは実際の dict に入る。
+    let body = "<plist><dict/></plist><!-- </dict> -->";
+    let out = simulator_entitlements(body, "com.example.app").expect("足せる");
+    assert!(
+        out.starts_with("<plist><dict>\n\t<key>application-identifier</key>"),
+        "{out}"
+    );
+    let body = "<plist>\n<dict>\n\t<key>A</key>\n\t<string>x</string>\n</dict>\n</plist>\n<!-- </dict> -->\n";
+    let out = simulator_info_plist(body).expect("足せる");
+    assert!(
+        out.contains("<string>iPhoneSimulator</string>\n\t</array>\n</dict>\n</plist>"),
+        "{out}"
+    );
 }

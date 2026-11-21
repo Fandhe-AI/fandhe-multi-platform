@@ -7,7 +7,7 @@
 //! - `reach` モジュール - アプリが依存として解決した機能 crate の到達判定（feature の活性化を自前で辿る）
 //! - `native` モジュール - 到達した機能の宣言だけからネイティブ設定（Manifest・Gradle・Info.plist・entitlements、Web は `--os web` で Web App Manifest）を生成する（`cargo fandhe gen`。`gen` は 2024 edition の予約語のため別名）
 //! - [`eject`] - 生成した設定ファイルを `<アプリの crate>/eject/` へ書き出す（`cargo fandhe gen --eject`、#1202）。`eject/` のファイルは gen・run・build が生成の代わりに使う
-//! - `run` モジュール - アプリの実行・ビルド（`cargo fandhe run|build`、デスクトップ・Web・Android、#1422・#1423）。手順は純粋関数で組み、実行器が順に走らせる
+//! - `run` モジュール - アプリの実行・ビルド（`cargo fandhe run|build`、デスクトップ・Web・Android・iOS シミュレータ、#1422・#1423・#1424）。手順は純粋関数で組み、実行器が順に走らせる
 //! - `scope` モジュール - 選ばなかった機能の宣言が成果物に無いことの照合（`cargo fandhe verify-scope`、#1178）
 //!
 //! 形式の仕様は `docs/architecture/capability-declaration.md`。

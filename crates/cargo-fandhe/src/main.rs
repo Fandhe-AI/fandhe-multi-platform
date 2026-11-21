@@ -2,7 +2,7 @@
 //! - `check`: workspace 内の機能宣言を検証する
 //! - `gen`: アプリが選んだ機能の宣言からネイティブ設定を `<アプリの crate>/gen/` へ生成する（`--os web` は Web App Manifest だけ、#1238）
 //! - `gen --eject <パス>`: 生成した設定ファイルを `<アプリの crate>/eject/` へ書き出す（以後は生成の代わりに使われる、#1202）
-//! - `run` / `build`: アプリを OS 向けにビルド・起動する（macos・windows・linux・web・android、#1422・#1423）
+//! - `run` / `build`: アプリを OS 向けにビルド・起動する（macos・windows・linux・web・android・ios シミュレータ、#1422・#1423・#1424）
 //! - `verify-scope`: 選ばなかった機能の宣言が成果物の観測テキストに無いことを検査する（#1178）
 //!
 //! 終了コード: 0 正常 / 1 宣言・入力の不正（`run`/`build` では前提の不足と子プロセスの失敗も 1） / 2 未知の引数。
@@ -10,7 +10,7 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-const USAGE: &str = "使い方: cargo fandhe check|gen [--os web] [--manifest-path <Cargo.toml>]\n       （--os web は gen のみ。Web App Manifest だけを生成する）\n       cargo fandhe gen --eject <パス> [--eject <パス>]... [--manifest-path <Cargo.toml>]\n       （<パス> は gen/ からの相対パス）\n       （生成した設定ファイルを <アプリの crate>/eject/ へ書き出す。以後は生成の代わりに使われ、消すと生成へ戻る。\n       　対象: android/AndroidManifest.xml・{ios,macos}/Info.plist・{ios,macos}/App.entitlements・{ios,macos}/extensions/<name>/ の plist・entitlements）\n       cargo fandhe run|build [--os macos|windows|linux|web|android] [--release] [--manifest-path <アプリの Cargo.toml>]\n       cargo fandhe verify-scope [--catalog <Cargo.toml>] [--manifest-path <アプリの Cargo.toml>] --os android|ios|macos <観測ファイル>...";
+const USAGE: &str = "使い方: cargo fandhe check|gen [--os web] [--manifest-path <Cargo.toml>]\n       （--os web は gen のみ。Web App Manifest だけを生成する）\n       cargo fandhe gen --eject <パス> [--eject <パス>]... [--manifest-path <Cargo.toml>]\n       （<パス> は gen/ からの相対パス）\n       （生成した設定ファイルを <アプリの crate>/eject/ へ書き出す。以後は生成の代わりに使われ、消すと生成へ戻る。\n       　対象: android/AndroidManifest.xml・{ios,macos}/Info.plist・{ios,macos}/App.entitlements・{ios,macos}/extensions/<name>/ の plist・entitlements）\n       cargo fandhe run|build [--os macos|windows|linux|web|android|ios] [--release] [--device] [--manifest-path <アプリの Cargo.toml>]\n       （--os ios は iOS シミュレータ。--device（iOS 実機）は未対応で、指定すると止まる。#1425）\n       cargo fandhe verify-scope [--catalog <Cargo.toml>] [--manifest-path <アプリの Cargo.toml>] --os android|ios|macos <観測ファイル>...";
 
 /// `verify-scope` の引数処理と実行。観測ファイルは UTF-8 のテキストとして連結して読む。
 fn verify_scope(args: &[&str]) -> ExitCode {

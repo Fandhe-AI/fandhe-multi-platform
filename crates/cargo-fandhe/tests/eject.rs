@@ -196,6 +196,7 @@ fn android_load_app_applies_eject_and_ignores_other_os_dirs() {
                 os: Some(Os::Android),
                 release: false,
                 manifest: Some(m.clone()),
+                device: false,
             },
             Os::Android,
         )
@@ -364,6 +365,7 @@ fn build_opts(m: &Path) -> Options {
         os: Some(Os::Android),
         release: false,
         manifest: Some(m.to_path_buf()),
+        device: false,
     }
 }
 
@@ -382,6 +384,7 @@ fn android_env() -> Env {
             ndk: true,
             ..AndroidEnv::default()
         },
+        ios: Default::default(),
         cargo: "cargo".into(),
     }
 }

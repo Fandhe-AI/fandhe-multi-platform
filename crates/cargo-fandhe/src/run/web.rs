@@ -139,6 +139,7 @@ fn plan(app: &App, opts: &Options, env: &Env, dir: &Path, name: &str) -> Vec<Op>
         ops.push(Op::Copy {
             from: from.clone(),
             to: dir.join("fonts/noto-sans-jp-regular.otf"),
+            within: app.target_dir.clone(),
         });
     }
     ops.push(Op::Say(format!("Web の成果物: {}", dir.display())));
