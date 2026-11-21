@@ -1927,3 +1927,20 @@ fn empty_self_closing_top_dict_accepts_inserted_keys() {
             .contains("<key>CFBundleSupportedPlatforms</key>")
     );
 }
+
+#[test]
+fn plist_insertion_ignores_closing_tags_in_comments() {
+    // コメントの中の `</dict>` は最上位の終わりではない。キーは実際の dict に入る。
+    let body = "<plist><dict/></plist><!-- </dict> -->";
+    let out = simulator_entitlements(body, "com.example.app").expect("足せる");
+    assert!(
+        out.starts_with("<plist><dict>\n\t<key>application-identifier</key>"),
+        "{out}"
+    );
+    let body = "<plist>\n<dict>\n\t<key>A</key>\n\t<string>x</string>\n</dict>\n</plist>\n<!-- </dict> -->\n";
+    let out = simulator_info_plist(body).expect("足せる");
+    assert!(
+        out.contains("<string>iPhoneSimulator</string>\n\t</array>\n</dict>\n</plist>"),
+        "{out}"
+    );
+}

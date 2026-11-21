@@ -156,22 +156,20 @@ pub(super) fn detect(commands: &std::collections::BTreeSet<String>, action: Acti
     i
 }
 
-/// XML の plist の最上位の dict の末尾（最後の `</dict>` の前）へ、キーと値（XML の断片）を足す。
-/// `</dict>` が無ければ最上位は空の dict（`<dict/>`）のはずなので、開始・終了タグへ展開してから足す。
+/// XML の plist の最上位の dict の末尾へ、キーと値（XML の断片）を足す。位置は [`scan_top`] が決める
+/// （コメント・入れ子の中の `</dict>` は数えない）。最上位が空の `<dict/>` なら開始・終了タグへ展開して足す。
 fn insert_top(body: &str, what: &str, key: &str, value: &str) -> Result<String, String> {
+    let frag = format!("\t<key>{key}</key>\n\t{value}\n");
     let mut out = body.to_string();
-    if !out.contains("</dict>") {
-        if let Some((i, tag)) = ["<dict/>", "<dict />"]
-            .into_iter()
-            .find_map(|t| out.find(t).map(|i| (i, t)))
-        {
-            out.replace_range(i..i + tag.len(), "<dict>\n</dict>");
+    match scan_top(body).end {
+        Some(TopEnd::Close(at)) => out.insert_str(at, &frag),
+        Some(TopEnd::Empty(r)) => out.replace_range(r, &format!("<dict>\n{frag}</dict>")),
+        None => {
+            return Err(format!(
+                "{what} を読めません（XML の plist の最上位に dict がありません）"
+            ))
         }
     }
-    let at = out.rfind("</dict>").ok_or_else(|| {
-        format!("{what} を読めません（XML の plist の最上位に dict がありません）")
-    })?;
-    out.insert_str(at, &format!("\t<key>{key}</key>\n\t{value}\n"));
     Ok(out)
 }
 
@@ -183,23 +181,53 @@ fn unescape_xml(v: &str) -> String {
         .replace("&amp;", "&")
 }
 
-/// XML の plist の最上位の dict にあるキーと、値が `<string>` ならその文字列（それ以外は `None`）。
+/// 最上位の dict の終わり。
+enum TopEnd {
+    /// 最上位の `</dict>` の開始位置。
+    Close(usize),
+    /// 空の最上位 `<dict/>` の範囲。
+    Empty(std::ops::Range<usize>),
+}
+
+/// XML の plist の最上位の dict の走査結果。
+struct TopDict {
+    /// キーと、値が `<string>` ならその文字列（それ以外は `None`）。
+    entries: Vec<(String, Option<String>)>,
+    end: Option<TopEnd>,
+}
+
+/// XML の plist の最上位の dict を走査する。コメント・処理命令・DOCTYPE は飛ばし、
 /// 入れ子の dict・array の中のキーは数えない（`info-plist` の追記は入れ子に同名キーを持ちうる）。
+/// 最初の最上位の dict が閉じたところで止める。
 /// ponytail: タグを数えるだけの走査。CDATA は扱わない（gen も Xcode も出さない）。
-fn top_entries(body: &str) -> Vec<(String, Option<String>)> {
-    let mut out = Vec::new();
+fn scan_top(body: &str) -> TopDict {
+    let mut t = TopDict {
+        entries: Vec::new(),
+        end: None,
+    };
     let mut depth = 0usize; // dict・array の深さ。最上位の dict の中が 1
     let mut pending: Option<String> = None; // 値を待つ最上位のキー
-    let mut rest = body;
-    while let Some(i) = rest.find('<') {
-        rest = &rest[i..];
-        if let Some(r) = rest.strip_prefix("<!--") {
-            rest = r.split_once("-->").map_or("", |(_, r)| r);
+    let mut pos = 0;
+    // `pos` からの本文を `close` まで読み、その後ろへ進む。
+    let text_until = |pos: &mut usize, close: &str| {
+        let end = body[*pos..].find(close).map_or(body.len(), |e| *pos + e);
+        let text = unescape_xml(&body[*pos..end]);
+        *pos = (end + close.len()).min(body.len());
+        text
+    };
+    while let Some(i) = body[pos..].find('<') {
+        let start = pos + i;
+        if body[start..].starts_with("<!--") {
+            pos = body[start..]
+                .find("-->")
+                .map_or(body.len(), |e| start + e + 3);
             continue;
         }
-        let Some(end) = rest.find('>') else { break };
-        let tag = &rest[1..end];
-        rest = &rest[end + 1..];
+        let Some(e) = body[start..].find('>') else {
+            break;
+        };
+        let tag = &body[start + 1..start + e];
+        pos = start + e + 1;
         if tag.starts_with('?') || tag.starts_with('!') {
             continue;
         }
@@ -210,46 +238,50 @@ fn top_entries(body: &str) -> Vec<(String, Option<String>)> {
             .split_whitespace()
             .next()
             .unwrap_or("");
+        let container = matches!(name, "dict" | "array");
         if closing {
-            if matches!(name, "dict" | "array") {
+            if container {
+                if depth == 1 && name == "dict" {
+                    t.end = Some(TopEnd::Close(start));
+                    break;
+                }
                 depth = depth.saturating_sub(1);
             }
             continue;
         }
+        if depth == 0 && name == "dict" && empty {
+            t.end = Some(TopEnd::Empty(start..pos));
+            break;
+        }
         if depth == 1 && name == "key" && !empty {
-            let (text, r) = rest.split_once("</key>").unwrap_or((rest, ""));
-            rest = r;
-            pending = Some(unescape_xml(text));
+            pending = Some(text_until(&mut pos, "</key>"));
             continue;
         }
         if depth == 1 {
             if let Some(k) = pending.take() {
                 let v = match (name, empty) {
                     ("string", true) => Some(String::new()),
-                    ("string", false) => {
-                        let (text, r) = rest.split_once("</string>").unwrap_or((rest, ""));
-                        rest = r;
-                        Some(unescape_xml(text))
-                    }
+                    ("string", false) => Some(text_until(&mut pos, "</string>")),
                     _ => None,
                 };
-                out.push((k, v));
+                t.entries.push((k, v));
             }
         }
-        if matches!(name, "dict" | "array") && !empty {
+        if container && !empty {
             depth += 1;
         }
     }
-    out
+    t
 }
 
 fn has_top_key(body: &str, key: &str) -> bool {
-    top_entries(body).iter().any(|(k, _)| k == key)
+    scan_top(body).entries.iter().any(|(k, _)| k == key)
 }
 
 /// XML の plist の最上位の dict で、`key` の値の文字列。無い・文字列でなければ `None`。
 fn plist_string(body: &str, key: &str) -> Option<String> {
-    top_entries(body)
+    scan_top(body)
+        .entries
         .into_iter()
         .find(|(k, _)| k == key)
         .and_then(|(_, v)| v)
