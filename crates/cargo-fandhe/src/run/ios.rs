@@ -28,8 +28,6 @@ use crate::native::{esc_xml, IOS_MIN_VERSION};
 const INFO_PLIST: &str = "ios/Info.plist";
 const ENTITLEMENTS: &str = "ios/App.entitlements";
 const EXTENSIONS: &str = "ios/extensions/";
-/// シミュレータ向けの `CFBundleSupportedPlatforms`。gen は組み立て時の値のため出さない（`native::ios_base`）。
-const SUPPORTED_PLATFORMS_KEY: &str = "<key>CFBundleSupportedPlatforms</key>";
 
 /// 起動中の iOS シミュレータ 1 台。
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -162,27 +160,91 @@ fn insert_top(body: &str, what: &str, key: &str, value: &str) -> Result<String, 
     Ok(out)
 }
 
-/// XML の plist で、`key` の直後の `<string>` の値（最初に現れたもの）。値が文字列でなければ `None`。
+fn unescape_xml(v: &str) -> String {
+    v.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&amp;", "&")
+}
+
+/// XML の plist の最上位の dict にあるキーと、値が `<string>` ならその文字列（それ以外は `None`）。
+/// 入れ子の dict・array の中のキーは数えない（`info-plist` の追記は入れ子に同名キーを持ちうる）。
+/// ponytail: タグを数えるだけの走査。CDATA は扱わない（gen も Xcode も出さない）。
+fn top_entries(body: &str) -> Vec<(String, Option<String>)> {
+    let mut out = Vec::new();
+    let mut depth = 0usize; // dict・array の深さ。最上位の dict の中が 1
+    let mut pending: Option<String> = None; // 値を待つ最上位のキー
+    let mut rest = body;
+    while let Some(i) = rest.find('<') {
+        rest = &rest[i..];
+        if let Some(r) = rest.strip_prefix("<!--") {
+            rest = r.split_once("-->").map_or("", |(_, r)| r);
+            continue;
+        }
+        let Some(end) = rest.find('>') else { break };
+        let tag = &rest[1..end];
+        rest = &rest[end + 1..];
+        if tag.starts_with('?') || tag.starts_with('!') {
+            continue;
+        }
+        let closing = tag.starts_with('/');
+        let empty = tag.ends_with('/');
+        let name = tag
+            .trim_matches('/')
+            .split_whitespace()
+            .next()
+            .unwrap_or("");
+        if closing {
+            if matches!(name, "dict" | "array") {
+                depth = depth.saturating_sub(1);
+            }
+            continue;
+        }
+        if depth == 1 && name == "key" && !empty {
+            let (text, r) = rest.split_once("</key>").unwrap_or((rest, ""));
+            rest = r;
+            pending = Some(unescape_xml(text));
+            continue;
+        }
+        if depth == 1 {
+            if let Some(k) = pending.take() {
+                let v = match (name, empty) {
+                    ("string", true) => Some(String::new()),
+                    ("string", false) => {
+                        let (text, r) = rest.split_once("</string>").unwrap_or((rest, ""));
+                        rest = r;
+                        Some(unescape_xml(text))
+                    }
+                    _ => None,
+                };
+                out.push((k, v));
+            }
+        }
+        if matches!(name, "dict" | "array") && !empty {
+            depth += 1;
+        }
+    }
+    out
+}
+
+fn has_top_key(body: &str, key: &str) -> bool {
+    top_entries(body).iter().any(|(k, _)| k == key)
+}
+
+/// XML の plist の最上位の dict で、`key` の値の文字列。無い・文字列でなければ `None`。
 fn plist_string(body: &str, key: &str) -> Option<String> {
-    let (_, rest) = body.split_once(&format!("<key>{key}</key>"))?;
-    let (v, _) = rest
-        .trim_start()
-        .strip_prefix("<string>")?
-        .split_once("</string>")?;
-    Some(
-        v.replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&quot;", "\"")
-            .replace("&apos;", "'")
-            .replace("&amp;", "&"),
-    )
+    top_entries(body)
+        .into_iter()
+        .find(|(k, _)| k == key)
+        .and_then(|(_, v)| v)
 }
 
 /// gen の Info.plist に、シミュレータ向けの `CFBundleSupportedPlatforms` を足す。
 /// 生成物も eject した XML の plist も、最上位の dict の末尾（最後の `</dict>` の前）へ入れる。
 /// 既に書かれていれば（eject・`info-plist` の追記）、組み立て時に決まる値と食い違いうるため拒否する。
 pub fn simulator_info_plist(body: &str) -> Result<String, String> {
-    if body.contains(SUPPORTED_PLATFORMS_KEY) {
+    if has_top_key(body, "CFBundleSupportedPlatforms") {
         return Err("Info.plist に CFBundleSupportedPlatforms があります。シミュレータか実機かで cargo fandhe が決める値のため、eject した Info.plist・`info-plist` の追記から消してください".into());
     }
     insert_top(
@@ -215,7 +277,7 @@ fn info_plist_problems(plist: &str, bundle: &str, bin: &str) -> Vec<String> {
 /// 実行体に埋める entitlements。`application-identifier` が無ければ bundle id を値として足す
 /// （HealthKit はシミュレータでもこれが無いと `Missing application-identifier entitlement` で失敗する）。
 pub fn simulator_entitlements(body: &str, bundle: &str) -> Result<String, String> {
-    if body.contains("<key>application-identifier</key>") {
+    if has_top_key(body, "application-identifier") {
         return Ok(body.to_string());
     }
     insert_top(

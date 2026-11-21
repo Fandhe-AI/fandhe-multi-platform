@@ -1868,3 +1868,21 @@ fn copy_refuses_destinations_outside_or_through_symlinks() {
     assert!(!victim.join("a.txt").exists());
     copy(within.join("ok/a.txt")).expect("配下は写せる");
 }
+
+#[test]
+fn info_plist_checks_read_only_the_top_dict() {
+    // 入れ子の dict（`info-plist` の追記）に同名キーが先に出ても、最上位の値で照合する。
+    let app = gallery(Os::Ios);
+    let build = opts(Action::Build, Os::Ios, false);
+    let nested = with_plist(
+        &app,
+        "<key>CFBundleExecutable</key>",
+        "<key>A</key>\n\t<dict>\n\t\t<key>CFBundleExecutable</key>\n\t\t<string>other</string>\n\t\t<key>CFBundleSupportedPlatforms</key>\n\t\t<array/>\n\t</dict>\n\t<key>CFBundleExecutable</key>",
+    );
+    assert!(prepare(&nested, &build, &ienv()).is_ok());
+    // 入れ子の application-identifier は最上位に足すのを妨げない。
+    let body = "<plist version=\"1.0\">\n<dict>\n\t<key>A</key>\n\t<dict>\n\t\t<key>application-identifier</key>\n\t\t<string>x</string>\n\t</dict>\n</dict>\n</plist>\n";
+    assert!(simulator_entitlements(body, "com.example.app")
+        .expect("足せる")
+        .contains("<string>com.example.app</string>"));
+}
