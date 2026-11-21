@@ -99,6 +99,7 @@ fn to_outcome(outcome: NotifyOutcome) -> CoreOutcome {
 /// 画面の状態型に依存しないため、フレームワークの外のアプリも使える入口。iOS / Android は権限ダイアログの結果を
 /// コールバックで受けるため、[`NativeNotifier`]（結果が届くまで呼び出しスレッドを塞ぐ。UI スレッドから呼ばない）を返す。
 pub fn platform_notification() -> Arc<dyn Notifier> {
+    register_teardown();
     implementation()
 }
 
@@ -262,7 +263,7 @@ pub(crate) mod bridge {
         )
     }
 
-    /// Android 専用: Activity 再生成直後に `android_main` から呼ぶ（`biometric_auth::
+    /// Android 専用: Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から呼ばれる（`biometric_auth::
     /// bridge::reset` と同じ位置づけ）。[`SLOT`] はプロセス static のため Activity
     /// 再生成をまたいで残るが、画面状態（`NotificationSendState`）は再生成のたびに
     /// `Default`（`Idle`）で作り直される。放置すると、再生成前に開始した権限確認が
@@ -309,6 +310,7 @@ impl Notifier for NativeNotifier {
         &self,
         request: &crate::contract::NotificationRequest,
     ) -> Result<NotifyOutcome, NotificationError> {
+        register_teardown();
         let (tx, rx) = std::sync::mpsc::channel();
         {
             let _guard = bridge::START.lock().unwrap_or_else(|e| e.into_inner());
@@ -422,6 +424,7 @@ pub fn notification_send_effect(
     state: &NotificationSendState,
     sender: &CompletionSender<NotificationSendState>,
 ) {
+    register_teardown();
     drive_callback(state, sender);
 }
 
@@ -432,10 +435,11 @@ pub fn notification_send_effect(
     state: &NotificationSendState,
     sender: &CompletionSender<NotificationSendState>,
 ) {
+    register_teardown();
     drive(state, sender, implementation());
 }
 
-/// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照。
+/// 登録表（`fandhe_runtime::teardown`）から呼ばれる薄いエイリアス（[`bridge::reset`] 参照。
 /// `fandhe_cap_biometric_auth::driver::reset_pending_tracking` と同じ命名・位置づけ）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
@@ -580,6 +584,16 @@ mod tests {
         assert!(error.starts_with("失敗しました: "));
         assert!(!error.contains("送信しました"));
     }
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("notification")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 /// [`outcome_from_code`] の単体テスト（iOS 専用の写像表、モジュール doc 参照）。

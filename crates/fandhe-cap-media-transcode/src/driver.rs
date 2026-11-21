@@ -46,6 +46,7 @@ const WAV_HEADER_BYTES: u64 = 44;
 
 /// 現在のプラットフォームに応じた `MediaTranscode` 実装を返す（dispatch の最終形）。
 pub fn platform_media_transcode() -> Arc<dyn MediaTranscode> {
+    register_teardown();
     #[cfg(target_os = "macos")]
     {
         Arc::new(crate::apple::AppleMediaTranscode)
@@ -238,6 +239,7 @@ fn drive(
 
 /// `registry.rs` の `effect` 区画から `media_transcode` 画面用に配線される effect ドライバ。
 pub fn media_transcode_effect(state: &TranscodeState, sender: &CompletionSender<TranscodeState>) {
+    register_teardown();
     static IMPL: std::sync::OnceLock<Arc<dyn MediaTranscode>> = std::sync::OnceLock::new();
     let imp = IMPL.get_or_init(platform_media_transcode);
     drive(
@@ -246,6 +248,16 @@ pub fn media_transcode_effect(state: &TranscodeState, sender: &CompletionSender<
         imp,
         SESSION.get_or_init(|| Arc::new(Session::default())),
         TRANSCODE_DEADLINE,
+    );
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("media-transcode")
+            .on_android_recreate(crate::reset_pending_tracking),
     );
 }
 

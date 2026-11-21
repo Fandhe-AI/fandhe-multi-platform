@@ -91,8 +91,8 @@ static ANDROID_STARTED: OnceLock<()> = OnceLock::new();
 #[cfg(target_os = "android")]
 static ANDROID_PRECISE_STARTED: OnceLock<()> = OnceLock::new();
 
-/// Android 専用: [`LAST_PROCESSED_RETRY_SEQ`] を `0` へ戻す（`android_main` から
-/// `Activity` 再生成のたびに呼ぶ契約、`android.rs::set_android_app` doc と同じ
+/// Android 専用: [`LAST_PROCESSED_RETRY_SEQ`] を `0` へ戻す（`android_main` が回す登録表（`fandhe_runtime::teardown`）から
+/// `Activity` 再生成のたびに呼ばれる契約、`android.rs::set_android_app` doc と同じ
 /// 「再生成のたびに古い値を残さない」考え方）。
 ///
 /// `LocationShowState`（`retry_seq` を含む）はプロセスの `static` と異なり `Activity`
@@ -100,7 +100,7 @@ static ANDROID_PRECISE_STARTED: OnceLock<()> = OnceLock::new();
 /// はプロセス生存中残り続ける。これを放置すると、再生成前に「再試行」を複数回押して
 /// 世代番号が進んでいた場合、再生成後の新しい画面（`retry_seq` は `0` から再スタート）で
 /// 利用者が改めて「再試行」を押しても、[`LAST_PROCESSED_RETRY_SEQ`] に残った大きい値を
-/// 下回ったままとなり、再要求が一切発火しなくなる。呼び出し元（`android_main`）が
+/// 下回ったままとなり、再要求が一切発火しなくなる。呼び出し元（`android_main` が回す登録表（`fandhe_runtime::teardown`））が
 /// 新しい画面 `S` を構築する前に本関数で基準値を作り直しておけば、両者は必ず `0` から
 /// 揃う。
 #[cfg(target_os = "android")]
@@ -132,19 +132,22 @@ static UNSUPPORTED_PUSHED: OnceLock<()> = OnceLock::new();
 /// `start_apple_location_once()` を 1 度呼ぶこと（`location_effect` 経由の画面は自動で呼ぶ）。
 /// Windows は初回呼び出しで書き手を起動し、Android は `location_effect` が権限要求と開始を行う。
 pub fn platform_location() -> &'static SharedLocation {
+    register_teardown();
     shared_location()
 }
 
 /// 共有 `SharedLocation` への参照を返す（Windows のみ未初期化時に書き手を起動・
 /// 登録する。Apple は `location_effect` 側が起動する、モジュール doc 参照）。
-/// `registry.rs` の `effect` 区画・`fandhe-gallery` の終了フック（`shutdown()`）から参照される公開入口。
+/// `registry.rs` の `effect` 区画・終了処理の登録表（`fandhe_runtime::teardown`）から参照される公開入口。
 pub fn shared_location() -> &'static SharedLocation {
+    register_teardown();
     shared_location_for(false)
 }
 
 /// [`shared_location`] のジオフェンス用。Android で精密位置（FINE）の許可を求める
 /// （位置情報画面は COARSE のみ、最小権限）。他 OS では [`shared_location`] と同じ。
 pub fn shared_location_precise() -> &'static SharedLocation {
+    register_teardown();
     shared_location_for(true)
 }
 
@@ -235,6 +238,7 @@ fn ensure_windows_driver(shared: &SharedLocation, force: bool) {
     target_os = "macos"
 ))]
 pub fn restart_location(shared: &SharedLocation, _precise: bool) {
+    register_teardown();
     #[cfg(target_os = "windows")]
     ensure_windows_driver(shared, true);
     #[cfg(target_os = "android")]
@@ -251,7 +255,7 @@ pub fn restart_location(shared: &SharedLocation, _precise: bool) {
     }
 }
 
-/// アプリ終了時に Windows の測位子プロセスを止める（`fandhe-gallery` の終了フック（`shutdown()`）から呼ばれる契約。`static` は `Drop` が走らないため、
+/// アプリ終了時に Windows の測位子プロセスを止める（終了処理の登録表（`fandhe_runtime::teardown`）から呼ばれる契約。`static` は `Drop` が走らないため、
 /// 明示停止が要る、`fandhe-cap-bluetooth-le` の `stop_shared_scan` と同じ理由）。
 pub fn stop_shared_location() {
     #[cfg(target_os = "windows")]
@@ -268,6 +272,7 @@ pub fn stop_shared_location() {
 /// 両画面から呼ばれる（`CLLocationManager` は main スレッド = egui の update ループで起動する）。
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub fn start_apple_location_once() -> bool {
+    register_teardown();
     let first = APPLE_STARTED.set(()).is_ok();
     if first {
         crate::apple::start();
@@ -279,6 +284,7 @@ pub fn start_apple_location_once() -> bool {
 /// `fandhe-device` に依存しないため、両者の型を橋渡しするのは本クレート側の責務、
 /// `fandhe-cap-local-storage-kv` の driver と同じ判断）。
 pub fn to_failure_kind(e: &LocationError) -> FailureKind {
+    register_teardown();
     match e {
         LocationError::PermissionDenied => FailureKind::PermissionDenied,
         LocationError::Disabled(_) => FailureKind::ServiceDisabled,
@@ -384,6 +390,7 @@ pub fn location_effect(
     state: &fandhe_core::screens::location_show::LocationShowState,
     sender: &CompletionSender<fandhe_core::screens::location_show::LocationShowState>,
 ) {
+    register_teardown();
     let shared = shared_location();
     #[cfg(any(target_os = "windows", target_os = "android"))]
     {
@@ -414,6 +421,16 @@ pub fn location_effect(
         }
     }
     drive(state, sender, shared);
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t =
+        fandhe_runtime::teardown::Teardown::new("location").on_exit(crate::stop_shared_location);
+    #[cfg(target_os = "android")]
+    let t = t.on_android_recreate(crate::reset_retry_tracking);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

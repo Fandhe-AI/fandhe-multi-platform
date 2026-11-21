@@ -69,6 +69,7 @@ node scripts/device/migrate-capability.mjs scaffold <id> [--module <stem>] [--dr
 | 宣言 | 権限・usage description・framework・`<queries>`・コンポーネントを `[package.metadata.fandhe]` に書き、`cargo run -p cargo-fandhe -- check` で現行の設定と突き合わせる |
 | 共有ファイル | `fandhe-egui-proxy/src/device.rs` の `mod` 宣言、`fandhe-egui-proxy/build.rs` の `compile_ios_*`、`fandhe-device/src/lib.rs` の `pub mod`、`MainActivity.java` の受け口、`fandhe-gallery/src/screens/registry.rs` の effect の参照先を直す。他機能の SAFETY コメントが移した関数を根拠に指している場合は元の根拠へ直す |
 | 対応表 | `docs/device/capabilities/<id>.json` の `impl` を新しいパスにする |
+| 終了処理・再生成時の破棄 | crate ルートから `shutdown`・`stop_shared_*`・`reset_*` を出したら、`driver.rs` の `register_teardown()` で登録表へ登録し、公開の入口と `driver` の `pub fn` の先頭で呼ぶ（§34）。入口 crate の `lifecycle.rs` には足さない |
 | crate doc | 役割・呼び出し元・守る範囲と守らない範囲を `lib.rs` に書く（`code-comment-style.md`）。`.claude/rules/device-bridge-contracts.md` の自己点検を移行 PR でも行う |
 
 ## 4. 検証
@@ -458,7 +459,7 @@ print・print-screen・window-management・screen-orientation・autofill-otp の
 | 既定値 | 読み戻しは届かず（期限で失敗）、`window_state` は全項目 `None`（全画面が読めず依頼を出さずに失敗）、ヒントは `Unsupported`。いずれも嘘の成功にならない |
 | 呼んでよい時点 | §13 と同じ（フレーム末尾の UI スレッド） |
 | egui 実装 | `fandhe-render-egui` の `EguiWaker`。読み戻しは `ViewportCommand::Screenshot`、ウィンドウは `ViewportCommand` と `ViewportInfo` |
-| ヒントの橋渡し | `fandhe-render-egui` は `forbid(unsafe_code)` で OS の入力欄を触れないため、`app::set_text_input_hint_hook` で橋渡しを持つ層が登録する（`set_teardown_hooks` と同じ形。2 回目以降は無視）。入口 crate `fandhe` の `src/entry/ios_text_input.rs`（#1200 で `fandhe-egui-proxy` から移した） |
+| ヒントの橋渡し | `fandhe-render-egui` は `forbid(unsafe_code)` で OS の入力欄を触れないため、`app::set_text_input_hint_hook` で橋渡しを持つ層が登録する（プロセスで 1 つ。2 回目以降は無視）。入口 crate `fandhe` の `src/entry/ios_text_input.rs`（#1200 で `fandhe-egui-proxy` から移した） |
 | 採らなかった案 | `RgbaPixels` の流用（辺の上限 2048 で、Retina の読み戻しが通らなくなる）、`HostView: Send + Sync`（他の実装の fake を壊す）、`fandhe-render-egui` から C ABI を直接呼ぶ（`unsafe` の禁止に反する） |
 | 範囲外 | `egui_context`（fullscreen-immersive・safe-area-insets）と `canvas_*`（pen-stylus）は口を足さない（第 14 束 #1334 で足した。§24） |
 
@@ -800,7 +801,7 @@ PiP の切り替わりの口は #1327（§18）で決着していた。はじめ
 | --- | --- |
 | 入口の生成 | `fandhe-macros` の `#[fandhe::main]`（`fandhe::main` で再公開）。生成コードは `fandhe::__private` の `run`・`run_android`・`start_web` を呼ぶだけ |
 | 各 OS の入口・ソフトキーボード・iOS の入力欄の橋渡し | `crates/fandhe/src/entry/`（`android.rs`・`ios.rs`・`web.rs`・`soft_keyboard.rs`・`ios_text_input.rs`）と `crates/fandhe/ios/fandhe_ios_text_input.m`（`build.rs` が iOS で compile）。`fandhe` は iOS だけ `deny(unsafe_code)` |
-| 起動前の登録・終了処理・Activity 再生成時の破棄 | カタログの `main.rs`・`lib.rs` が機能ごとに呼んでいた一覧を `crates/fandhe/src/entry/lifecycle.rs` へ移し、feature で囲んだ。新しい機能 crate が crate ルートから `register`・`shutdown`・`reset_*`・`stop_shared_*` を出したら、ここへ同じ形で足す（`tests/features.rs` が足し忘れを落とす） |
+| 起動前の登録・終了処理・Activity 再生成時の破棄 | カタログの `main.rs`・`lib.rs` が機能ごとに呼んでいた一覧を `crates/fandhe/src/entry/lifecycle.rs` へ移し、feature で囲んだ。新しい機能 crate が crate ルートから `register` を出したら、ここへ同じ形で足す（`tests/features.rs` が足し忘れを落とす）。終了処理と再生成時の破棄は #1453 で登録表へ移した（§34） |
 | 画面の名前での選択（`FANDHE_PROXY_APP`・debug システムプロパティ・自動撮影・Windows の URL・ファイル起動の既定画面・Android の画面ゲート） | カタログ専用として `crates/fandhe-gallery/src/select.rs` へ移した。入口は名前を知らない |
 | TV のフォーカス移動・プロトタイプ・計測用の入口 | `crates/fandhe-gallery/src/demo/`。計測ビルド（`frame-metrics`・`cold-start-probe`・`debug-proxy-app`）は gallery の feature になった |
 | 描画テスト | `fandhe-render-egui/tests/` へ移した。プロトタイプ・TV フォーカスを使う 3 本（`ax_tree`・`prototype_render`・`virtual_list_render`）は `fandhe-gallery/tests/` |
@@ -857,3 +858,41 @@ calendar の `platform_calendar().add_event` と live-activity の `run_live_act
 | 失われた要求 | Android の再生成の `reset` で消えた要求は、`poll`（同期の待ちを含む）が `Internal("… reset")` を 1 度だけ返す |
 | 旧版からの変更 | 画面の slot は画面用の結果（`AddOutcome`・`LiveResult`）ではなく生の値を持つ。画面が Android の再生成の `reset` で要求を失ったときは、失敗で終える |
 | ホストのテスト | `bridge` を `test` でもコンパイルし、打ち切り・遅れて届いた結果の破棄・次の要求・画面との排他・同期の待ちの復帰を確かめる |
+
+## 34. 終了処理と再生成時の破棄を登録表へ移す（#1453）
+
+入口の `lifecycle.rs` が feature つきで呼んでいた終了処理・画面の破棄・Android の再生成時の破棄を、`fandhe-runtime` の登録表
+（`fandhe_runtime::teardown`）へ移した。機能 crate は初めて使われたときに自分を登録する。直接依存で選んだ標準機能と第三者の機能でも
+片付けが走り、`fandhe-render-egui` の `set_teardown_hooks`（プロセスで 1 回だけ）は撤去した。契約は capability-crate-contract.md 3.4 節。
+
+| 項目 | 扱い |
+| --- | --- |
+| 登録の口 | `fandhe_runtime::teardown::register(Teardown::new("<id>")…)`。`on_exit`（アプリの終了）・`on_screen_drop`（`ProxyApp` の破棄）・`on_android_recreate`（再生成の前）・`stage`（`Stage::Shared` は `Stage::Feature` の後に止める） |
+| 表を回す側 | `ProxyApp::on_exit` と一覧表示中の `Menu::on_exit` が `run_exit`、`ProxyApp` の `Drop` が `run_screen_drop`、`fandhe` の Android の入口が `run_android_recreate` |
+| 起動前の登録 | 移さない（`register`・Windows の起動時の処理は初めて使われるより前に要る）。`lifecycle.rs` の `before_launch` に残し、feature で選ぶか利用者が呼ぶ |
+| 停止順 | audio-session だけ `Stage::Shared`。media-playback・now-playing-controls の後に止まる（登録順に依らない）。旧 `lifecycle.rs` の media-playback → now-playing-controls の前後は同じ段階の中なので保証しない（依存は無い） |
+| 起動時の片付け | 旧版は Android の新しいプロセスでも `android_main` が全機能の `reset_*` を呼んでいた。前のプロセスが残した固定 id の通知を閉じていた 2 機能は、Java の `attach` がプロセスで最初の Activity の生成で 1 回だけ閉じる（live-activity の `LiveActivityHelper.attach` が `dismissAll`、now-playing-controls の `NowPlayingHelper.attach` が `cancel(TAG, NOTIFICATION_ID)`） |
+| 検査 | `crates/fandhe/tests/features.rs` が、`register_teardown` の本体（コメントを除く）の `fandhe_runtime::teardown::register(…)`・`Teardown::new("<id>")`・各関数の `.on_exit(crate::…)`・`.on_android_recreate(crate::…)`、入口の先頭の `register_teardown()`（1 行の本体も見る）、`pub use … as` が無いこと、`lifecycle.rs` から直接呼ばないこと、audio-session の `.stage(fandhe_runtime::teardown::Stage::Shared)` を見る |
+
+機能 crate に足す手順は次のとおり。
+
+1. `driver.rs` に登録の関数を置く。再生成時の破棄は Android でだけ登録する（旧 `lifecycle.rs` と同じ）
+
+   ```rust
+   /// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+   pub(crate) fn register_teardown() {
+       let t = fandhe_runtime::teardown::Teardown::new("<id>").on_exit(crate::shutdown);
+       #[cfg(target_os = "android")]
+       let t = t.on_android_recreate(crate::reset_pending_tracking);
+       fandhe_runtime::teardown::register(t);
+   }
+   ```
+
+2. 次の本体の先頭で `register_teardown();`（`driver.rs` の外は `crate::driver::register_teardown();`）を呼ぶ。
+   crate ルートから出す関数、`driver.rs`・`lib.rs` の行頭の `pub fn`（effect を含む）、公開型（`driver.rs`・`lib.rs` の `pub struct` /
+   `pub enum` と crate ルートが名前で出す型）の `impl` の `fn`（trait の実装を含む。`NativeBluetoothLe::scan` のように型を直接作って
+   呼ぶ経路があるため）。`shutdown` などの片付けそのもの・`const fn`・std の trait（`Debug`・`From` など）の実装は除く。
+   `contract.rs` の型は対象外（登録表が片付ける static の状態に触れない）。crate ルートの再公開に `as` で別名を付けない
+3. 片付けの関数が、使われていない状態でも 2 回呼ばれても安全かを確かめる（登録表は呼ぶ回数を 1 回に絞らない）
+4. 前のプロセスが残した OS の状態を起動時に片付ける必要があれば、`reset_*` に頼らず provider（`FeatureLifecycleProvider`）で行う
+5. `cargo test -p fandhe --test features` を通す

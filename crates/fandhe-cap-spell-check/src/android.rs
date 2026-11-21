@@ -16,7 +16,7 @@
 //!
 //! ライフサイクル: Activity 再生成（`onDestroy`）で保留中の要求を Java が中断扱いで確定し、session を
 //! 閉じる。`SLOT` の id は単調増加で、新しい `SpellCheckHelper` は未追跡から始まるため旧結果が新しい
-//! 要求を消費しない。Rust 側の保留追跡は [`reset_pending_tracking`]（`fandhe-gallery` の `android_main` が呼ぶ）。Activity の生成・破棄は
+//! 要求を消費しない。Rust 側の保留追跡は [`reset_pending_tracking`]（登録表（`fandhe_runtime::teardown`）が呼ぶ）。Activity の生成・破棄は
 //! `SpellCheckLifecycle`（`FeatureLifecycleProvider`）が Helper へ伝え、Helper が無いときの要求は FAILED で確定する。
 //!
 //! 守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止・session の解放・入力と誤り語のログ非出力。

@@ -39,7 +39,7 @@
 //! # アプリ終了時
 //!
 //! プロセスが終わると `NSBackgroundActivityScheduler` を含め全リソースが消えるため、
-//! `fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）への追加は不要（`.m` ファイル冒頭コメントと対応）。
+//! 終了処理の登録表（`fandhe_runtime::teardown`）への登録は不要（`.m` ファイル冒頭コメントと対応）。
 
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};

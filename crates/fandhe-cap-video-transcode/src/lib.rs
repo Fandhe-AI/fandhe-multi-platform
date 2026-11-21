@@ -1,7 +1,7 @@
 //! video-transcode の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。実行時に作った動画を小さい解像度の mp4 へ 1 回変換する。
 //!
 //! 呼び出し元は `fandhe-gallery` の `screens/registry.rs`（`video_transcode_effect`）と、Activity 再生成時の
-//! `reset_pending_tracking`（gallery の `android_main` から、Android のみ）。Web の実装本体は `fandhe-web-dom` に残り、
+//! `reset_pending_tracking`（登録表（`fandhe_runtime::teardown`）から、Android のみ）。Web の実装本体は `fandhe-web-dom` に残り、
 //! 契約の定数と出力の検査だけを本 crate から使う。映像・出力・OS の生エラー値はログに出さない。
 //! 守る範囲は失敗を成功値へ畳まないこと・一時ファイルの解放（未解放は static で追跡し、確認できるまで次の要求を受け付けない）・
 //! FFI へ渡す長さの上限、守らない範囲は端末ごとの所要時間・ビットレート・符号形式の違い・複数プロセス間（`contract` の doc を参照）。

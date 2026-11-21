@@ -5,6 +5,37 @@
 
 ## [Unreleased]
 
+終了処理と Android の再生成時の破棄を、機能 crate が初めて使われたときに自分で登録する登録表を足す（Issue #1453）。
+
+直接依存で選んだ標準機能と第三者の機能には、終了処理と再生成時の破棄が走らなかった（入口が feature つきで呼んでいたため）。
+
+### 破壊的変更（BREAKING CHANGE）
+
+- `fandhe_render_egui::app::set_teardown_hooks` を撤去。終了処理・画面の破棄の処理は `fandhe_runtime::teardown::register` で
+  機能ごとに登録する（プロセスで何件でも登録できる。同じ id は 1 件にまとめる）
+- `fandhe::__private::register_teardown_hooks` を撤去（入口と描画層が登録表を回すため、呼ぶ必要が無くなった）
+
+### 追加
+
+- `fandhe_runtime::teardown`: `Teardown::new(id)` に `on_exit`・`on_screen_drop`・`on_android_recreate`・`stage` を足して
+  `register` する。
+  `Stage::Shared`（共有の OS 資源）は `Stage::Feature` の後に止める（audio-session。登録順に依らず media-playback の後）。
+  表は描画層（`run_exit`・`run_screen_drop`）と `fandhe` の Android の入口（`run_android_recreate`）が回す。`run_*` は描画層・入口専用、
+  `registered(id)` はテスト用で、どちらも `#[doc(hidden)]`。`Stage` は `#[non_exhaustive]`。
+  同じ id で段階か処理が違う登録は捨て、id ごとに 1 回だけ標準エラーへ警告する（id は自 crate の宣言の id に限る）。
+  守らない範囲（実行の後の登録・同じ段階の中の順・並行の実行での重複）はモジュール doc に書いた
+- 標準機能の crate（終了処理・再生成時の破棄を持つ 58 機能）は、公開の入口・effect・公開型のメソッド（`NativeBluetoothLe::scan`・
+  `NativeNotifier::notify` など trait の実装を含む）の先頭で自分を登録する。
+  feature で選んでも直接依存で選んでも同じに片付けが走る
+
+### 変更
+
+- Android の新しいプロセスでは、使われていない機能の `reset_*` を呼ばなくなった。前のプロセスが残した固定 id の通知は、
+  プロセスで最初の Activity の生成で Java の `attach` が 1 回だけ閉じる（live-activity の `LiveActivityHelper.attach`、
+  now-playing-controls の `NowPlayingHelper.attach`）
+- Web でも、画面（`ProxyApp`）の破棄で `run_screen_drop` が走る（旧版は入口が終了フックを登録しない Web では何も呼ばなかった）
+- 起動前の登録（`register`・Windows の起動時の処理）は従来どおり入口が feature の分だけ呼ぶ
+
 一覧の行ごとに別の画像を出せるようにし、一定時間後に状態を変える書き方を足す（Issue #1291）。
 
 画素の保管所（`fandhe_runtime::image_store`）が 1 枠だったため、一覧の行ごとに別の画像を出せなかった。

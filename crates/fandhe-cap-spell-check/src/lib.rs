@@ -2,7 +2,7 @@
 //!
 //! 呼び出し元は `fandhe-gallery` の `screens/registry.rs`（`spell_check_effect`）。macOS（`NSSpellChecker`）・iOS（`UITextChecker`）・
 //! Android（`TextServicesManager`、Activity ごとの `SpellCheckHelper` を `SpellCheckLifecycle` が束ねる）・Windows（`ISpellChecker`）が実装する。
-//! Activity の作り直しでは `fandhe-gallery` の `android_main` が `reset_pending_tracking` を呼ぶ。
+//! Activity の作り直しでは登録表（`fandhe_runtime::teardown`）が `reset_pending_tracking` を呼ぶ。
 //! 守る範囲は 1 プロセス内の要求順序・嘘の成功の禁止（辞書なしを「誤り 0 件」にしない）・session の解放・入力と誤り語のログ非出力。
 //! 守らない範囲は期限後も OS 側の検査が走り切ること、OS（OEM・キーボードアプリ）による結果の違い。
 //!

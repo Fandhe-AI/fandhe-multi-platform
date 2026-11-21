@@ -36,6 +36,7 @@ use fandhe_runtime::CompletionSender;
 /// 現在のプラットフォームに応じた `RadioControl` 実装を返す（プロセスで 1 個）。
 /// 画面の状態型に依存しないため、フレームワークの外のアプリも使える。
 pub fn platform_radio_control() -> Arc<dyn RadioControl> {
+    register_teardown();
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn RadioControl>> = OnceLock::new();
     INSTANCE
@@ -186,7 +187,7 @@ fn finish_spawn_failed(s: &mut RadioControlShowState, generation: u64, kind: Kin
     }
 }
 
-/// Android: Activity 再生成直後に gallery の `android_main` から呼ぶ。保留中の切り替え要求を破棄し、
+/// Android: Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から呼ぶ。保留中の切り替え要求を破棄し、
 /// 待機中のワーカーを失敗で戻す（復元しない）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
@@ -198,7 +199,18 @@ pub fn radio_control_show_effect(
     state: &RadioControlShowState,
     sender: &CompletionSender<RadioControlShowState>,
 ) {
+    register_teardown();
     drive(state, sender, platform_radio_control(), access_starter());
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("radio-control")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 #[cfg(test)]

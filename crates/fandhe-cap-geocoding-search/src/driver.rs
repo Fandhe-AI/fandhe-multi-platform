@@ -44,6 +44,7 @@ type Coordinates = (f64, f64, u32);
 
 /// 現在のプラットフォームに応じた `ForwardGeocoder` 実装を返す（dispatch の最終形）。
 pub fn platform_geocoding_search() -> Arc<dyn ForwardGeocoder> {
+    register_teardown();
     #[cfg(target_os = "macos")]
     {
         Arc::new(crate::apple::AppleForwardGeocoder)
@@ -191,6 +192,7 @@ pub fn geocoding_search_show_effect(
     state: &GeocodingSearchState,
     sender: &CompletionSender<GeocodingSearchState>,
 ) {
+    register_teardown();
     static IMPL: std::sync::OnceLock<Arc<dyn ForwardGeocoder>> = std::sync::OnceLock::new();
     let imp = IMPL.get_or_init(platform_geocoding_search);
     drive(
@@ -199,6 +201,16 @@ pub fn geocoding_search_show_effect(
         imp,
         SESSION.get_or_init(Session::default),
         GEOCODE_DEADLINE,
+    );
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("geocoding-search")
+            .on_android_recreate(crate::reset_pending_tracking),
     );
 }
 

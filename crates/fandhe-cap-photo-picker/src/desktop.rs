@@ -49,6 +49,7 @@ pub struct RfdPhotoPicker {
 impl RfdPhotoPicker {
     /// 構築は失敗しない。
     pub fn new() -> Self {
+        crate::driver::register_teardown();
         Self {
             busy: AtomicBool::new(false),
         }
@@ -65,6 +66,7 @@ impl Default for RfdPhotoPicker {
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 impl PhotoPicker for RfdPhotoPicker {
     fn pick(&self) -> Result<PickedPhoto, PhotoPickerError> {
+        crate::driver::register_teardown();
         if self
             .busy
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)

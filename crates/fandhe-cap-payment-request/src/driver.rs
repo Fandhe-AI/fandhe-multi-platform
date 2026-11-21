@@ -27,6 +27,7 @@ use fandhe_runtime::CompletionSender;
 /// 実際の確認・決済シートは [`start_payment_check`] / [`start_payment`] と [`poll_payment`] の組で行う。Web の実装は `fandhe-web-dom` にあり、この契約の定数と写像だけを共有する。
 /// 画面の状態型に依存しない入口（`docs/architecture/consumer-app-structure.md` §8.2）。
 pub fn platform_payment_request() -> std::sync::Arc<dyn PaymentSheet> {
+    register_teardown();
     std::sync::Arc::new(UnsupportedPaymentSheet)
 }
 
@@ -47,11 +48,13 @@ pub enum PaymentPoll {
 /// 進行中、または結果が未取得の要求があれば `None`（置き換えない）。同期で失敗した場合も id を返し、失敗は [`poll_payment`] で受け取る。
 /// 画面用の effect（[`payment_request_effect`]）と同じ slot を使うが、持ち主（`SlotOwner`）で分け、互いの要求を置き換えも横取りもしない（先行があれば後からの側が失敗または `None`）。
 pub fn start_payment_check() -> Option<u64> {
+    register_teardown();
     start(PaymentAction::Check)
 }
 
 /// フレームワークの外のアプリ用: 決済シートの表示を OS へ依頼し、要求 id を返す。規則は [`start_payment_check`] と同じ。
 pub fn start_payment() -> Option<u64> {
+    register_teardown();
     start(PaymentAction::Pay)
 }
 
@@ -74,6 +77,7 @@ fn start(action: PaymentAction) -> Option<u64> {
 /// [`start_payment_check`] / [`start_payment`] の結果を取り出す。未着・別の id・取り出し済みは `None`。
 /// 取り出すと要求は終わり、次の `start_*` を受け付ける。失敗は固定文言（内部名を出さない）。
 pub fn poll_payment(request_id: u64) -> Option<Result<PaymentPoll, String>> {
+    register_teardown();
     let outcome = bridge::SLOT.take_ready(request_id)?;
     Some(outcome.map(|o| match o {
         CoreOutcome::Available => PaymentPoll::Available,
@@ -131,14 +135,14 @@ pub(crate) mod bridge {
         SLOT.deliver(request_id, pay_outcome(result))
     }
 
-    /// Activity 再生成直後に `android_main` から呼ぶ。保留中の要求は復元せず破棄し、旧 `request_id`
+    /// Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から呼ばれる。保留中の要求は復元せず破棄し、旧 `request_id`
     /// の完了を無視させる。
     pub(crate) fn reset() {
         SLOT.reset()
     }
 }
 
-/// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
+/// 登録表（`fandhe_runtime::teardown`）から呼ばれる薄いエイリアス（[`bridge::reset`] 参照）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
     bridge::reset();
@@ -232,6 +236,7 @@ pub fn payment_request_effect(
     state: &PaymentRequestState,
     sender: &CompletionSender<PaymentRequestState>,
 ) {
+    register_teardown();
     drive_callback(
         state,
         sender,
@@ -247,7 +252,18 @@ pub fn payment_request_effect(
     state: &PaymentRequestState,
     sender: &CompletionSender<PaymentRequestState>,
 ) {
+    register_teardown();
     drive_sync(state, sender, platform_payment_request().as_ref());
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("payment-request")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 #[cfg(test)]

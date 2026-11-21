@@ -41,6 +41,7 @@ use fandhe_runtime::request_slot::RequestSlot;
 
 /// 現在のプラットフォームに応じた `PdfPageRenderer` 実装を返す（dispatch の最終形）。
 pub fn platform_pdf_viewer() -> Arc<dyn PdfPageRenderer> {
+    register_teardown();
     #[cfg(target_os = "macos")]
     {
         Arc::new(crate::apple::ApplePdfPageRenderer)
@@ -226,6 +227,7 @@ pub fn pdf_first_page_effect(
     state: &PdfFirstPageState,
     sender: &CompletionSender<PdfFirstPageState>,
 ) {
+    register_teardown();
     static IMPL: std::sync::OnceLock<Arc<dyn PdfPageRenderer>> = std::sync::OnceLock::new();
     let imp = IMPL.get_or_init(platform_pdf_viewer);
     drive(
@@ -234,6 +236,16 @@ pub fn pdf_first_page_effect(
         imp,
         SESSION.get_or_init(|| Arc::new(Session::default())),
         PDF_DEADLINE,
+    );
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("pdf-viewer")
+            .on_android_recreate(crate::reset_pending_tracking),
     );
 }
 

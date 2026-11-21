@@ -24,7 +24,7 @@
 //! # 期限・終了
 //!
 //! 期限は `BROWSE_DURATION_MS` だけ（OS 側へ渡して一致させる、同 3 節）。画面離脱はプロセス終了と
-//! 同義のため、[`stop_shared_discovery`] を `fandhe-gallery` の終了フックから呼んで探索を止める。再要求は
+//! 同義のため、[`stop_shared_discovery`] を終了処理の登録表（`fandhe_runtime::teardown`）から呼んで探索を止める。再要求は
 //! 古いセッションを置き換え、古い request_id の結果は照合して捨てる。Android は停止が
 //! Activity のライフサイクルで完結するため分岐を持たない。
 //!
@@ -322,6 +322,7 @@ fn drive(
 
 /// `registry.rs` の `effect` 区画から `lan_discover` 画面用に配線される effect ドライバ。
 pub fn lan_discover_effect(state: &LanDiscoverState, sender: &CompletionSender<LanDiscoverState>) {
+    register_teardown();
     #[cfg(any(
         target_os = "ios",
         target_os = "macos",
@@ -338,7 +339,7 @@ pub fn lan_discover_effect(state: &LanDiscoverState, sender: &CompletionSender<L
     drive(state, sender, &crate::contract::UnsupportedLanDiscovery);
 }
 
-/// Activity 再生成時に旧要求の保留を捨てる（`fandhe-gallery` の `android_main` から呼ばれる。
+/// Activity 再生成時に旧要求の保留を捨てる（登録表（`fandhe_runtime::teardown`）から呼ばれる。
 /// Java 側の追跡は Activity インスタンスのフィールドで、再生成で一緒に消える）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
@@ -352,6 +353,7 @@ pub fn reset_pending_tracking() {
 /// 対して「未対応」を正直に返す（成功の 0 件にしない）。
 // ponytail: 同期 trait の実装は要求が出たら足す（`OBSERVED.finish` を待つワーカーが要る）。
 pub fn platform_lan_discovery() -> Box<dyn crate::contract::LanDiscovery> {
+    register_teardown();
     Box::new(crate::contract::UnsupportedLanDiscovery)
 }
 
@@ -403,6 +405,7 @@ fn begin_public_slot() -> Option<u64> {
     target_os = "android"
 ))]
 pub fn begin_lan_discovery() -> Result<u64, LanDiscoveryError> {
+    register_teardown();
     let duration = std::time::Duration::from_millis(crate::contract::BROWSE_DURATION_MS);
     let request_id =
         begin_public_slot().ok_or(LanDiscoveryError::Internal("lan_discovery busy"))?;
@@ -432,11 +435,13 @@ pub fn begin_lan_discovery() -> Result<u64, LanDiscoveryError> {
     target_os = "android"
 )))]
 pub fn begin_lan_discovery() -> Result<u64, LanDiscoveryError> {
+    register_teardown();
     Err(LanDiscoveryError::Unsupported("lan_discovery"))
 }
 
 /// [`begin_lan_discovery`] の結果を取り出す。窓が閉じて届いていれば 1 度だけ `Some`、未着・旧 id・取り出し済みは `None`。
 pub fn poll_lan_discovery(request_id: u64) -> Option<Result<Vec<LanService>, LanDiscoveryError>> {
+    register_teardown();
     #[cfg(any(
         target_os = "ios",
         target_os = "macos",
@@ -461,7 +466,7 @@ pub fn poll_lan_discovery(request_id: u64) -> Option<Result<Vec<LanService>, Lan
     }
 }
 
-/// アプリ終了時に進行中の探索を止める（`fandhe-gallery` の終了フック（`shutdown()`）から呼ばれる）。
+/// アプリ終了時に進行中の探索を止める（終了処理の登録表（`fandhe_runtime::teardown`）から呼ばれる）。
 /// Rust 側のロックを握ったまま OS 側の停止を呼ばない（OS 側コールバックが同じロックを取るため、
 /// `device-bridge-contracts.md` 11 節）。
 pub fn stop_shared_discovery() {
@@ -470,6 +475,16 @@ pub fn stop_shared_discovery() {
     crate::apple::stop();
     #[cfg(target_os = "windows")]
     crate::windows::stop_shared();
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t = fandhe_runtime::teardown::Teardown::new("lan-discovery")
+        .on_exit(crate::stop_shared_discovery);
+    #[cfg(target_os = "android")]
+    let t = t.on_android_recreate(crate::reset_pending_tracking);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

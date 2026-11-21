@@ -1,7 +1,7 @@
 //! wallpaper-set（壁紙・ロック画面の設定）の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行、#1192）。
 //!
 //! 呼び出し元は `fandhe-gallery` の `screens/registry.rs`（`wallpaper_set_effect`）と、Activity 再生成時の
-//! `fandhe-gallery` の `android_main`（`reset_pending_tracking`）。Android（`WallpaperManager`）・macOS（`NSWorkspace`）・
+//! 登録表（`fandhe_runtime::teardown`）（`reset_pending_tracking`）。Android（`WallpaperManager`）・macOS（`NSWorkspace`）・
 //! Windows（`SystemParametersInfoW`）が実装し、他の OS は `Unsupported`。渡す画像は検査済みの PNG（`PngImage`）だけ。
 //! 守る範囲は 1 プロセス内の順序・失敗や禁止を成功に畳まないこと・完了通知を 1 回だけ反映すること。
 //! 守らない範囲は設定後に利用者や他アプリが壁紙を変えること。

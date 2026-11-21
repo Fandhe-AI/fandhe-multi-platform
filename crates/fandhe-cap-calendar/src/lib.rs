@@ -5,7 +5,7 @@
 //!
 //! 呼び出し元: 利用側（`fandhe-gallery` の `screens/registry.rs`）が [`calendar_add_effect`] を画面
 //! （`fandhe_core::screens::calendar_add`）の effect として登録する。Activity 再生成では gallery の
-//! `android_main` から Android 限定の `reset_pending_tracking` を呼ぶ。egui・`fandhe-device` には依存しない。
+//! `android_main` が回す登録表（`fandhe_runtime::teardown`）から Android 限定の `reset_pending_tracking` を呼ぶ。egui・`fandhe-device` には依存しない。
 //! 画面の外からは、OS の完了まで待つ同期の [`platform_calendar`] と、待ちを打ち切れる [`begin_add_event`] /
 //! [`poll_add_event`] / [`discard_add_event`] を使う（打ち切った要求は OS 側で後から保存されうる）。
 //!

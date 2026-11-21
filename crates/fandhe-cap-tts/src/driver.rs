@@ -6,7 +6,7 @@
 //!
 //! 非 wasm32 でのみ使われる（Web は #867 が別経路 `fandhe-web-dom` で配線する）。iOS/Android は本ファイルの
 //! [`platform_tts`] が `crate::ios::IosTts`/`crate::android::AndroidTts`（Issue #866）へ分岐する。
-//! 呼び出し元は最終成果物（`fandhe-gallery`）の画面レジストリ（`tts_speak_effect`）と終了フック（[`shutdown`]）。
+//! 呼び出し元は最終成果物（`fandhe-gallery`）の画面レジストリ（`tts_speak_effect`）と終了処理の登録表（`fandhe_runtime::teardown`）（[`shutdown`]）。
 //!
 //! # 別スレッドで OS を呼ぶ理由
 //!
@@ -110,6 +110,7 @@ const UNAVAILABLE: &str = "この環境では読み上げを使えません";
 /// それ以外（macOS/Windows は `CommandTts`、Linux 等その他は未対応）は
 /// 従来どおり `CommandTts::new()` の成否に従う。
 pub fn platform_tts() -> Result<&'static dyn Tts, &'static str> {
+    register_teardown();
     let cached = TTS.get_or_init(|| {
         #[cfg(target_os = "ios")]
         {
@@ -215,7 +216,7 @@ fn worker_loop(
     }
 }
 
-/// アプリ終了時に共有 TTS の発話を止める（最終成果物 `fandhe-gallery` の終了フックから呼ばれる契約）。
+/// アプリ終了時に共有 TTS の発話を止める（終了処理の登録表（`fandhe_runtime::teardown`）から呼ばれる契約）。
 ///
 /// [`TTS`] は `static OnceLock` で保持しているため、プロセス終了時に `Drop`
 /// （`crate::contract::CommandTts` の子プロセス回収処理）が走らない
@@ -355,6 +356,7 @@ fn fail_stop(sender: &CompletionSender<TtsSpeakState>, message: &'static str) {
 /// ここで発送した順序と一致する（モジュール doc「OS 呼び出しを 1 本のキューで
 /// 順序保証する理由」参照）。
 pub fn tts_speak_effect(state: &TtsSpeakState, sender: &CompletionSender<TtsSpeakState>) {
+    register_teardown();
     if dispatch_stop(state, sender) {
         let _ = command_queue().send(TtsCommand::Stop {
             sender: sender.clone(),
@@ -367,6 +369,13 @@ pub fn tts_speak_effect(state: &TtsSpeakState, sender: &CompletionSender<TtsSpea
             sender: sender.clone(),
         });
     }
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t = fandhe_runtime::teardown::Teardown::new("tts").on_exit(crate::shutdown);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

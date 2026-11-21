@@ -278,7 +278,7 @@ pub(crate) mod bridge {
         SLOT.deliver(request_id, result)
     }
 
-    /// Android 専用: Activity 再生成直後に `android_main` から呼ぶ
+    /// Android 専用: Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から呼ばれる
     /// （`fandhe-cap-biometric-auth` の `bridge::reset` と同じ位置づけ）。[`SLOT`]・
     /// [`STARTED_REQUEST_ID`] はプロセス static のため Activity 再生成をまたいで
     /// 残るが、画面状態（`MicRecordState`）は再生成のたびに `Default`（`Idle`）で
@@ -500,6 +500,7 @@ fn drive(
     target_os = "android"
 ))]
 pub fn mic_record_effect(state: &MicRecordState, sender: &CompletionSender<MicRecordState>) {
+    register_teardown();
     drive_callback(state, sender);
 }
 
@@ -512,6 +513,7 @@ pub fn mic_record_effect(state: &MicRecordState, sender: &CompletionSender<MicRe
     target_os = "android"
 )))]
 pub fn mic_record_effect(state: &MicRecordState, sender: &CompletionSender<MicRecordState>) {
+    register_teardown();
     drive(state, sender, &crate::contract::UnsupportedMicRecorder);
 }
 
@@ -521,6 +523,7 @@ pub fn mic_record_effect(state: &MicRecordState, sender: &CompletionSender<MicRe
 /// 画面は effect（`mic_record_effect`）の経路を使う。それ以外の OS（Linux 等）も同じく `Unsupported` で、固定の案内（`UNAVAILABLE`）が画面へ出る。
 /// 同期実装が要る OS が出たら、ここで OS ごとの実装へ分岐する。
 pub fn platform_mic_record() -> Box<dyn MicRecorder> {
+    register_teardown();
     Box::new(UnsupportedMicRecorder)
 }
 
@@ -570,6 +573,7 @@ fn clamp_max_duration(d: std::time::Duration) -> Result<std::time::Duration, Mic
     target_os = "android"
 ))]
 pub fn begin_mic_record(max_duration: std::time::Duration) -> Result<u64, MicRecordError> {
+    register_teardown();
     let max_duration = clamp_max_duration(max_duration)?;
     let request_id = bridge::begin_public().ok_or(MicRecordError::Internal("mic_record busy"))?;
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
@@ -596,6 +600,7 @@ pub fn begin_mic_record(max_duration: std::time::Duration) -> Result<u64, MicRec
     target_os = "android"
 )))]
 pub fn begin_mic_record(max_duration: std::time::Duration) -> Result<u64, MicRecordError> {
+    register_teardown();
     let _ = max_duration;
     Err(MicRecordError::Unsupported)
 }
@@ -603,6 +608,7 @@ pub fn begin_mic_record(max_duration: std::time::Duration) -> Result<u64, MicRec
 /// [`begin_mic_record`] の録音の停止を依頼する。依頼を OS へ渡せたら `true`。`request_id` が自分の進行中の要求でない・
 /// 既に終わっている場合は `false`（結果は自動停止か既存の配送で届く）。停止後の結果は [`poll_mic_record`] で取る。
 pub fn request_stop_mic_record(request_id: u64) -> bool {
+    register_teardown();
     #[cfg(any(
         target_os = "macos",
         target_os = "ios",
@@ -639,6 +645,7 @@ pub fn request_stop_mic_record(request_id: u64) -> bool {
 /// OS 側の録音は上限時間で自動停止し、後から届いた結果は id 不一致で捨てられる。OS 側の停止が済むまでの間に
 /// 次の [`begin_mic_record`] をすると、OS 側の二重開始として `Internal`（busy）の失敗になりうる。捨てたあとは [`poll_mic_record`] が `None` になる。
 pub fn discard_mic_record(request_id: u64) -> bool {
+    register_teardown();
     #[cfg(any(
         target_os = "macos",
         target_os = "ios",
@@ -681,6 +688,7 @@ pub fn discard_mic_record(request_id: u64) -> bool {
 pub fn poll_mic_record(
     request_id: u64,
 ) -> Option<Result<crate::contract::Recording, MicRecordError>> {
+    register_teardown();
     #[cfg(any(
         target_os = "macos",
         target_os = "ios",
@@ -726,13 +734,23 @@ pub fn poll_mic_record(
 /// 外部アプリ（呼ばない構成）では Java 側が再生成を引き継ぐ。
 /// `android_main` で effect の駆動前に呼ぶ前提で、開始（`begin_mic_record`・画面 effect）と並走させない
 /// （reset と Java 側 `abortPending` の間に別スレッドの開始が登録されると、その要求は pending のまま残りうる）。
-/// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照。
+/// 登録表（`fandhe_runtime::teardown`）から呼ばれる薄いエイリアス（[`bridge::reset`] 参照。
 /// `fandhe-cap-biometric-auth` の `reset_pending_tracking` と同じ命名・位置づけ）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
     bridge::reset();
     // Java 側の保留・実行中の要求も止める（残すと権限許可後に画面へ反映されない録音・聞き取りが走る）。
     crate::android::abort_pending();
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("mic-record")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 #[cfg(test)]

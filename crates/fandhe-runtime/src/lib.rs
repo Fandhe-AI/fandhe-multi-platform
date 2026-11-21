@@ -16,12 +16,14 @@
 //! - [`timer`] は「一定時間後に状態を変える」予約表。effect からは [`CompletionSender::after`] で使う
 //! - [`request_slot`] は request/response 型の端末機能が使う「要求 1 件の追跡」
 //! - [`tick`] は時間で進む画面の effect ドライバが共用する、フレームごとの経過時間の実測
+//! - [`teardown`] は終了処理・画面の破棄・Android の再生成時の破棄の登録表。機能 crate が初めて使われたときに登録する
 
 #![forbid(unsafe_code)]
 
 pub mod host_view;
 pub mod image_store;
 pub mod request_slot;
+pub mod teardown;
 pub mod tick;
 pub mod timer;
 

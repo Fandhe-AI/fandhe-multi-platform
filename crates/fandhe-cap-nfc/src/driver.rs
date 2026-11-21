@@ -41,6 +41,7 @@ type Outcome = Result<NfcReadOutcome, NfcReadFailure>;
 /// 現在のプラットフォームに応じた `NfcReader` 実装を返す（dispatch の最終形）。
 /// 画面の状態型に依存しないため、フレームワークの外のアプリも使える。
 pub fn platform_nfc() -> Arc<dyn NfcReader> {
+    register_teardown();
     #[cfg(target_os = "android")]
     {
         crate::android::implementation()
@@ -232,6 +233,7 @@ fn drive(
 
 /// `registry.rs` の `effect` 区画から `nfc_read` 画面用に配線される effect ドライバ。
 pub fn nfc_read_effect(state: &NfcReadState, sender: &CompletionSender<NfcReadState>) {
+    register_teardown();
     static IMPL: OnceLock<Arc<dyn NfcReader>> = OnceLock::new();
     let imp = IMPL.get_or_init(platform_nfc);
     drive(
@@ -240,6 +242,16 @@ pub fn nfc_read_effect(state: &NfcReadState, sender: &CompletionSender<NfcReadSt
         imp,
         SESSION.get_or_init(Session::default),
         READ_DEADLINE,
+    );
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("nfc")
+            .on_android_recreate(crate::reset_pending_tracking),
     );
 }
 

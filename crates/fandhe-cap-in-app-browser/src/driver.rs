@@ -90,6 +90,7 @@ impl InAppBrowser for Registered {
 /// 先行の要求が進行中か、公開側の結果が未取得なら置き換えず `Busy`（画面側の未取得の結果は画面の受け取り待ちへ移して始める）。
 /// `request_id` は 1 以上。
 pub fn platform_in_app_browser() -> Arc<dyn InAppBrowser> {
+    register_teardown();
     Arc::new(Registered(os_implementation()))
 }
 
@@ -371,6 +372,7 @@ fn start_request(
 /// 置き換えず [`InAppBrowserFailure::Busy`] を返す。画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める。結果は [`poll_open_result`] で取得する
 /// （OS 層の `try_begin_present` はこの要求を受理する）。
 pub fn open_url(raw_url: &str) -> Result<u64, InAppBrowserFailure> {
+    register_teardown();
     static IMPL: OnceLock<Arc<dyn InAppBrowser>> = OnceLock::new();
     let b = bridge();
     start_request(b, &**IMPL.get_or_init(os_implementation), b.public, raw_url)
@@ -383,6 +385,7 @@ pub fn open_url(raw_url: &str) -> Result<u64, InAppBrowserFailure> {
 pub fn poll_open_result(
     request_id: u64,
 ) -> Option<Result<InAppBrowserOutcome, InAppBrowserFailure>> {
+    register_teardown();
     poll_open(bridge(), request_id)
 }
 
@@ -467,8 +470,19 @@ pub fn in_app_browser_show_effect(
     state: &InAppBrowserShowState,
     sender: &CompletionSender<InAppBrowserShowState>,
 ) {
+    register_teardown();
     static IMPL: OnceLock<Arc<dyn InAppBrowser>> = OnceLock::new();
     drive(state, sender, IMPL.get_or_init(os_implementation), bridge());
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("in-app-browser")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 #[cfg(test)]

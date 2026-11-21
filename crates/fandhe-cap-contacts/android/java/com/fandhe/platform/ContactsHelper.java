@@ -36,7 +36,7 @@ import java.util.WeakHashMap;
 //   届けるため、再生成と同じく何も捨てない。
 // 残る限界: 連絡先アプリが結果を一度も返さない間（終了ではない破棄の後、利用者が戻らない間を含む）は、後続の要求が
 // 失敗（`Internal`）で断られ続ける。固定タイムアウトは掛けない。
-// Rust 側 `reset_pending_tracking`（gallery の `android_main`）が待ち手を先に戻していれば、引き継いだ結果は旧 id として捨てられる。
+// Rust 側 `reset_pending_tracking`（登録表（`fandhe_runtime::teardown`））が待ち手を先に戻していれば、引き継いだ結果は旧 id として捨てられる。
 // 読み書きは UI スレッドだけで行う。
 final class ContactsHelper {
     private static native void nativeOnContactPickerResult(long requestId, int code, String name);

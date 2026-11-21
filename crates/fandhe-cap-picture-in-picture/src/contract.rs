@@ -19,7 +19,7 @@
 //!
 //! # ライフサイクル（契約表 1）
 //!
-//! - macOS: 窓が背面・最小化でも小窓は続く。終了時は最終成果物の終了フックが `shutdown` で止めて解放する
+//! - macOS: 窓が背面・最小化でも小窓は続く。終了時は終了処理の登録表（`fandhe_runtime::teardown`）が `shutdown` で止めて解放する
 //! - iOS: 小窓中の背景遷移は正常（中断にしない）
 //! - Android: 小窓に入るときの `onPause` を中断と扱わない。Activity の作り直しでは `reset_pending_tracking`
 //! - Web: `pagehide` で小窓を閉じる

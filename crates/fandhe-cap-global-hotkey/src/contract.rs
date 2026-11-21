@@ -37,7 +37,7 @@
 //! - 解除は OS が成功を返したときだけハンドルを手放す。失敗なら
 //!   `Err(Internal("global_hotkey unregister"))` を返し、登録中のまま残して再試行できる。
 //!   未登録での解除は `Ok(NotRegistered)`
-//! - アプリ終了（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`））でも解除する
+//! - アプリ終了（終了処理の登録表（`fandhe_runtime::teardown`））でも解除する
 //!
 //! # スレッド
 //!

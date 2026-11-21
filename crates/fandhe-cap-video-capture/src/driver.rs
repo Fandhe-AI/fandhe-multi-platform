@@ -67,6 +67,7 @@ type Outcome = Result<VideoCaptureOutcome, VideoCaptureFailure>;
 /// `capture(request_id, ..)` は渡した id で要求を bridge へ登録してから OS へ渡すため、撮影 UI が出る。
 /// 結果は [`take_capture_result`] で 1 回だけ取り出す（取り出すまで次の要求は `Internal` で断る）。
 pub fn platform_video_capture() -> Arc<dyn VideoCapturer> {
+    register_teardown();
     Arc::new(Registering(raw_platform()))
 }
 
@@ -74,6 +75,7 @@ pub fn platform_video_capture() -> Arc<dyn VideoCapturer> {
 pub fn take_capture_result(
     request_id: u64,
 ) -> Option<Result<VideoCaptureOutcome, VideoCaptureFailure>> {
+    register_teardown();
     bridge().slot.take_ready(request_id)
 }
 
@@ -81,6 +83,7 @@ pub fn take_capture_result(
 /// `platform_video_capture()` を直接使うアプリが、自前のパネルへ状態を写すための口。
 /// 戻り値は本 crate の [`PanelState`] で、画面の状態型（`fandhe_core::screens`）に依存しない。
 pub fn capture_panel(request_id: u64) -> Option<PanelState> {
+    register_teardown();
     bridge()
         .panel()
         .filter(|(id, _)| *id == request_id)
@@ -90,6 +93,7 @@ pub fn capture_panel(request_id: u64) -> Option<PanelState> {
 /// 撮影パネルの命令（録画の開始・停止・取り消し）を `request_id` の要求へ渡す。Windows 以外は何もしない。
 /// 命令は本 crate の [`PanelOp`] で、画面の状態型に依存しない。
 pub fn send_panel_command(request_id: u64, command: PanelOp) {
+    register_teardown();
     forward_panel_command(request_id, command);
 }
 
@@ -363,7 +367,7 @@ fn panel_op_from_command(command: PanelCommand) -> PanelOp {
 
 /// 画面の作り直し時に保留中の要求を破棄する。画面状態は `default()`（世代 0）に戻るため、
 /// 保留が残ると次の要求が発送されず飲み込まれる。旧要求の遅延完了は id 不一致で捨てられる。
-// Android の再生成経路（`fandhe-gallery` の `android_main`）から呼ばれる。
+// Android の再生成経路（登録表（`fandhe_runtime::teardown`））から呼ばれる。
 pub fn reset_pending_tracking() {
     if let Some(b) = BRIDGE.get() {
         b.reset();
@@ -486,6 +490,7 @@ pub fn video_capture_show_effect(
     state: &VideoCaptureShowState,
     sender: &CompletionSender<VideoCaptureShowState>,
 ) {
+    register_teardown();
     static IMPL: OnceLock<Arc<dyn VideoCapturer>> = OnceLock::new();
     drive(
         state,
@@ -502,6 +507,16 @@ fn forward_panel_command(request_id: u64, command: PanelOp) {
     crate::windows::panel_command(request_id, command);
     #[cfg(not(target_os = "windows"))]
     let _ = (request_id, command);
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("video-capture")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 #[cfg(test)]

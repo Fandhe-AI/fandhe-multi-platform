@@ -118,7 +118,7 @@ pub(crate) mod bridge {
         SLOT.deliver(request_id, (value, result))
     }
 
-    /// Android: Activity 再生成直後に `android_main` から呼ぶ。保留中の要求は復元せず破棄し、
+    /// Android: Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から呼ばれる。保留中の要求は復元せず破棄し、
     /// 以後届く旧 `request_id` の [`deliver`] を無視させる。待っている呼び出しは送信側を捨てて起こす
     /// （受信側は `Internal` で戻る）。
     #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -147,7 +147,7 @@ impl crate::contract::AppBadge for CallbackAppBadge {
     }
 }
 
-/// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
+/// 登録表（`fandhe_runtime::teardown`）から呼ばれる薄いエイリアス（[`bridge::reset`] 参照）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
     bridge::reset();
@@ -231,6 +231,7 @@ fn drive_callback(state: &AppBadgeSetState, sender: &CompletionSender<AppBadgeSe
 /// `registry.rs` から `app_badge_set` 画面用に配線される effect ドライバ（iOS / Android）。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn app_badge_set_effect(state: &AppBadgeSetState, sender: &CompletionSender<AppBadgeSetState>) {
+    register_teardown();
     drive_callback(state, sender);
 }
 
@@ -258,6 +259,7 @@ fn drive(
 /// iOS / Android はコールバック型のため、OS の完了（許可ダイアログの応答を含む）まで `set` を block する。
 /// 同時に 1 件だけで、先行が終わるまで後から呼ぶと `Internal` で即座に戻る。Linux は常に `Unsupported`。
 pub fn platform_app_badge() -> Box<dyn crate::contract::AppBadge> {
+    register_teardown();
     #[cfg(any(target_os = "ios", target_os = "android"))]
     return Box::new(CallbackAppBadge);
     #[cfg(target_os = "macos")]
@@ -279,10 +281,21 @@ pub fn platform_app_badge() -> Box<dyn crate::contract::AppBadge> {
 /// 戻らない OS 呼び出しが見つかったら、作業スレッド + bridge へ移す。
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn app_badge_set_effect(state: &AppBadgeSetState, sender: &CompletionSender<AppBadgeSetState>) {
+    register_teardown();
     if take_request(state).is_none() {
         return;
     }
     drive(state, sender, platform_app_badge().as_ref());
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("app-badge")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 #[cfg(test)]

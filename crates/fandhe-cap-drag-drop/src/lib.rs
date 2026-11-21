@@ -47,6 +47,7 @@ pub use fandhe_device::drag_drop::{
 /// iOS で取り付けに失敗したら [`DropSetupError`] を返す（呼び出し側が利用者へ見せる。取り付けは間隔を置いて再試行される）。
 /// 画面ドライバ（[`drag_drop_effect`]）と同時に使わない（出来事を取り合う）。
 pub fn platform_drag_drop() -> Result<Vec<drop_session::DropEvent>, DropSetupError> {
+    crate::driver::register_teardown();
     #[cfg(target_os = "ios")]
     {
         ios::mark_active();

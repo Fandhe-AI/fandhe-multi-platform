@@ -2,7 +2,7 @@
 //!
 //! 呼び出し元は `fandhe-gallery` の `screens/registry.rs`（`geocoding_search_show_effect`）。iOS・macOS は MapKit、Android は
 //! `android.location.Geocoder`（Activity ごとの `GeocodingHelper` を `GeocodingLifecycle` が束ねる）が実装し、他の OS は `Unsupported`。
-//! Activity の作り直しでは `fandhe-gallery` の `android_main` が `reset_pending_tracking` を呼ぶ。
+//! Activity の作り直しでは登録表（`fandhe_runtime::teardown`）が `reset_pending_tracking` を呼ぶ。
 //! 守る範囲は 1 プロセス内の要求順序・嘘の成功の禁止（0 件・座標なしを成功にしない）・住所と座標のログ非出力。
 //! 守らない範囲は OS 側の処理が期限後も走り切ること、通信不可と回数上限の区別（Android）。
 //!

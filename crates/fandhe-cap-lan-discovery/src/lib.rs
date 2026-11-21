@@ -1,6 +1,6 @@
 //! lan-discovery（同じネットワークの `_http._tcp` サービスを一定時間探して一覧で返す）の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。
 //! iOS・macOS は Network.framework（`nw_browser`）と dns_sd、Android は `NsdManager`（Java 側 `LanDiscoveryHelper`）、Windows は Win32 `DnsServiceBrowse`。
-//! 呼び出し元は `fandhe-gallery` の画面登録（`registry.rs` の `effect` 区画）が登録する effect ドライバ（`driver`）と、終了フックから呼ばれる [`stop_shared_discovery`]。
+//! 呼び出し元は `fandhe-gallery` の画面登録（`registry.rs` の `effect` 区画）が登録する effect ドライバ（`driver`）と、終了処理の登録表（`fandhe_runtime::teardown`）から呼ばれる [`stop_shared_discovery`]。
 //!
 //! 守る範囲: 失敗（許可なし・未接続・非対応・中断）を空リストの成功へ畳まないこと、新しい要求が古い要求を置き換えること、期限（[`BROWSE_DURATION_MS`]）の単調時計での計測、全経路での探索の停止と資源の解放。
 //! 守らない範囲: 窓の間に公開をやめたサービスの残り、窓内に解決が済まない場合の欠落（IP は 1 件のみ）、ファイアウォール由来の 0 件、複数プロセスの結果差。詳細は `contract.rs` の契約を参照。

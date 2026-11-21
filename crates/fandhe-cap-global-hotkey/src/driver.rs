@@ -115,6 +115,7 @@ fn drive(
 /// 現在の OS の実装を返す。画面の状態型に依存しないため、フレームワークの外のアプリも使える。
 /// 実体はプロセスに 1 つで、[`shutdown`] が登録と同じものに届く。
 pub fn platform_global_hotkey() -> Arc<dyn GlobalHotkey> {
+    register_teardown();
     shared_impl().clone()
 }
 
@@ -136,6 +137,7 @@ pub fn global_hotkey_effect(
     state: &GlobalHotkeyState,
     sender: &CompletionSender<GlobalHotkeyState>,
 ) {
+    register_teardown();
     let needs_platform =
         platform_kind() != Platform::Unknown && state.platform == Platform::Unknown;
     if take_action(state).is_none() && !needs_platform {
@@ -144,10 +146,17 @@ pub fn global_hotkey_effect(
     drive(state, sender, shared_impl().as_ref());
 }
 
-/// アプリ終了時に登録を外す（`fandhe-gallery` の終了フックから、eframe の `on_exit`（main thread）で呼ばれる）。
+/// アプリ終了時に登録を外す（終了処理の登録表（`fandhe_runtime::teardown`）から、eframe の `on_exit`（main thread）で呼ばれる）。
 /// 終了経路なので結果は見ない。
 pub fn shutdown() {
     let _ = shared_impl().unregister();
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t = fandhe_runtime::teardown::Teardown::new("global-hotkey").on_exit(crate::shutdown);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

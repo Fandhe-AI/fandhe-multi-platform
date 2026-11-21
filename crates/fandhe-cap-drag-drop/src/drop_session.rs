@@ -34,7 +34,7 @@
 //! 「このセッションはまだ現在のものか」を事前に問い合わせてから I/O を始めたいため、
 //! [`wants`] を追加した（iOS は completion が既に非同期に開始済みで問い合わせる余地が
 //! 無く、[`item`] の世代照合だけで十分だった）。Activity 再生成時は [`reset`] を呼び
-//! （`android_main` から、モジュール doc 参照）、進行中のセッションと未適用イベントを
+//! （`android_main` が回す登録表 `fandhe_runtime::teardown` から、モジュール doc 参照）、進行中のセッションと未適用イベントを
 //! 破棄する。
 
 // `wants` と `reset` は Android だけが使う。デスクトップ・iOS では未使用になるため許可する。
@@ -255,7 +255,7 @@ pub fn wants(session: u64, index: usize) -> bool {
     lock().wants(session, index)
 }
 
-/// [`DropSessions::reset`] へ委譲する（`android_main` から Activity 再生成のたびに呼ぶ、
+/// [`DropSessions::reset`] へ委譲する（Activity 再生成のたびに `android_main` が回す登録表から呼ばれる、
 /// モジュール doc「Android 経路」参照）。iOS では呼ばれない（`UIDropInteraction` の
 /// 登録が破棄されないため、`ensure_installed`/`INSTALLED` 側で別途扱う）。
 pub fn reset() {

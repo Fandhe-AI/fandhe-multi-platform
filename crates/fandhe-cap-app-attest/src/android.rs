@@ -15,7 +15,7 @@
 //! # 期限・ライフサイクル
 //!
 //! 期限は呼び出しに渡す残り時間で、Java が単調時計で確かめる（期限後に届いた成功は捨てて 1 を返す）。
-//! Activity の作り直しでは Rust 側の保留記録を `reset_pending_tracking`（`fandhe-gallery` の `android_main` が呼ぶ） が捨てる
+//! Activity の作り直しでは Rust 側の保留記録を `reset_pending_tracking`（登録表（`fandhe_runtime::teardown`）が呼ぶ） が捨てる
 //! （`android.rs` から配線済み。要求 id は単調に増えるので、古い要求の完了が新しい要求を消費しない）。
 //! 鍵は要求ごとに一意の alias で作り、Java が finally で削除する。前回プロセスの残りは初回に掃除する。
 //!

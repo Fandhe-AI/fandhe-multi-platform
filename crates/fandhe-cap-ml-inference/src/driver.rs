@@ -41,6 +41,7 @@ use fandhe_runtime::CompletionSender;
 /// 画面の状態型に依存しない入口。フレームワークの外のアプリはこれで OS 実装を取得し、effect を自分で書く
 /// （`docs/architecture/consumer-app-structure.md` §8.2）。
 pub fn platform_ml_inference() -> Arc<dyn MlInference> {
+    register_teardown();
     #[cfg(target_os = "macos")]
     {
         Arc::new(crate::apple::AppleMlInference)
@@ -200,6 +201,7 @@ fn drive(
 
 /// `registry.rs` の `effect` 区画から `ml_infer` 画面用に配線される effect ドライバ。
 pub fn ml_infer_effect(state: &MlInferState, sender: &CompletionSender<MlInferState>) {
+    register_teardown();
     static IMPL: std::sync::OnceLock<Arc<dyn MlInference>> = std::sync::OnceLock::new();
     let imp = IMPL.get_or_init(platform_ml_inference);
     drive(
@@ -208,6 +210,16 @@ pub fn ml_infer_effect(state: &MlInferState, sender: &CompletionSender<MlInferSt
         imp,
         SESSION.get_or_init(Session::default),
         INFER_DEADLINE,
+    );
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("ml-inference")
+            .on_android_recreate(crate::reset_pending_tracking),
     );
 }
 

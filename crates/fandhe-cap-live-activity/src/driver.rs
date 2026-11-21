@@ -33,6 +33,7 @@ use fandhe_runtime::request_slot::{
 
 /// OS ごとの実装を 1 つだけ持つ（iOS・Android は各 OS 実装、他 OS は非対応）。
 pub fn platform_live_activity() -> &'static Arc<dyn LiveActivity> {
+    register_teardown();
     static INSTANCE: OnceLock<Arc<dyn LiveActivity>> = OnceLock::new();
     INSTANCE.get_or_init(|| {
         #[cfg(target_os = "ios")]
@@ -51,6 +52,7 @@ pub fn platform_live_activity() -> &'static Arc<dyn LiveActivity> {
 /// `Internal("live_activity reset")` で戻る。待ちを打ち切りたいときは [`begin_live_activity`] / [`poll_live_activity`] /
 /// [`discard_live_activity`] を使う。
 pub fn run_live_activity(op: LiveOperation) -> Result<LiveOutcome, LiveActivityError> {
+    register_teardown();
     let request_id = begin_live_activity(op)?;
     bridge::PUBLIC.wait(&bridge::SLOT, request_id, bridge::lost)
 }
@@ -62,6 +64,7 @@ pub fn run_live_activity(op: LiveOperation) -> Result<LiveOutcome, LiveActivityE
 /// - 画面側の届いた未取得の結果は捨てずに画面の受け取り待ちへ移して始める（画面はそのまま受け取る）
 /// - 依頼自体の失敗は `Err`（結果は届かない）。非対応の OS は `Unsupported`
 pub fn begin_live_activity(op: LiveOperation) -> Result<u64, LiveActivityError> {
+    register_teardown();
     let request_id =
         bridge::begin_public().ok_or(LiveActivityError::Internal("live_activity busy"))?;
     if let Err(e) = platform_live_activity().submit(request_id, op) {
@@ -78,6 +81,7 @@ pub fn begin_live_activity(op: LiveOperation) -> Result<u64, LiveActivityError> 
 /// 打ち切った（`discard` した）要求は、OS 側で後から開始・更新・終了されうる（未確定）。そのため結果は届かない。
 /// 並行して同じ id を poll しても、結果が二重に返ることはない。
 pub fn poll_live_activity(request_id: u64) -> Option<Result<LiveOutcome, LiveActivityError>> {
+    register_teardown();
     bridge::PUBLIC.poll(&bridge::SLOT, request_id, bridge::lost)
 }
 
@@ -88,6 +92,7 @@ pub fn poll_live_activity(request_id: u64) -> Option<Result<LiveOutcome, LiveAct
 /// 後から届いた結果は id で照合して捨て、新しい要求へ結びつけない。OS がまだ進行中の間は、次の開始
 /// （画面・公開とも）は `Internal("live_activity busy")` で断られる（OS 側が置き換えて重複させないため）。
 pub fn discard_live_activity(request_id: u64) -> bool {
+    register_teardown();
     bridge::PUBLIC.discard(&bridge::SLOT, request_id)
 }
 
@@ -214,15 +219,26 @@ pub fn live_activity_show_effect(
     state: &LiveActivityShowState,
     sender: &CompletionSender<LiveActivityShowState>,
 ) {
+    register_teardown();
     drive(state, sender, platform_live_activity().as_ref());
 }
 
-/// Android: Activity 再生成直後に `android_main` から呼ぶ。保留中の要求は復元せず破棄して以後届く旧
+/// Android: Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から呼ばれる。保留中の要求は復元せず破棄して以後届く旧
 /// `request_id` の完了を無視させ、OS 側の表示も閉じる。再生成後の画面は `Idle` から始まるため、
 /// 表示を残すと「開始」の次の操作と食い違う（契約表 1・9）。
 pub fn reset_pending_tracking() {
     bridge::SLOT.reset();
     platform_live_activity().dismiss_all();
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("live-activity")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 #[cfg(test)]

@@ -57,6 +57,7 @@ type Outcome = Result<CompanionDeviceOutcome, CompanionDeviceFailure>;
 /// 現在のプラットフォームに応じた `CompanionDevicePicker` 実装を返す（dispatch の最終形）。
 /// 画面の状態型に依存しないため、フレームワークの外のアプリも使える。
 pub fn platform_companion_device() -> Arc<dyn CompanionDevicePicker> {
+    register_teardown();
     #[cfg(target_os = "android")]
     {
         crate::android::implementation()
@@ -270,12 +271,23 @@ pub fn companion_device_show_effect(
     state: &CompanionDeviceShowState,
     sender: &CompletionSender<CompanionDeviceShowState>,
 ) {
+    register_teardown();
     static IMPL: OnceLock<Arc<dyn CompanionDevicePicker>> = OnceLock::new();
     drive(
         state,
         sender,
         IMPL.get_or_init(platform_companion_device),
         bridge(),
+    );
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("companion-device")
+            .on_android_recreate(crate::reset_pending_tracking),
     );
 }
 

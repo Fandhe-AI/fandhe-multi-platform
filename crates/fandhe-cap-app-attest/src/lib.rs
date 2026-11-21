@@ -1,7 +1,7 @@
 //! app-attest の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。端末・アプリの真正性証明（Android の Key Attestation）。
 //!
 //! 呼び出し元は `fandhe-gallery` の `screens/registry.rs`（`app_attest_effect`）。Android のみ実装（`AppAttestHelper` の static を JNI で呼ぶ）で、
-//! 他の OS は `Unsupported`。Activity の作り直しでは `fandhe-gallery` の `android_main` が `reset_pending_tracking` を呼ぶ。
+//! 他の OS は `Unsupported`。Activity の作り直しでは登録表（`fandhe_runtime::teardown`）が `reset_pending_tracking` を呼ぶ。
 //! 守る範囲は 1 プロセス内の要求と完了の順序・失敗を成功に畳まないこと・鍵エントリの解放。
 //! 守らない範囲はチェーンの信頼性（サーバー側の判断）・StrongBox の不使用・複数プロセス間（`android` の doc を参照）。
 //!

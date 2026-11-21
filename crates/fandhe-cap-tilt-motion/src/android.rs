@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// 現在表示中の画面が傾き（`tilt_ball`）を使うかどうか。Java 側の `motionListener` は画面に関わらず常にセンサを登録して
 /// 通知するため、素直に毎回 `request_repaint` すると傾きを使わない画面でも `SENSOR_DELAY_GAME` の頻度で再描画要求が発生し
 /// 不要な電力消費になる。起動画面（`FANDHE_PROXY_APP` で決まる画面は `Activity` 生存中は変わらない）の決定直後に
-/// 最終成果物（`fandhe-gallery` の `android_main`）が [`set_screen_active`] で設定する。
+/// 最終成果物（`fandhe-gallery` の起動画面の選択、`select.rs`）が [`set_screen_active`] で設定する。
 static SCREEN_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 /// 画面が傾きを使うかを差し替える（`android_main` が起動画面を決定した直後に呼ぶ）。

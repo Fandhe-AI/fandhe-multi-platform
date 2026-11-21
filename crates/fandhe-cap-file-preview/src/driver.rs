@@ -76,6 +76,7 @@ pub(crate) fn sample_bytes(kind: FileKind) -> Vec<u8> {
 ///
 /// 画面の状態型に依存しない入口で、フレームワークの外のアプリも契約を直接呼べる。
 pub fn platform_file_preview() -> Arc<dyn FileThumbnailer> {
+    register_teardown();
     #[cfg(target_os = "macos")]
     {
         Arc::new(crate::apple::AppleFileThumbnailer)
@@ -110,6 +111,7 @@ pub fn platform_file_preview() -> Arc<dyn FileThumbnailer> {
 /// OS が同期で結果を確定した場合も、[`poll_file_preview`] で受け取る。依頼自体の失敗は `Err`（結果は届かない）。
 /// サムネイルは同期の [`platform_file_preview`] を使う。
 pub fn begin_file_preview(kind: FileKind) -> Result<u64, FilePreviewError> {
+    register_teardown();
     // 画面の未取得の結果も含め、届いて未取得の結果があるうちは置き換えない。
     let request_id = SESSION
         .slot
@@ -130,6 +132,7 @@ pub fn begin_file_preview(kind: FileKind) -> Result<u64, FilePreviewError> {
 
 /// [`begin_file_preview`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・取り出し済みは `None`。
 pub fn poll_file_preview(request_id: u64) -> Option<Result<PreviewResult, FilePreviewError>> {
+    register_teardown();
     match SESSION.slot.take_ready(request_id)? {
         Raw::Preview(r) => Some(r),
         Raw::Screen(_) => Some(Err(FilePreviewError::Internal("file preview result"))),
@@ -436,6 +439,7 @@ fn drive(
 
 /// `registry.rs` の `effect` 区画から `file_preview` 画面用に配線される effect ドライバ。
 pub fn file_preview_effect(state: &FilePreviewState, sender: &CompletionSender<FilePreviewState>) {
+    register_teardown();
     static IMPL: std::sync::OnceLock<Arc<dyn FileThumbnailer>> = std::sync::OnceLock::new();
     let imp = IMPL.get_or_init(platform_file_preview);
     drive(
@@ -445,6 +449,16 @@ pub fn file_preview_effect(state: &FilePreviewState, sender: &CompletionSender<F
         imp,
         present_preview,
         THUMBNAIL_DEADLINE,
+    );
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("file-preview")
+            .on_android_recreate(crate::reset_pending_tracking),
     );
 }
 

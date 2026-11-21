@@ -8,7 +8,7 @@
 //!
 //! [`platform_midi`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
 //! モジュールだけを埋める（macOS / iOS: `apple_midi`（iOS 14 以上。未満は失敗コードを返す）、
-//! Android: `android_midi`（#1400。再生成時は `reset_pending_tracking` を `android_main` が呼ぶ）、Windows: `windows_midi`（#1402））。それ以外は
+//! Android: `android_midi`（#1400。再生成時は `reset_pending_tracking` を`android_main` が回す登録表（`fandhe_runtime::teardown`）が呼ぶ）、Windows: `windows_midi`（#1402））。それ以外は
 //! `UnsupportedMidiInput` 固定で、ダミーの成功実装へは倒さない。
 //!
 //! # 並行性
@@ -43,6 +43,7 @@ use fandhe_runtime::CompletionSender;
 
 /// プロセスに 1 つだけ持つ実装（`stop` が `start` と同じ実体に届くようにする）。
 pub fn platform_midi() -> &'static Arc<dyn MidiInput> {
+    register_teardown();
     static INPUT: OnceLock<Arc<dyn MidiInput>> = OnceLock::new();
     INPUT.get_or_init(|| {
         #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -294,6 +295,7 @@ fn drive(
 
 /// `registry.rs` の `effect` 区画から `midi_show` 画面用に配線される effect ドライバ。
 pub fn midi_show_effect(state: &MidiShowState, sender: &CompletionSender<MidiShowState>) {
+    register_teardown();
     drive(
         state,
         sender,
@@ -303,9 +305,18 @@ pub fn midi_show_effect(state: &MidiShowState, sender: &CompletionSender<MidiSho
     );
 }
 
-/// アプリ終了時に購読を外す（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）から呼ばれる）。
+/// アプリ終了時に購読を外す（終了処理の登録表（`fandhe_runtime::teardown`）から呼ばれる）。
 pub fn shutdown() {
     platform_midi().stop();
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t = fandhe_runtime::teardown::Teardown::new("midi").on_exit(crate::shutdown);
+    #[cfg(target_os = "android")]
+    let t = t.on_android_recreate(crate::reset_pending_tracking);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

@@ -75,6 +75,7 @@ fn platform_now_playing() -> &'static Arc<dyn NowPlaying> {
 /// プロセスに 1 つだけ持つ実装（`clear` / `shutdown` が `publish` と同じ実体に届くようにする）。
 /// フレームワークの外のアプリも、画面の状態型なしで OS の「再生中」表示を操作できる入口。
 pub fn platform_now_playing_controls() -> Arc<dyn NowPlaying> {
+    register_teardown();
     Arc::clone(platform_now_playing())
 }
 
@@ -84,6 +85,7 @@ pub fn platform_now_playing_controls() -> Arc<dyn NowPlaying> {
 /// [`platform_now_playing_controls`] の `publish` の前に `arm()`（`publish` が失敗したら `disarm()`）、
 /// OS からの再生・一時停止は `take()` で取り出す。`clear` / 停止を確定する前に `disarm()` して、停止後に届く古い操作を捨てる。
 pub fn commands() -> &'static SharedOsCommand {
+    register_teardown();
     static COMMANDS: OnceLock<SharedOsCommand> = OnceLock::new();
     COMMANDS.get_or_init(SharedOsCommand::new)
 }
@@ -194,6 +196,7 @@ fn sync(
 
 /// `media_playback::audio_play_effect` から毎フレーム呼ばれる。
 pub fn sync_audio_play(state: &AudioPlayState, sender: &CompletionSender<AudioPlayState>) {
+    register_teardown();
     sync(
         state,
         sender,
@@ -235,10 +238,20 @@ pub fn reset_pending_tracking() {
     }
 }
 
-/// アプリ終了時に表示を取り下げる（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）から呼ばれる）。
+/// アプリ終了時に表示を取り下げる（終了処理の登録表（`fandhe_runtime::teardown`）から呼ばれる）。
 pub fn shutdown() {
     commands().disarm();
     platform_now_playing().shutdown();
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t =
+        fandhe_runtime::teardown::Teardown::new("now-playing-controls").on_exit(crate::shutdown);
+    #[cfg(target_os = "android")]
+    let t = t.on_android_recreate(crate::reset_pending_tracking);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

@@ -18,7 +18,7 @@
 //! `TimedOut` は bridge の期限だけが確定する。
 //!
 //! 守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止・Activity 再生成時の旧要求の破棄
-//! （アプリの `android_main` が `reset_pending_tracking` を呼ぶ）と、旧要求の関連付けを外して捨てること。
+//! （登録表（`fandhe_runtime::teardown`）が `reset_pending_tracking` を呼ぶ）と、旧要求の関連付けを外して捨てること。
 //! 再生成で helper が回収された後に届いた関連付けは、static コールバックが Application Context で外す。
 //! 守らない範囲: API 32 以下・関連付けを残すこと・背景での起動・機器との通信とボンディング・
 //! 選択画面の表示中のプロセス死・複数プロセス。

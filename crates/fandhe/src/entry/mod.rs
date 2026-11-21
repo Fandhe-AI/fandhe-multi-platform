@@ -9,7 +9,8 @@
 //! - Web: [`start_web`]（glow / WebGL2、`web.rs`）
 //!
 //! どの OS でも、利用者の関数（[`BuildFn`]）を起動時に 1 回だけ呼び、返した画面を最初に出す。画面の名前や
-//! 環境変数では選ばない（画面の登録表に依存しない）。選んだ端末機能の起動前の登録と終了処理は `lifecycle.rs` が持つ。
+//! 環境変数では選ばない（画面の登録表に依存しない）。選んだ端末機能の起動前の登録は `lifecycle.rs` が持つ。終了処理と
+//! 再生成時の破棄は、機能 crate が `fandhe_runtime::teardown` へ登録したものを描画層と `android.rs` が回す。
 
 #[cfg(target_os = "android")]
 mod android;
@@ -44,7 +45,6 @@ pub fn run(title: &str, build: BuildFn) -> Result<(), fandhe_render_egui::Launch
     #[cfg(not(target_os = "ios"))]
     {
         lifecycle::before_launch();
-        lifecycle::register_teardown_hooks();
         fandhe_render_egui::launch::run_desktop(title, desktop_inner_size(), move |lc| {
             // Issue #898: Windows の共有シート・生体認証などが要る HWND は起動時のコンテキストからしか取れないため、
             // 構築時に 1 度だけ控える。
@@ -82,10 +82,4 @@ pub fn start_web(build: BuildFn) -> Result<(), wasm_bindgen::JsValue> {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn before_launch() {
     lifecycle::before_launch();
-}
-
-/// 同上の、終了処理の登録。
-#[cfg(not(target_arch = "wasm32"))]
-pub fn register_teardown_hooks() {
-    lifecycle::register_teardown_hooks();
 }

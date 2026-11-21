@@ -205,7 +205,7 @@ pub(crate) mod bridge {
         true
     }
 
-    /// Android: Activity 再生成直後に `android_main` から呼ぶ。保留中の要求は復元せず破棄し、
+    /// Android: Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から呼ばれる。保留中の要求は復元せず破棄し、
     /// 以後届く旧 `request_id` の [`deliver`] を無視させる（`app_badge::bridge::reset` と同じ）。受け取り待ちの結果も捨てる。
     /// 持ち主の印は残し、画面は次の poll で失敗に、公開側は次の [`poll_public`] で失われた要求を 1 度だけ通知する。
     #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
@@ -220,7 +220,7 @@ pub(crate) mod bridge {
     }
 }
 
-/// gallery の `android_main`（Activity 再生成）から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
+/// 登録表（`fandhe_runtime::teardown`）（Activity 再生成）から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
     bridge::reset();
@@ -305,6 +305,7 @@ fn drive_callback(state: &ComposeMailSmsState, sender: &CompletionSender<Compose
 /// （iOS には reset が無く、discard も進行中の slot は残す）。`.m` は `modalInPresentation` でスワイプの閉じを塞いでいる。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn begin_compose_mail_sms(req: &ComposeRequest) -> Result<u64, ComposeMailSmsError> {
+    register_teardown();
     let request_id = bridge::begin_public().ok_or(ComposeMailSmsError::Internal(contract::BUSY))?;
     if let Err(e) = begin_compose(request_id, req) {
         bridge::abort_public(request_id);
@@ -316,6 +317,7 @@ pub fn begin_compose_mail_sms(req: &ComposeRequest) -> Result<u64, ComposeMailSm
 /// iOS / Android 以外では成功へ倒さず `Unsupported`（macOS・Windows は同期の [`platform_compose_mail_sms`]）。
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn begin_compose_mail_sms(req: &ComposeRequest) -> Result<u64, ComposeMailSmsError> {
+    register_teardown();
     let _ = req;
     Err(ComposeMailSmsError::Unsupported("compose"))
 }
@@ -326,6 +328,7 @@ pub fn begin_compose_mail_sms(req: &ComposeRequest) -> Result<u64, ComposeMailSm
 pub fn poll_compose_mail_sms(
     request_id: u64,
 ) -> Option<Result<ComposeOutcome, ComposeMailSmsError>> {
+    register_teardown();
     #[cfg(any(target_os = "ios", target_os = "android"))]
     {
         bridge::poll_public(request_id)
@@ -341,6 +344,7 @@ pub fn poll_compose_mail_sms(
 /// （他人の id・取り出し済み・0・iOS / Android 以外は `false`）。以後 [`poll_compose_mail_sms`] は `None`。
 /// 作成画面は閉じない。開いたままなら、OS の結果が届くまで次の開始（画面・公開とも）は busy になる。
 pub fn discard_compose_mail_sms(request_id: u64) -> bool {
+    register_teardown();
     #[cfg(any(target_os = "ios", target_os = "android"))]
     {
         bridge::discard_public(request_id)
@@ -358,6 +362,7 @@ pub fn compose_mail_sms_effect(
     state: &ComposeMailSmsState,
     sender: &CompletionSender<ComposeMailSmsState>,
 ) {
+    register_teardown();
     drive_callback(state, sender);
 }
 
@@ -409,6 +414,7 @@ fn finish(
 /// iOS / Android は結果をコールバックで受ける別の型（`bridge`）で、同期の [`ComposeMailSms`] を持たないため載せない。
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn platform_compose_mail_sms() -> Box<dyn ComposeMailSms> {
+    register_teardown();
     #[cfg(target_os = "macos")]
     return crate::macos::implementation();
     #[cfg(target_os = "windows")]
@@ -426,10 +432,21 @@ pub fn compose_mail_sms_effect(
     state: &ComposeMailSmsState,
     sender: &CompletionSender<ComposeMailSmsState>,
 ) {
+    register_teardown();
     if take_request(state).is_none() {
         return;
     }
     drive(state, sender, platform_compose_mail_sms().as_ref());
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("compose-mail-sms")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 #[cfg(test)]

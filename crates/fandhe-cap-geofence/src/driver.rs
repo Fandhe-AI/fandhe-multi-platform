@@ -47,6 +47,7 @@ use fandhe_runtime::CompletionSender;
 /// 画面の状態型に依存しない入口。判定器そのもの（[`GeofenceTracker`]）を新しく作って返す
 /// （プロセス共有の状態は持たない。画面は [`geofence_effect`] の static を使う）。
 pub fn platform_geofence() -> GeofenceTracker {
+    register_teardown();
     GeofenceTracker::new()
 }
 
@@ -77,7 +78,7 @@ static DRIVER: Mutex<Option<GeofenceDriver>> = Mutex::new(None);
 /// Android: Activity 再生成で画面の `GeofenceShowState` が未登録の既定値に戻るのに合わせ、
 /// static 側の登録（判定器・登録地点・案内・履歴・処理済み世代）をまとめて破棄して未登録へ
 /// 揃える（永続化はしない。`fandhe_cap_location::reset_retry_tracking` と同じ位置づけで
-/// `fandhe-gallery` の `android_main` から呼ぶ）。
+/// 登録表（`fandhe_runtime::teardown`）から呼ぶ）。
 #[cfg(any(target_os = "android", test))]
 pub fn reset_register_tracking() {
     *DRIVER.lock().unwrap_or_else(|p| p.into_inner()) = None;
@@ -169,6 +170,7 @@ fn drive(
 
 /// `registry.rs` の `effect` 区画から `geofence_show` 画面用に配線される effect ドライバ。
 pub fn geofence_effect(state: &GeofenceShowState, sender: &CompletionSender<GeofenceShowState>) {
+    register_teardown();
     let location = shared_location_precise();
     // Apple は shared_location() から起動しない方針のため、ここで起動する（`fandhe-cap-location` の `driver.rs` 参照）。
     #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -204,6 +206,16 @@ fn restart_if_supported(_location: &SharedLocation) {
         target_os = "macos"
     ))]
     restart_location(_location, true);
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("geofence")
+            .on_android_recreate(crate::reset_register_tracking),
+    );
 }
 
 #[cfg(test)]

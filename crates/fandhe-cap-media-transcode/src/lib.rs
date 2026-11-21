@@ -1,7 +1,7 @@
 //! media-transcode（実行時に作った音声 1 本の AAC（m4a）への変換と出力の検証） の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。
 //!
 //! 呼び出し元は `fandhe-gallery` の画面登録（`media_transcode_effect`）と、Activity 再生成時に `reset_pending_tracking` を呼ぶ
-//! アプリの `android_main`。契約（出力の m4a 検査・失敗の細分類）は Web 実装（`fandhe-web-dom`）と共有する。MP4 box の走査は
+//! 登録表（`fandhe_runtime::teardown`）。契約（出力の m4a 検査・失敗の細分類）は Web 実装（`fandhe-web-dom`）と共有する。MP4 box の走査は
 //! 動画変換 `fandhe-device::video_transcode` も使うため `fandhe-device::media_transcode` に残している。
 //! 守る範囲は 0 バイト・形式違い・長さ不一致・期限切れを成功にしないことと、一時ファイルとコーデックの解放で、OS ごとの
 //! 所要時間とビットレートの違い・複数プロセスは守らない。出力のバイト列と OS のエラー文はログへ出さない。

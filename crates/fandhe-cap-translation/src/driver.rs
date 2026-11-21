@@ -193,11 +193,13 @@ fn drive(
 /// 入口。現在の OS に応じた [`TextTranslator`] を返す（画面の状態型に依存しないため、フレームワークの外のアプリも使える）。
 /// 契約を通らず pull 型で結果を返す経路はなく、Windows・Linux は `Unsupported` 固定の実装を返す。
 pub fn platform_translation() -> Arc<dyn TextTranslator> {
+    register_teardown();
     platform()
 }
 
 /// `registry.rs` の `effect` 区画から `translation` 画面用に配線される effect ドライバ。
 pub fn translation_effect(state: &TranslationState, sender: &CompletionSender<TranslationState>) {
+    register_teardown();
     static IMPL: std::sync::OnceLock<Arc<dyn TextTranslator>> = std::sync::OnceLock::new();
     let imp = IMPL.get_or_init(platform);
     drive(
@@ -206,6 +208,16 @@ pub fn translation_effect(state: &TranslationState, sender: &CompletionSender<Tr
         imp,
         SESSION.get_or_init(Session::default),
         TRANSLATE_DEADLINE,
+    );
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("translation")
+            .on_android_recreate(crate::reset_pending_tracking),
     );
 }
 

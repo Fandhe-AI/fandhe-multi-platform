@@ -22,7 +22,7 @@
 //!
 //! # 終了
 //!
-//! [`shutdown`] を `fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）から呼ぶ。停止フラグを立て、進行中の往復が手を離すのを
+//! [`shutdown`] を終了処理の登録表（`fandhe_runtime::teardown`）から呼ぶ。停止フラグを立て、進行中の往復が手を離すのを
 //! [`SHUTDOWN_WAIT`] だけ待つ（`POLL_STEP` の 3 回分。往復は `POLL_STEP` ごとに停止を見る）。
 //! 待ち切れなくてもプロセス終了で OS が fd を閉じる（守らない範囲、`crate::contract`）。
 //! main thread でロックを握ったまま待たない。
@@ -49,6 +49,7 @@ const SHUTDOWN_WAIT: Duration = Duration::from_millis(300);
 
 /// 現在のプラットフォームに応じた `SerialPorts` 実装を返す（プロセスで 1 個）。
 pub fn platform_serial_port() -> Arc<dyn SerialPorts> {
+    register_teardown();
     static INSTANCE: OnceLock<Arc<dyn SerialPorts>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
@@ -240,6 +241,7 @@ pub fn serial_port_show_effect(
     state: &SerialPortShowState,
     sender: &CompletionSender<SerialPortShowState>,
 ) {
+    register_teardown();
     if take_request(state).is_none() {
         return;
     }
@@ -255,12 +257,19 @@ fn global_worker() -> Option<&'static Worker> {
         .as_ref()
 }
 
-/// アプリ終了時に往復を止める（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）から呼ばれる）。一度も使われていなければ
+/// アプリ終了時に往復を止める（終了処理の登録表（`fandhe_runtime::teardown`）から呼ばれる）。一度も使われていなければ
 /// ワーカーを起こさず何もしない。
 pub fn shutdown() {
     if let Some(Some(worker)) = WORKER.get() {
         worker.stop_and_wait(SHUTDOWN_WAIT);
     }
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t = fandhe_runtime::teardown::Teardown::new("serial-port").on_exit(crate::shutdown);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

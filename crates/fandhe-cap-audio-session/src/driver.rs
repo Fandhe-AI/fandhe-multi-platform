@@ -9,7 +9,7 @@
 //!
 //! [`platform_audio_session`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
 //! モジュールだけを埋める（iOS: `ios_audio_session`（#841）、Android: `android_audio_session`（#842。
-//! 再生成時は `reset_pending_tracking` を gallery の `android_main` が呼ぶ））。それ以外は
+//! 再生成時は `reset_pending_tracking` を登録表（`fandhe_runtime::teardown`）が呼ぶ））。それ以外は
 //! `UnsupportedAudioSession` 固定で、ダミーの成功実装へは倒さない。
 //!
 //! # 並行性
@@ -39,6 +39,7 @@ use fandhe_runtime::CompletionSender;
 ///
 /// 画面の状態型に依存しない入口で、フレームワークの外のアプリも契約を直接呼べる。
 pub fn platform_audio_session() -> &'static Arc<dyn AudioSession> {
+    register_teardown();
     static SESSION_IMPL: OnceLock<Arc<dyn AudioSession>> = OnceLock::new();
     SESSION_IMPL.get_or_init(|| {
         #[cfg(target_os = "ios")]
@@ -98,7 +99,7 @@ pub fn reset_pending_tracking() {
     }
 }
 
-/// アプリ終了時にセッションを解放する（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）から呼ばれる）。
+/// アプリ終了時にセッションを解放する（終了処理の登録表（`fandhe_runtime::teardown`）から呼ばれる）。
 pub fn shutdown() {
     reset_pending_tracking();
 }
@@ -303,12 +304,24 @@ pub fn audio_session_show_effect(
     state: &AudioSessionShowState,
     sender: &CompletionSender<AudioSessionShowState>,
 ) {
+    register_teardown();
     drive(
         state,
         sender,
         platform_audio_session(),
         DRIVER.get_or_init(Driver::default),
     );
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t = fandhe_runtime::teardown::Teardown::new("audio-session")
+        .stage(fandhe_runtime::teardown::Stage::Shared)
+        .on_exit(crate::shutdown);
+    #[cfg(target_os = "android")]
+    let t = t.on_android_recreate(crate::reset_pending_tracking);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

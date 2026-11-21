@@ -26,6 +26,7 @@ use fandhe_runtime::CompletionSender;
 /// 同時に 1 件だけで、先行が終わるまで後から呼ぶと `Internal` で即座に戻る。UI スレッドから呼ばない。
 /// Windows 以外の非対応 OS は常に `Unsupported`。
 pub fn platform_passkey_signin() -> Box<dyn crate::contract::Passkey> {
+    register_teardown();
     #[cfg(target_os = "windows")]
     return crate::windows::implementation();
     #[cfg(target_os = "android")]
@@ -188,7 +189,7 @@ impl crate::contract::Passkey for CallbackPasskey {
     }
 }
 
-/// `android_main` から呼ぶ。slot と `android_passkey` の保留を捨てる（Java 側は `onDestroy` で追跡を外し済み）。
+/// 登録表（`fandhe_runtime::teardown`）から呼ばれる。slot と `android_passkey` の保留を捨てる（Java 側は `onDestroy` で追跡を外し済み）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
     bridge::reset();
@@ -267,6 +268,7 @@ pub fn passkey_signin_effect(
     state: &PasskeySigninState,
     sender: &CompletionSender<PasskeySigninState>,
 ) {
+    register_teardown();
     drive_callback(
         state,
         sender,
@@ -282,6 +284,7 @@ pub fn passkey_signin_effect(
     state: &PasskeySigninState,
     sender: &CompletionSender<PasskeySigninState>,
 ) {
+    register_teardown();
     use fandhe_core::screens::passkey_signin::{PasskeyPhase, finish, mark_running};
 
     if let Some(view) = take_request(state) {
@@ -353,12 +356,23 @@ pub fn passkey_signin_effect(
     state: &PasskeySigninState,
     sender: &CompletionSender<PasskeySigninState>,
 ) {
+    register_teardown();
     drive_sync(state, sender, &crate::contract::UnsupportedPasskey);
 }
 
 /// 画面を経ない待ち合わせ（プロセス static）を触るテストと `frame` を直列化する。
 #[cfg(test)]
 pub(crate) static WAITERS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("passkey-signin")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
+}
 
 #[cfg(test)]
 mod tests {

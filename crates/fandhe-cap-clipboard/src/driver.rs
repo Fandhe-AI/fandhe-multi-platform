@@ -38,7 +38,7 @@ use fandhe_runtime::CompletionSender;
 /// 呼び出しのたびに再接続を試みない（失敗はディスプレイサーバ不在など持続的な要因）。
 static CLIPBOARD: OnceLock<Result<Box<dyn Clipboard>, String>> = OnceLock::new();
 
-/// Android: Activity 再生成直後に gallery の `android_main` から呼ぶ。保留中の要求を破棄し、待機中のワーカーを失敗で戻す
+/// Android: Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から呼ぶ。保留中の要求を破棄し、待機中のワーカーを失敗で戻す
 /// （復元しない）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
@@ -61,6 +61,7 @@ const UNAVAILABLE: &str = "この環境では OS のクリップボードを使�
 /// 画面の `status` にも出す（coding-rust.md「回復可能なエラーは Result で返す」）。
 /// `DummyClipboard` はテストと、端末機能を持たない明示的なデモ用途に限る。
 pub fn platform_clipboard() -> Result<&'static dyn Clipboard, &'static str> {
+    register_teardown();
     let cached = CLIPBOARD.get_or_init(|| {
         #[cfg(target_os = "ios")]
         {
@@ -161,10 +162,21 @@ pub fn clipboard_text_effect(
     state: &ClipboardTextState,
     sender: &CompletionSender<ClipboardTextState>,
 ) {
+    register_teardown();
     match platform_clipboard() {
         Ok(clipboard) => drive(state, sender, clipboard),
         Err(message) => fail_request(state, sender, message),
     }
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("clipboard")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 #[cfg(test)]

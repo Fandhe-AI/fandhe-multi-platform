@@ -305,7 +305,7 @@ fn app(ctx: &egui::Context) -> Box<dyn ProxyAppDyn> {
 ## 6. 宣言と説明文
 
 - 機能は `Cargo.toml` の `fandhe = { …, features = ["<id>", …] }` で選びます。機能 crate を直接依存に書くのは、
-  Swift 薄層を持つ機能のリンク指定を受け取るとき（下記）だけです。直接依存だけでは起動前の登録・終了処理が走らない機能があります
+  Swift 薄層を持つ機能のリンク指定を受け取るとき（下記）だけです。直接依存だけでは起動前の登録が走らない機能があります（終了処理は機能 crate が自分で登録する）
 - 権限（Android の `uses-permission`）・framework・entitlement は機能の宣言から `cargo fandhe gen` が入れます。アプリは書きません
 - iOS・macOS の許可ダイアログの説明文（`*UsageDescription`）だけはアプリが書きます。キーは機能 crate の
   `[package.metadata.fandhe.ios]`・`[package.metadata.fandhe.macos]` の `usage-descriptions` にあり、無ければ `gen` が 1 行ずつ出して止まります。

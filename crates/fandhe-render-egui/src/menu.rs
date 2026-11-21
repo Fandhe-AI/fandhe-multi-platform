@@ -4,7 +4,7 @@
 //! 別リポジトリの最小アプリ（#1177）が手で書いていたメニューを、入口 crate `fandhe` から使える部品にした。
 //! 子画面は選んだときに作り、メニューへ戻ると捨てる（画面の状態は持ち越さない）。子の画面が処理しなかった
 //! 戻る操作（Esc・Android の戻る）でも一覧へ戻る。終了処理（`on_exit`）は表示中の子へ渡し、一覧の表示中は
-//! 終了フックを直接呼ぶ。
+//! 終了処理の登録表（`fandhe_runtime::teardown`）を直接呼ぶ。
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -110,13 +110,13 @@ impl EguiApp for Menu {
         }
     }
 
-    /// アプリの終了処理。子を表示中なら子の `on_exit`（`ProxyApp` は終了フックを呼ぶ）へ渡し、一覧の表示中は
-    /// 終了フック（[`crate::app::set_teardown_hooks`]）を直接呼ぶ。終了フックはプロセス全体の端末資源を止めるため、
+    /// アプリの終了処理。子を表示中なら子の `on_exit`（`ProxyApp` は登録表の終了処理を呼ぶ）へ渡し、一覧の表示中は
+    /// 登録表の終了処理（[`fandhe_runtime::teardown::run_exit`]）を直接呼ぶ。終了処理はプロセス全体の端末資源を止めるため、
     /// 子を閉じて一覧へ戻るときには呼ばない（戻った後も他の画面で端末機能を使い続けるため）。
     fn on_exit(&mut self) {
         match self.child.as_mut() {
             Some(child) => child.on_exit(),
-            None => crate::app::run_exit_hook(),
+            None => fandhe_runtime::teardown::run_exit(),
         }
     }
 }

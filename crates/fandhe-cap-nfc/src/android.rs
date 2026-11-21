@@ -118,7 +118,7 @@ fn read_with(
 #[cfg(target_os = "android")]
 static SLOT: RequestSlot<Reply> = RequestSlot::new();
 
-/// Activity 再生成直後に gallery の `android_main` から（`driver::reset_pending_tracking` 経由で）呼ぶ。保留中の要求を捨て、
+/// Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から（`driver::reset_pending_tracking` 経由で）呼ぶ。保留中の要求を捨て、
 /// 待機中のワーカーを失敗で戻し、旧要求の遅延完了を id 不一致で無視させる。
 #[cfg(target_os = "android")]
 pub(crate) fn reset_pending_tracking() {

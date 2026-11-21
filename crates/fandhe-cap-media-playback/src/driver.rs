@@ -45,6 +45,7 @@ const FAILED_DECODE: &str = "音声を読み込めません";
 /// プロセスに 1 つだけ持つ実装（`stop` が `play` と同じ実体に届くようにする）。
 /// フレームワークの外のアプリも、画面の状態型なしで再生を操作できる入口。
 pub fn platform_media_playback() -> Arc<dyn MediaPlayback> {
+    register_teardown();
     Arc::clone(platform_playback())
 }
 
@@ -362,6 +363,7 @@ fn report_snapshot(
 
 /// `registry.rs` の `effect` 区画から `audio_play` 画面用に配線される effect ドライバ。
 pub fn audio_play_effect(state: &AudioPlayState, sender: &CompletionSender<AudioPlayState>) {
+    register_teardown();
     drive(
         state,
         sender,
@@ -371,9 +373,18 @@ pub fn audio_play_effect(state: &AudioPlayState, sender: &CompletionSender<Audio
     );
 }
 
-/// アプリ終了時にプレーヤーを解放する（`fandhe-gallery` の終了処理から呼ばれる）。
+/// アプリ終了時にプレーヤーを解放する（終了処理の登録表（`fandhe_runtime::teardown`）から呼ばれる）。
 pub fn shutdown() {
     platform_playback().shutdown();
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t = fandhe_runtime::teardown::Teardown::new("media-playback").on_exit(crate::shutdown);
+    #[cfg(target_os = "android")]
+    let t = t.on_android_recreate(crate::reset_pending_tracking);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

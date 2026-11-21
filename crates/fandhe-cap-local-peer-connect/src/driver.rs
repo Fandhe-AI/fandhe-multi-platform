@@ -52,6 +52,7 @@ use fandhe_runtime::CompletionSender;
 /// 実際の交換は [`start_exchange`] と [`poll_exchange`] の組で行う。
 /// 画面の状態型に依存しない入口（`docs/architecture/consumer-app-structure.md` §8.2）。
 pub fn platform_local_peer_connect() -> std::sync::Arc<dyn LocalPeer> {
+    register_teardown();
     std::sync::Arc::new(crate::contract::UnsupportedLocalPeer)
 }
 
@@ -214,6 +215,7 @@ fn launch(request_id: u64) -> String {
 /// 進行中、または結果が未取得の要求があれば `None`（置き換えない）。対象外 OS・同期の失敗も id を返し、失敗は [`poll_exchange`] で受け取る。
 /// 画面用の effect（[`peer_connect_effect`]）と同じ slot を使うが、持ち主（`SlotOwner`）で分け、互いの要求を置き換えも横取りもしない（先行があれば後からの側が失敗または `None`）。
 pub fn start_exchange() -> Option<u64> {
+    register_teardown();
     let request_id = bridge::SLOT.try_begin_unless(|_| true)?;
     #[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
     let _ = launch(request_id);
@@ -231,6 +233,7 @@ pub fn start_exchange() -> Option<u64> {
 pub fn poll_exchange(
     request_id: u64,
 ) -> Option<Result<Option<PeerExchange>, LocalPeerConnectError>> {
+    register_teardown();
     bridge::SLOT.take_ready(request_id)
 }
 
@@ -307,13 +310,14 @@ fn drive(
 
 /// `registry.rs` の `effect` 区画から `peer_connect` 画面用に配線される effect ドライバ。
 pub fn peer_connect_effect(state: &PeerConnectState, sender: &CompletionSender<PeerConnectState>) {
+    register_teardown();
     #[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
     drive_callback(state, sender);
     #[cfg(not(any(target_os = "ios", target_os = "macos", target_os = "android")))]
     drive(state, sender, platform_local_peer_connect().as_ref());
 }
 
-/// Activity 再生成時に旧要求の保留を捨てる（最終成果物の `android_main` が呼ぶ。
+/// Activity 再生成時に旧要求の保留を捨てる（`android_main` が回す登録表（`fandhe_runtime::teardown`）から呼ばれる。
 /// Java 側の追跡は Activity インスタンスのフィールドで、再生成で一緒に消える）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
@@ -321,13 +325,22 @@ pub fn reset_pending_tracking() {
     PENDING.clear();
 }
 
-/// アプリ終了時に進行中の交換を止める（最終成果物の終了フックが呼ぶ）。
+/// アプリ終了時に進行中の交換を止める（終了処理の登録表（`fandhe_runtime::teardown`）が呼ぶ）。
 /// Rust 側のロックを握ったまま OS 側の停止を呼ばない（OS 側コールバックが同じロックを取るため、
 /// `device-bridge-contracts.md` 11 節）。`PENDING.clear()` はロックを解放して戻ってから停止を呼ぶ。
 pub fn shutdown() {
     PENDING.clear();
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     crate::apple::stop();
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t = fandhe_runtime::teardown::Teardown::new("local-peer-connect").on_exit(crate::shutdown);
+    #[cfg(target_os = "android")]
+    let t = t.on_android_recreate(crate::reset_pending_tracking);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

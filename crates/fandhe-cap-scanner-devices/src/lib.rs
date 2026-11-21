@@ -1,7 +1,7 @@
 //! scanner-devices の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。接続したスキャナー・カメラ機器から画像を 1 枚取り込む。
 //!
 //! 呼び出し元は `fandhe-gallery` の `screens/registry.rs`（`scanner_devices_import_effect`）と、Activity 再生成時の
-//! `reset_pending_tracking`（gallery の `android_main` から、Android のみ）。機器名・画像・id・コードはログに出さない。
+//! `reset_pending_tracking`（登録表（`fandhe_runtime::teardown`）から、Android のみ）。機器名・画像・id・コードはログに出さない。
 //! 守る範囲は 1 プロセス内の要求の順序・失敗を成功と見せないこと・資源の解放・Activity 破棄時の保留要求の確定、
 //! 守らない範囲は探索窓の後に現れた機器・複数台のうち先頭以外・他アプリが同じ機器を開いていることによる失敗（`contract` の doc を参照）。
 //! macOS・iOS・Windows・Android が実装し、他の OS は `Unsupported`。

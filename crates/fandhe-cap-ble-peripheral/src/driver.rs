@@ -203,6 +203,7 @@ fn drive(
 /// OS 別の [`BlePeripheral`] 実装（プロセスに 1 つ。画面の effect・`shutdown` と同じ実体）。
 /// 画面の状態型に依存しないため、フレームワークの外のアプリも使える。
 pub fn platform_ble_peripheral() -> Arc<dyn BlePeripheral> {
+    register_teardown();
     Arc::clone(shared())
 }
 
@@ -233,16 +234,26 @@ pub fn ble_peripheral_effect(
     state: &BlePeripheralState,
     sender: &CompletionSender<BlePeripheralState>,
 ) {
+    register_teardown();
     if take_action(state).is_none() {
         return;
     }
     drive(state, sender, shared().as_ref());
 }
 
-/// アプリ終了時に公開を止めて資源を解放する（`fandhe-gallery` の終了処理から呼ばれる）。
+/// アプリ終了時に公開を止めて資源を解放する（終了処理の登録表（`fandhe_runtime::teardown`）から呼ばれる）。
 /// 終了経路なので結果は見ない。
 pub fn shutdown() {
     let _ = shared().stop();
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t = fandhe_runtime::teardown::Teardown::new("ble-peripheral").on_exit(crate::shutdown);
+    #[cfg(target_os = "android")]
+    let t = t.on_android_recreate(crate::reset_pending_tracking);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]
