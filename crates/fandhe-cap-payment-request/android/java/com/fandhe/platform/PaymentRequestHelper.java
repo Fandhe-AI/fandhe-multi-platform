@@ -57,7 +57,7 @@ import java.util.WeakHashMap;
 // - シート起動前（isReadyToPay / loadPaymentData の Task 待ち）の破棄: Task の callback は破棄済み helper で捨てられるため、
 //   終了かどうかによらず中断として失敗を 1 度だけ届ける。
 // 失敗の送達は `take()` が NONE でないときだけ行う（first-wins。callback との二重通知にならない）。
-// Rust 側 reset_pending_tracking()（gallery の android_main）が待ち手を先に戻していれば、引き継いだ結果は旧 id として捨てられる。
+// Rust 側 reset_pending_tracking()（登録表（`fandhe_runtime::teardown`））が待ち手を先に戻していれば、引き継いだ結果は旧 id として捨てられる。
 // 残る限界: 決済シートが結果を一度も返さない間（終了ではない破棄の後、利用者が戻らない間を含む）は、後続の要求が
 // 失敗で断られ続ける。固定タイムアウトは掛けない。
 // 守る範囲: 1 プロセス内の要求と完了の順序・嘘の成功の禁止。守らない範囲: プロセス死をまたぐ結果・

@@ -19,7 +19,7 @@
 //!
 //! 期限は `SCAN_DURATION_MS` だけ（OS 側へ渡して一致させる、同 3 節）。画面離脱は
 //! プロセス終了と同義（`FANDHE_PROXY_APP` は 1 プロセス 1 画面）のため、
-//! [`stop_shared_scan`] を `fandhe-gallery` の終了処理から呼んでスキャンを止める。
+//! [`stop_shared_scan`] を終了処理の登録表（`fandhe_runtime::teardown`）から呼んでスキャンを止める。
 //! 再要求は古いセッションを置き換え、古い request_id の結果は照合して捨てる。
 //!
 //! # Android（#1062）
@@ -359,6 +359,7 @@ pub struct NativeBluetoothLe;
 ))]
 impl BluetoothLe for NativeBluetoothLe {
     fn scan(&self) -> Result<Vec<BleDevice>, BluetoothLeError> {
+        register_teardown();
         let (tx, rx) = std::sync::mpsc::channel();
         start_native_scan(Some(tx));
         // 期限は掛けない（権限ダイアログの回答待ちを含め、OS が完了を必ず返す契約。契約の「呼び出し側で別の期限を持たない」）。
@@ -475,6 +476,7 @@ fn drive(state: &BleScanState, sender: &CompletionSender<BleScanState>, ble: &dy
 /// 画面の状態型に依存しない入口。対応 4 OS は結果が届くまで塞ぐ同期実装（[`NativeBluetoothLe`]）、それ以外は
 /// `Unsupported` 固定（Web は別経路 `fandhe-web-dom`）。
 pub fn platform_bluetooth_le() -> Box<dyn BluetoothLe> {
+    register_teardown();
     #[cfg(any(
         target_os = "ios",
         target_os = "macos",
@@ -493,6 +495,7 @@ pub fn platform_bluetooth_le() -> Box<dyn BluetoothLe> {
 
 /// `registry.rs` の `effect` 区画から `ble_scan` 画面用に配線される effect ドライバ。
 pub fn ble_scan_effect(state: &BleScanState, sender: &CompletionSender<BleScanState>) {
+    register_teardown();
     #[cfg(any(
         target_os = "ios",
         target_os = "macos",
@@ -509,7 +512,7 @@ pub fn ble_scan_effect(state: &BleScanState, sender: &CompletionSender<BleScanSt
     drive(state, sender, &crate::contract::UnsupportedBluetoothLe);
 }
 
-/// Activity 再生成時に旧要求の保留を捨てる（`fandhe-gallery` の `android_main` から呼ばれる。
+/// Activity 再生成時に旧要求の保留を捨てる（登録表（`fandhe_runtime::teardown`）から呼ばれる。
 /// Java 側の追跡は Activity インスタンスのフィールドで、再生成で一緒に消える）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
@@ -519,7 +522,7 @@ pub fn reset_pending_tracking() {
     OBSERVED.clear();
 }
 
-/// アプリ終了時に進行中のスキャンを止める（`fandhe-gallery` の終了処理から呼ばれる）。
+/// アプリ終了時に進行中のスキャンを止める（終了処理の登録表（`fandhe_runtime::teardown`）から呼ばれる）。
 /// Rust 側のロックを握ったまま OS 側の停止を呼ばない（OS 側コールバックが同じ
 /// ロックを取るため、`device-bridge-contracts.md` 11 節）。
 ///
@@ -534,6 +537,16 @@ pub fn stop_shared_scan() {
     crate::apple::stop();
     #[cfg(target_os = "windows")]
     crate::windows::stop_shared();
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t =
+        fandhe_runtime::teardown::Teardown::new("bluetooth-le").on_exit(crate::stop_shared_scan);
+    #[cfg(target_os = "android")]
+    let t = t.on_android_recreate(crate::reset_pending_tracking);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

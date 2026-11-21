@@ -22,7 +22,7 @@
 //! 画面の状態型に依存しない入口は begin / poll / discard 型の非同期（[`begin_photo_pick`] / [`poll_photo_pick`] / [`discard_photo_pick`]）で、
 //! 画面 effect と同じ slot を持ち主（`SlotOwner`）で分けて共有する（`consumer-app-structure.md` §8.2）。復号確認は OS コールバックのスレッド側（`bridge::deliver`）で
 //! 済ませ、egui の UI スレッドでは復号しない。保留中の要求は Activity 再生成で **復元せず破棄**する（契約: `fandhe_device::photo_picker`
-//! モジュール doc。`file_pick` の復元方式は採らない。`fandhe-gallery` の `android_main` が `reset_pending_tracking` を呼ぶ）。
+//! モジュール doc。`file_pick` の復元方式は採らない。登録表（`fandhe_runtime::teardown`）が `reset_pending_tracking` を呼ぶ）。
 //! OS 側が JPEG / PNG 以外（HEIC・GIF・WebP 等）を JPEG へ変換して渡し、変換できなければ `Internal` として失敗表示にする。
 //! 形式の最終判定は OS の名乗る MIME ではなく `validate_photo` の先頭バイトで行う。
 //!
@@ -58,6 +58,7 @@ use std::sync::Arc;
 /// （[`RfdPhotoPicker`](crate::RfdPhotoPicker)）、iOS・Android は結果が非同期に届き同期の trait を通らないため `Unsupported`
 /// 固定（成功を偽装しない。iOS・Android は [`begin_photo_pick`] / [`poll_photo_pick`] を使う）、それ以外（Linux）も `Unsupported` 固定。
 pub fn platform_photo_picker() -> Arc<dyn PhotoPicker> {
+    register_teardown();
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn PhotoPicker>> = OnceLock::new();
     INSTANCE
@@ -273,7 +274,7 @@ pub(crate) mod bridge {
         true
     }
 
-    /// Activity 再生成直後に `fandhe-gallery` の `android_main` から呼ぶ。保留中の要求を捨て、以後届く旧 `request_id` の
+    /// Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から呼ぶ。保留中の要求を捨て、以後届く旧 `request_id` の
     /// [`deliver`] を不一致で無視させる（契約は「復元せず破棄」）。
     #[cfg_attr(not(any(test, target_os = "android")), allow(dead_code))]
     pub(crate) fn reset() {
@@ -319,6 +320,7 @@ fn public_outcome(
 /// デスクトップ（macOS・Windows）は同期の [`platform_photo_picker`] を使うため、この入口は持たず `Unsupported`。Linux 等も `Unsupported`。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn begin_photo_pick() -> Result<u64, PhotoPickerError> {
+    register_teardown();
     let request_id =
         bridge::begin_public().ok_or(PhotoPickerError::Internal("photo_picker busy"))?;
     if !present(request_id) {
@@ -331,6 +333,7 @@ pub fn begin_photo_pick() -> Result<u64, PhotoPickerError> {
 /// iOS・Android 以外では `Unsupported`（[`platform_photo_picker`] 参照）。
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn begin_photo_pick() -> Result<u64, PhotoPickerError> {
+    register_teardown();
     Err(PhotoPickerError::Unsupported("photo_picker"))
 }
 
@@ -341,6 +344,7 @@ pub fn begin_photo_pick() -> Result<u64, PhotoPickerError> {
 /// slot の要求が失われたとき（reset 等）は、1 度だけ `Err(Internal("photo_picker lost"))` を返し、以後は `None`。
 /// 並行して同じ id を poll しても、結果と喪失が二重に返ることはない。iOS・Android 以外では常に `None`。
 pub fn poll_photo_pick(request_id: u64) -> Option<Result<PickedPhoto, PhotoPickerError>> {
+    register_teardown();
     #[cfg(any(target_os = "ios", target_os = "android"))]
     {
         bridge::poll_public(request_id)
@@ -358,6 +362,7 @@ pub fn poll_photo_pick(request_id: u64) -> Option<Result<PickedPhoto, PhotoPicke
 /// discard は OS のピッカーを閉じない。ピッカーが閉じるまで次の [`begin_photo_pick`]（画面 effect の開始も）は OS 側が busy で断る。
 /// 後から届いた結果は id 不一致で捨てられ、新しい要求へは結びつかない。iOS・Android 以外では常に `false`。
 pub fn discard_photo_pick(request_id: u64) -> bool {
+    register_teardown();
     #[cfg(any(target_os = "ios", target_os = "android"))]
     {
         bridge::discard_public(request_id)
@@ -369,7 +374,7 @@ pub fn discard_photo_pick(request_id: u64) -> bool {
     }
 }
 
-/// Activity 再生成直後に `fandhe-gallery` の `android_main` が呼ぶ。保留中の写真選択の要求を捨てる（契約は「復元せず破棄」。
+/// Activity 再生成直後に登録表（`fandhe_runtime::teardown`）が呼ぶ。保留中の写真選択の要求を捨てる（契約は「復元せず破棄」。
 /// `bridge::SLOT` がプロセス static のため再生成をまたいで残るのを、新しい `Idle` の画面状態を作る前に断つ）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
@@ -501,10 +506,21 @@ fn drive(
 
 /// `registry.rs` の `effect` 区画から `photo_pick` 画面用に配線される effect ドライバ。
 pub fn photo_pick_effect(state: &PhotoPickState, sender: &CompletionSender<PhotoPickState>) {
+    register_teardown();
     #[cfg(any(target_os = "ios", target_os = "android"))]
     drive_mobile(state, sender);
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     drive(state, sender, platform_photo_picker().as_ref());
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("photo-picker")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 #[cfg(test)]

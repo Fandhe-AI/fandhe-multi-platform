@@ -86,7 +86,7 @@ pub(crate) mod bridge {
         SLOT.deliver(request_id, result)
     }
 
-    /// Android: Activity 再生成直後に `android_main` から呼ぶ。[`SLOT`] はプロセス static の
+    /// Android: Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から呼ばれる。[`SLOT`] はプロセス static の
     /// ため再生成をまたいで残る。保留中の要求は復元せず破棄し、以後届く旧 `request_id` の
     /// [`deliver`] を無視させる（`calendar::bridge::reset` と同じ位置づけ）。
     #[cfg_attr(not(target_os = "android"), allow(dead_code))]
@@ -95,7 +95,7 @@ pub(crate) mod bridge {
     }
 }
 
-/// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
+/// 登録表（`fandhe_runtime::teardown`）から呼ばれる薄いエイリアス（[`bridge::reset`] 参照）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
     bridge::reset();
@@ -106,6 +106,7 @@ pub fn reset_pending_tracking() {
 /// （成功の偽装を避けるため「未対応」を返す）、画面は [`photo_save_effect`] の経路を使う。
 // ponytail: コールバック型 OS の同期 trait 実装は要求が出たら足す（`bridge` の結果を待つワーカーが要る）。
 pub fn platform_photo_library() -> Box<dyn PhotoLibrary> {
+    register_teardown();
     #[cfg(target_os = "windows")]
     return Box::new(crate::windows::WindowsPhotoLibrary);
     #[cfg(not(target_os = "windows"))]
@@ -129,6 +130,7 @@ fn begin_public_slot() -> Option<u64> {
 /// Windows は同期の [`platform_photo_library`] を使う。Linux は `Unsupported`。
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub fn begin_photo_save(image: &PngImage) -> Result<u64, PhotoLibraryError> {
+    register_teardown();
     let request_id =
         begin_public_slot().ok_or(PhotoLibraryError::Internal("photo_library busy"))?;
     if let Err(e) = begin_save(request_id, image) {
@@ -142,12 +144,14 @@ pub fn begin_photo_save(image: &PngImage) -> Result<u64, PhotoLibraryError> {
 /// OS コールバック型の実装がない OS では成功へ倒さず `Unsupported`。
 #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
 pub fn begin_photo_save(image: &PngImage) -> Result<u64, PhotoLibraryError> {
+    register_teardown();
     let _ = image;
     Err(PhotoLibraryError::Unsupported("photo_library"))
 }
 
 /// [`begin_photo_save`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・取り出し済みは `None`。
 pub fn poll_photo_save(request_id: u64) -> Option<Result<SavedTo, PhotoLibraryError>> {
+    register_teardown();
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     {
         // 照合・取得・消去を同じロックで行う（並行 poll でも Some は 1 件だけ）。
@@ -246,6 +250,7 @@ fn drive_callback(state: &PhotoSaveState, sender: &CompletionSender<PhotoSaveSta
 /// `registry.rs` から `photo_save` 画面用に配線される effect ドライバ（macOS / iOS / Android）。
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub fn photo_save_effect(state: &PhotoSaveState, sender: &CompletionSender<PhotoSaveState>) {
+    register_teardown();
     drive_callback(state, sender);
 }
 
@@ -276,6 +281,7 @@ fn drive(
 /// ネットワーク先へリダイレクトされて遅いと分かったら、作業スレッド + bridge へ移す。
 #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
 pub fn photo_save_effect(state: &PhotoSaveState, sender: &CompletionSender<PhotoSaveState>) {
+    register_teardown();
     #[cfg(target_os = "windows")]
     drive(state, sender, &crate::windows::WindowsPhotoLibrary);
     #[cfg(not(target_os = "windows"))]
@@ -288,6 +294,16 @@ pub fn photo_save_effect(state: &PhotoSaveState, sender: &CompletionSender<Photo
     any(target_os = "macos", target_os = "ios", target_os = "android")
 ))]
 static SLOT_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("photo-library")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
+}
 
 #[cfg(test)]
 mod tests {

@@ -5,8 +5,8 @@
 //! （REQ-21 / TASK-21.4、Issue #1335。移行の手順は `docs/operations/capability-crate-migration.md`）。
 //!
 //! 呼び出し元: 利用側（`fandhe-gallery` の `screens/registry.rs`）が [`peer_connect_effect`] を画面
-//! （`fandhe_core::screens::peer_connect`）の effect として登録し、Activity 再生成時は `android_main` が
-//! [`reset_pending_tracking`]（Android）を、アプリ終了時は終了フックが [`shutdown`] を呼ぶ。
+//! （`fandhe_core::screens::peer_connect`）の effect として登録し、Activity 再生成時は`android_main` が回す登録表（`fandhe_runtime::teardown`）が
+//! [`reset_pending_tracking`]（Android）を、アプリ終了時は終了処理の登録表（`fandhe_runtime::teardown`）が [`shutdown`] を呼ぶ。
 //! 入口 [`platform_local_peer_connect`] は画面の状態型に依存しない。Windows は保留、Web は対象外のため `Unsupported` 固定。
 //! egui・`fandhe-device` には依存しない。
 //!

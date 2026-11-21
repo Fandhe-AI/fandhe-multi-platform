@@ -15,8 +15,9 @@
 //! 閉じられた通知を再投稿しないこと・再生成時と起動時の通知の解放。守らない範囲: 利用者が閉じて
 //! から次の操作までの画面表示の食い違い、OEM 独自の表示規則。`Cancelled` は出さない。
 //!
-//! 再生成時: `android_main` → `reset_pending_tracking` → `SLOT.reset()` + `dismiss_all`
-//! （通知を cancel）。旧インスタンスの結果は id 照合で捨てられる。
+//! 再生成時: `android_main` →登録表（`fandhe_runtime::teardown`）→ `reset_pending_tracking` → `SLOT.reset()` +
+//! `dismiss_all`（通知を cancel）。旧インスタンスの結果は id 照合で捨てられる。登録はこの機能が初めて使われたときなので、
+//! 起動時（前のプロセスが残した通知）は Java 側 `LiveActivityHelper.attach` がプロセスで最初の Activity の生成で閉じる。
 //!
 //! no-op スタブは置かない: Java の native は Rust の `submit` を経た後でしか呼ばれず、
 //! この crate を選ばないアプリではその経路に到達しない（app-badge と同じ）。

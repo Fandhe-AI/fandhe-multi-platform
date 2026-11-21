@@ -142,6 +142,7 @@ const INSTALL_FAILED_MESSAGE: &str = "失敗しました: ドロップの受け�
 /// で経路が分かれる理由」参照）。
 #[cfg_attr(any(target_os = "ios", target_os = "android"), allow(unused_variables))]
 pub fn drag_drop_effect(state: &DragDropState, sender: &CompletionSender<DragDropState>) {
+    register_teardown();
     #[cfg(target_os = "ios")]
     {
         // 毎フレーム、install 成否に関わらず先に呼ぶ（画面が表示中である証跡を
@@ -437,6 +438,16 @@ pub(crate) fn item_from_fd(code: i32, file: Option<File>, name: String) -> Dropp
             result: Err(DropError::Unreadable.to_string()),
         },
     }
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("drag-drop")
+            .on_android_recreate(crate::reset_sessions),
+    );
 }
 
 #[cfg(test)]

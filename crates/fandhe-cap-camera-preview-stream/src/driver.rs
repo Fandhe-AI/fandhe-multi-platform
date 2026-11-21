@@ -62,6 +62,7 @@ const MAX_PENDING_EVENTS: usize = 32;
 
 /// 現在のプラットフォームに応じた `CameraPreview` 実装を返す（状態を持たないため呼び出しごとに構築）。
 pub fn platform_camera_preview_stream() -> Arc<dyn CameraPreview> {
+    register_teardown();
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     {
         crate::ios::implementation()
@@ -439,12 +440,23 @@ fn drive(
 
 /// `registry.rs` の `effect` 区画から `camera_preview_stream_show` 画面用に配線される effect ドライバ。
 pub fn camera_preview_stream_show_effect(state: &CameraPreviewStreamShowState, sender: &Sender) {
+    register_teardown();
     drive(
         state,
         sender,
         &ACTIVE,
         platform_camera_preview_stream().as_ref(),
     );
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t =
+        fandhe_runtime::teardown::Teardown::new("camera-preview-stream").on_exit(crate::shutdown);
+    #[cfg(target_os = "android")]
+    let t = t.on_android_recreate(crate::reset_pending_tracking);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

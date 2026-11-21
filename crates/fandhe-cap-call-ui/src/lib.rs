@@ -5,7 +5,7 @@
 //!
 //! 呼び出し元: 利用側（`fandhe-gallery` の `screens/registry.rs`）が [`call_ui_show_effect`] を画面
 //! （`fandhe_core::screens::call_ui_show`）の effect として登録する。Activity 再生成では gallery の
-//! `android_main` から [`reset_pending_tracking`] を呼ぶ。egui・`fandhe-device` には依存しない。
+//! 登録表（`fandhe_runtime::teardown`）から [`reset_pending_tracking`] を呼ぶ。egui・`fandhe-device` には依存しない。
 //!
 //! 守る範囲と守らない範囲は [`CallUi`] の契約（`contract.rs`）を参照。
 

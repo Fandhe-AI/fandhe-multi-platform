@@ -336,7 +336,7 @@ pub(crate) mod bridge {
         SLOT.deliver(request_id, result)
     }
 
-    /// Android 専用: Activity 再生成直後に `android_main` から呼ぶ
+    /// Android 専用: Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から呼ばれる
     /// （`fandhe-cap-mic-record` の `bridge::reset` と同じ位置づけ）。[`SLOT`]・
     /// [`STARTED_REQUEST_ID`] はプロセス static のため Activity 再生成をまたいで
     /// 残るが、画面状態（`SpeechRecognizeState`）は再生成のたびに `Default`（`Idle`）
@@ -539,6 +539,7 @@ pub fn speech_recognize_effect(
     state: &SpeechRecognizeState,
     sender: &CompletionSender<SpeechRecognizeState>,
 ) {
+    register_teardown();
     drive_callback(state, sender);
 }
 
@@ -554,6 +555,7 @@ pub fn speech_recognize_effect(
     state: &SpeechRecognizeState,
     sender: &CompletionSender<SpeechRecognizeState>,
 ) {
+    register_teardown();
     drive(state, sender, &crate::contract::UnsupportedSpeechRecognizer);
 }
 
@@ -563,6 +565,7 @@ pub fn speech_recognize_effect(
 /// 画面は effect（`speech_recognize_effect`）の経路を使う。それ以外の OS（Linux 等）も同じく `Unsupported` で、固定の案内（`UNAVAILABLE`）が画面へ出る。
 /// 同期実装が要る OS が出たら、ここで OS ごとの実装へ分岐する。
 pub fn platform_speech_recognition() -> Box<dyn SpeechRecognizer> {
+    register_teardown();
     Box::new(UnsupportedSpeechRecognizer)
 }
 
@@ -614,6 +617,7 @@ fn clamp_max_listen(d: std::time::Duration) -> Result<std::time::Duration, Speec
     target_os = "android"
 ))]
 pub fn begin_speech_recognition(max: std::time::Duration) -> Result<u64, SpeechRecognitionError> {
+    register_teardown();
     let max = clamp_max_listen(max)?;
     let request_id = bridge::begin_public()
         .ok_or(SpeechRecognitionError::Internal("speech_recognition busy"))?;
@@ -643,6 +647,7 @@ pub fn begin_speech_recognition(max: std::time::Duration) -> Result<u64, SpeechR
     target_os = "android"
 )))]
 pub fn begin_speech_recognition(max: std::time::Duration) -> Result<u64, SpeechRecognitionError> {
+    register_teardown();
     let _ = max;
     Err(SpeechRecognitionError::Unsupported)
 }
@@ -650,6 +655,7 @@ pub fn begin_speech_recognition(max: std::time::Duration) -> Result<u64, SpeechR
 /// [`begin_speech_recognition`] の聞き取りの停止を依頼する。依頼を OS へ渡せたら `true`。`request_id` が自分の進行中の要求でない・
 /// 既に終わっている場合は `false`（結果は自動停止か既存の配送で届く）。停止後の結果は [`poll_speech_recognition`] で取る。
 pub fn request_stop_speech_recognition(request_id: u64) -> bool {
+    register_teardown();
     #[cfg(any(
         target_os = "macos",
         target_os = "ios",
@@ -686,6 +692,7 @@ pub fn request_stop_speech_recognition(request_id: u64) -> bool {
 /// OS 側の聞き取りは上限時間で自動停止し、後から届いた結果は id 不一致で捨てられる。OS 側の停止が済むまでの間に
 /// 次の [`begin_speech_recognition`] をすると、OS 側の二重開始として `Internal`（busy）の失敗になりうる。捨てたあとは [`poll_speech_recognition`] が `None` になる。
 pub fn discard_speech_recognition(request_id: u64) -> bool {
+    register_teardown();
     #[cfg(any(
         target_os = "macos",
         target_os = "ios",
@@ -728,6 +735,7 @@ pub fn discard_speech_recognition(request_id: u64) -> bool {
 pub fn poll_speech_recognition(
     request_id: u64,
 ) -> Option<Result<crate::contract::SpeechOutcome, SpeechRecognitionError>> {
+    register_teardown();
     #[cfg(any(
         target_os = "macos",
         target_os = "ios",
@@ -780,13 +788,23 @@ pub fn poll_speech_recognition(
 /// 外部アプリ（呼ばない構成）では Java 側が再生成を引き継ぐ。
 /// `android_main` で effect の駆動前に呼ぶ前提で、開始（`begin_speech_recognition`・画面 effect）と並走させない
 /// （reset と Java 側 `abortPending` の間に別スレッドの開始が登録されると、その要求は pending のまま残りうる）。
-/// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照。
+/// 登録表（`fandhe_runtime::teardown`）から呼ばれる薄いエイリアス（[`bridge::reset`] 参照。
 /// `fandhe-cap-biometric-auth` の `reset_pending_tracking` と同じ命名・位置づけ）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
     bridge::reset();
     // Java 側の保留・実行中の要求も止める（残すと権限許可後に画面へ反映されない録音・聞き取りが走る）。
     crate::android::abort_pending();
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("speech-recognition")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 #[cfg(test)]

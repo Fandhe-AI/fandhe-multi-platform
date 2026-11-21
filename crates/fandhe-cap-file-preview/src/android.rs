@@ -15,7 +15,7 @@
 //!
 //! # ライフサイクル
 //!
-//! Activity が作り直されると gallery の `android_main` の再実行で `reset_pending_tracking` が保留を捨てる。
+//! Activity が作り直されると `android_main` が登録表（`fandhe_runtime::teardown`）を回し、`reset_pending_tracking` が保留を捨てる。
 //! 要求 id は単調に増えるため、旧 Activity の native コールバックが新しい要求を消費することはない。
 //! サムネイルは短い同期処理なので背景遷移では中断しない。
 //!

@@ -1,7 +1,7 @@
 //! app-badge（アプリアイコンのバッジ数） の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。
 //!
 //! 呼び出し元は `fandhe-gallery` の画面登録（`app_badge_set_effect`）と、Activity 再生成時に `reset_pending_tracking` を呼ぶ
-//! アプリの `android_main`。契約の値（`BadgeValue`）は Web 実装（`fandhe-web-dom`、本体は web-dom に残る）と共有する。
+//! 登録表（`fandhe_runtime::teardown`）。契約の値（`BadgeValue`）は Web 実装（`fandhe-web-dom`、本体は web-dom に残る）と共有する。
 //! Android は通知権限のランチャーを持つため `AppBadgeLifecycle`（`FeatureLifecycleProvider`）で Activity ごとに helper を付ける。
 //! 守る範囲は権限拒否・非対応・失敗を成功にしないことと 1 プロセス内の要求順序で、OS が実際にバッジを描くか
 //! （ランチャーの仕様・通知の集約）・複数プロセスは守らない。

@@ -40,6 +40,7 @@ use fandhe_runtime::CompletionSender;
 
 /// 現在のプラットフォームに応じた `OnDeviceLlm` 実装を返す（dispatch の最終形）。
 pub fn platform_on_device_llm() -> Arc<dyn OnDeviceLlm> {
+    register_teardown();
     #[cfg(target_os = "macos")]
     {
         Arc::new(crate::apple::AppleOnDeviceLlm)
@@ -171,6 +172,7 @@ fn drive(
 
 /// `registry.rs` の `effect` 区画から `on_device_llm` 画面用に配線される effect ドライバ。
 pub fn on_device_llm_effect(state: &OnDeviceLlmState, sender: &CompletionSender<OnDeviceLlmState>) {
+    register_teardown();
     static IMPL: std::sync::OnceLock<Arc<dyn OnDeviceLlm>> = std::sync::OnceLock::new();
     let imp = IMPL.get_or_init(platform_on_device_llm);
     drive(
@@ -179,6 +181,16 @@ pub fn on_device_llm_effect(state: &OnDeviceLlmState, sender: &CompletionSender<
         imp,
         SESSION.get_or_init(Session::default),
         RESPOND_DEADLINE,
+    );
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("on-device-llm")
+            .on_android_recreate(crate::reset_pending_tracking),
     );
 }
 

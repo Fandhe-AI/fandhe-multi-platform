@@ -41,6 +41,7 @@ const FAILED_PIP: &str = "小窓の操作";
 
 /// プロセスに 1 つだけ持つ実装（`stop` が `start` と同じ実体に届くようにする）。
 pub fn platform_picture_in_picture() -> &'static Arc<dyn PictureInPicture> {
+    register_teardown();
     static PIP: OnceLock<Arc<dyn PictureInPicture>> = OnceLock::new();
     PIP.get_or_init(|| {
         #[cfg(target_os = "macos")]
@@ -304,6 +305,7 @@ fn report_snapshot(
 
 /// `registry.rs` の `effect` 区画から `pip_show` 画面用に配線される effect ドライバ。
 pub fn pip_show_effect(state: &PipShowState, sender: &CompletionSender<PipShowState>) {
+    register_teardown();
     drive(
         state,
         sender,
@@ -313,9 +315,18 @@ pub fn pip_show_effect(state: &PipShowState, sender: &CompletionSender<PipShowSt
     );
 }
 
-/// アプリ終了時に小窓の資源を解放する（最終成果物の終了フックが呼ぶ）。
+/// アプリ終了時に小窓の資源を解放する（終了処理の登録表（`fandhe_runtime::teardown`）が呼ぶ）。
 pub fn shutdown() {
     platform_picture_in_picture().shutdown();
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t = fandhe_runtime::teardown::Teardown::new("picture-in-picture").on_exit(crate::shutdown);
+    #[cfg(target_os = "android")]
+    let t = t.on_android_recreate(crate::reset_pending_tracking);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

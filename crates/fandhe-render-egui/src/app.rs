@@ -641,39 +641,23 @@ impl<S: 'static> EguiApp for ProxyApp<S> {
         }
     }
 
-    /// ウィンドウを閉じる（プロセスは直後に終了する）タイミングで、登録済みの終了フック
-    /// （[`set_teardown_hooks`]）を呼ぶ。`static` に保持しているため `Drop` が走らない端末リソース
+    /// ウィンドウを閉じる（プロセスは直後に終了する）タイミングで、登録表の終了処理
+    /// （[`fandhe_runtime::teardown::run_exit`]）を呼ぶ。`static` に保持しているため `Drop` が走らない端末リソース
     /// （TTS の子プロセス等）を明示的に止めるためのもの（Issue #865 の codex-review P1 指摘）。
-    /// 何を止めるかは入口（`fandhe` の `src/entry/lifecycle.rs`）が登録する。
+    /// 何を止めるかは、使われた機能 crate が自分で登録する（Issue #1453）。
     fn on_exit(&mut self) {
-        run_exit_hook();
-    }
-}
-
-/// 登録済みの終了フック（[`set_teardown_hooks`] の `on_exit`）を呼ぶ。プロセス全体の端末資源を止めるため、
-/// 画面の切り替えでは呼ばず、ウィンドウを閉じる経路（`EguiApp::on_exit`）からだけ呼ぶ。
-pub(crate) fn run_exit_hook() {
-    if let Some((on_exit, _)) = TEARDOWN_HOOKS.get() {
-        on_exit();
+        fandhe_runtime::teardown::run_exit();
     }
 }
 
 /// 画面（`ProxyApp`）の破棄時に、停止操作なしで残りうる購読を解放する（同一プロセスで別画面へ
 /// 切り替えても guard・通知登録が残らないようにする。メモリ逼迫の通知、Issue #911）。
-/// 実際の解放処理は登録済みの終了フック（[`set_teardown_hooks`]）の `on_drop`。
+/// 実際の解放処理は、機能 crate が登録表へ登録した画面の破棄の処理（[`fandhe_runtime::teardown::run_screen_drop`]）。
 impl<S> Drop for ProxyApp<S> {
     fn drop(&mut self) {
-        if let Some((_, on_drop)) = TEARDOWN_HOOKS.get() {
-            on_drop();
-        }
+        fandhe_runtime::teardown::run_screen_drop();
     }
 }
-
-/// [`set_teardown_hooks`] が保持する (on_exit, on_drop)。プロセスで 1 組。
-static TEARDOWN_HOOKS: std::sync::OnceLock<TeardownHooks> = std::sync::OnceLock::new();
-
-/// (on_exit, on_drop)。
-type TeardownHooks = (fn(), fn());
 
 /// [`set_text_input_hint_hook`] が保持するフック。プロセスで 1 つ。
 static TEXT_INPUT_HINT_HOOK: std::sync::OnceLock<
@@ -686,16 +670,6 @@ static TEXT_INPUT_HINT_HOOK: std::sync::OnceLock<
 /// （現状は `fandhe` の iOS 入力橋渡し、`src/entry/ios_text_input.rs`）が登録する。未登録なら `Unsupported` を返す。
 pub fn set_text_input_hint_hook(hook: fn(TextInputHint) -> Result<(), TextInputHintError>) {
     let _ = TEXT_INPUT_HINT_HOOK.set(hook);
-}
-
-/// [`ProxyApp`] の終了・破棄時に呼ぶ解放処理を登録する（プロセスで 1 回。2 回目以降は無視）。
-///
-/// 端末機能（`fandhe-device` 等）を知らない描画層から、端末リソースの解放を呼べるようにする口で、
-/// `fandhe_runtime::set_repaint_waker` と同じ形。`on_exit` はウィンドウを閉じる経路
-/// （[`EguiApp::on_exit`]。モバイルでは届かない）、`on_drop` は `ProxyApp` の `Drop` で呼ぶ。
-/// 未登録なら何もしない。Android は `android_main` が再実行されうるため、2 回目以降を無視する。
-pub fn set_teardown_hooks(on_exit: fn(), on_drop: fn()) {
-    let _ = TEARDOWN_HOOKS.set((on_exit, on_drop));
 }
 
 #[cfg(test)]

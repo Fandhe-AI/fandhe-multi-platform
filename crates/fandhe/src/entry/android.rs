@@ -4,8 +4,8 @@
 //! バックエンドは Vulkan 固定（REQ-1、`fandhe_render_egui::launch::run_android`）。利用者の `MainActivity`
 //! （`GameActivity` を継承し `System.loadLibrary` で cdylib を読む）から `android_main` が呼ばれ、ここへ来る。
 //!
-//! ここで行うこと: `AndroidApp` の保持（`fandhe-platform-android`）、選んだ端末機能の保留中の要求の破棄
-//! （Activity 再生成で画面状態は作り直されるため、`super::lifecycle`）、終了処理の登録、起床口の登録、
+//! ここで行うこと: `AndroidApp` の保持（`fandhe-platform-android`）、使われた端末機能の保留中の要求の破棄
+//! （Activity 再生成で画面状態は作り直されるため、`fandhe_runtime::teardown`）、起床口の登録、
 //! window insets の配線、ソフトキーボードの入力の橋渡し（winit が GameTextInput の更新を egui へ渡さないため）。
 
 /// `android_main` の引数型。利用者が `winit` に直接依存せずに済むよう `fandhe::__private` から出す。
@@ -15,12 +15,14 @@ use fandhe_platform_android::{android_app, set_android_app};
 
 /// Android アプリの本体。`build` が返した画面を最初に出す。
 pub(crate) fn run(app: AndroidApp, title: &str, build: super::BuildFn) {
-    // 片付けより前に登録する。機能の破棄（通知の閉じ込み等）は `android_app()` を使うため、新しいプロセスで
-    // 未登録のまま呼ぶと何も消えない。`configChanges` で止められない再生成で `android_main` が新しい
+    // 片付けより前に登録する。機能の破棄（通知の閉じ込み等）は `android_app()` を使うため、未登録のまま呼ぶと
+    // 何も消えない。`configChanges` で止められない再生成で `android_main` が新しい
     // `AndroidApp` で再度呼ばれた場合も毎回上書きし、破棄済みの Activity を指したまま残さない。
     set_android_app(app.clone());
-    super::lifecycle::reset_android();
-    super::lifecycle::register_teardown_hooks();
+    // Activity 再生成では画面状態が作り直される（世代 0・`Idle`）。プロセスの static に残った旧要求が残ると、
+    // 次の要求が飲み込まれたり、遅延した完了が新しい画面へ結びついたりするため、新しい画面状態を作る前に捨てる。
+    // 捨てる処理は、このプロセスで使われた機能 crate が登録したもの（新しいプロセスでは空。Issue #1453）。
+    fandhe_runtime::teardown::run_android_recreate();
 
     if let Err(err) = fandhe_render_egui::launch::run_android(app, title, move |lc| {
         let ctx = lc.egui_ctx();

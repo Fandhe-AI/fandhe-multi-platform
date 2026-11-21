@@ -33,7 +33,7 @@ import java.util.WeakHashMap;
 //
 // 許可ランチャーは `attach`（`Activity.onCreate` の中、STARTED より前）で登録する。登録キーは従来の文字列のまま。
 // 権限ダイアログ待ちの要求は Activity の破棄で `RESULT_INTERRUPTED` として確定する（復元しない。公開入口の待ち手を残さないため。
-// Rust 側 `android_main` の `reset_pending_tracking` と対）。後から届く許可コールバックは `take()` が NONE で no-op（二重確定しない）。
+// Rust 側の登録表（`fandhe_runtime::teardown`、`android_main` が回す）の `reset_pending_tracking` と対）。後から届く許可コールバックは `take()` が NONE で no-op（二重確定しない）。
 // ダイアログ自体が Activity を pause させるため、許可コールバックでは前面かどうかを見ない（通知の投稿は背景でも正当）。
 // 守る範囲: 1 プロセス内の要求の照合（旧要求の遅延到着は捨てる）・嘘の成功の禁止。
 // 守らない範囲: 通知の表示の確認（`Shown` は返さない）・通知タップへの応答（contentIntent を付けない）。

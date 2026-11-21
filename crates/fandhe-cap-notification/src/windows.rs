@@ -94,6 +94,7 @@ pub fn setting_result_for(
     feature: &'static str,
     internal: &'static str,
 ) -> Result<(), NotificationError> {
+    crate::driver::register_teardown();
     match code {
         0 => Ok(()),
         1 => Err(NotificationError::PermissionDenied(feature)),
@@ -340,6 +341,7 @@ fn write_shortcut(path: &Path, exe: &Path) -> Result<(), NotificationError> {
 /// `feature` は APPDATA・実行ファイルが取れないときの `Unsupported` のラベル。
 /// 呼び出し元が [`ComInit`] で COM を初期化済みのスレッド上でのみ呼ぶ契約。
 pub fn ensure_app_aumid(feature: &'static str) -> Result<(), NotificationError> {
+    crate::driver::register_teardown();
     let appdata = std::env::var_os("APPDATA").ok_or(NotificationError::Unsupported(feature))?;
     let exe = std::env::current_exe().map_err(|_| NotificationError::Unsupported(feature))?;
     let path = shortcut_path(&appdata);

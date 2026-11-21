@@ -1,7 +1,7 @@
 //! bluetooth-classic（Bluetooth Classic: ペアリング済み機器の一覧と、近くの機器の検索）の機能 crate
 //! （REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。macOS は `IOBluetooth`、Windows は `BluetoothFindFirstDevice`、Android は
 //! `BluetoothAdapter` の検索（結果は pull 型 `bridge` で受ける）。iOS・Web は対象外。`fandhe-gallery` の画面登録から effect
-//! `bluetooth_classic_show_effect` が呼ばれる。終了時の検索の停止（[`stop_shared_discovery`]）は `fandhe-gallery` の終了処理が呼ぶ。
+//! `bluetooth_classic_show_effect` が呼ばれる。終了時の検索の停止（[`stop_shared_discovery`]）は終了処理の登録表（`fandhe_runtime::teardown`）が呼ぶ。
 //!
 //! 守る範囲: 嘘の成功を出さないこと（0 件と失敗の区別）、検索の確実な停止と資源の解放、機器名・アドレスをログに出さないこと。
 //! 守らない範囲: 検索結果の網羅性と鮮度、複数プロセス、OS 側の非同期確定との時間差。

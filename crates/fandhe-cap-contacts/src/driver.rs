@@ -16,7 +16,7 @@
 //! `nativeOnContactPickerResult` が Java のコード 0（選択）/ 1（キャンセル）/ 3（提示・
 //! 読み取り失敗）で届ける（インテント経由なので 2 = 権限拒否は送られない）。Activity 再生成では
 //! Java 側が要求 id を引き継いで結果を 1 度だけ届ける。再生成を伴わない破棄は Java 側が中断（3）を 1 度だけ届ける。
-//! どちらも待ち手は機能 crate 自身で確定する。`android_main` が [`reset_pending_tracking`] を呼ぶ構成では、
+//! どちらも待ち手は機能 crate 自身で確定する。登録表（`fandhe_runtime::teardown`）が [`reset_pending_tracking`] を呼ぶ構成では、
 //! 待ち手を先に `Internal` で戻し、引き継いだ結果は旧 id として捨てる。
 //!
 //! # macOS / iOS / Android 以外
@@ -100,7 +100,7 @@ pub(crate) mod bridge {
         SLOT.deliver(request_id, super::to_outcome(result))
     }
 
-    /// Activity 再生成直後に `android_main` から呼ぶ。保留中の要求を捨て、以後届く旧
+    /// Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から呼ばれる。保留中の要求を捨て、以後届く旧
     /// `request_id` の [`deliver`] を不一致で無視させる（再生成前の待ち手は `Internal` で戻る）。
     #[cfg_attr(not(target_os = "android"), allow(dead_code))]
     pub(crate) fn reset() {
@@ -108,7 +108,7 @@ pub(crate) mod bridge {
     }
 }
 
-/// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
+/// 登録表（`fandhe_runtime::teardown`）から呼ばれる薄いエイリアス（[`bridge::reset`] 参照）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
     bridge::reset();
@@ -195,6 +195,7 @@ fn drive(
 /// 画面の effect ドライバ（[`contact_pick_effect`]）と同じ `bridge` を共有するため、同時には使わない
 /// （後から始めた要求が先の要求を置き換え、先の呼び出しは `Internal` で返る）。それ以外の OS は `Unsupported` 固定。
 pub fn platform_contacts() -> Box<dyn crate::contract::ContactPicker> {
+    register_teardown();
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     return Box::new(BridgeContactPicker);
     #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
@@ -240,10 +241,21 @@ impl crate::contract::ContactPicker for BridgeContactPicker {
 
 /// `registry.rs` の `effect` 区画から `contact_pick` 画面用に配線される effect ドライバ。
 pub fn contact_pick_effect(state: &ContactPickState, sender: &CompletionSender<ContactPickState>) {
+    register_teardown();
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     drive_callback(state, sender);
     #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
     drive(state, sender, &crate::contract::UnsupportedContactPicker);
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("contacts")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 #[cfg(test)]

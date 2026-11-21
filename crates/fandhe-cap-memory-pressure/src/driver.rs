@@ -53,6 +53,7 @@ type Sender = CompletionSender<MemoryPressureShowState>;
 ///
 /// 画面の状態型に依存しない入口で、フレームワークの外のアプリも契約を直接呼べる。
 pub fn platform_memory_pressure() -> Arc<dyn MemoryPressure> {
+    register_teardown();
     #[cfg(target_os = "windows")]
     {
         crate::windows::implementation()
@@ -333,7 +334,7 @@ fn do_start(
     }
 }
 
-/// 保持中の購読を止める（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）と `ProxyApp` の drop から呼ばれる）。画面を離れる / 終了する
+/// 保持中の購読を止める（終了処理の登録表（`fandhe_runtime::teardown`）と `ProxyApp` の drop から呼ばれる）。画面を離れる / 終了する
 /// とき、停止ボタンや次回の `drive` を待たずに guard・通知登録・待機スレッドを解放する。
 /// 解除はロックの外で行う（OS コールバックが同じロックを取りうるため）。
 pub fn shutdown() {
@@ -347,7 +348,17 @@ fn take_active(active: &Mutex<Option<ActiveSubscription>>) {
 
 /// `registry.rs` の `effect` 区画から `memory_pressure_show` 画面用に配線される effect ドライバ。
 pub fn memory_pressure_show_effect(state: &MemoryPressureShowState, sender: &Sender) {
+    register_teardown();
     drive(state, sender, &ACTIVE, platform_memory_pressure().as_ref());
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t = fandhe_runtime::teardown::Teardown::new("memory-pressure")
+        .on_exit(crate::shutdown)
+        .on_screen_drop(crate::shutdown);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

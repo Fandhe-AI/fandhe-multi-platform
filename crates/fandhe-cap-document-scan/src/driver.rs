@@ -102,6 +102,7 @@ type Outcome = Result<CoreScan, DocumentScanFailure>;
 /// 結果の受け取りは、画面用の [`document_scan_show_effect`] か、状態型に依存しない [`start_scan`] / [`poll_scan`] の組で行う
 /// （`scanner.scan(id)` を直接呼ぶだけでは撮影 UI が出ない。要求の登録は [`start_scan`] が行う）。
 pub fn platform_document_scan() -> Arc<dyn DocumentScanner> {
+    register_teardown();
     #[cfg(target_os = "ios")]
     {
         crate::ios::implementation()
@@ -289,7 +290,7 @@ pub(crate) fn complete_from_os(
 
 /// 画面の作り直し時に保留中の要求を破棄する。画面状態は `default()`（世代 0）に戻るため、
 /// 保留が残ると次の要求が発送されず飲み込まれる。旧要求の遅延完了は id 不一致で捨てられる。
-/// Android の再生成経路（アプリの `android_main`）が、新しい画面状態を作る前に呼ぶ。
+/// Android の再生成経路（登録表（`fandhe_runtime::teardown`））が、新しい画面状態を作る前に呼ぶ。
 /// iOS・デスクトップには再生成経路がなく呼ばなくてよい。
 pub fn reset_pending_tracking() {
     if let Some(b) = BRIDGE.get() {
@@ -349,6 +350,7 @@ pub enum ScanResult {
 /// 画面用の要求や先行の要求が進行中なら `None`（置き換えない）。同期で失敗した場合も id を返し、失敗は [`poll_scan`] で受け取る。
 /// 結果は [`poll_scan`] を毎フレーム呼んで取り出す。期限は [`PRESENT_DEADLINE`]（撮影 UI が出るまで）。
 pub fn start_scan() -> Option<u64> {
+    register_teardown();
     static IMPL: OnceLock<Arc<dyn DocumentScanner>> = OnceLock::new();
     let b = bridge();
     let request_id = b.begin_exclusive(false)?;
@@ -361,6 +363,7 @@ pub fn start_scan() -> Option<u64> {
 /// [`start_scan`] で得た要求の結果を取り出す。未着は `None`。取り出すと要求は終わり、次の [`start_scan`] を受け付ける。
 /// 別の要求の id・取り出し済みの id は常に `None`。
 pub fn poll_scan(request_id: u64) -> Option<Result<ScanResult, DocumentScanFailure>> {
+    register_teardown();
     let b = bridge();
     b.expire_if_due();
     let outcome = b.slot.take_ready(request_id)?;
@@ -456,12 +459,23 @@ pub fn document_scan_show_effect(
     state: &DocumentScanShowState,
     sender: &CompletionSender<DocumentScanShowState>,
 ) {
+    register_teardown();
     static IMPL: OnceLock<Arc<dyn DocumentScanner>> = OnceLock::new();
     drive(
         state,
         sender,
         IMPL.get_or_init(platform_document_scan),
         bridge(),
+    );
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("document-scan")
+            .on_android_recreate(crate::reset_pending_tracking),
     );
 }
 

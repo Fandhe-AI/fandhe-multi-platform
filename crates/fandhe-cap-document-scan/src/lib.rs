@@ -145,6 +145,7 @@ impl ScannedPage {
     ///
     /// `Ok` は「復号できる」ことを意味しない。橋渡し層が表示前に復号して確かめる。
     pub fn from_os(bytes: Vec<u8>, page_count: u32) -> Result<ScannedPage, DocumentScanFailure> {
+        crate::driver::register_teardown();
         if page_count == 0 {
             return Err(DocumentScanFailure::Empty);
         }
@@ -167,16 +168,19 @@ impl ScannedPage {
 
     /// 1 ページ目の画像のバイト列。
     pub fn bytes(&self) -> &[u8] {
+        crate::driver::register_teardown();
         &self.bytes
     }
 
     /// 1 ページ目の画像形式（先頭バイトで判定済み）。
     pub fn format(&self) -> PageFormat {
+        crate::driver::register_teardown();
         self.format
     }
 
     /// スキャン全体のページ数（1 以上）。
     pub fn page_count(&self) -> u32 {
+        crate::driver::register_teardown();
         self.page_count
     }
 }
@@ -237,6 +241,7 @@ pub struct UnsupportedDocumentScanner;
 
 impl DocumentScanner for UnsupportedDocumentScanner {
     fn scan(&self, _request_id: u64) -> Result<(), DocumentScanFailure> {
+        crate::driver::register_teardown();
         Err(DocumentScanFailure::Unsupported)
     }
 }

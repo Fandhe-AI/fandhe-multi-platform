@@ -12,8 +12,8 @@
 //! # 期限・ライフサイクル
 //!
 //! 期限（10 秒）は Rust のドライバだけが持ち、Java は走り切る（期限後の成功はドライバが捨てる）。
-//! Java 側は要求 id も保留状態も持たない。Activity が作り直されたときの保留記録は `android_main` の
-//! 再実行で [`crate::reset_pending_tracking`] が捨てる（gallery の `android_main` が呼ぶ）。要求 id は単調に増えるため、
+//! Java 側は要求 id も保留状態も持たない。Activity が作り直されたときの保留記録は、`android_main` が回す登録表
+//! （`fandhe_runtime::teardown`）から呼ばれる [`crate::reset_pending_tracking`] が捨てる。要求 id は単調に増えるため、
 //! 古いワーカーの完了が新しい要求を消費することはない。短い処理なので背景遷移では中断しない。
 //!
 //! 守る範囲: 失敗を成功値へ畳まないこと・資源の解放・FFI に渡す長さの上限。

@@ -203,7 +203,7 @@ pub(crate) mod bridge {
         SLOT.deliver(request_id, super::to_outcome(result))
     }
 
-    /// Android 専用: Activity 再生成直後に `android_main` から呼ぶ
+    /// Android 専用: Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から呼ばれる
     /// （`fandhe_cap_location::driver::reset_retry_tracking` と同じ位置づけ）。[`SLOT`] は
     /// プロセス static のため Activity 再生成をまたいで残るが、画面状態
     /// （`BiometricCheckState`）は再生成のたびに `Default`（`Idle`）で作り直される。
@@ -345,6 +345,7 @@ fn drive(
 /// （後から始めた要求が先の要求を置き換え、先の呼び出しは `Internal` で返る）。
 /// `available` は OS へ問い合わせる実装を持たないため `Unsupported`（成功へ倒さない）。Linux は `authenticate` も `Unsupported`。
 pub fn platform_biometric_auth() -> Box<dyn crate::contract::BiometricAuth> {
+    register_teardown();
     #[cfg(any(
         target_os = "macos",
         target_os = "ios",
@@ -429,6 +430,7 @@ pub fn biometric_check_effect(
     state: &BiometricCheckState,
     sender: &CompletionSender<BiometricCheckState>,
 ) {
+    register_teardown();
     drive_callback(state, sender);
 }
 
@@ -444,10 +446,11 @@ pub fn biometric_check_effect(
     state: &BiometricCheckState,
     sender: &CompletionSender<BiometricCheckState>,
 ) {
+    register_teardown();
     drive(state, sender, &crate::contract::UnsupportedBiometricAuth);
 }
 
-/// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照。
+/// 登録表（`fandhe_runtime::teardown`）から呼ばれる薄いエイリアス（[`bridge::reset`] 参照。
 /// `fandhe_cap_location::driver::reset_retry_tracking` と同じ命名・位置づけ）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
@@ -489,6 +492,16 @@ pub(crate) fn outcome_from_android_code(
         5 => Err(BiometricAuthError::Internal("biometric interrupted")),
         _ => Err(BiometricAuthError::Internal("biometric outcome")),
     }
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("biometric-auth")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 #[cfg(test)]

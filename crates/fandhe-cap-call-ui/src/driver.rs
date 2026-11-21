@@ -8,7 +8,7 @@
 //!
 //! [`platform_call_ui`] の cfg 分岐が全対象 OS の最終形で、各 OS は `implementation()` を持つ
 //! モジュールだけを埋める（iOS: `ios`（#277）、Android: `android`（#278。再生成時は
-//! `reset_pending_tracking` を gallery の `android_main` が呼ぶ））。それ以外は `UnsupportedCallUi` 固定で、
+//! `reset_pending_tracking` を登録表（`fandhe_runtime::teardown`）が呼ぶ））。それ以外は `UnsupportedCallUi` 固定で、
 //! ダミーの成功実装へは倒さない。
 //!
 //! # 並行性と期限
@@ -39,6 +39,7 @@ use fandhe_runtime::CompletionSender;
 
 /// プロセスに 1 つだけ持つ実装（`end` が `report_incoming` と同じ実体に届くようにする）。
 pub fn platform_call_ui() -> &'static Arc<dyn CallUi> {
+    register_teardown();
     static UI: OnceLock<Arc<dyn CallUi>> = OnceLock::new();
     UI.get_or_init(|| {
         #[cfg(target_os = "ios")]
@@ -274,6 +275,7 @@ fn drive(
 
 /// `registry.rs` の `effect` 区画から `call_ui_show` 画面用に配線される effect ドライバ。
 pub fn call_ui_show_effect(state: &CallUiShowState, sender: &CompletionSender<CallUiShowState>) {
+    register_teardown();
     drive(
         state,
         sender,
@@ -281,6 +283,16 @@ pub fn call_ui_show_effect(state: &CallUiShowState, sender: &CompletionSender<Ca
         SESSION.get_or_init(Session::default),
         REPORT_DEADLINE,
         RING_TIMEOUT,
+    );
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("call-ui")
+            .on_android_recreate(crate::reset_pending_tracking),
     );
 }
 

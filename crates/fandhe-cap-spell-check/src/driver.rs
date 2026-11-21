@@ -44,6 +44,7 @@ const FAILED_MESSAGE: &str = "検査できませんでした";
 
 /// 現在のプラットフォームに応じた `SpellChecker` 実装を返す（dispatch の最終形）。
 pub fn platform_spell_check() -> Arc<dyn SpellChecker> {
+    register_teardown();
     #[cfg(target_os = "macos")]
     {
         crate::macos::implementation()
@@ -263,6 +264,7 @@ fn drive(
 
 /// `registry.rs` の `effect` 区画から `spell_check` 画面用に配線される effect ドライバ。
 pub fn spell_check_effect(state: &SpellCheckState, sender: &CompletionSender<SpellCheckState>) {
+    register_teardown();
     static IMPL: std::sync::OnceLock<Arc<dyn SpellChecker>> = std::sync::OnceLock::new();
     let imp = IMPL.get_or_init(platform_spell_check);
     drive(
@@ -271,6 +273,16 @@ pub fn spell_check_effect(state: &SpellCheckState, sender: &CompletionSender<Spe
         imp,
         SESSION.get_or_init(Session::default),
         SPELL_CHECK_DEADLINE,
+    );
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("spell-check")
+            .on_android_recreate(crate::reset_pending_tracking),
     );
 }
 

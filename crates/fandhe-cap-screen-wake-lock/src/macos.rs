@@ -13,7 +13,7 @@
 //!
 //! # アプリ終了時
 //!
-//! プロセスが終わると OS がアサーションを解放するため、`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）への追加は不要
+//! プロセスが終わると OS がアサーションを解放するため、終了処理の登録表（`fandhe_runtime::teardown`）への登録は不要
 //! （`.m` ファイル冒頭コメントと対応）。
 
 use std::sync::{Arc, Mutex};

@@ -28,6 +28,7 @@ use fandhe_runtime::CompletionSender;
 /// ponytail: `fandhe-cap-photo-library` の見本画像と同じ生成を持つ複製（デモ画像のため、2 つの機能 crate を依存させず複製する。
 /// 共有するなら `fandhe-device` へ置く）。
 pub fn sample_png() -> Vec<u8> {
+    register_teardown();
     let img = image::RgbaImage::from_fn(256, 256, |x, y| image::Rgba([x as u8, y as u8, 160, 255]));
     let mut out = std::io::Cursor::new(Vec::new());
     // メモリ上への PNG 書き出しは失敗しない。万一失敗しても空バイト列は
@@ -98,14 +99,14 @@ pub(crate) mod bridge {
         SLOT.deliver(request_id, result)
     }
 
-    /// Activity 再生成直後に `android_main` から呼ぶ。保留中の要求は復元せず破棄し、
+    /// Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から呼ばれる。保留中の要求は復元せず破棄し、
     /// 以後届く旧 `request_id` の [`deliver`] を無視させる（`photo_save::bridge::reset` と同じ）。
     pub(crate) fn reset() {
         SLOT.reset()
     }
 }
 
-/// gallery の `android_main`（Activity 再生成）から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
+/// 登録表（`fandhe_runtime::teardown`）（Activity 再生成）から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
     bridge::reset();
@@ -170,6 +171,7 @@ pub fn wallpaper_set_effect(
     state: &WallpaperSetState,
     sender: &CompletionSender<WallpaperSetState>,
 ) {
+    register_teardown();
     drive_callback(state, sender);
 }
 
@@ -184,6 +186,7 @@ pub fn begin_wallpaper_set(
     image: &PngImage,
     target: WallpaperTarget,
 ) -> Result<u64, WallpaperSetError> {
+    register_teardown();
     let request_id = bridge::SLOT
         .try_begin_unless(|_| true)
         .ok_or(WallpaperSetError::Internal("wallpaper set busy"))?;
@@ -200,11 +203,13 @@ pub fn begin_wallpaper_set(
     _image: &PngImage,
     _target: WallpaperTarget,
 ) -> Result<u64, WallpaperSetError> {
+    register_teardown();
     Err(WallpaperSetError::Unsupported)
 }
 
 /// [`begin_wallpaper_set`] の結果を取り出す。届いていれば 1 度だけ `Some`、未着・旧 id・取り出し済みは `None`。
 pub fn poll_wallpaper_set(request_id: u64) -> Option<Result<WallpaperTarget, WallpaperSetError>> {
+    register_teardown();
     #[cfg(target_os = "android")]
     return bridge::SLOT.take_ready(request_id);
     #[cfg(not(target_os = "android"))]
@@ -244,6 +249,7 @@ pub fn wallpaper_set_effect(
     state: &WallpaperSetState,
     sender: &CompletionSender<WallpaperSetState>,
 ) {
+    register_teardown();
     drive(state, sender, platform_wallpaper_set().as_ref());
 }
 
@@ -251,12 +257,23 @@ pub fn wallpaper_set_effect(
 /// フレームワークの外のアプリも画像を直接渡して設定できる。Android はコールバック型で trait を通らず
 /// （[`begin_wallpaper_set`]）、iOS・Linux と同じく `UnsupportedWallpaper` を返す（成功へは倒さない）。
 pub fn platform_wallpaper_set() -> Box<dyn crate::contract::Wallpaper> {
+    register_teardown();
     #[cfg(target_os = "macos")]
     return Box::new(crate::macos::MacosWallpaper);
     #[cfg(target_os = "windows")]
     return Box::new(crate::windows::WindowsWallpaper);
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     return Box::new(crate::contract::UnsupportedWallpaper);
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("wallpaper-set")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 #[cfg(test)]

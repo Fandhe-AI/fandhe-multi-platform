@@ -60,6 +60,7 @@ extern "C" fn fandhe_rust_photo_picker_outcome(
 /// 提示失敗も code 2 で非同期に通知するため、iOS では通常 `true`。`false`（提示依頼自体の同期的な失敗）のときは登録を消して返す
 /// （受け取りは呼ばれない。呼び出し側が失敗として確定する）。
 pub fn present_ios_photo_picker(deliver: IosPickDeliver) -> bool {
+    crate::driver::register_teardown();
     let request_id = PENDING.register(deliver);
     #[allow(unsafe_code)]
     // SAFETY: `fandhe_ios_photo_picker_pick` の契約（`.m` ファイル冒頭コメント）: 引数はプリミティブ整数のみでポインタを経由しない。

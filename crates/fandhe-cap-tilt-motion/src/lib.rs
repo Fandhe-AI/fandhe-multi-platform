@@ -2,7 +2,7 @@
 //! （REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。iOS は `CMMotionManager` の gravity を毎フレーム pull し、Android は
 //! `SensorManager` の重力センサ値を Java から push で受ける。デスクトップはスライダー値を `DummyMotion` へ書いて代替し、
 //! Web は `fandhe-web-dom`（`DeviceOrientationEvent`）。`fandhe-gallery` の画面登録から effect `tilt_ball_effect` が呼ばれる。
-//! Android の画面ゲート（[`set_screen_active`]）は `fandhe-gallery` の `android_main` が起動画面の決定直後に呼ぶ。
+//! Android の画面ゲート（[`set_screen_active`]）は `fandhe-gallery` の起動画面の選択（`select.rs`）が画面の決定直後に呼ぶ。
 //!
 //! iOS の共有 `CMMotionManager`（`ios/fandhe_ios_motion.m`）は motion-raw-sensors の iOS 実装も使うため、
 //! motion-raw-sensors が iOS の target 依存で本 crate に依存する。

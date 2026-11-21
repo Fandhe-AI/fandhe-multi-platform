@@ -14,7 +14,7 @@
 //! （成功へ倒さない）。`Closed` は bridge 側が表示開始を記録した要求にしか認めない。
 //!
 //! 守る範囲: 1 プロセス内の要求順序・嘘の成功の禁止・Activity 再生成時の旧要求の破棄
-//! （`fandhe-gallery` の `android_main` が `reset_pending_tracking` を呼ぶ。id は単調増加で旧結果は id 不一致で捨てられる）。
+//! （登録表（`fandhe_runtime::teardown`）が `reset_pending_tracking` を呼ぶ。id は単調増加で旧結果は id 不一致で捨てられる）。
 //! 守らない範囲: 開いた後に Rust から閉じること・閲覧内容と読み込み失敗の検知・Custom Tabs
 //! 非対応ブラウザでの表示の差・複数プロセス・プロセス死後の結果。
 //! URL と OS のエラー文はログに出さない。新しい権限・依存・`<queries>` は足さない。

@@ -4,8 +4,8 @@
 //! 1 つに集める（REQ-21 / TASK-21.4、Issue #1335。移行の手順は `docs/operations/capability-crate-migration.md`）。
 //!
 //! 呼び出し元: 利用側（`fandhe-gallery` の `screens/registry.rs`）が [`pip_show_effect`] を画面
-//! （`fandhe_core::screens::pip_show`）の effect として登録し、Activity 再生成時は `android_main` が
-//! [`reset_pending_tracking`]（Android）を、アプリ終了時は終了フックが [`shutdown`] を呼ぶ。
+//! （`fandhe_core::screens::pip_show`）の effect として登録し、Activity 再生成時は`android_main` が回す登録表（`fandhe_runtime::teardown`）が
+//! [`reset_pending_tracking`]（Android）を、アプリ終了時は終了処理の登録表（`fandhe_runtime::teardown`）が [`shutdown`] を呼ぶ。
 //! 入口 [`platform_picture_in_picture`] は画面の状態型に依存しない。Web の実装本体は `fandhe-web-dom` に残り、
 //! この crate の契約の定数と純関数（`frame_color`・`FRAME_COLORS` など）だけを共有する（wasm32 でも通る）。
 //! Windows は保留、Linux は `Unsupported` 固定。egui・`fandhe-device` には依存しない。

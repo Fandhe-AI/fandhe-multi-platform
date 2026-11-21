@@ -26,7 +26,7 @@
 //! # 期限・終了
 //!
 //! 期限は `DISCOVERY_WINDOW_MS` だけ（OS 側へ渡して一致させる、同 3 節）。画面離脱はプロセス終了と
-//! 同義のため、[`stop_shared_discovery`] を `fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）から呼んで検索を止める。再要求は
+//! 同義のため、[`stop_shared_discovery`] を終了処理の登録表（`fandhe_runtime::teardown`）から呼んで検索を止める。再要求は
 //! 古いセッションを置き換え、古い request_id の結果は照合して捨てる。Android は停止が
 //! Activity のライフサイクルで完結するため分岐を持たない。
 //!
@@ -74,6 +74,7 @@ const MAX_OBSERVED: usize = 256;
 /// 現在のプラットフォームに応じた `BluetoothClassic` 実装を返す（状態を持たないため呼び出しごとに構築）。
 /// Windows・Android は骨格のスタブ（`Unsupported`）で、#660 / #661 が実装に置き換える。
 pub fn platform_bluetooth_classic() -> Box<dyn BluetoothClassic> {
+    register_teardown();
     #[cfg(target_os = "macos")]
     {
         crate::macos::implementation()
@@ -349,6 +350,7 @@ fn begin_and_present_with(
 /// 新しい要求（画面側を含む）・[`stop_shared_discovery`]・Activity 再生成で置き換わった要求は `Cancelled` で完了する。
 /// 非対応 OS は即座に `Unsupported` で完了する。
 pub fn start_discovery(on_complete: DiscoverCallback) {
+    register_teardown();
     #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
     begin_and_present(Some(on_complete));
     #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
@@ -471,6 +473,7 @@ pub fn bluetooth_classic_show_effect(
     state: &BluetoothClassicShowState,
     sender: &CompletionSender<BluetoothClassicShowState>,
 ) {
+    register_teardown();
     drive_paired_sync(state, sender, platform_bluetooth_classic().as_ref());
     #[cfg(any(target_os = "macos", target_os = "windows", target_os = "android"))]
     drive_discover_callback(state, sender);
@@ -478,7 +481,7 @@ pub fn bluetooth_classic_show_effect(
     drive_discover_sync(state, sender, platform_bluetooth_classic().as_ref());
 }
 
-/// Activity 再生成時に旧要求の保留を捨てる（`fandhe-gallery` の `android_main` から呼ばれる。
+/// Activity 再生成時に旧要求の保留を捨てる（登録表（`fandhe_runtime::teardown`）から呼ばれる。
 /// Java 側の追跡は Activity インスタンスのフィールドで、再生成で一緒に消える）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
@@ -504,7 +507,7 @@ fn invalidate_for_stop() -> Option<DiscoverCallback> {
     old
 }
 
-/// アプリ終了時に進行中の検索を止める（`fandhe-gallery` の終了処理から呼ばれる）。
+/// アプリ終了時に進行中の検索を止める（終了処理の登録表（`fandhe_runtime::teardown`）から呼ばれる）。
 /// Rust 側のロックを握ったまま OS 側の停止を呼ばない（macOS の停止は main queue へ同期ディスパッチし、
 /// main 側のコールバックが同じロックを取るため、`device-bridge-contracts.md` 11 節）。
 /// 完了通知と観測の無効化は [`START`] の内側で一括して行い（停止と並行する新しい要求の登録を、途中で
@@ -527,6 +530,16 @@ pub fn stop_shared_discovery() {
     fire_cancelled(old);
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     fire_cancelled(swept);
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t = fandhe_runtime::teardown::Teardown::new("bluetooth-classic")
+        .on_exit(crate::stop_shared_discovery);
+    #[cfg(target_os = "android")]
+    let t = t.on_android_recreate(crate::reset_pending_tracking);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

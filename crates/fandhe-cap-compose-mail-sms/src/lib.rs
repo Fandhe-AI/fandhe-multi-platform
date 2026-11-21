@@ -2,7 +2,7 @@
 //! （対応表の id は compose-mail-sms と compose-mail-attachment の 2 つで、同じモジュールを共有するため 1 つの crate にまとめた）。
 //!
 //! 呼び出し元は `fandhe-gallery` の `screens/registry.rs`（`compose_mail_sms_effect`）と、Activity 再生成時の
-//! `reset_pending_tracking`（gallery の `android_main` から、Android のみ）。Web の実装本体は `fandhe-web-dom` に残り、
+//! `reset_pending_tracking`（登録表（`fandhe_runtime::teardown`）から、Android のみ）。Web の実装本体は `fandhe-web-dom` に残り、
 //! 契約の `ComposeRequest`・`ComposeAttachment` だけを本 crate から使う。宛先・件名・本文・添付・例外の文言はログに出さない。
 //! 守る範囲は 1 プロセス内の要求の順序・NoHandler や非前景を成功に畳まないこと・添付の一時ファイルの追跡と回収
 //! （このプロセスが作った分だけ）、守らない範囲は作成画面へ渡した後の送信可否・複数プロセス・OS の一時領域に残る他者のファイル

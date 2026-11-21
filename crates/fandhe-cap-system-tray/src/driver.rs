@@ -81,6 +81,7 @@ fn to_hide_result(outcome: HideOutcome) -> HideResult {
 /// 逃がすため（`'static` 参照ではなく `std::thread::spawn` へ move できる所有権が
 /// 要る、`fandhe-cap-notification` の `driver.rs::implementation` と同型）。
 pub fn platform_system_tray() -> Arc<dyn SystemTray> {
+    register_teardown();
     #[cfg(target_os = "macos")]
     {
         use std::sync::OnceLock;
@@ -175,10 +176,11 @@ pub(crate) fn drive(
 /// `registry.rs` の `effect` 区画から `system_tray` 画面用に配線される effect
 /// ドライバ。
 pub fn system_tray_effect(state: &SystemTrayState, sender: &CompletionSender<SystemTrayState>) {
+    register_teardown();
     drive(state, sender, platform_system_tray());
 }
 
-/// アプリ終了時（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`））に呼ぶ。表示中のアイコンを消す
+/// アプリ終了時（終了処理の登録表（`fandhe_runtime::teardown`））に呼ぶ。表示中のアイコンを消す
 /// （`hide()` の結果は無視する純関数、テストから呼べるよう `stop_shared_system_tray`
 /// 本体から切り出す。`HIDE_ITEM_INDEX` を使わず直接 `hide` を呼ぶのは、終了時は
 /// 画面状態（`SystemTrayState`）が既に破棄されている可能性があり、状態機械を
@@ -187,11 +189,19 @@ pub(crate) fn cleanup(tray: &dyn SystemTray) {
     let _ = tray.hide();
 }
 
-/// `fandhe-gallery` の終了フックから呼ぶ。プロセス終了時に Windows の
+/// 終了処理の登録表（`fandhe_runtime::teardown`）から呼ぶ。プロセス終了時に Windows の
 /// 通知領域アイコンが残る（`NIM_DELETE` 忘れ）のを防ぐ（モジュール doc「終了時」
-/// 契約、`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）参照）。
+/// 契約、終了処理の登録表（`fandhe_runtime::teardown`）参照）。
 pub fn stop_shared_system_tray() {
     cleanup(&*platform_system_tray());
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t = fandhe_runtime::teardown::Teardown::new("system-tray")
+        .on_exit(crate::stop_shared_system_tray);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

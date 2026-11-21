@@ -117,9 +117,25 @@ final class NowPlayingHelper {
     private static final Map<Activity, NowPlayingHelper> HELPERS =
             Collections.synchronizedMap(new WeakHashMap<>());
 
-    // Activity の生成時（`NowPlayingLifecycle` から、UI スレッド）。
+    // 前のプロセスが残した通知を、このプロセスで取り下げたか（UI スレッド専用）。
+    private static boolean leftoverCancelled;
+
+    // Activity の生成時（`NowPlayingLifecycle` から、UI スレッド）。プロセスで最初の生成では、前のプロセスが残した通知
+    // （固定 TAG/ID なので同じ通知）を 1 回だけ取り下げる。Rust 側の再生成時の破棄（`clear` → 取り下げ）は、この機能が
+    // 使われたときにだけ登録されるため（Issue #1453）、起動時の取り下げはここで行う。
     static void attach(Activity activity) {
         HELPERS.put(activity, new NowPlayingHelper(activity));
+        if (!leftoverCancelled) {
+            leftoverCancelled = true;
+            try {
+                NotificationManager nm = activity.getSystemService(NotificationManager.class);
+                if (nm != null) {
+                    nm.cancel(TAG, NOTIFICATION_ID);
+                }
+            } catch (RuntimeException e) {
+                // 冪等な片付けなので握りつぶす。
+            }
+        }
     }
 
     // Activity の破棄時（同上）。再生成を含む。session を解放し、旧要求・旧操作を止める。
@@ -329,7 +345,7 @@ final class NowPlayingHelper {
             b = new Notification.Builder(activity);
         }
         // contentIntent は付けない（exported な入口を増やさない）。ongoing にもしない。プロセスが
-        // 異常終了すると通知は残り、利用者が消せなくなるため（次回起動の取り下げまで残る）。
+        // 異常終了すると通知は残り、利用者が消せなくなるため（次回起動時に `attach` が取り下げるまで残る）。
         b.setSmallIcon(android.R.drawable.ic_media_play)
                 .setContentTitle(d.title)
                 .setOngoing(false)
@@ -344,7 +360,7 @@ final class NowPlayingHelper {
                 nm.cancel(TAG, NOTIFICATION_ID);
             }
         } catch (RuntimeException e) {
-            // 取り下げの失敗は握りつぶす（残った通知は次回起動時の取り下げで消える）。
+            // 取り下げの失敗は握りつぶす（残った通知は次回起動時に `attach` が取り下げる）。
         }
     }
 

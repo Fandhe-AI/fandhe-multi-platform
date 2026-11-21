@@ -1,7 +1,7 @@
 //! on-device-llm（端末内 LLM による応答生成） の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。
 //!
 //! 呼び出し元は `fandhe-gallery` の画面登録（`on_device_llm_effect`）と、Activity 再生成時に `reset_pending_tracking` を呼ぶ
-//! アプリの `android_main`。契約（応答検査・期限・失敗の細分類）は Web 実装（`fandhe-web-dom`、本体は web-dom に残る）と共有する。
+//! 登録表（`fandhe_runtime::teardown`）。契約（応答検査・期限・失敗の細分類）は Web 実装（`fandhe-web-dom`、本体は web-dom に残る）と共有する。
 //! Apple（iOS / macOS）は Swift 薄層（FoundationModels を弱リンク）で、Android は未実装（Unsupported）。
 //! 守る範囲はモデル未取得・拒否・混雑・期限切れ・空応答を成功にしないことと 1 プロセス内の要求順序で、応答の非決定性・
 //! 複数プロセス・プロンプトの内容の検証（長さの上限のみ）は守らない。プロンプトと応答はログへ出さない。

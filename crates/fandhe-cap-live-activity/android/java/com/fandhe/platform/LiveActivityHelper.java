@@ -78,9 +78,18 @@ final class LiveActivityHelper {
                 new ActivityResultContracts.RequestPermission(), this::onPermissionResult);
     }
 
-    // Activity の生成時（`LiveActivityLifecycle` から）。
+    // 前のプロセスが残した通知を、このプロセスで閉じたか（UI スレッド専用）。
+    private static boolean leftoverDismissed;
+
+    // Activity の生成時（`LiveActivityLifecycle` から）。プロセスで最初の生成では、前のプロセスが残した通知
+    // （固定 tag/ID なので同じ通知）を閉じる。Rust 側の再生成時の破棄（`dismissAll` を含む）は、この機能が
+    // 使われたときにだけ登録されるため（Issue #1453）、起動時の片付けはここで行う。
     static void attach(ComponentActivity activity) {
         HELPERS.put(activity, new LiveActivityHelper(activity));
+        if (!leftoverDismissed) {
+            leftoverDismissed = true;
+            dismissAll(activity);
+        }
     }
 
     // Activity の破棄時（`LiveActivityLifecycle` から）。

@@ -152,7 +152,7 @@ pub(crate) mod bridge {
         Err(CalendarError::Internal(RESET))
     }
 
-    /// Android: Activity 再生成直後に `android_main` から呼ぶ。[`SLOT`] はプロセス static のため再生成をまたいで残る。
+    /// Android: Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から呼ばれる。[`SLOT`] はプロセス static のため再生成をまたいで残る。
     /// 保留中の要求は復元せず破棄し、以後届く旧 `request_id` の [`deliver`] を無視させる。持ち主の印は残し、
     /// 画面は次の poll で失敗に、公開側（同期の待ちを含む）は次の poll で失われた要求を 1 度だけ通知される。
     #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
@@ -161,7 +161,7 @@ pub(crate) mod bridge {
     }
 }
 
-/// `android_main` から呼ぶ薄いエイリアス（[`bridge::reset`] 参照）。
+/// 登録表（`fandhe_runtime::teardown`）から呼ばれる薄いエイリアス（[`bridge::reset`] 参照）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
     bridge::reset();
@@ -189,6 +189,7 @@ fn present(request_id: u64, draft: &EventDraft) -> bool {
 /// 即座に戻る（先行は置き換えない）。Activity 再生成で待っている呼び出しは `Internal("calendar reset")` で戻る。
 /// それ以外の OS は常に `Unsupported`。
 pub fn platform_calendar() -> std::sync::Arc<dyn crate::contract::CalendarEvents> {
+    register_teardown();
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     {
         std::sync::Arc::new(CallbackCalendar)
@@ -221,6 +222,7 @@ impl crate::contract::CalendarEvents for CallbackCalendar {
 /// - 依頼自体の失敗は `Err`（結果は届かない）。macOS・iOS・Android 以外では `Unsupported`
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub fn begin_add_event(draft: &EventDraft) -> Result<u64, CalendarError> {
+    register_teardown();
     let request_id = bridge::begin_public().ok_or(CalendarError::Internal(bridge::BUSY))?;
     if !present(request_id, draft) {
         bridge::PUBLIC.abort(&bridge::SLOT, request_id);
@@ -232,6 +234,7 @@ pub fn begin_add_event(draft: &EventDraft) -> Result<u64, CalendarError> {
 /// macOS・iOS・Android 以外では成功へ倒さず `Unsupported`。
 #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
 pub fn begin_add_event(draft: &EventDraft) -> Result<u64, CalendarError> {
+    register_teardown();
     let _ = draft;
     Err(CalendarError::Unsupported)
 }
@@ -243,6 +246,7 @@ pub fn begin_add_event(draft: &EventDraft) -> Result<u64, CalendarError> {
 /// 打ち切った（`discard` した）要求は、OS 側で後から保存されうる（未確定）。そのため結果は届かない。
 /// 並行して同じ id を poll しても、結果が二重に返ることはない。
 pub fn poll_add_event(request_id: u64) -> Option<Result<AddEventOutcome, CalendarError>> {
+    register_teardown();
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     {
         bridge::PUBLIC.poll(&bridge::SLOT, request_id, bridge::lost)
@@ -261,6 +265,7 @@ pub fn poll_add_event(request_id: u64) -> Option<Result<AddEventOutcome, Calenda
 /// 後から届いた結果は id で照合して捨て、新しい要求へ結びつけない。OS がまだ進行中の間は、次の開始
 /// （画面・公開とも）は `Internal("calendar busy")` で断られる（重複して保存しないため）。
 pub fn discard_add_event(request_id: u64) -> bool {
+    register_teardown();
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     {
         bridge::PUBLIC.discard(&bridge::SLOT, request_id)
@@ -335,6 +340,7 @@ fn drive_callback(state: &CalendarAddState, sender: &CompletionSender<CalendarAd
 /// `registry.rs` から `calendar_add` 画面用に配線される effect ドライバ（macOS / iOS / Android）。
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub fn calendar_add_effect(state: &CalendarAddState, sender: &CompletionSender<CalendarAddState>) {
+    register_teardown();
     drive_callback(state, sender);
 }
 
@@ -362,7 +368,18 @@ fn drive(
 /// `registry.rs` から配線される effect ドライバ（非対応 OS。常に非対応を表示する）。
 #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
 pub fn calendar_add_effect(state: &CalendarAddState, sender: &CompletionSender<CalendarAddState>) {
+    register_teardown();
     drive(state, sender, &crate::contract::UnsupportedCalendar);
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("calendar")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 #[cfg(test)]

@@ -206,9 +206,10 @@ fn app(ctx: &egui::Context) -> Box<dyn ProxyAppDyn> {
 - 選ばなかった機能は依存に入らず、呼ぶとコンパイルエラーです。その機能の権限も成果物に入りません
 - 機能ごとの呼び方（同期の入口 `platform_<名前>()`、結果が後から届く機能の `begin_*`・`poll_*`・`discard_*`）は、
   各機能 crate（`crates/fandhe-cap-<id>`）の doc を見ます
-- 機能の crate（`fandhe-cap-<id>`）を直接依存に書いても選べますが、起動前の登録・終了処理・Android の再生成時の破棄が要る機能は、
-  直接依存では走りません（#1453）。標準機能は feature で選んでください。見分け方と第三者の機能の作り方は
-  `docs/architecture/capability-crate-contract.md` 5 節です
+- 機能の crate（`fandhe-cap-<id>`）を直接依存に書いても選べます。終了処理と Android の再生成時の破棄は、機能 crate が
+  初めて使われたときに自分で登録するため、直接依存でも走ります（#1453）。起動前の登録が要る機能（URL scheme の受信・
+  ファイルを開く・背景処理など）だけは、feature で選ぶか `src/main.rs` で呼びます。見分け方と第三者の機能の作り方は
+  `docs/architecture/capability-crate-contract.md` 3.3 節・3.4 節・5 節です
 - Web では、実装が DOM 出力側（`fandhe-web-dom`）に残っている機能は、`#[fandhe::main]` のアプリから `Unsupported` を返します（#1456）。
   network-status はその 1 つで、Web では「このプラットフォームでは未対応です」から始まる文言が出ます。
   該当する機能はまだ洗い出しておらず、対応表で Web が done の機能でも `Unsupported` になりえます
@@ -425,7 +426,7 @@ alarm・image-generation・live-activity・on-device-llm・screen-capture・tran
   説明文を要する機能（位置情報・カメラ・マイク等）は、macOS で許可ダイアログが出ないことがあります
 - **Android では `forbid(unsafe_code)` にできない**: `android_main` が `no_mangle` を伴うため、4 節のように Android だけ `deny` にします
 - **wasm-bindgen の版**: `fandhe` が `wasm-bindgen` を `=` で固定しているため、CLI は `Cargo.lock` の版に合わせます（8.2 節）
-- **終了処理を持つ機能の直接依存**: 5 節。feature で選びます（#1453）
+- **起動前の登録を持つ機能の直接依存**: 5 節。feature で選ぶか `src/main.rs` で呼びます（#1453）
 - **Web で `Unsupported` になる機能**: 5 節。対応表で Web が done でも、`#[fandhe::main]` のアプリでは未対応のことがあります（#1456）
 - **`gen/` に手を入れない**: 毎回作り直します。変えたいときは追記か `--eject` を使います（7 節）
 

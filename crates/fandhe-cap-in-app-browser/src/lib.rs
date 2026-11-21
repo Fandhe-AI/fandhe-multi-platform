@@ -1,6 +1,6 @@
 //! in-app-browser（アプリ内ブラウザ）の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。
 //! iOS は `SFSafariViewController`、Android は Custom Tabs（`CustomTabsIntent`）で http / https の URL を開く。
-//! `fandhe-gallery` の画面登録から effect `in_app_browser_show_effect` が呼ばれ、Activity 再生成時は `android_main` が
+//! `fandhe-gallery` の画面登録から effect `in_app_browser_show_effect` が呼ばれ、Activity 再生成時は`android_main` が回す登録表（`fandhe_runtime::teardown`）が
 //! `reset_pending_tracking` で旧要求を捨てる。
 //!
 //! 守る範囲: 1 プロセス内の要求順序、非前景・ブラウザ無しを成功に畳まないこと、期限切れと表示開始の排他。

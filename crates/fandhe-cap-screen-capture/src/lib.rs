@@ -1,7 +1,7 @@
 //! screen-capture（画面の録画・キャプチャ） の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。
 //!
 //! 呼び出し元は `fandhe-gallery` の画面登録（`screen_capture_effect`）と、Activity 再生成時に `reset_pending_tracking` を呼ぶ
-//! アプリの `android_main`。契約（`build_capture_result`）は Web 実装（`fandhe-web-dom`、本体は web-dom に残る）と共有する。
+//! 登録表（`fandhe_runtime::teardown`）。契約（`build_capture_result`）は Web 実装（`fandhe-web-dom`、本体は web-dom に残る）と共有する。
 //! Android は MediaProjection の同意ダイアログと前景サービス（`ScreenCaptureService`）を持ち、Activity ごとの helper
 //! （`ScreenCaptureLifecycle`）が前面離脱・破棄で録画を中断する。経過時間は `fandhe-runtime` の単調時計の実測で進める。
 //! 守る範囲は 0 バイト・中断・失敗を成功にしないことと、キャプチャ資源・サービスの解放で、録画内容の検証・複数プロセスは

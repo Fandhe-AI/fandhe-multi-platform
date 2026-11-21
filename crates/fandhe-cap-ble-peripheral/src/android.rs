@@ -13,7 +13,7 @@
 //!
 //! 画面の session は画面状態ごとに数え直されるため、Activity 再生成後の新しい画面の session が
 //! 旧 Activity の session と衝突しうる。Java とのやりとりと `SessionSlot` の照合には、プロセス単調の
-//! [`next_token`] を使う。再生成時は `android_main` が [`reset_pending_tracking`] で通知先を捨てる。
+//! [`next_token`] を使う。再生成時は登録表（`fandhe_runtime::teardown`）が [`reset_pending_tracking`] で通知先を捨てる。
 //!
 //! # JNI 署名（Java 側と 2 か所で一致させる。native 宣言は Rust の要求を経ないと呼ばれないので no-op スタブは置かない）
 //!
@@ -50,7 +50,7 @@ fn next_token() -> u64 {
     NEXT_TOKEN.fetch_add(1, Ordering::Relaxed)
 }
 
-/// Activity 再生成時に通知先を捨てる（`fandhe-gallery` の `android_main` から呼ばれる）。旧 Activity の遅延した通知は
+/// Activity 再生成時に通知先を捨てる（登録表（`fandhe_runtime::teardown`）から呼ばれる）。旧 Activity の遅延した通知は
 /// token 不一致（slot が空）で捨てられる。
 pub fn reset_pending_tracking() {
     SESSION.clear();

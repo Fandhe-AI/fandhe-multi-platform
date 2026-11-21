@@ -172,6 +172,7 @@ pub(crate) mod bridge {
 
 /// OS 別エンジンの dispatch（最終形。後続 OS の子 issue は各 OS のモジュール内だけを直す）。
 pub fn platform_screen_capture() -> &'static dyn ScreenCapturer {
+    register_teardown();
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
         crate::apple::capturer()
@@ -230,6 +231,7 @@ fn begin_public_slot() -> Option<u64> {
     target_os = "android"
 ))]
 pub fn begin_capture(max_duration: std::time::Duration) -> Result<u64, ScreenCaptureError> {
+    register_teardown();
     // 進行中の依頼と公開側の未取得の結果は置き換えず拒否する（失敗時の clear で既存依頼を壊さない）。画面側の未取得の結果は受け取り待ちへ移す。
     let Some(request_id) = begin_public_slot() else {
         return Err(ScreenCaptureError::Internal("busy"));
@@ -254,6 +256,7 @@ pub fn begin_capture(max_duration: std::time::Duration) -> Result<u64, ScreenCap
 pub fn poll_capture(
     request_id: u64,
 ) -> Option<Result<crate::contract::CaptureResult, ScreenCaptureError>> {
+    register_teardown();
     let (id, ready) = bridge::SLOT.snapshot()?;
     if id != request_id {
         return None;
@@ -274,6 +277,7 @@ pub fn poll_capture(
     target_os = "android"
 ))]
 pub fn abandon_capture(request_id: u64) -> bool {
+    register_teardown();
     match bridge::SLOT.snapshot() {
         Some((id, Some(_))) if id == request_id => {
             bridge::SLOT.clear(id);
@@ -435,6 +439,7 @@ pub fn screen_capture_effect(
     state: &ScreenCaptureState,
     sender: &CompletionSender<ScreenCaptureState>,
 ) {
+    register_teardown();
     drive_callback(state, sender);
 }
 
@@ -449,13 +454,24 @@ pub fn screen_capture_effect(
     state: &ScreenCaptureState,
     sender: &CompletionSender<ScreenCaptureState>,
 ) {
+    register_teardown();
     drive(state, sender, &crate::contract::UnsupportedScreenCapturer);
 }
 
-/// `android_main` から呼ぶ（[`bridge::reset`] 参照）。
+/// 登録表（`fandhe_runtime::teardown`）から呼ばれる（[`bridge::reset`] 参照）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
     bridge::reset();
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("screen-capture")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 #[cfg(test)]

@@ -5,7 +5,7 @@
 //!
 //! 呼び出し元: 利用側（`fandhe-gallery` の `screens/registry.rs`）が [`live_activity_show_effect`] を画面
 //! （`fandhe_core::screens::live_activity_show`）の effect として登録する。Activity 再生成では gallery の
-//! `android_main` から [`reset_pending_tracking`] を呼ぶ。egui・`fandhe-device` には依存しない。
+//! 登録表（`fandhe_runtime::teardown`）から [`reset_pending_tracking`] を呼ぶ。egui・`fandhe-device` には依存しない。
 //! 画面の外からは、OS の完了まで待つ同期の [`run_live_activity`] と、待ちを打ち切れる [`begin_live_activity`] /
 //! [`poll_live_activity`] / [`discard_live_activity`] を使う（打ち切った要求は OS 側で後から完了しうる）。
 //!

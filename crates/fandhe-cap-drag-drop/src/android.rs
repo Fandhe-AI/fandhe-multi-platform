@@ -13,9 +13,9 @@
 //! - `boolean nativeDragDropWants(long, int)`: 1 件読む前の問い合わせ。false なら読まずに打ち切る
 //! - `void nativeOnDragDropItem(long, int, int, String, int)`: 1 件ぶんの結果（code 0=ファイル / 1=フォルダ / 2=読めない）
 //!
-//! 画面の表示状態は `fandhe-gallery` の `android_main` が画面名を決めた時点で [`set_screen_active`] へ渡し、
-//! Activity の再生成では [`reset_sessions`] が進行中のセッションと未適用イベントを捨てる
-//! （どちらも最終成果物 `fandhe-gallery` が呼ぶ）。
+//! 画面の表示状態は `fandhe-gallery` の起動画面の選択（`select.rs`）が画面名を決めた時点で [`set_screen_active`] へ渡す。
+//! Activity の再生成では [`reset_sessions`] が進行中のセッションと未適用イベントを捨てる（登録表（`fandhe_runtime::teardown`）から呼ばれる。
+//! 登録はこの機能が初めて使われたとき）。
 //!
 //! 受け取った内容（ファイル名・中身）はログ出力・保存しない（他アプリの機密文書になり得る、security.md A09）。
 
@@ -56,13 +56,14 @@ fn is_active() -> bool {
         || (last != 0 && now_ms().saturating_sub(last - 1) < ACTIVE_WINDOW_MS)
 }
 
-/// 表示中の画面が `drag_drop` かどうかを差し替える。`fandhe-gallery` の `android_main` が起動画面を決定した直後に呼ぶ。
+/// 表示中の画面が `drag_drop` かどうかを差し替える。`fandhe-gallery` の起動画面の選択（`select.rs`）が画面を決定した直後に呼ぶ。
 pub fn set_screen_active(active: bool) {
+    crate::driver::register_teardown();
     SCREEN_ACTIVE.store(active, Ordering::Relaxed);
 }
 
 /// Activity 再生成のたびに、進行中のセッションと未適用イベントを捨てる。旧 Activity 由来の読み取りスレッドは
-/// `nativeDragDropWants` で打ち切られる。`fandhe-gallery` の `android_main` が呼ぶ。
+/// `nativeDragDropWants` で打ち切られる。登録表（`fandhe_runtime::teardown`）から呼ばれる。
 pub fn reset_sessions() {
     crate::drop_session::reset();
 }

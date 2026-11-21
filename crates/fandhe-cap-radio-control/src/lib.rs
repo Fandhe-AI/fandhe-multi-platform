@@ -1,7 +1,7 @@
 //! radio-control の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。無線（Wi-Fi・Bluetooth）の状態の読み取りと切り替えを OS に依頼する。
 //!
 //! 呼び出し元は `fandhe-gallery` の `screens/registry.rs`（`radio_control_show_effect`）と、Activity 再生成時の
-//! `reset_pending_tracking`（gallery の `android_main` から、Android のみ）。守る範囲は 1 プロセス内の要求の順序・
+//! `reset_pending_tracking`（登録表（`fandhe_runtime::teardown`）から、Android のみ）。守る範囲は 1 プロセス内の要求の順序・
 //! 失敗を成功と見せないこと・Activity 破棄時の保留要求の確定、守らない範囲は設定画面での利用者の操作・読み直し時点の
 //! 切り替わり途中の値・ダイアログの待ち時間（`contract` の doc を参照）。Android・macOS・Windows が実装し、他の OS は `Unsupported`。
 //!

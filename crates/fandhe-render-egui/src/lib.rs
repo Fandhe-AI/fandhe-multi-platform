@@ -9,7 +9,7 @@
 //! eframe はこのクレートの中だけで使い、公開 API に eframe の型を出さない
 //! （`eframe::App`・`CreationContext`・`NativeOptions`・`Frame`・`eframe::Result`）。
 //! 端末機能（保存・カメラ・OS 連携）は持たない。端末機能の配線は機能 crate の driver と入口（`fandhe` の `src/entry/`）が
-//! 担い、終了・破棄の解放処理だけは [`app::set_teardown_hooks`] で登録して呼ぶ。
+//! 担う。終了・画面の破棄の解放処理は、機能 crate が `fandhe_runtime::teardown` へ登録したものを [`app::ProxyApp`] と [`Menu`] が呼ぶ。
 //! 入力欄のヒント（`HostView::set_text_input_hint`）の橋渡しは [`app::set_text_input_hint_hook`] で登録する。
 //!
 //! 全ターゲットで `#![forbid(unsafe_code)]` を維持する。`android_main` の `#[no_mangle]` や

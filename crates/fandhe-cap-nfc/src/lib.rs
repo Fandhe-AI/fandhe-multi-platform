@@ -1,7 +1,7 @@
 //! nfc の機能 crate（REQ-21 / TASK-21.4、Issue #1183 の手順で移行）。NFC タグの NDEF を 1 枚だけ読む。
 //!
 //! 呼び出し元は `fandhe-gallery` の `screens/registry.rs`（`nfc_read_effect`）と、Activity 再生成時の
-//! `reset_pending_tracking`（gallery の `android_main` から、Android のみ）。Web の実装本体は `fandhe-web-dom` に残り、
+//! `reset_pending_tracking`（登録表（`fandhe_runtime::teardown`）から、Android のみ）。Web の実装本体は `fandhe-web-dom` に残り、
 //! 契約の定数・写像表だけを本 crate から使う。タグの中身・UID・id・コードはログに出さない。
 //! 守る範囲は 1 プロセス内の要求の順序・失敗を成功と見せないこと・reader mode の解除・Activity 破棄時の保留要求の確定、
 //! 守らない範囲はかざしたが届く前の離脱・2 枚同時にかざしたときの選択・他アプリや OS が先にタグを処理した場合（`contract` の doc を参照）。

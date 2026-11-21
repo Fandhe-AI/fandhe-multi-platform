@@ -43,6 +43,7 @@ const FAILED_CAST: &str = "外部機器への再生";
 
 /// プロセスに 1 つだけ持つ実装（`stop` が `play` と同じ実体に届くようにする）。
 pub fn platform_media_cast() -> &'static Arc<dyn MediaCast> {
+    register_teardown();
     static CAST: OnceLock<Arc<dyn MediaCast>> = OnceLock::new();
     CAST.get_or_init(|| {
         #[cfg(target_os = "macos")]
@@ -332,6 +333,7 @@ fn report_snapshot(
 
 /// `registry.rs` の `effect` 区画から `cast_show` 画面用に配線される effect ドライバ。
 pub fn cast_show_effect(state: &CastShowState, sender: &CompletionSender<CastShowState>) {
+    register_teardown();
     drive(
         state,
         sender,
@@ -342,9 +344,16 @@ pub fn cast_show_effect(state: &CastShowState, sender: &CompletionSender<CastSho
     );
 }
 
-/// アプリ終了時に資源を解放する（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`）から呼ばれる）。
+/// アプリ終了時に資源を解放する（終了処理の登録表（`fandhe_runtime::teardown`）から呼ばれる）。
 pub fn shutdown() {
     platform_media_cast().release();
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t = fandhe_runtime::teardown::Teardown::new("media-cast").on_exit(crate::shutdown);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

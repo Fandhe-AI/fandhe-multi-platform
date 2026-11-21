@@ -41,6 +41,7 @@ use fandhe_runtime::request_slot::{SlotOwner, poll_and_finish_owned};
 
 /// 現在のプラットフォームに応じた `WebAuthSession` 実装を返す（プロセスで 1 個）。
 pub fn platform_web_auth_session() -> Arc<dyn WebAuthSession> {
+    register_teardown();
     use std::sync::OnceLock;
     static INSTANCE: OnceLock<Arc<dyn WebAuthSession>> = OnceLock::new();
     INSTANCE
@@ -228,7 +229,7 @@ pub(crate) mod bridge {
     }
 }
 
-/// 終了時（`fandhe` の入口の終了処理（`src/entry/lifecycle.rs` の `shutdown`））に進行中の認証を閉じる。
+/// 終了時（終了処理の登録表（`fandhe_runtime::teardown`））に進行中の認証を閉じる。
 pub fn shutdown() {
     if bridge::lock().is_some() {
         bridge::shutdown(&*platform_web_auth_session());
@@ -434,6 +435,7 @@ fn drive(
 /// - Windows は開く URL を `http://127.0.0.1:` か `https://` に限る（コールバックは呼び出し側のループバック受け口）。
 /// - 実 OAuth 対応（開く URL・コールバックの設定化）は未実装。
 pub fn begin_web_auth(req: AuthRequest) -> Result<u64, WebAuthFailure> {
+    register_teardown();
     begin_external(&*platform_web_auth_session(), req)
 }
 
@@ -471,6 +473,7 @@ fn begin_external(imp: &dyn WebAuthSession, req: AuthRequest) -> Result<u64, Web
 /// `Ok(TimedOut)` を返す。呼び出さない間は期限切れが確定しない。要求が失われた（Activity の終了後に結果が返らず
 /// 別の呼び出しで置き換わった等）ときは `Err(Internal)` を 1 度だけ返す。
 pub fn poll_web_auth(request_id: u64) -> Option<Result<WebAuthOutcome, WebAuthFailure>> {
+    register_teardown();
     poll_external(&*platform_web_auth_session(), request_id)
 }
 
@@ -504,6 +507,7 @@ fn poll_external(
 /// [`begin_web_auth`] の要求を取り消す。OS のセッションを閉じ、結果は [`poll_web_auth`] が `Ok(Cancelled)` で返す。
 /// 現在の要求でない id・確定済みの要求には何もしない。
 pub fn cancel_web_auth(request_id: u64) {
+    register_teardown();
     if request_id != 0 && EXTERNAL_OWNER.current() == request_id {
         bridge::conclude_with(
             Some(request_id),
@@ -517,6 +521,7 @@ pub fn cancel_web_auth(request_id: u64) {
 /// `verify_callback` を通った URL だけで確定して `true`。通らない・現在の要求でない・確定済みなら `false`
 /// （受け口は 404 を返して待ち続ける）。他の OS は OS 層が受けるため使わない。
 pub fn complete_web_auth_loopback(request_id: u64, url: String) -> bool {
+    register_teardown();
     bridge::complete_loopback(request_id, url)
 }
 
@@ -525,7 +530,15 @@ pub fn web_auth_session_demo_effect(
     state: &WebAuthSessionDemoState,
     sender: &CompletionSender<WebAuthSessionDemoState>,
 ) {
+    register_teardown();
     drive(state, sender, &*platform_web_auth_session());
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    let t = fandhe_runtime::teardown::Teardown::new("web-auth-session").on_exit(crate::shutdown);
+    fandhe_runtime::teardown::register(t);
 }
 
 #[cfg(test)]

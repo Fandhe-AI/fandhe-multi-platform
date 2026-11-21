@@ -9,7 +9,7 @@
 //! [`poll_photo_pick`] / [`discard_photo_pick`]（画面 effect と同じ slot を持ち主で分けて共有し、進行中は busy で断る）。iOS 専用の
 //! [`present_ios_photo_picker`]（PHPicker の受け口を共有する文字認識・バーコード読み取りが、要求ごとに受け取りを登録して使う）。
 //!
-//! 呼び出し元は最終成果物（`fandhe-gallery`）の画面レジストリ（`photo_pick_effect`）と、Android の `android_main`（`reset_pending_tracking`）。
+//! 呼び出し元は最終成果物（`fandhe-gallery`）の画面レジストリ（`photo_pick_effect`）と、Android の`android_main` が回す登録表（`fandhe_runtime::teardown`）（`reset_pending_tracking`）。
 //! Android の JNI 受け口（`nativeOnPhotoPickerResult`）と iOS の FFI 受け口は、この crate 内の `bridge::deliver` / 登録済みの受け取りへ
 //! 結果を届ける。Web の実体は `fandhe-web-dom` に残る。
 //!

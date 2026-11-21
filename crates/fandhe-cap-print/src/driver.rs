@@ -155,7 +155,7 @@ pub(crate) mod bridge {
         SLOT.deliver(request_id, result)
     }
 
-    /// Android: Activity 再生成直後に `android_main` から呼ぶ。保留中の要求は復元せず破棄し、
+    /// Android: Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から呼ばれる。保留中の要求は復元せず破棄し、
     /// 以後届く旧 `request_id` の [`deliver`] を無視させる。
     #[cfg_attr(not(target_os = "android"), allow(dead_code))]
     pub(crate) fn reset() {
@@ -163,7 +163,7 @@ pub(crate) mod bridge {
     }
 }
 
-/// Activity 再生成直後に最終成果物（`fandhe-gallery` の `android_main`）から呼ぶ。保留中の要求・取り込み待ちは
+/// Activity 再生成直後に登録表（`fandhe_runtime::teardown`）から呼ばれる。保留中の要求・取り込み待ちは
 /// 復元せず破棄し、以後届く旧要求の結果を無視させる（[`bridge::reset`] 参照）。
 #[cfg(target_os = "android")]
 pub fn reset_pending_tracking() {
@@ -204,6 +204,7 @@ fn begin_print_image(request_id: u64, img: &PrintImage) -> Result<(), PrintError
 /// 外部アプリは [`poll_print`] で取り出すまで次の要求が busy になる。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn begin_print_request(req: &PrintRequest) -> Result<u64, PrintError> {
+    register_teardown();
     // 未取得の結果も守る（`keep` が常に真）。取り出すまで占有を維持し、新しい要求は busy にする。
     let id = bridge::SLOT
         .try_begin_unless(|_| true)
@@ -215,6 +216,7 @@ pub fn begin_print_request(req: &PrintRequest) -> Result<u64, PrintError> {
 /// [`begin_print_request`] の画面の画像版。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn begin_print_image_request(img: &PrintImage) -> Result<u64, PrintError> {
+    register_teardown();
     // 未取得の結果も守る（`keep` が常に真）。取り出すまで占有を維持し、新しい要求は busy にする。
     let id = bridge::SLOT
         .try_begin_unless(|_| true)
@@ -226,6 +228,7 @@ pub fn begin_print_image_request(img: &PrintImage) -> Result<u64, PrintError> {
 /// 要求 id の結果が届いていれば取り出して返す（取り出すと保留は消える）。未着・別の id・再生成で破棄済みは `None`。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn poll_print(request_id: u64) -> Option<Result<PrintOutcome, PrintError>> {
+    register_teardown();
     bridge::SLOT.take_ready(request_id)
 }
 
@@ -301,6 +304,7 @@ fn poll_bridge(state: &PrintPageState, sender: &CompletionSender<PrintPageState>
 /// `registry.rs` から `print_page` 画面用に配線される effect ドライバ（iOS / Android）。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn print_page_effect(state: &PrintPageState, sender: &CompletionSender<PrintPageState>) {
+    register_teardown();
     drive_callback(state, sender);
 }
 
@@ -323,6 +327,7 @@ fn drive(state: &PrintPageState, sender: &CompletionSender<PrintPageState>, prin
 /// フレームワークの外のアプリも使える。iOS・Android は結果が後から届く型のため `Print` を持たず、effect ドライバだけを使う。
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn platform_print() -> Box<dyn Print> {
+    register_teardown();
     #[cfg(target_os = "macos")]
     return crate::macos::implementation();
     #[cfg(target_os = "windows")]
@@ -338,6 +343,7 @@ pub fn platform_print() -> Box<dyn Print> {
 /// bridge へ移す。
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn print_page_effect(state: &PrintPageState, sender: &CompletionSender<PrintPageState>) {
+    register_teardown();
     if take_request(state).is_none() {
         return;
     }
@@ -476,6 +482,7 @@ fn on_screen_request(generation: u64, sender: &CompletionSender<PrintPageState>)
 /// 要求を受けたら取り込みを始め、以後のフレームで [`drive_screen`] が進める。
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn print_screen_page_effect(state: &PrintPageState, sender: &CompletionSender<PrintPageState>) {
+    register_teardown();
     if let Some(view) = take_request(state) {
         let _ = sender.send(Box::new(mark_printing));
         on_screen_request(view.generation, sender);
@@ -496,6 +503,7 @@ pub fn print_screen_page_effect(state: &PrintPageState, sender: &CompletionSende
 /// `begin_print_image` へ渡し、結果は [`bridge`] のポーリングで反映する。
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn print_screen_page_effect(state: &PrintPageState, sender: &CompletionSender<PrintPageState>) {
+    register_teardown();
     use fandhe_core::screens::print_page::{PrintPhase, mark_printing};
 
     if let Some(view) = take_request(state) {
@@ -530,6 +538,16 @@ pub fn print_screen_page_effect(state: &PrintPageState, sender: &CompletionSende
             }
         }
     }
+}
+
+/// 終了処理と Android の再生成時の破棄を登録表（`fandhe_runtime::teardown`）へ登録する（Issue #1453）。
+/// 公開の入口・effect・公開型のメソッドの先頭で呼ぶ。初めて使われたときに登録され、2 回目以降は何もしない。
+pub(crate) fn register_teardown() {
+    #[cfg(target_os = "android")]
+    fandhe_runtime::teardown::register(
+        fandhe_runtime::teardown::Teardown::new("print")
+            .on_android_recreate(crate::reset_pending_tracking),
+    );
 }
 
 #[cfg(test)]
