@@ -11,7 +11,8 @@
 - 配布・登録の仕組み（レジストリ・機能の一覧・検索）は作りません。第三者の機能は普通の crate として配り、
   利用者は `Cargo.toml` の依存に足して選びます
 - 標準機能も、入口 crate `fandhe` の feature を経由せず依存の追加で選べます（5.1 節）。
-  ただし起動前の登録・終了処理・Activity 再生成時の破棄は feature を選んだときだけ走ります（5.3 節）
+  終了処理と Activity 再生成時の破棄は、どの選び方でも機能 crate が自分で登録します（3.4 節。#1453 以降）。
+  起動前の登録だけは、feature を選んだときに入口が行い、それ以外は利用者が呼びます（5.3 節）
 - 宣言の欄と検証・統合の規則は `capability-declaration.md`、標準機能を移す手順は
   `docs/operations/capability-crate-migration.md` が正です。本書はそれらのうち第三者にも効く部分をまとめます
 
@@ -67,23 +68,64 @@ begin / poll / discard 型の入口も出します。同期の入口が OS の�
 
 ### 3.3 起動・終了の口
 
-起動前の登録や終了処理が要る機能は、crate ルートから関数を出します。次の表の名前は、標準機能の足し忘れを
+起動前の登録・終了処理・再生成時の破棄が要る機能は、crate ルートから関数を出します。次の表の名前は、標準機能の足し忘れを
 `crates/fandhe/tests/features.rs` が検査する名前です。
 
-| 名前 | 呼ぶ時点 | 例 |
-| --- | --- | --- |
-| `register` | イベントループの開始前（main thread） | URL scheme の受信、背景転送の完了通知 |
-| `shutdown`・`stop_shared_*` | アプリの終了（ウィンドウを閉じる経路）。`ProxyApp` の破棄でも呼ぶ機能がある（memory-pressure） | 子プロセス・OS のセッションの停止 |
-| `reset_*` | Android の Activity 再生成の前 | 保留中の要求と処理済み世代の破棄 |
+| 名前 | 呼ぶ時点 | 呼ぶ側 | 例 |
+| --- | --- | --- | --- |
+| `register` | イベントループの開始前（main thread） | 入口（feature で選んだとき）か利用者の `main`（5.3 節） | URL scheme の受信、背景転送の完了通知 |
+| `shutdown`・`stop_shared_*` | アプリの終了（ウィンドウを閉じる経路） | 登録表（3.4 節） | 子プロセス・OS のセッションの停止 |
+| `reset_*` | Android の Activity 再生成の前 | 登録表（3.4 節） | 保留中の要求と処理済み世代の破棄 |
 
 - `register` は引数を取ることがあります（`fandhe_cap_spotlight_index::register(URL_PREFIX)`）
 - 表の外にも、入口が起動前に呼ぶ Windows の処理があります。タスク スケジューラによる再起動の判定と実行
   （`fandhe_cap_background_task::parse_scheduled_args`・`run_scheduled`）、ファイル起動の経路の登録
   （`fandhe_cap_file_association::windows::register_route`）、単一インスタンスの調停
   （`fandhe_cap_url_scheme::windows::win::startup`）です。`tests/features.rs` はこれらを検査しません
+- 起動前の登録は、起動と同じターンで届く通知に間に合わせるため、初めて使われるより前に要ります。登録表へ遅らせられないので、
+  標準機能の分は入口 crate `fandhe` が feature に応じて呼びます（`crates/fandhe/src/entry/lifecycle.rs`）
 
-標準機能の分は入口 crate `fandhe` が feature に応じて呼びます（`crates/fandhe/src/entry/lifecycle.rs`）。
-第三者の機能の分を呼ぶ口は無く、利用者が呼びます（5.3 節）。
+### 3.4 終了処理と再生成時の破棄の登録
+
+終了処理・画面の破棄・Android の再生成時の破棄は、機能 crate が `fandhe_runtime::teardown` の登録表へ自分で登録します。
+登録表と本節の API（`register`・`Teardown`・`Stage`）は #1453 で入ります。入るまでは、標準機能の分を入口 crate `fandhe` が
+feature に応じて呼び（`crates/fandhe/src/entry/lifecycle.rs`）、直接依存で選んだ標準機能と第三者の機能では走りません。
+使っていない機能は OS 資源を持たないため片付けも要らず、初めて使われたときの登録で足ります。feature で選んだ標準機能、
+直接依存で選んだ標準機能、第三者の機能が同じ口を通ります。表を回すのは描画層（アプリの終了と画面の破棄）と Android の入口
+（再生成の前）で、機能 crate は回しません。
+
+- 公開の入口（crate ルートから出す関数）・effect・公開型のメソッド（trait の実装を含む）の先頭で `register` を呼びます。
+  利用者は型を直接作って trait のメソッドを呼ぶこともあるため（`NativeBluetoothLe::scan` など）、関数だけでは足りません。
+  同じ id の登録は 1 件にまとめるため、毎回呼んでかまいません。呼ばない入口から使われると、その機能の片付けが走りません
+- id は自 crate の宣言の `id` に限ります（4 節。`cargo fandhe check` が一意を求めます）。同じ id で処理が違う登録が来ると、
+  後の登録は捨てられ、id ごとに 1 回だけ標準エラーへ警告が出ます
+- 登録する処理は、使われていない状態でも 2 回呼ばれても安全にします（停止済みなら何もしない）
+- 他の機能が上に載る共有の OS 資源は `Stage::Shared` にします。`Stage::Feature`（既定）をすべて止めてから止まるため、
+  登録順に依らず media-playback → audio-session の順が保たれます。同じ段階の中の順は決めません
+- 画面（`ProxyApp`）の破棄で解放する購読は `on_screen_drop` に登録します（memory-pressure）
+- 守る範囲と守らない範囲（実行中の登録・終了後の登録・並行の実行）は `fandhe_runtime::teardown` のモジュール doc が正です
+
+```rust
+use fandhe_runtime::teardown::{register, Teardown};
+
+/// アプリの終了で止める。使われていなければ何もしない。
+pub fn shutdown() { /* … */ }
+
+fn register_teardown() {
+    register(Teardown::new("acme-hello").on_exit(shutdown));
+}
+
+pub fn platform_hello() -> &'static dyn Greeter {
+    register_teardown();
+    // …
+}
+```
+
+標準機能では、#1453 で入る `crates/fandhe/tests/features.rs` の検査が、登録（`register_teardown` の本体の
+`fandhe_runtime::teardown::register(…)`・`Teardown::new("<id>")`・各関数の `.on_exit(crate::…)`・`.on_android_recreate(crate::…)`）と、
+入口の先頭の `register_teardown()` を見ます。入口は、crate ルートから出す関数、`driver.rs`・`lib.rs` の `pub fn`、
+公開型（`driver.rs`・`lib.rs` の `pub struct` / `pub enum` と crate ルートが名前で出す型）の `impl` の `fn` です。
+入口 crate から終了処理を直接呼ぶと二重になるため、それも落とします。
 
 ## 4. 宣言（`[package.metadata.fandhe]`）
 
@@ -110,16 +152,15 @@ begin / poll / discard 型の入口も出します。同期の入口が OS の�
 第三者の機能も標準機能も、アプリの `Cargo.toml` の `[dependencies]` に足すだけで選べます。標準機能は、入口 crate `fandhe` の
 feature（対応表の id）で選ぶこともできます。
 
-| 選び方 | 契約の呼び方 | 宣言 | 起動・終了の口（3.3 節） |
-| --- | --- | --- | --- |
-| `fandhe` の feature | `fandhe::<stem>::…` | 生成に入る | 入口が呼ぶ |
-| 標準機能の crate を直接依存 | `fandhe_cap_<stem>::…` | 生成に入る | 呼ばれない（下記） |
-| 第三者の crate を依存 | その crate のパス | 生成に入る | 呼ばれない（下記） |
+| 選び方 | 契約の呼び方 | 宣言 | 起動前の登録（3.3 節） | 終了処理・再生成時の破棄（3.4 節） |
+| --- | --- | --- | --- | --- |
+| `fandhe` の feature | `fandhe::<stem>::…` | 生成に入る | 入口が呼ぶ | 機能 crate が登録する |
+| 標準機能の crate を直接依存 | `fandhe_cap_<stem>::…` | 生成に入る | 利用者が呼ぶ（5.3 節） | 機能 crate が登録する |
+| 第三者の crate を依存 | その crate のパス | 生成に入る | 利用者が呼ぶ（5.3 節） | 機能 crate が登録する |
 
-起動・終了の口を持たない標準機能（`fandhe-cap-network-status` など）は、直接依存だけで feature と同じに動きます。
-口を持つ標準機能を直接依存だけで選ぶと、起動前の登録・終了処理・再生成時の破棄が走りません。その機能は feature で選びます。
-口を持つかどうかは、3.3 節の表の名前が crate ルートにあるか、表の外の Windows の処理の対象（background-task・file-association・
-url-scheme）かで分かります。
+直接依存で選んだ標準機能も、終了処理と再生成時の破棄は feature と同じに走ります（#1453 以降）。差が出るのは起動前の登録だけです。
+起動前の登録を持つかどうかは、crate ルートに `register` があるか、3.3 節の表の外の Windows の処理の対象（background-task・
+file-association・url-scheme）かで分かります。持つ機能は、feature で選ぶか利用者が呼びます。
 
 ### 5.2 画面の effect
 
@@ -198,9 +239,10 @@ fn app(ctx: &egui::Context) -> Box<dyn ProxyAppDyn> {
 
 ### 5.3 起動前の登録・終了処理・再生成時の破棄
 
-第三者の機能と、直接依存で選んだ標準機能の口は、入口（`#[fandhe::main]`）からは呼ばれません。
-
-- 起動前の登録（`register`）: デスクトップと iOS では、利用者の `src/main.rs` で入口より前に呼びます
+- 終了処理・画面の破棄・Android の再生成時の破棄: 機能 crate が初めて使われたときに登録表へ登録し（3.4 節）、
+  描画層と Android の入口が回します（#1453 以降）。どの選び方でも利用者が呼ぶ必要はありません
+- 起動前の登録（`register`）: 入口（`#[fandhe::main]`）は feature で選んだ標準機能の分だけ呼びます。第三者の機能と、
+  直接依存で選んだ標準機能の分は、デスクトップと iOS では利用者の `src/main.rs` で入口より前に呼びます
 
   ```rust
   fn main() -> Result<(), fandhe::app::LaunchError> {
@@ -210,8 +252,9 @@ fn app(ctx: &egui::Context) -> Box<dyn ProxyAppDyn> {
   ```
 
 - Android の `android_main` と Web の `start` は生成されるため、前に処理を挟めません。Android で起動時に要る処理は、
-  宣言した provider（4 節）がプロセス開始時に行います
-- 終了処理（`shutdown`）と Android の再生成時の破棄（`reset_*`）を利用者が登録する口はありません（#1453）
+  宣言した provider（4 節）がプロセス開始時に行います。前のプロセスが残した OS の状態（固定 id の通知など）の片付けも、
+  初めて使われるまで登録表に載らないため、provider で行います（#1453 で live-activity の `LiveActivityHelper.attach`・
+  now-playing-controls の `NowPlayingHelper.attach` へ移す）
 
 ### 5.4 Swift 薄層・弱リンクを持つ機能（`links` の出し直し）
 
@@ -233,14 +276,19 @@ fn app(ctx: &egui::Context) -> Box<dyn ProxyAppDyn> {
 | `verify-scope` の到達した宣言 | 同じ | 同じ |
 | 名前と id の一致・宣言の必須 | `check` が求める | 求めない |
 | `fandhe` の feature と `fandhe::<stem>` の再公開 | ある | ない |
-| 起動・終了の口の呼び出し | feature で選べば入口が呼ぶ | 利用者が呼ぶ（5.3 節） |
+| 起動前の登録の呼び出し | feature で選べば入口が呼ぶ | 利用者が呼ぶ（5.3 節） |
+| 終了処理・再生成時の破棄 | 同じ（機能 crate が登録表へ登録する。3.4 節） | 同じ |
 | 公開入口の検査（`sync --check`）・対応表・カタログ（`fandhe-gallery`） | 対象 | 対象外 |
 | 画面の状態型（`fandhe_core::screens`）と effect ドライバ（`driver`） | カタログ用に持つ | 持たない（利用者が書く） |
 
 ## 7. 守らない範囲
 
 - 配布・発見・登録の仕組み。第三者の crate の品質・権限の妥当性は、利用者が依存を足すときに判断します
-- 第三者の機能の終了処理と Android の再生成時の破棄を呼ぶ口。直接依存で選んだ標準機能の起動・終了の口も呼びません（#1453）
+- 第三者の機能と、直接依存で選んだ標準機能の起動前の登録を入口が呼ぶこと（利用者が呼びます。5.3 節）
+- 登録表の実行が終わった後に初めて使われた機能の片付け、同じ段階の中の停止順、並行の実行での重複
+  （`fandhe_runtime::teardown` のモジュール doc）
+- 依存の中で `fandhe-runtime` が互換しない 2 版に分かれると、機能 crate は別の表へ登録し、入口と描画層が回す表には載らず、
+  片付けが走りません。同じ機能 crate の 2 版が同じ id で並ぶと、後から登録した版は捨てられます（警告だけ出ます）
 - 版の互換。0.x の間は `fandhe-runtime`・`fandhe-platform-*`・`fandhe-device` の契約が変わりえます（#1224）
 - `verify-scope` は、カタログ（`--catalog` の workspace）に無い機能の混入を検出しません。
   第三者の機能が選ばれていない成果物を検査するときは、その crate を含む workspace をカタログに渡します
