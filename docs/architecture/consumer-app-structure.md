@@ -75,8 +75,9 @@ graph TD
 
 第三者が機能 crate を作れるよう、契約（trait・宣言・登録）だけを公開します。配布の仕組みは作りません（#1203）。
 標準機能も `fandhe` の feature を経由せず依存の追加で使える形にし、第三者の機能と同じ選び方を残します。
-契約の中身と確かめた最小例は `capability-crate-contract.md` にあります。起動前の登録・終了処理・再生成時の破棄は
-feature で選んだ標準機能だけに入口が行い、直接依存の標準機能と第三者の機能には行いません（同書 5.3 節、#1453）。
+契約の中身と確かめた最小例は `capability-crate-contract.md` にあります。終了処理と再生成時の破棄は、機能 crate が初めて
+使われたときに `fandhe_runtime::teardown` の登録表へ自分で登録するため、選び方に依らず走ります（同書 3.4 節。登録表は #1453 で入る）。
+起動前の登録だけは遅らせられないため、feature で選んだ標準機能の分を入口が行い、それ以外は利用者が `main` で呼びます（同書 5.3 節）。
 
 ### 3.3 各 OS の入口（`#[fandhe::main]`、#1200）
 
@@ -94,9 +95,11 @@ fn app(ctx: &fandhe::egui::Context) -> Box<dyn fandhe::app::ProxyAppDyn> {
 
 - 生成するのは `pub fn main`（デスクトップ・iOS。Android・Web では何もしない）、`android_main`（cdylib から探される固定名）、
   wasm-bindgen の `start` です。起動の中身は `fandhe` の隠しモジュール `fandhe::__private` が持ち、生成コードはそれを呼ぶだけです
-- 選んだ端末機能の起動前の登録（URL scheme・ファイルを開く・背景転送の完了・検索から開く・Windows の単一インスタンス）、
-  終了処理、Android の Activity 再生成時の破棄は、`fandhe` が有効な feature の分だけ行います。機能の追加・削除は feature の追加・削除だけで済みます。
-  呼ぶ関数の網羅は `crates/fandhe/tests/features.rs` が機能 crate の crate ルートと突き合わせます
+- 選んだ端末機能の起動前の登録（URL scheme・ファイルを開く・背景転送の完了・検索から開く・Windows の単一インスタンス）は、
+  `fandhe` が有効な feature の分だけ行います。機能の追加・削除は feature の追加・削除だけで済みます。
+  終了処理と Android の Activity 再生成時の破棄は、使われた機能 crate が登録表（`fandhe_runtime::teardown`）へ自分で登録し、
+  描画層と Android の入口が回します（登録表は #1453 で入る。入るまでは `fandhe` が feature の分だけ呼ぶ）。
+  網羅は `crates/fandhe/tests/features.rs` が機能 crate の crate ルートと突き合わせます
 - Android の `android_main` は `no_mangle` を伴うため、利用者の crate は Android で `forbid(unsafe_code)` にできません（`deny` にします）
 - `bin` だけのアプリ（iOS・デスクトップ）は `src/main.rs` に付けます。cdylib の無いアプリには `cargo fandhe gen` が Android の生成物を出しません
 - Swift 薄層を持つ機能（alarm・image-generation・live-activity・on-device-llm・translation）を iOS 向けに選ぶアプリは、
