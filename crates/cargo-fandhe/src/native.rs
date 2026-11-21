@@ -20,10 +20,10 @@
 //! 出力先は `<アプリの crate>/gen/` に固定する（consumer-app-structure.md §4、gitignore する）。
 //! Info.plist の説明文（`*UsageDescription`）は既定値を持たず、アプリ側の
 //! `[package.metadata.fandhe-app]` に無ければエラーにする（既定文言のまま審査に出る事故を防ぐ）。
-//! 範囲外: `CFBundleSupportedPlatforms`（シミュレータか実機かは組み立て時に決まる、#1201）、
+//! 範囲外: `CFBundleSupportedPlatforms`（シミュレータか実機かは組み立て時に決まる。`run|build --os ios` が足す、#1424）、
 //! applicationId・compileSdk・`<application>` の属性（バックアップ規則の 2 属性を除く）、macOS・拡張の Info.plist の確定値化、
 //! Xcode のターゲット・framework のリンク（#1212）、Windows の identity（#1208）、
-//! 既存設定からの切り替え（#1194）、run/build への組み込み（#1201）。
+//! 既存設定からの切り替え（#1194）。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -51,7 +51,8 @@ const MAIN_ACTIVITY_CONFIG_CHANGES: &str = "orientation|screenSize|keyboardHidde
 /// 一致させる（一致は tests/gen.rs が読み合わせる）。Info.plist が存在しないクラスを名指すと起動しない（#1292）。
 const IOS_SCENE_DELEGATE: &str = "FandheSceneDelegate";
 /// iOS の最低対応版。`.cargo/config.toml` の `IPHONEOS_DEPLOYMENT_TARGET` と揃える（一致は tests/gen.rs が保証する）。
-const IOS_MIN_VERSION: &str = "17.0";
+/// `cargo fandhe run|build --os ios` は cargo へ同じ値を `IPHONEOS_DEPLOYMENT_TARGET` で渡す（#1201 の申し送り）。
+pub(crate) const IOS_MIN_VERSION: &str = "17.0";
 /// ライブラリ名を Java から参照させるクラス（アプリは `System.loadLibrary(FandheLibrary.NAME)` と書く）。
 const LIBRARY_CLASS_PATH: &str = "android/java/com/fandhe/platform/FandheLibrary.java";
 /// OS ごとに `cargo metadata --filter-platform` へ渡す triple（対象 OS に限った依存の cfg 評価は cargo に任せる）。
@@ -266,11 +267,15 @@ impl AppInfo {
     }
 }
 
-/// ドット区切り（2 セグメント以上）の英数字とハイフン。App Group の接頭辞と bundle id が共用する。
+/// ドット区切り（2 セグメント以上）の英数字とハイフンで、各セグメントの先頭は英数字。App Group の接頭辞と
+/// iOS・macOS の bundle id が共用する（Android の application-id は `is_application_id`）。先頭の `-` を拒否するのは、
+/// bundle id が `simctl launch` 等の引数になり、オプションと読まれうるため。
 fn is_reverse_dns(p: &str) -> bool {
     p.split('.').count() >= 2
-        && p.split('.')
-            .all(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
+        && p.split('.').all(|s| {
+            s.starts_with(|c: char| c.is_ascii_alphanumeric())
+                && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        })
 }
 
 /// `ja`・`en`・`zh-Hans`・`pt-BR` の形（2〜3 文字の英字 + `-` 区切りの英数字）。
@@ -362,12 +367,12 @@ impl AppConfig {
         let mut errs = Vec::new();
         if let Some(p) = &cfg.app_group_prefix {
             if !is_reverse_dns(p) {
-                errs.push(format!("fandhe-app.app-group-prefix: `{p}` はドット区切り（2 セグメント以上）の英数字とハイフンにしてください"));
+                errs.push(format!("fandhe-app.app-group-prefix: `{p}` はドット区切り（2 セグメント以上）の英数字とハイフンにし、各セグメントは英数字で始めてください"));
             }
         }
         if let Some(b) = &cfg.ios.bundle_id {
             if !is_reverse_dns(b) {
-                errs.push(format!("fandhe-app.ios.bundle-id: `{b}` はドット区切り（2 セグメント以上）の英数字とハイフンにしてください"));
+                errs.push(format!("fandhe-app.ios.bundle-id: `{b}` はドット区切り（2 セグメント以上）の英数字とハイフンにし、各セグメントは英数字で始めてください"));
             }
         }
         if let Some(w) = &cfg.web {
@@ -411,7 +416,7 @@ impl AppConfig {
         }
         if let Some(b) = &cfg.macos.bundle_id {
             if !is_reverse_dns(b) {
-                errs.push(format!("fandhe-app.macos.bundle-id: `{b}` はドット区切り（2 セグメント以上）の英数字とハイフンにしてください"));
+                errs.push(format!("fandhe-app.macos.bundle-id: `{b}` はドット区切り（2 セグメント以上）の英数字とハイフンにし、各セグメントは英数字で始めてください"));
             }
         }
         for (os, c) in [("ios", &cfg.ios), ("macos", &cfg.macos)] {
@@ -911,7 +916,7 @@ fn ios_scene_manifest() -> Value {
 }
 
 /// iOS 本体の土台。Xcode の変数ではなく確定値を書く（Xcode を通さない組み立てでもそのまま使える）。
-/// `CFBundleSupportedPlatforms` は組み立て時の値（シミュレータか実機か）のため出さない（#1201）。
+/// `CFBundleSupportedPlatforms` は組み立て時の値（シミュレータか実機か）のため出さない（`run/ios.rs` が足す、#1424）。
 fn ios_base(app: &AppInfo, cfg: &OsConfig) -> Result<Map<String, Value>, Vec<String>> {
     let mut errs = Vec::new();
     let bundle = cfg.bundle_id.clone().unwrap_or_else(|| {
@@ -1328,22 +1333,33 @@ pub fn generate(manifest: Option<&Path>) -> Result<Generated, Vec<String>> {
 pub(crate) fn generate_android(
     manifest: Option<&Path>,
     gen_dir: PathBuf,
-) -> Result<(Generated, AndroidShellInput), Vec<String>> {
+) -> Result<(Generated, ShellInput), Vec<String>> {
     generate_for(manifest, Some("android"), Some(gen_dir))
 }
 
-/// 殻（run・build が target 配下に作る Gradle プロジェクト）へ渡すアプリの入力。gen の出力には入らない。
+/// iOS の分だけ生成する（`cargo fandhe run|build --os ios` 用の内部入口、#1424）。Android・macOS の必須条件を検査しない。
+/// 出力先は `gen_dir`（アプリの `gen/` には触れない）。bundle id は戻りの [`ShellInput`] に入る。
+pub(crate) fn generate_ios(
+    manifest: Option<&Path>,
+    gen_dir: PathBuf,
+) -> Result<(Generated, ShellInput), Vec<String>> {
+    generate_for(manifest, Some("ios"), Some(gen_dir))
+}
+
+/// 殻（run・build が target 配下に作る Gradle プロジェクト・`.app`）へ渡すアプリの入力。gen の出力には入らない。
 #[derive(Debug, Default, Clone)]
-pub(crate) struct AndroidShellInput {
+pub(crate) struct ShellInput {
     pub application_id: Option<String>,
     pub application_attributes: BTreeMap<String, String>,
+    /// `fandhe-app.ios.bundle-id`。`run --os ios` が `simctl launch` に渡す。
+    pub ios_bundle_id: Option<String>,
 }
 
 fn generate_for(
     manifest: Option<&Path>,
     only: Option<&str>,
     gen_dir: Option<PathBuf>,
-) -> Result<(Generated, AndroidShellInput), Vec<String>> {
+) -> Result<(Generated, ShellInput), Vec<String>> {
     let (mut g, shell, dir) = generate_parts(manifest, only, gen_dir)?;
     apply_eject(&dir, only, &mut g.files, &mut g.notes)?;
     Ok((g, shell))
@@ -1354,7 +1370,7 @@ fn generate_parts(
     manifest: Option<&Path>,
     only: Option<&str>,
     gen_dir: Option<PathBuf>,
-) -> Result<(Generated, AndroidShellInput, PathBuf), Vec<String>> {
+) -> Result<(Generated, ShellInput, PathBuf), Vec<String>> {
     let mut sets: Vec<Vec<Found>> = Vec::new();
     let mut app: Option<(PathBuf, Value, Value)> = None;
     for (os, triple) in [
@@ -1403,9 +1419,10 @@ fn generate_parts(
             files,
             notes,
         },
-        AndroidShellInput {
+        ShellInput {
             application_id: cfg.android.application_id,
             application_attributes: cfg.android.application_attributes,
+            ios_bundle_id: cfg.ios.bundle_id,
         },
         dir,
     ))
@@ -1911,7 +1928,11 @@ mod tests {
             json!({"app-group-prefix": "com.x y"}),
             json!({"ios": {"bundle-id": "com"}}),
             json!({"ios": {"bundle-id": "com.a b"}}),
+            json!({"ios": {"bundle-id": "-com.example"}}),
+            json!({"ios": {"bundle-id": "com.-example"}}),
             json!({"macos": {"bundle-id": "com"}}),
+            json!({"macos": {"bundle-id": "-x.y"}}),
+            json!({"app-group-prefix": "com.-x"}),
             json!({"ios": {"display-name": " "}}),
             json!({"macos": {"display-name": "a\tb"}}),
             json!({"ios": {"localizations": ["japanese"]}}),
@@ -1926,6 +1947,11 @@ mod tests {
             AppConfig::parse(&json!({"ios": {"localizations": ["zh-Hans", "pt-BR", "en"]}}))
                 .is_ok()
         );
+        // セグメント中・末尾のハイフンと数字始まりは今までどおり通す。
+        assert!(AppConfig::parse(
+            &json!({"ios": {"bundle-id": "com.my-app.2nd-"}, "app-group-prefix": "com.a-b"})
+        )
+        .is_ok());
     }
 
     #[test]

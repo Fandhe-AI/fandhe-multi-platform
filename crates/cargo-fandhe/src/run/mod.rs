@@ -7,23 +7,27 @@
 //! - 実行器 [`execute`]: 手順を順に実行するだけ。判断は持たない
 //!
 //! デスクトップ（macOS・Windows・Linux）は cargo への委譲、Web は `web` モジュール、Android は `android` モジュール
-//! （#1423）。iOS は後続 PR で `Os` と `match os` の腕を足す（漏れはコンパイルで分かる）。`scripts/` は gallery 専用で利用者に配られないため呼ばない。
+//! （#1423）、iOS シミュレータは `ios` モジュール（#1424。実機の `--device` は #1425 で、今は前提の不足として止める）。`scripts/` は gallery 専用で利用者に配られないため呼ばない。
 //! 終了コードは `main.rs` が決める（失敗は 1）。エラー文に環境変数の値は出さない（security.md）。
 //! 設計は `docs/architecture/run-build-cli.md`。
 
 mod android;
+mod ios;
 mod serve;
 mod web;
 
 pub use android::{parse_adb_devices, AndroidEnv};
+pub use ios::{
+    parse_booted_simulators, simulator_entitlements, simulator_info_plist, IosEnv, Simulator,
+};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::native::{
-    app_root, generate_android, generate_web, shell_overlay, AppInfo, ANDROID_TRIPLE, EJECT_NOTE,
-    WEB_MANIFEST_PATH, WEB_TRIPLE,
+    app_root, generate_android, generate_ios, generate_web, shell_overlay, AppInfo, ANDROID_TRIPLE,
+    EJECT_NOTE, IOS_TRIPLE, WEB_MANIFEST_PATH, WEB_TRIPLE,
 };
 use crate::workspace::run_metadata;
 
@@ -35,6 +39,8 @@ pub enum Os {
     Linux,
     Web,
     Android,
+    /// iOS シミュレータ（実機は `--device`、#1425）。
+    Ios,
 }
 
 impl Os {
@@ -46,13 +52,21 @@ impl Os {
             Os::Linux => "linux",
             Os::Web => "web",
             Os::Android => "android",
+            Os::Ios => "ios",
         }
     }
 
     fn parse(s: &str) -> Option<Os> {
-        [Os::Macos, Os::Windows, Os::Linux, Os::Web, Os::Android]
-            .into_iter()
-            .find(|o| o.name() == s)
+        [
+            Os::Macos,
+            Os::Windows,
+            Os::Linux,
+            Os::Web,
+            Os::Android,
+            Os::Ios,
+        ]
+        .into_iter()
+        .find(|o| o.name() == s)
     }
 
     /// このプロセスが動いているデスクトップ OS。対応外（BSD 等）は `None`。
@@ -70,6 +84,7 @@ impl Os {
         match self {
             Os::Web => Some(WEB_TRIPLE),
             Os::Android => Some(ANDROID_TRIPLE),
+            Os::Ios => Some(IOS_TRIPLE),
             Os::Macos | Os::Windows | Os::Linux => None,
         }
     }
@@ -93,6 +108,8 @@ pub struct Options {
     pub release: bool,
     /// `--manifest-path`。省略はカレントのパッケージ。
     pub manifest: Option<PathBuf>,
+    /// `--device`（iOS の実機）。未対応のため `prepare` が止める（#1425）。
+    pub device: bool,
 }
 
 /// `args` は `run` / `build` から始まる引数列。解釈できなければ `None`（使い方を出す側が終了コード 2 にする）。
@@ -108,11 +125,13 @@ pub fn parse_args(args: &[&str]) -> Option<Options> {
         os: None,
         release: false,
         manifest: None,
+        device: false,
     };
     let mut it = rest.iter();
     while let Some(a) = it.next() {
         match *a {
             "--release" if !o.release => o.release = true,
+            "--device" if !o.device => o.device = true,
             "--os" if o.os.is_none() => o.os = Some(Os::parse(it.next()?)?),
             "--manifest-path" if o.manifest.is_none() => {
                 let v = it.next()?;
@@ -162,6 +181,10 @@ pub struct App {
     pub android_gen: Option<BTreeMap<String, String>>,
     /// `eject/android/shell/` に置いたファイル（置き場からの相対）。Android のときだけ読む。殻へ重ねる。
     pub shell_overlay: Vec<String>,
+    /// `cargo fandhe gen`（iOS の分だけ）の出力。iOS のときだけ作る。
+    pub ios_gen: Option<BTreeMap<String, String>>,
+    /// `fandhe-app.ios.bundle-id`（iOS のときだけ読む）。`simctl launch` に渡す。
+    pub bundle_id: Option<String>,
 }
 
 /// 実行環境のスナップショット。判定を純粋にするため、実環境の観測は [`detect_env`] だけが行う。
@@ -169,7 +192,7 @@ pub struct App {
 pub struct Env {
     /// ホストのデスクトップ OS。対応外は `None`。
     pub host: Option<Os>,
-    /// PATH 上にあるコマンド名（`rustup`・`wasm-bindgen`・`wasm-opt`・`cargo-ndk`・`gradle`・`gradle.bat`・`java`・`adb`）。
+    /// PATH 上にあるコマンド名（`rustup`・`wasm-bindgen`・`wasm-opt`・`cargo-ndk`・`gradle`・`gradle.bat`・`java`・`adb`・`xcrun`）。
     pub commands: BTreeSet<String>,
     /// `rustup target list --installed`。rustup が無い・取得できないときは `None`（検査を飛ばす）。
     pub installed_targets: Option<BTreeSet<String>>,
@@ -177,6 +200,8 @@ pub struct Env {
     pub wasm_bindgen_version: Option<String>,
     /// Android の環境（Android のときだけ調べる）。
     pub android: android::AndroidEnv,
+    /// iOS の環境（iOS のときだけ調べる）。
+    pub ios: ios::IosEnv,
     /// 子プロセスとして起動する cargo（環境変数 `CARGO` か `cargo`）。値はエラー文に出さない。
     pub cargo: OsString,
 }
@@ -229,10 +254,11 @@ pub enum Op {
         within: PathBuf,
         files: Vec<String>,
     },
-    /// ファイルを写す（親ディレクトリは作る）。
+    /// ファイルを写す（親ディレクトリは作る）。`to` が `within` の配下で、途中に symlink が無いことを確かめてから写す。
     Copy {
         from: PathBuf,
         to: PathBuf,
+        within: PathBuf,
     },
     /// ディレクトリを丸ごと写す。symlink は写さない。
     CopyDir {
@@ -254,6 +280,22 @@ fn resolve_os(opts: &Options, host: Option<Os>) -> Result<Os, Vec<String>> {
     })
 }
 
+/// 対象 OS を決め、アプリを読む前に分かる不足で止める（`run_cli` が `load_app` の前に、`prepare` も同じく呼ぶ）。
+/// `--device` は #1425 まで未対応で、`--os ios` 以外でも使えない。`--os ios` は macOS でだけ組める。
+/// `load_app` は gen を走らせるため、これより後に判定すると gen のエラーが先に出て原因が分からなくなる。
+pub fn check_os(opts: &Options, host: Option<Os>) -> Result<Os, Vec<String>> {
+    let os = resolve_os(opts, host)?;
+    match (os, opts.device) {
+        (Os::Ios, true) => Err(vec!["iOS の実機（--device）は未対応です（#1425）。シミュレータで動かすなら --device を外してください".into()]),
+        (_, true) => Err(vec!["--device は --os ios でだけ使えます（iOS の実機。#1425）".into()]),
+        (Os::Ios, false) if host != Some(Os::Macos) => Err(vec![format!(
+            "--os ios は macOS でだけビルドできます（ホスト: {}）",
+            host.map_or("対応外", Os::name)
+        )]),
+        _ => Ok(os),
+    }
+}
+
 /// 成果物の置き場 `<target_dir>/fandhe/<package 名>/<os>/`。
 fn out_dir(app: &App, os: Os) -> PathBuf {
     app.target_dir
@@ -264,10 +306,11 @@ fn out_dir(app: &App, os: Os) -> PathBuf {
 
 /// 前提を全件検査し、問題がなければ手順を返す。問題は 1 件 1 行「何が無いか。直し方」。
 pub fn prepare(app: &App, opts: &Options, env: &Env) -> Result<Vec<Op>, Vec<String>> {
-    let os = resolve_os(opts, env.host)?;
+    let os = check_os(opts, env.host)?;
     match os {
         Os::Web => web::prepare(app, opts, env, &out_dir(app, os)),
         Os::Android => android::prepare(app, opts, env, &out_dir(app, os)),
+        Os::Ios => ios::prepare(app, opts, env, &out_dir(app, os)),
         Os::Macos | Os::Windows | Os::Linux => desktop_prepare(os, app, opts, env),
     }
 }
@@ -352,6 +395,8 @@ pub fn load_app(opts: &Options, os: Os) -> Result<App, Vec<String>> {
         application_attributes: BTreeMap::new(),
         android_gen: None,
         shell_overlay: Vec::new(),
+        ios_gen: None,
+        bundle_id: None,
     };
     match os {
         Os::Web => {
@@ -401,6 +446,16 @@ pub fn load_app(opts: &Options, os: Os) -> Result<App, Vec<String>> {
             app.application_id = shell.application_id;
             app.application_attributes = shell.application_attributes;
         }
+        Os::Ios => {
+            // Android と同じく、gen の出力はアプリの `gen/` ではなく成果物の置き場へ出す。
+            let gen_dir = out_dir(&app, Os::Ios).join("gen");
+            let (g, shell) = generate_ios(opts.manifest.as_deref(), gen_dir)?;
+            for n in g.notes.iter().filter(|n| n.starts_with(EJECT_NOTE)) {
+                eprintln!("{n}");
+            }
+            app.ios_gen = Some(g.files);
+            app.bundle_id = shell.ios_bundle_id;
+        }
         Os::Macos | Os::Windows | Os::Linux => {}
     }
     Ok(app)
@@ -412,7 +467,7 @@ pub fn parse_wasm_bindgen_version(out: &str) -> Option<String> {
     (w.next()? == "wasm-bindgen").then(|| w.next().map(String::from))?
 }
 
-/// 実環境を観測して [`Env`] にする。rustup の target は Web・Android だけ、wasm-bindgen の版は Web だけ調べる。
+/// 実環境を観測して [`Env`] にする。rustup の target は Web・Android・iOS だけ、wasm-bindgen の版は Web だけ調べる。
 pub fn detect_env(os: Os, action: Action) -> Env {
     let commands: BTreeSet<String> = [
         "rustup",
@@ -423,19 +478,24 @@ pub fn detect_env(os: Os, action: Action) -> Env {
         "gradle.bat",
         "java",
         "adb",
+        "xcrun",
     ]
     .into_iter()
     .filter(|c| on_path(c))
     .map(String::from)
     .collect();
     let rust_targets = match os {
-        Os::Web | Os::Android => true,
+        Os::Web | Os::Android | Os::Ios => true,
         Os::Macos | Os::Windows | Os::Linux => false,
     };
     let web = os == Os::Web;
     let android = match os {
         Os::Android => android::detect(&commands, action),
         _ => android::AndroidEnv::default(),
+    };
+    let ios = match os {
+        Os::Ios => ios::detect(&commands, action),
+        _ => ios::IosEnv::default(),
     };
     let installed_targets = (rust_targets && commands.contains("rustup"))
         .then(|| output_of("rustup", &["target", "list", "--installed"]))
@@ -451,6 +511,7 @@ pub fn detect_env(os: Os, action: Action) -> Env {
         installed_targets,
         wasm_bindgen_version,
         android,
+        ios,
         cargo: std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()),
     }
 }
@@ -494,7 +555,8 @@ pub fn execute(ops: &[Op]) -> Result<(), String> {
                 within,
                 files,
             } => overlay(from, to, within, files)?,
-            Op::Copy { from, to } => {
+            Op::Copy { from, to, within } => {
+                check_within(to, within)?;
                 make_parent(to)?;
                 std::fs::copy(from, to).map_err(|e| {
                     format!("{} を {} へ写せません: {e}", from.display(), to.display())
@@ -712,7 +774,7 @@ fn make_parent(path: &Path) -> Result<(), String> {
 
 /// `cargo fandhe run|build` の本体。問題は 1 件ずつの文字列で返す。
 pub fn run_cli(opts: &Options) -> Result<(), Vec<String>> {
-    let os = resolve_os(opts, Os::host())?;
+    let os = check_os(opts, Os::host())?;
     let env = detect_env(os, opts.action);
     let app = load_app(opts, os)?;
     let ops = prepare(&app, opts, &env)?;

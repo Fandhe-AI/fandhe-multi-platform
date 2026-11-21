@@ -6,14 +6,15 @@ fandhe でアプリを新しく作り、端末機能を足し、各 OS で動か
 本書のコマンドとコードは、リポジトリの外の新しいディレクトリで本書どおりに写して確かめました（13 節）。
 
 v1 前のため API は変わることがあります。crates.io には未公開で、依存は git か path で書きます。
-iOS の `cargo fandhe run`・`build` は未対応です（8.5 節）。
+iOS の `cargo fandhe run`・`build` はシミュレータだけで、実機は未対応です（8.5 節）。
 
 ## 1. 前提
 
 | 対象 | 要るもの |
 | --- | --- |
 | 共通 | rustup・cargo。本書は Rust 1.99.1（リポジトリと同じ版）で確かめた |
-| macOS・iOS | Xcode（コマンドラインツールを含む） |
+| macOS | Xcode（コマンドラインツールを含む） |
+| iOS | Xcode（コマンドラインツールだけでは足りない。`xcode-select` で選ぶ）・iOS のシミュレータ、Rust の iOS シミュレータ target |
 | Linux | `build-essential`・`pkg-config`。実行には `libxcursor1`・`libxi6`・`libxkbcommon-x11-0`（Ubuntu/Debian の例） |
 | Web | target `wasm32-unknown-unknown`、`wasm-bindgen` CLI（版はアプリの `Cargo.lock` と同じ）。`--release` は `wasm-opt`（binaryen） |
 | Android | Android SDK（`ANDROID_HOME`）・NDK・`cargo-ndk`・`gradle`（PATH。wrapper は使わない）・JDK 17 以上・`adb`、Rust の Android target |
@@ -278,7 +279,7 @@ NSLocationUsageDescription = "近くの店舗を地図に出すために、現�
 ## 8. OS ごとのビルドと実行
 
 ```sh
-cargo fandhe run|build [--os macos|windows|linux|web|android] [--release] [--manifest-path <Cargo.toml>]
+cargo fandhe run|build [--os macos|windows|linux|web|android|ios] [--release] [--device] [--manifest-path <Cargo.toml>]
 ```
 
 `--os` を省くとホストのデスクトップ OS です。手順の詳細は `docs/architecture/run-build-cli.md` です。
@@ -328,31 +329,21 @@ signtool の署名・パッケージ ID（#1208）、MSIX とストア提出（#
 
 ### 8.5 iOS
 
-`cargo fandhe run|build --os ios` は未対応です（シミュレータ #1424、実機 #1425）。
-
-型検査は次で通ります。
-
 ```sh
-rustup target add aarch64-apple-ios aarch64-apple-ios-sim
-cargo check --target aarch64-apple-ios-sim
+rustup target add aarch64-apple-ios-sim
+cargo fandhe build --os ios   # シミュレータ向けの .app
+cargo fandhe run --os ios     # 起動中のシミュレータへ入れて起動する
 ```
 
-`gen/ios/Info.plist` は Xcode の変数を使わない確定値で出るため、シミュレータ向けには手で `.app` を組めます。
-これは #1424 までのつなぎで、実機・配布には使えません。
-
-```sh
-cargo fandhe gen
-cargo build --target aarch64-apple-ios-sim
-mkdir -p target/MyApp.app
-cp target/aarch64-apple-ios-sim/debug/my-app gen/ios/Info.plist target/MyApp.app/
-codesign --sign - --force target/MyApp.app
-xcrun simctl install booted target/MyApp.app
-xcrun simctl launch booted com.example.myapp
-```
-
-- 先にシミュレータを起動しておきます（`xcrun simctl boot <端末名>` か Simulator.app）
-- Apple silicon の Mac が前提です。Intel Mac では target を `x86_64-apple-ios` にします
-- 実行体名は bin 名（`my-app`）で、Info.plist の `CFBundleExecutable` と同じです
+- 先にシミュレータを起動しておきます（Simulator.app か `xcrun simctl boot "<端末名>"`。端末名は `xcrun simctl list devices available`）。
+  自動では起動しません。起動中の iOS シミュレータが 0 台・複数台なら止まります（複数なら使わないものを `xcrun simctl shutdown` で止めます）
+- Intel Mac では target が `x86_64-apple-ios` です（`rustup target add x86_64-apple-ios`）。cargo-fandhe がホストの CPU から選びます
+- 成果物は `target/fandhe/my-app/ios/my-app.app` です。ad-hoc 署名（`codesign --sign -`）で、シミュレータ専用です
+- Xcode プロジェクトは作りません。cargo で実行体を作り、`gen` の Info.plist と合わせて `.app` を組みます
+- entitlements は Xcode のシミュレータ向けと同じく実行体に埋め込み、署名には入れません（`application-identifier` は bundle id で足します）
+- `eject/ios/Info.plist` を置いたときは、`CFBundleIdentifier`・`CFBundleExecutable`・`MinimumOSVersion` を `bundle-id`・bin 名・17.0 にそろえます（違えば止まります）
+- 拡張（ウィジェット・ライブアクティビティ）は `.app` に入りません。拡張を要る機能はシミュレータでも動きません
+- 実機（`--device`）は未対応です（#1425）
 
 ## 9. 配布物を作る
 
@@ -360,7 +351,7 @@ xcrun simctl launch booted com.example.myapp
 | --- | --- | --- |
 | Android | `cargo fandhe build --os android --release` で署名済みの `.aab` | 使える。Play への提出は手で行う |
 | Web | `cargo fandhe build --os web --release`（`wasm-opt -Os` を通す）。`target/fandhe/my-app/web/` を静的ホスティングに置く | 使える（本書の手順では未確認、13 節） |
-| iOS・macOS | `cargo fandhe` での署名・提出は未対応 | #1425。証明書とプロファイルの用意は `docs/environment/apple-developer-setup.md` |
+| iOS・macOS | `cargo fandhe` での署名・提出は未対応。`build --os ios` の `.app` はシミュレータ専用 | #1425。証明書とプロファイルの用意は `docs/environment/apple-developer-setup.md` |
 | Windows | 未対応 | signtool の署名・パッケージ ID は #1208、MSIX とストア提出は #3 |
 
 ### 9.1 Android の署名
@@ -418,9 +409,10 @@ alarm・image-generation・live-activity・on-device-llm・screen-capture・tran
    }
    ```
 
-3. Swift 薄層を持つ 5 機能（screen-capture 以外）を iOS 向けにビルドするときは、
+3. Swift 薄層を持つ 5 機能（screen-capture 以外）を `cargo build`・`cargo check` で直接 iOS 向けにビルドするときは、
    `iOS の最小 OS（IPHONEOS_DEPLOYMENT_TARGET）が 17.0 以上でない` で止まります。アプリの `.cargo/config.toml` に次を書きます。
-   cargo の `[env]` は依存先から引き継がれないため、アプリ側に要ります（#1398）
+   cargo の `[env]` は依存先から引き継がれないため、アプリ側に要ります（#1398）。
+   `cargo fandhe run|build --os ios` は同じ値を cargo へ渡すため、この設定が無くても止まりません
 
    ```toml
    [env]
@@ -490,7 +482,8 @@ macOS（Apple silicon）で、リポジトリの外の新しいディレクト�
 | 8.3 節の `build --os android`・`run --os android` | エミュレータ（API 34）で起動し、ボタンで回数が増える |
 | 9.1 節の keystore の作成と `build --os android --release` | 署名済みの `.aab` ができる（jarsigner の検証が通る） |
 | 10.1 節の 6 機能の組み込み | screen-capture は、`build.rs` が無いと macOS のリンクが `Undefined symbols` で失敗し、手順どおりに足すと通って起動する。alarm は、`.cargo/config.toml` が無いと 10.1 節の文言で止まり、`build.rs` が無いと iOS シミュレータ向けのリンクが失敗し、両方を足すと通る |
-| 8.5 節の手で組む `.app` | iOS シミュレータで起動し、接続状態が出る |
+| 8.5 節の `run --os ios`・`build --os ios --release`（4 節のアプリ、依存は path） | iOS シミュレータ（iOS 26.5）で起動し、「カウンター」の画面が出る。`--release` の `.app` もできる |
+| 10.1 節の alarm を `.cargo/config.toml` なしで `run --os ios`（依存は path） | `build.rs` があれば通り、シミュレータで起動する |
 | 11 節のスキルの導入（依存は path） | `.claude/skills/fandhe-app/` に写せた。経緯を知らない AI が、スキルだけを頼りに位置情報（`location`）の画面を足し、`cargo fandhe check`・`gen`・macOS の `cargo build`・`cargo test` が通った |
 
 Windows・Linux の `run`・`build`、Web の `--release`、実機での起動は、この手順では確かめていません。
