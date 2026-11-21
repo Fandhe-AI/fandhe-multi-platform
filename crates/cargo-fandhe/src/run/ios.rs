@@ -157,11 +157,20 @@ pub(super) fn detect(commands: &std::collections::BTreeSet<String>, action: Acti
 }
 
 /// XML の plist の最上位の dict の末尾（最後の `</dict>` の前）へ、キーと値（XML の断片）を足す。
+/// `</dict>` が無ければ最上位は空の dict（`<dict/>`）のはずなので、開始・終了タグへ展開してから足す。
 fn insert_top(body: &str, what: &str, key: &str, value: &str) -> Result<String, String> {
-    let at = body.rfind("</dict>").ok_or_else(|| {
+    let mut out = body.to_string();
+    if !out.contains("</dict>") {
+        if let Some((i, tag)) = ["<dict/>", "<dict />"]
+            .into_iter()
+            .find_map(|t| out.find(t).map(|i| (i, t)))
+        {
+            out.replace_range(i..i + tag.len(), "<dict>\n</dict>");
+        }
+    }
+    let at = out.rfind("</dict>").ok_or_else(|| {
         format!("{what} を読めません（XML の plist の最上位に dict がありません）")
     })?;
-    let mut out = body.to_string();
     out.insert_str(at, &format!("\t<key>{key}</key>\n\t{value}\n"));
     Ok(out)
 }

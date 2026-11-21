@@ -1911,3 +1911,19 @@ fn ios_gen_resolves_dependencies_with_the_simulator_triple() {
     let plist = &app.ios_gen.as_ref().expect("生成済み")["ios/Info.plist"];
     assert!(plist.contains("NSCameraUsageDescription"), "{plist}");
 }
+
+#[test]
+fn empty_self_closing_top_dict_accepts_inserted_keys() {
+    // eject で entitlement をすべて消した `<dict/>` も有効な plist。展開してから足す。
+    let out = simulator_entitlements("<plist version=\"1.0\"><dict/></plist>", "com.example.app")
+        .expect("足せる");
+    assert_eq!(
+        out,
+        "<plist version=\"1.0\"><dict>\n\t<key>application-identifier</key>\n\t<string>com.example.app</string>\n</dict></plist>"
+    );
+    assert!(
+        simulator_info_plist("<plist version=\"1.0\"><dict /></plist>")
+            .expect("足せる")
+            .contains("<key>CFBundleSupportedPlatforms</key>")
+    );
+}
